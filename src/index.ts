@@ -1,4 +1,5 @@
 import { run, subcommands } from "cmd-ts";
+import { list } from "./subcommands/list";
 import { start, status, stop } from "./subcommands/server";
 import { printVersion, version } from "./subcommands/version";
 
@@ -15,6 +16,7 @@ const cli = subcommands({
     start,
     status,
     stop,
+    list,
   },
 });
 

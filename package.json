@@ -14,13 +14,16 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@lmstudio/lms-common": "^0.3.0",
+    "@lmstudio/sdk": "^0.0.1",
     "boxen": "^5.1.2",
     "chalk": "^4.1.2",
     "cmd-ts": "^0.13.0",
+    "columnify": "^1.6.0",
     "inquirer": "^8.2.6",
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/columnify": "^1.5.4",
     "@types/inquirer": "^9.0.7",
     "@types/node": "^20.12.5",
     "@typescript-eslint/eslint-plugin": "^6.20.0",
