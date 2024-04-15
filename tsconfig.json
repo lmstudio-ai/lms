@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "module": "CommonJS",
+    "target": "ES2021",
+    "declaration": true,
+    "incremental": true,
+    "noImplicitOverride": true,
+    "sourceMap": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "stripInternal": true
+  }
+}

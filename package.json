@@ -1,0 +1,36 @@
+{
+  "name": "@lmstudio/lms-cli",
+  "version": "0.1.0",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": "dist/index.js",
+  "scripts": {
+    "build": "npm run clean && tsc",
+    "start": "tsc -w",
+    "clean": "shx rm -rf ./dist && shx rm ./tsconfig.tsbuildinfo"
+  },
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@lmstudio/lms-common": "^0.3.0",
+    "boxen": "^5.1.2",
+    "chalk": "^4.1.2",
+    "cmd-ts": "^0.13.0",
+    "inquirer": "^8.2.6",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^9.0.7",
+    "@types/node": "^20.12.5",
+    "@typescript-eslint/eslint-plugin": "^6.20.0",
+    "@typescript-eslint/parser": "^6.20.0",
+    "eslint": "^8.56.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-tsdoc": "^0.2.17",
+    "prettier": "^3.2.5",
+    "shx": "^0.3.4",
+    "typescript": "^5.3.3"
+  }
+}
