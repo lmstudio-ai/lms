@@ -9,10 +9,13 @@
     "concatenator",
     "Fcfs",
     "GGUF",
+    "gptneox",
     "immer",
     "inferencing",
     "lmstudio",
     "proxying",
+    "replit",
+    "starcoder",
     "Streamable"
   ],
   "rewrap.wrappingColumn": 100,

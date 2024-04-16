@@ -156,7 +156,7 @@ async function checkHttpServerWithRetries(logger: SimpleLogger, port: number, ma
 /**
  * Gets the last status of the server.
  */
-async function getServerLastStatus(logger: SimpleLogger) {
+export async function getServerLastStatus(logger: SimpleLogger) {
   const lastStatusPath = getServerLastStatusPath();
   logger.debug(`Reading last status from ${lastStatusPath}`);
   const lastStatus = JSON.parse(await readFile(lastStatusPath, "utf-8")) as HttpServerLastStatus;
