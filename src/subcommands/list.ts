@@ -22,7 +22,7 @@ function architecture(architecture?: string) {
     return "";
   }
   const architectureInfo = architectureInfoLookup.find(architecture);
-  return architectureInfo.colorer(` ${architectureInfo.name} `);
+  return architectureInfo.colorer(architectureInfo.name);
 }
 
 function printDownloadedModelsTable(
@@ -181,7 +181,7 @@ export const ls = command({
     const llms = downloadedModels.filter(model => model.type === "llm");
     if (llms.length > 0) {
       printDownloadedModelsTable(
-        chalk.bgGreenBright.black(" LLM ") + " " + chalk.green("(Large Language Models)"),
+        chalk.bgGreenBright.black("   LLM   ") + " " + chalk.green("(Large Language Models)"),
         llms,
         loadedModels,
       );
@@ -192,12 +192,65 @@ export const ls = command({
     const embeddings = downloadedModels.filter(model => model.type === "embedding");
     if (embeddings.length > 0) {
       printDownloadedModelsTable(
-        chalk.bgGreenBright.black(" Embeddings "),
+        chalk.bgGreenBright.black("   Embeddings   "),
         embeddings,
         loadedModels,
       );
       console.info();
       console.info();
+    }
+  },
+});
+
+export const ps = command({
+  name: "ps",
+  description: "List all loaded models",
+  args: {
+    ...logLevelArgs,
+    json: flag({
+      long: "json",
+      description: "Outputs in JSON format to stdout",
+    }),
+  },
+  handler: async args => {
+    const logger = createLogger(args);
+    const client = await createClient(logger);
+
+    const { json } = args;
+
+    const loadedModels = await client.llm.listLoaded();
+    const downloadedModels = await client.system.listDownloadedModels();
+
+    if (json) {
+      console.info(JSON.stringify(loadedModels));
+      return;
+    }
+
+    if (loadedModels.length === 0) {
+      console.info(chalk.redBright("You have not loaded any models yet."));
+      return;
+    }
+
+    console.info();
+    console.info(chalk.bgCyanBright.black("   LOADED MODELS   "));
+    console.info();
+
+    const dot = chalk.blackBright("  • ");
+
+    for (const { identifier, address } of loadedModels) {
+      const model = downloadedModels.find(model => model.address === address);
+      console.info(chalk.greenBright(`Identifier: ${chalk.green(identifier)}`));
+      if (model === undefined) {
+        console.info(chalk.gray("  Cannot find more information"));
+      } else {
+        console.info(dot + chalk.whiteBright(`Type: ${chalk.bgGreenBright.black(" LLM ")}`));
+        console.info(dot + chalk.whiteBright(`Address: ${chalk.white(address)}`));
+        console.info(
+          dot + chalk.whiteBright(`Size: ${formatSizeBytesWithColor1000(model.sizeBytes)}`),
+        );
+        console.info(dot + chalk.whiteBright(`Architecture: ${architecture(model.architecture)}`));
+        console.info();
+      }
     }
   },
 });
