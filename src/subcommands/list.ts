@@ -28,7 +28,7 @@ function architecture(architecture?: string) {
 function printDownloadedModelsTable(
   title: string,
   downloadedModels: Array<DownloadedModel>,
-  loadedModels: Array<{ address: string; identifier: string }>,
+  loadedModels: Array<{ path: string; identifier: string }>,
 ) {
   interface DownloadedModelWithExtraInfo extends DownloadedModel {
     loadedIdentifiers: Array<string>;
@@ -38,11 +38,11 @@ function printDownloadedModelsTable(
   const downloadedModelsGroups = downloadedModels
     // Attach 1) all the loadedIdentifiers 2) group name (user/repo) to each model
     .map(model => {
-      const segments = model.address.split("/");
+      const segments = model.path.split("/");
       return {
         ...model,
         loadedIdentifiers: loadedModels
-          .filter(loadedModel => loadedModel.address === model.address)
+          .filter(loadedModel => loadedModel.path === model.path)
           .map(loadedModel => loadedModel.identifier),
         group: segments.slice(0, 2).join("/"),
         remaining: segments.slice(2).join("/"),
@@ -65,7 +65,7 @@ function printDownloadedModelsTable(
         // Group is a model itself
         const model = models[0];
         return {
-          address: chalk.grey(" ") + chalk.cyanBright(group),
+          path: chalk.grey(" ") + chalk.cyanBright(group),
           sizeBytes: formatSizeBytesWithColor1000(model.sizeBytes),
           arch: architecture(model.architecture),
           loaded: loadedCheck(model.loadedIdentifiers.length),
@@ -75,10 +75,10 @@ function printDownloadedModelsTable(
         // Empty line between groups
         {},
         // Group title
-        { address: chalk.grey(" ") + chalk.cyanBright(group) },
+        { path: chalk.grey(" ") + chalk.cyanBright(group) },
         // Models within the group
         ...models.map(model => ({
-          address: chalk.grey("   ") + chalk.white("/" + model.remaining),
+          path: chalk.grey("   ") + chalk.white("/" + model.remaining),
           sizeBytes: formatSizeBytesWithColor1000(model.sizeBytes),
           arch: architecture(model.architecture),
           loaded: loadedCheck(model.loadedIdentifiers.length),
@@ -91,10 +91,10 @@ function printDownloadedModelsTable(
   console.info();
   console.info(
     columnify(downloadedModelsAndHeadlines, {
-      columns: ["address", "sizeBytes", "arch", "loaded"],
+      columns: ["path", "sizeBytes", "arch", "loaded"],
       config: {
-        address: {
-          headingTransform: () => chalk.gray(" ") + chalk.greenBright("ADDRESS"),
+        path: {
+          headingTransform: () => chalk.gray(" ") + chalk.greenBright("PATH"),
         },
         sizeBytes: {
           headingTransform: () => chalk.greenBright("SIZE"),
@@ -237,14 +237,14 @@ export const ps = command({
 
     const dot = chalk.blackBright("  • ");
 
-    for (const { identifier, address } of loadedModels) {
-      const model = downloadedModels.find(model => model.address === address);
-      console.info(chalk.greenBright(`Identifier: ${chalk.green(identifier)}`));
+    for (const { identifier, path } of loadedModels) {
+      const model = downloadedModels.find(model => model.path === path);
+      console.info(chalk.greenBright(`identifier: ${chalk.green(identifier)}`));
       if (model === undefined) {
         console.info(chalk.gray("  Cannot find more information"));
       } else {
         console.info(dot + chalk.whiteBright(`Type: ${chalk.bgGreenBright.black(" LLM ")}`));
-        console.info(dot + chalk.whiteBright(`Address: ${chalk.white(address)}`));
+        console.info(dot + chalk.whiteBright(`Path: ${chalk.white(path)}`));
         console.info(
           dot + chalk.whiteBright(`Size: ${formatSizeBytesWithColor1000(model.sizeBytes)}`),
         );
