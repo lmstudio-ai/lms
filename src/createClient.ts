@@ -1,6 +1,7 @@
-import { type SimpleLogger } from "@lmstudio/lms-common";
+import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { LMStudioClient } from "@lmstudio/sdk";
-import { getServerLastStatus } from "./subcommands/server";
+import chalk from "chalk";
+import { checkHttpServer, getServerLastStatus } from "./subcommands/server";
 
 export async function createClient(logger: SimpleLogger) {
   let port: number;
@@ -10,6 +11,16 @@ export async function createClient(logger: SimpleLogger) {
   } catch (e) {
     logger.debug("Failed to get last server status", e);
     port = 1234;
+  }
+  if (!(await checkHttpServer(logger, port))) {
+    logger.errorWithoutPrefix(text`
+      ${"\n"}${chalk.redBright(text`
+        LM Studio server is not running. To start the server, run the following command:
+      `)}
+
+          ${chalk.yellow("lms start ")}${chalk.gray("[--port <PORT>] [--cors=true|false]")}
+    `);
+    process.exit(1);
   }
   const baseUrl = `ws://127.0.0.1:${port}`;
   logger.debug(`Connecting to server with baseUrl ${port}`);

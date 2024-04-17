@@ -114,7 +114,7 @@ async function waitForCtlFileClear(
 /**
  * Checks if the HTTP server is running.
  */
-async function checkHttpServer(logger: SimpleLogger, port: number) {
+export async function checkHttpServer(logger: SimpleLogger, port: number) {
   const url = `http://127.0.0.1:${port}/lmstudio-greeting`;
   logger.debug(`Checking server at ${url}`);
   try {
