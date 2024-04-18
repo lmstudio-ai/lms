@@ -44,7 +44,7 @@ Here are some frequently used commands:
 - `lms status` - To check the status of the current project.
 - `lms server start` - To start the local API server.
 - `lms server stop` - To stop the local API server.
-- `lms server ls` - To list all downloaded models.
-- `lms server ps` - To list all loaded models available for inferencing.
+- `lms ls` - To list all downloaded models.
+- `lms ps` - To list all loaded models available for inferencing.
 
 Please note that most commands, except those controlling the server, internally use [lmstudio.js](https://github.com/lmstudio-ai/lmstudio.js). Therefore, ensure the server is running before utilizing these commands. You can start the server using `lms server start`.
