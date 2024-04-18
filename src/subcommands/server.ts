@@ -2,7 +2,7 @@ import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import boxen from "boxen";
 import chalk from "chalk";
 import { spawn } from "child_process";
-import { command, flag, number, option, optional } from "cmd-ts";
+import { command, flag, number, option, optional, subcommands } from "cmd-ts";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import inquirer from "inquirer";
 import os from "os";
@@ -163,7 +163,7 @@ export async function getServerLastStatus(logger: SimpleLogger) {
   return lastStatus;
 }
 
-export const start = command({
+const start = command({
   name: "start",
   description: "Starts the local server",
   args: {
@@ -235,7 +235,7 @@ export const start = command({
               About to Launch LM Studio
 
               By default, if the LM Studio is not running, using the command ${chalk.yellow(
-                "lms start",
+                "lms server start",
               )} will launch LM Studio in minimized mode and then start the server.
 
               ${chalk.grey(text`
@@ -325,7 +325,7 @@ export const start = command({
   },
 });
 
-export const stop = command({
+const stop = command({
   name: "stop",
   description: "Stops the local server",
   args: {
@@ -356,7 +356,7 @@ export const stop = command({
   },
 });
 
-export const status = command({
+const status = command({
   name: "status",
   description: "Displays the status of the local server",
   args: {
@@ -389,5 +389,15 @@ export const status = command({
     if (json) {
       process.stdout.write(JSON.stringify({ running, port }) + "\n");
     }
+  },
+});
+
+export const server = subcommands({
+  name: "server",
+  description: "Commands for managing the local server",
+  cmds: {
+    start,
+    status,
+    stop,
   },
 });

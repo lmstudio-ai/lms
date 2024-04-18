@@ -6,9 +6,9 @@
   "types": "dist/index.d.ts",
   "bin": "dist/index.js",
   "scripts": {
-    "build": "npm run clean && tsc",
-    "start": "tsc -w",
-    "clean": "shx rm -rf ./dist && shx rm ./tsconfig.tsbuildinfo"
+    "build": "tsc",
+    "watch": "tsc -w",
+    "clean": "shx rm -rf ./dist && shx rm -f ./tsconfig.tsbuildinfo"
   },
   "author": "",
   "license": "Apache-2.0",

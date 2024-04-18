@@ -1,6 +1,7 @@
 import { run, subcommands } from "cmd-ts";
 import { ls, ps } from "./subcommands/list";
-import { start, status, stop } from "./subcommands/server";
+import { server } from "./subcommands/server";
+import { status } from "./subcommands/status";
 import { printVersion, version } from "./subcommands/version";
 
 if (process.argv.length === 2) {
@@ -12,12 +13,11 @@ if (process.argv.length === 2) {
 const cli = subcommands({
   name: "lms",
   cmds: {
-    version,
-    start,
     status,
-    stop,
+    server,
     ls,
     ps,
+    version,
   },
 });
 
