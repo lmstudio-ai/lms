@@ -41,7 +41,7 @@ You can use `lms --help` to see a list of all available subcommands. For specifi
 
 Here are some frequently used commands:
 
-- `lms status` - To check the status of the current project.
+- `lms status` - To check the status of LM Studio.
 - `lms server start` - To start the local API server.
 - `lms server stop` - To stop the local API server.
 - `lms ls` - To list all downloaded models.
