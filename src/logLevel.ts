@@ -1,4 +1,5 @@
-import { SimpleLogger, text } from "@lmstudio/lms-common";
+import { makePrettyError, SimpleLogger, text } from "@lmstudio/lms-common";
+import chalk from "chalk";
 import { flag, oneOf, option, optional } from "cmd-ts";
 import { Console } from "console";
 
@@ -46,7 +47,12 @@ export function createLogger({
     numSpecified++;
   }
   if (numSpecified > 1) {
-    throw new Error("Only one of logLevel, verbose, or quiet can be specified");
+    throw makePrettyError(
+      chalk.redBright(text`
+        Only one of ${chalk.yellowBright("--logLevel")}, ${chalk.yellowBright("--verbose")}, or
+        ${chalk.yellowBright("--quiet")} can be specified.
+      `),
+    );
   }
   if (quiet) {
     logLevel = "none";
