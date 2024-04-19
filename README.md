@@ -13,7 +13,7 @@
 
 # Installation
 
-`lms` is shipped with [LM Studio](https://lmstudio.ai/). To set it up:
+`lms` ships with [LM Studio](https://lmstudio.ai/). To set it up:
 
 #### macOS / Linux
 
