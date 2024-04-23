@@ -8,13 +8,23 @@ import { createClient } from "../createClient";
 import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000";
 import { createLogger, logLevelArgs } from "../logLevel";
 
-function loadedCheckColored(count: number) {
+function loadedCheckBoxed(count: number) {
   if (count === 0) {
     return "";
   } else if (count === 1) {
     return chalk.bgGreenBright.black(" ✓ LOADED ");
   } else {
     return chalk.bgGreenBright.black(` ✓ LOADED (${count}) `);
+  }
+}
+
+function loadedCheck(count: number) {
+  if (count === 0) {
+    return "";
+  } else if (count === 1) {
+    return chalk.greenBright("✓ LOADED");
+  } else {
+    return chalk.greenBright(`✓ LOADED (${count})`);
   }
 }
 
@@ -81,7 +91,7 @@ function printDownloadedModelsTable(
             path: chalk.grey(" ") + chalk.cyanBright(group),
             sizeBytes: formatSizeBytesWithColor1000(model.sizeBytes),
             arch: architectureColored(model.architecture),
-            loaded: loadedCheckColored(model.loadedIdentifiers.length),
+            loaded: loadedCheckBoxed(model.loadedIdentifiers.length),
           };
         }
         return [
@@ -94,7 +104,7 @@ function printDownloadedModelsTable(
             path: chalk.grey("   ") + chalk.white("/" + model.remaining),
             sizeBytes: formatSizeBytesWithColor1000(model.sizeBytes),
             arch: architectureColored(model.architecture),
-            loaded: loadedCheckColored(model.loadedIdentifiers.length),
+            loaded: loadedCheckBoxed(model.loadedIdentifiers.length),
           })),
         ];
       },
@@ -133,12 +143,15 @@ function printDownloadedModelsTable(
             path: group,
             sizeBytes: formatSizeBytes1000(model.sizeBytes),
             arch: architecture(model.architecture),
-            loaded: loadedCheckColored(model.loadedIdentifiers.length),
+            loaded: loadedCheck(model.loadedIdentifiers.length),
           };
         } else {
           return {
             path: group,
             arch: chalk.gray(`(...${models.length} options)`),
+            loaded: loadedCheck(
+              models.reduce((acc, model) => acc + model.loadedIdentifiers.length, 0),
+            ),
           };
         }
       },
@@ -148,6 +161,10 @@ function printDownloadedModelsTable(
       columnify(downloadedModelsAndHeadlines, {
         columns: ["path", "sizeBytes", "arch", "loaded"],
         config: {
+          loaded: {
+            headingTransform: () => "",
+            align: "left",
+          },
           path: {
             headingTransform: () => chalk.greenBright(title),
           },
@@ -158,10 +175,6 @@ function printDownloadedModelsTable(
           arch: {
             headingTransform: () => chalk.greenBright("ARCHITECTURE"),
             align: "center",
-          },
-          loaded: {
-            headingTransform: () => chalk.greenBright("LOADED"),
-            align: "left",
           },
         },
         preserveNewLines: true,

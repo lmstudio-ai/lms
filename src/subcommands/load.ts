@@ -185,9 +185,9 @@ export const load = command({
       } else {
         console.info();
         console.info(
-          chalk.gray(text`
-          ! Multiple models match the provided path. Please select one.
-        `),
+          text`
+            ! Multiple models match the provided path. Please select one.
+          `,
         );
         model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
       }
