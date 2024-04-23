@@ -1,4 +1,4 @@
-import { makePrettyError, text, type SimpleLogger } from "@lmstudio/lms-common";
+import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { checkHttpServer, getServerLastStatus } from "./subcommands/server";
@@ -13,14 +13,15 @@ export async function createClient(logger: SimpleLogger) {
     port = 1234;
   }
   if (!(await checkHttpServer(logger, port))) {
-    logger.errorWithoutPrefix(
-      makePrettyError(text`
-        ${chalk.redBright(text`
-          LM Studio server is not running. To start the server, run the following command:
-        `)}
+    logger.error(
+      text`
+        LM Studio needs to be running in server mode to perform this operation.
 
-            ${chalk.yellow("lms server start ")}${chalk.gray("[--port <PORT>] [--cors=true|false]")}
-    `).message,
+        To start the server, run the following command:
+
+            ${chalk.yellow("lms server start ")}
+        
+      `,
     );
     process.exit(1);
   }

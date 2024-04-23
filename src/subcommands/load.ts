@@ -170,8 +170,10 @@ export const load = command({
     let model: DownloadedModel;
     if (initialFilteredModels.length !== 1 && !yes) {
       if (path === undefined) {
-        model = await selectModelToLoad(models, modelPaths, "", 3, lastLoadedMap);
+        console.info();
+        model = await selectModelToLoad(models, modelPaths, "", 4, lastLoadedMap);
       } else if (initialFilteredModels.length === 0) {
+        console.info();
         console.info(
           chalk.redBright(text`
             ! Cannot find a model matching the provided path (${chalk.yellowBright(path)}). Please
@@ -179,14 +181,15 @@ export const load = command({
           `),
         );
         path = "";
-        model = await selectModelToLoad(models, modelPaths, path, 4, lastLoadedMap);
+        model = await selectModelToLoad(models, modelPaths, path, 5, lastLoadedMap);
       } else {
+        console.info();
         console.info(
           chalk.gray(text`
           ! Multiple models match the provided path. Please select one.
         `),
         );
-        model = await selectModelToLoad(models, modelPaths, path ?? "", 4, lastLoadedMap);
+        model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
       }
     } else {
       if (initialFilteredModels.length === 0) {
@@ -238,6 +241,7 @@ async function selectModelToLoad(
   console.info(
     chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
   );
+  console.info();
   const { selected } = await inquirer.prompt({
     type: "autocomplete",
     name: "selected",

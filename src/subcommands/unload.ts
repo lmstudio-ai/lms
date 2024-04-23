@@ -98,17 +98,19 @@ export const unload = command({
         process.exit(1);
       }
       inquirer.registerPrompt("autocomplete", inquirerPrompt);
+      console.info();
       console.info(
         chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
       );
       console.info(chalk.gray("! To unload all models, use the --all flag."));
+      console.info();
       const { selected } = await inquirer.prompt({
         type: "autocomplete",
         name: "selected",
         message: chalk.greenBright("Select a model to unload") + chalk.gray(" |"),
         initialSearch: "",
         loop: false,
-        pageSize: terminalSize().rows - 3,
+        pageSize: terminalSize().rows - 5,
         emptyText: "No loaded model matched the filter",
         source: async (_: any, input: string) => {
           input = input.split("?").join(""); // Strip the question mark to prevent issues

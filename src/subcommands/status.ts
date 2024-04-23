@@ -54,7 +54,7 @@ export const status = command({
 
         ${chalk.gray("\n(i) To start the server, run the following command:")}
 
-            ${chalk.yellow("lms server start ")}${chalk.gray("[--port <PORT>] [--cors=true|false]")}
+            ${chalk.yellow("lms server start ")}
       `;
     }
     console.info(

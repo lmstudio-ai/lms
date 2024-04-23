@@ -245,12 +245,12 @@ export const ls = command({
       console.info();
       console.info(text`
         You have ${chalk.greenBright(downloadedModels.length)} models,
-        total size: ${chalk.greenBright(formatSizeBytes1000(totalSizeBytes))}
+        taking up ${chalk.greenBright(formatSizeBytes1000(totalSizeBytes))} of disk space.
       `);
     } else {
       console.info(text`
         You have ${downloadedModels.length} models,
-        total size: ${formatSizeBytes1000(totalSizeBytes)}
+        taking up ${formatSizeBytes1000(totalSizeBytes)} of disk space.
       `);
     }
     console.info();
@@ -306,7 +306,15 @@ export const ps = command({
     }
 
     if (loadedModels.length === 0) {
-      console.info(chalk.redBright("You have not loaded any models yet."));
+      logger.error(
+        text`
+          No models are currently loaded
+
+          To load a model, run:
+
+              ${chalk.yellow("lms load")}
+        `,
+      );
       return;
     }
 
