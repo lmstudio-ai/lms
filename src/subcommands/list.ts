@@ -312,7 +312,7 @@ export const ps = command({
 
           To load a model, run:
 
-              ${chalk.yellow("lms load")}
+              ${chalk.yellow("lms load")}${"\n"}
         `,
       );
       return;

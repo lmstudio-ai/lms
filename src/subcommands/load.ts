@@ -152,7 +152,7 @@ export const load = command({
 
               Note, you need to provide the full model path. For example:
 
-                  ${chalk.yellowBright(`lms load --exact "${chalk.yellow(shortestName)}"`)}
+                  ${chalk.yellowBright(`lms load --exact "${chalk.yellow(shortestName)}"`)}${"\n"}
             `,
           ).message,
         );
@@ -205,7 +205,7 @@ export const load = command({
 
               To select a model interactively, remove the ${chalk.yellowBright("--yes")} flag:
 
-                  ${chalk.yellowBright("lms load")}
+                  ${chalk.yellowBright("lms load")}${"\n"}
             `,
           ).message,
         );

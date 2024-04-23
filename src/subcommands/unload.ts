@@ -81,9 +81,9 @@ export const unload = command({
             text`
               Cannot find a model with the identifier "${chalk.yellowBright(identifier)}".
 
-              To see a list of loaded models, run
+              To see a list of loaded models, run:
 
-                  ${chalk.yellowBright("lms ps")}
+                  ${chalk.yellowBright("lms ps")}${"\n"}
             `,
           ).message,
         );
