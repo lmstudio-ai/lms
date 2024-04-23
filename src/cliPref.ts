@@ -7,10 +7,12 @@ import { SimpleFileData } from "./SimpleFileData";
 export async function getCliPref(logger?: SimpleLogger) {
   const cliPrefSchema = z.object({
     autoLaunchMinimizedWarned: z.boolean(),
+    lastLoadedModels: z.array(z.string()).optional(),
   });
   type CliPref = z.infer<typeof cliPrefSchema>;
   const defaultCliPref: CliPref = {
     autoLaunchMinimizedWarned: false,
+    lastLoadedModels: [],
   };
   const cliPref = new SimpleFileData(
     path.join(os.homedir(), ".cache/lm-studio/.internal/cli-pref.json"),

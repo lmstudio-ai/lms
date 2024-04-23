@@ -1,0 +1,56 @@
+diff --git a/node_modules/inquirer-autocomplete-prompt/index.js b/node_modules/inquirer-autocomplete-prompt/index.js
+index 37a2a16..bac54e9 100644
+--- a/node_modules/inquirer-autocomplete-prompt/index.js
++++ b/node_modules/inquirer-autocomplete-prompt/index.js
+@@ -73,7 +73,13 @@ class AutocompletePrompt extends Base {
+       .forEach(this.onKeypress.bind(this));
+ 
+     // Call once at init
+-    this.search(undefined);
++    if (typeof this.opt.initialSearch === 'string') {
++      this.search(this.opt.initialSearch);
++      this.rl.line = this.opt.initialSearch;
++      this.rl.cursor = this.opt.initialSearch.length;
++    } else {
++      this.search(undefined);
++    }
+ 
+     return this;
+   }
+@@ -89,9 +95,9 @@ class AutocompletePrompt extends Base {
+ 
+     if (this.firstRender) {
+       const suggestText = this.opt.suggestOnly ? ', tab to autocomplete' : '';
+-      content += pc.dim(
+-        '(Use arrow keys or type to search' + suggestText + ')'
+-      );
++      // content += pc.dim(
++      //   '(Use arrow keys or type to search' + suggestText + ')'
++      // );
+     }
+ 
+     // Render choices or answer depending on the state
+@@ -103,6 +109,10 @@ class AutocompletePrompt extends Base {
+     } else if (this.nbChoices) {
+       const choicesStr = listRender(this.currentChoices, this.selected);
+       content += this.rl.line;
++      if (this.rl.line.length === 0) {
++        const text = "Type to filter...";
++        content += pc.gray(text);
++      }
+       const indexPosition = this.selected;
+       let realIndexPosition = 0;
+       this.currentChoices.choices.every((choice, index) => {
+@@ -334,11 +344,7 @@ function listRender(choices, pointer /*: string */) /*: string */ {
+     }
+ 
+     const isSelected = i - separatorOffset === pointer;
+-    let line = (isSelected ? figures.pointer + ' ' : '  ') + choice.name;
+-
+-    if (isSelected) {
+-      line = pc.cyan(line);
+-    }
++    let line = (isSelected ? pc.green(figures.pointer) + ' ' : '  ') + (isSelected ? pc.bgGreen(pc.black(" " + choice.name + " ")) : " " + choice.name);
+   
+     output += line + ' \n';
+   });

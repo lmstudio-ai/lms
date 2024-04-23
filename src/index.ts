@@ -1,7 +1,9 @@
 import { run, subcommands } from "cmd-ts";
 import { ls, ps } from "./subcommands/list";
+import { load } from "./subcommands/load";
 import { server } from "./subcommands/server";
 import { status } from "./subcommands/status";
+import { unload } from "./subcommands/unload";
 import { printVersion, version } from "./subcommands/version";
 
 if (process.argv.length === 2) {
@@ -17,8 +19,13 @@ const cli = subcommands({
     server,
     ls,
     ps,
+    load,
+    unload,
     version,
   },
 });
 
-run(cli, process.argv.slice(2));
+run(cli, process.argv.slice(2)).catch(error => {
+  console.error(error?.message ?? error);
+  process.exit(1);
+});

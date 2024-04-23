@@ -37,7 +37,7 @@ export const status = command({
       const downloadedModels = await client.system.listDownloadedModels();
       content += chalk.cyanBright("Loaded Models");
       if (loadedModels.length === 0) {
-        content += "\n" + chalk.gray("  · No Models Loaded") + "\n";
+        content += "\n" + chalk.gray("  · No Models Loaded");
       } else {
         for (const model of loadedModels) {
           const sizeBytes = downloadedModels.find(m => m.path === model.path)?.sizeBytes;

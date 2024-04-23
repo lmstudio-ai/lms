@@ -1,13 +1,14 @@
+import { text } from "@lmstudio/lms-common";
 import { type DownloadedModel } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { command, flag } from "cmd-ts";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations";
 import { createClient } from "../createClient";
-import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000";
+import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000";
 import { createLogger, logLevelArgs } from "../logLevel";
 
-function loadedCheck(count: number) {
+function loadedCheckColored(count: number) {
   if (count === 0) {
     return "";
   } else if (count === 1) {
@@ -17,7 +18,7 @@ function loadedCheck(count: number) {
   }
 }
 
-function architecture(architecture?: string) {
+function architectureColored(architecture?: string) {
   if (!architecture) {
     return "";
   }
@@ -25,10 +26,18 @@ function architecture(architecture?: string) {
   return architectureInfo.colorer(architectureInfo.name);
 }
 
+function architecture(architecture?: string) {
+  if (!architecture) {
+    return "";
+  }
+  return architectureInfoLookup.find(architecture).name;
+}
+
 function printDownloadedModelsTable(
   title: string,
   downloadedModels: Array<DownloadedModel>,
   loadedModels: Array<{ path: string; identifier: string }>,
+  detailed: boolean,
 ) {
   interface DownloadedModelWithExtraInfo extends DownloadedModel {
     loadedIdentifiers: Array<string>;
@@ -59,60 +68,107 @@ function printDownloadedModelsTable(
       return acc;
     }, new Map<string, Array<DownloadedModelWithExtraInfo>>());
 
-  const downloadedModelsAndHeadlines = [...downloadedModelsGroups.entries()].flatMap(
-    ([group, models]) => {
-      if (models.length === 1 && models[0].remaining === "") {
-        // Group is a model itself
-        const model = models[0];
-        return {
-          path: chalk.grey(" ") + chalk.cyanBright(group),
-          sizeBytes: formatSizeBytesWithColor1000(model.sizeBytes),
-          arch: architecture(model.architecture),
-          loaded: loadedCheck(model.loadedIdentifiers.length),
-        };
-      }
-      return [
-        // Empty line between groups
-        {},
-        // Group title
-        { path: chalk.grey(" ") + chalk.cyanBright(group) },
-        // Models within the group
-        ...models.map(model => ({
-          path: chalk.grey("   ") + chalk.white("/" + model.remaining),
-          sizeBytes: formatSizeBytesWithColor1000(model.sizeBytes),
-          arch: architecture(model.architecture),
-          loaded: loadedCheck(model.loadedIdentifiers.length),
-        })),
-      ];
-    },
-  );
+  if (detailed) {
+    console.info(title);
+    console.info();
 
-  console.info(title);
-  console.info();
-  console.info(
-    columnify(downloadedModelsAndHeadlines, {
-      columns: ["path", "sizeBytes", "arch", "loaded"],
-      config: {
-        path: {
-          headingTransform: () => chalk.gray(" ") + chalk.greenBright("PATH"),
-        },
-        sizeBytes: {
-          headingTransform: () => chalk.greenBright("SIZE"),
-          align: "right",
-        },
-        arch: {
-          headingTransform: () => chalk.greenBright("ARCHITECTURE"),
-          align: "center",
-        },
-        loaded: {
-          headingTransform: () => chalk.greenBright("LOADED"),
-          align: "left",
-        },
+    const downloadedModelsAndHeadlines = [...downloadedModelsGroups.entries()].flatMap(
+      ([group, models]) => {
+        if (models.length === 1 && models[0].remaining === "") {
+          // Group is a model itself
+          const model = models[0];
+          return {
+            path: chalk.grey(" ") + chalk.cyanBright(group),
+            sizeBytes: formatSizeBytesWithColor1000(model.sizeBytes),
+            arch: architectureColored(model.architecture),
+            loaded: loadedCheckColored(model.loadedIdentifiers.length),
+          };
+        }
+        return [
+          // Empty line between groups
+          {},
+          // Group title
+          { path: chalk.grey(" ") + chalk.cyanBright(group) },
+          // Models within the group
+          ...models.map(model => ({
+            path: chalk.grey("   ") + chalk.white("/" + model.remaining),
+            sizeBytes: formatSizeBytesWithColor1000(model.sizeBytes),
+            arch: architectureColored(model.architecture),
+            loaded: loadedCheckColored(model.loadedIdentifiers.length),
+          })),
+        ];
       },
-      preserveNewLines: true,
-      columnSplitter: "  ",
-    }),
-  );
+    );
+
+    console.info(
+      columnify(downloadedModelsAndHeadlines, {
+        columns: ["path", "sizeBytes", "arch", "loaded"],
+        config: {
+          path: {
+            headingTransform: () => chalk.gray(" ") + chalk.greenBright("PATH"),
+          },
+          sizeBytes: {
+            headingTransform: () => chalk.greenBright("SIZE"),
+            align: "right",
+          },
+          arch: {
+            headingTransform: () => chalk.greenBright("ARCHITECTURE"),
+            align: "center",
+          },
+          loaded: {
+            headingTransform: () => chalk.greenBright("LOADED"),
+            align: "left",
+          },
+        },
+        preserveNewLines: true,
+        columnSplitter: "  ",
+      }),
+    );
+  } else {
+    const downloadedModelsAndHeadlines = [...downloadedModelsGroups.entries()].flatMap(
+      ([group, models]) => {
+        if (models.length === 1) {
+          const model = models[0];
+          return {
+            path: group,
+            sizeBytes: formatSizeBytes1000(model.sizeBytes),
+            arch: architecture(model.architecture),
+            loaded: loadedCheckColored(model.loadedIdentifiers.length),
+          };
+        } else {
+          return {
+            path: group,
+            arch: chalk.gray(`(...${models.length} options)`),
+          };
+        }
+      },
+    );
+
+    console.info(
+      columnify(downloadedModelsAndHeadlines, {
+        columns: ["path", "sizeBytes", "arch", "loaded"],
+        config: {
+          path: {
+            headingTransform: () => chalk.greenBright(title),
+          },
+          sizeBytes: {
+            headingTransform: () => chalk.greenBright("SIZE"),
+            align: "right",
+          },
+          arch: {
+            headingTransform: () => chalk.greenBright("ARCHITECTURE"),
+            align: "center",
+          },
+          loaded: {
+            headingTransform: () => chalk.greenBright("LOADED"),
+            align: "left",
+          },
+        },
+        preserveNewLines: true,
+        columnSplitter: "      ",
+      }),
+    );
+  }
 }
 
 export const ls = command({
@@ -132,12 +188,16 @@ export const ls = command({
       long: "json",
       description: "Outputs in JSON format to stdout",
     }),
+    detailed: flag({
+      long: "detailed",
+      description: "Show detailed information",
+    }),
   },
   handler: async args => {
     const logger = createLogger(args);
     const client = await createClient(logger);
 
-    const { llm, embedding, json } = args;
+    const { llm, embedding, json, detailed } = args;
 
     let downloadedModels = await client.system.listDownloadedModels();
     const loadedModels = await client.llm.listLoaded();
@@ -175,28 +235,47 @@ export const ls = command({
       return;
     }
 
+    let totalSizeBytes = 0;
+    for (const model of downloadedModels) {
+      totalSizeBytes += model.sizeBytes;
+    }
+
     console.info();
+    if (detailed) {
+      console.info();
+      console.info(text`
+        You have ${chalk.greenBright(downloadedModels.length)} models,
+        total size: ${chalk.greenBright(formatSizeBytes1000(totalSizeBytes))}
+      `);
+    } else {
+      console.info(text`
+        You have ${downloadedModels.length} models,
+        total size: ${formatSizeBytes1000(totalSizeBytes)}
+      `);
+    }
     console.info();
 
     const llms = downloadedModels.filter(model => model.type === "llm");
     if (llms.length > 0) {
       printDownloadedModelsTable(
-        chalk.bgGreenBright.black("   LLM   ") + " " + chalk.green("(Large Language Models)"),
+        detailed
+          ? chalk.bgGreenBright.black("   LLMs   ") + " " + chalk.green("(Large Language Models)")
+          : "LLMs (Large Language Models)",
         llms,
         loadedModels,
+        detailed,
       );
-      console.info();
       console.info();
     }
 
     const embeddings = downloadedModels.filter(model => model.type === "embedding");
     if (embeddings.length > 0) {
       printDownloadedModelsTable(
-        chalk.bgGreenBright.black("   Embeddings   "),
+        detailed ? chalk.bgGreenBright.black("   Embedding Models   ") : "Embedding Models",
         embeddings,
         loadedModels,
+        detailed,
       );
-      console.info();
       console.info();
     }
   },
@@ -248,7 +327,9 @@ export const ps = command({
         console.info(
           dot + chalk.whiteBright(`Size: ${formatSizeBytesWithColor1000(model.sizeBytes)}`),
         );
-        console.info(dot + chalk.whiteBright(`Architecture: ${architecture(model.architecture)}`));
+        console.info(
+          dot + chalk.whiteBright(`Architecture: ${architectureColored(model.architecture)}`),
+        );
         console.info();
       }
     }

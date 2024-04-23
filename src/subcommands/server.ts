@@ -1,5 +1,4 @@
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
-import boxen from "boxen";
 import chalk from "chalk";
 import { spawn } from "child_process";
 import { command, flag, number, option, optional, subcommands } from "cmd-ts";
@@ -229,33 +228,21 @@ const start = command({
       }
       const cliPref = await getCliPref(logger);
       if (!cliPref.get().autoLaunchMinimizedWarned) {
-        logger.warnWithoutPrefix(
-          boxen(
-            text`
-              About to Launch LM Studio
+        logger.warnWithoutPrefix(text`
+          ${"\n"}${chalk.bold.underline.greenBright("About to Launch LM Studio")}
 
-              By default, if the LM Studio is not running, using the command ${chalk.yellow(
-                "lms server start",
-              )} will launch LM Studio in minimized mode and then start the server.
+          By default, if the LM Studio is not running, using the command ${chalk.yellow(
+            "lms server start",
+          )} will launch LM Studio in minimized mode and then start the server.
 
-              ${chalk.grey(text`
-                If you don't want LM Studio to launch automatically, please use the ${chalk.yellow(
-                  "--no-launch",
-                )} flag.
-              `)}
+          ${chalk.grey(text`
+            If you don't want LM Studio to launch automatically, please use the ${chalk.yellow(
+              "--no-launch",
+            )} flag.
+          `)}
 
-              Type "${chalk.greenBright("OK")}" to continue. This confirmation will not be shown
-              again.
-            `,
-            {
-              padding: 1,
-              margin: 1,
-              borderColor: "green",
-              textAlignment: "center",
-              float: "center",
-            },
-          ),
-        );
+          ${chalk.gray("This confirmation will not be shown again.")}${"\n"}
+        `);
         await inquirer.prompt([
           {
             type: "input",
@@ -274,25 +261,12 @@ const start = command({
         });
       }
 
-      logger.warnWithoutPrefix(
-        boxen(
-          text`
-            Launching LM Studio Minimized...
-
-            ${chalk.grey(text`
-              If you don't want LM Studio to launch automatically, please use the ${chalk.yellow(
-                "--no-launch",
-              )} flag.
-            `)}
-          `,
-          {
-            padding: 1,
-            margin: 1,
-            borderColor: "yellow",
-            textAlignment: "center",
-            float: "center",
-          },
-        ),
+      logger.warn("Launching LM Studio minimized...");
+      logger.warn(
+        chalk.grey(text`
+          If you don't want LM Studio to launch automatically, please use the
+          ${chalk.yellow("--no-launch")} flag.
+        `),
       );
 
       const launched = await launchApplication(logger);
