@@ -19,8 +19,7 @@ export async function createClient(logger: SimpleLogger) {
 
         To start the server, run the following command:
 
-            ${chalk.yellow("lms server start ")}
-        
+            ${chalk.yellow("lms server start ")}${"\n"}
       `,
     );
     process.exit(1);

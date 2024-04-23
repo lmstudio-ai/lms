@@ -83,7 +83,7 @@ export const unload = command({
 
               To see a list of loaded models, run:
 
-                  ${chalk.yellowBright("lms ps")}${"\n"}
+                  ${chalk.yellowBright("lms ps")}
             `,
           ).message,
         );
