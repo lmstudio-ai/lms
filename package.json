@@ -40,6 +40,5 @@
     "prettier": "^3.2.5",
     "shx": "^0.3.4",
     "typescript": "^5.3.3"
-  },
-  "gitHead": "5259c45c526765acba906a11bb3f03fb2581d1d2"
+  }
 }
