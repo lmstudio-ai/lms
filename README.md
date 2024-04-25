@@ -33,7 +33,7 @@ echo 'export PATH="$HOME/.cache/lmstudio/bin:$PATH"' >> ~/.bashrc
 
 #### Windows
 
-- `lms.exe` should already be in your PATH after installation. Test it by running `lms version` in powershell or cmd.
+- `lms.exe` should already be in your PATH after installation. Test it by running `lms` in powershell or cmd.
 
 # Usage
 

@@ -203,12 +203,13 @@ export const load = command({
         path = "";
         model = await selectModelToLoad(models, modelPaths, path, 5, lastLoadedMap);
       } else if (initialFilteredModels.length === 1) {
-        console.info(
-          text`
-            ! Confirm model selection, or select a different model.
-          `,
-        );
-        model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
+        model = models[initialFilteredModels[0].index];
+        // console.info(
+        //   text`
+        //     ! Confirm model selection, or select a different model.
+        //   `,
+        // );
+        // model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
       } else {
         console.info(
           text`
