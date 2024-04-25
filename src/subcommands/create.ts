@@ -220,7 +220,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
       type: "input",
       name: "value",
       message: `${name}`,
-      default: defaultValue,
+      default: defaultValue === "" ? undefined : defaultValue,
     });
 
     if (arg.isProjectName) {
