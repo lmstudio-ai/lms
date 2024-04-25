@@ -1,15 +1,16 @@
-import { filteredArray, text, type SimpleLogger } from "@lmstudio/lms-common";
+import { filteredArray, type SimpleLogger } from "@lmstudio/lms-common";
 import boxen from "boxen";
 import chalk from "chalk";
 import { exec, spawn } from "child_process";
 import { command, optional, positional, string } from "cmd-ts";
 import fg from "fast-glob";
 import { existsSync } from "fs";
-import { mkdir, readFile, rm, unlink, writeFile } from "fs/promises";
+import { mkdir, readFile, rename, rm, unlink, writeFile } from "fs/promises";
 import fuzzy from "fuzzy";
 import inquirer from "inquirer";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
 import { tmpdir } from "os";
+import { join } from "path";
 import * as tar from "tar";
 import util from "util";
 import { z } from "zod";
@@ -44,6 +45,13 @@ const scaffoldSchema = z.object({
       replaceFrom: z.array(z.string()).optional(),
       default: z.string(),
       isProjectName: z.boolean().optional(),
+    }),
+  ),
+  renames: z.array(z.object({ from: z.string(), to: z.string() })).optional(),
+  motd: z.array(
+    z.object({
+      text: z.string(),
+      type: z.enum(["regular", "title", "command", "hint"]),
     }),
   ),
 });
@@ -334,20 +342,50 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
 
   await rm(`${projectName}/lms-scaffold.json`);
 
+  if (scaffold.renames !== undefined) {
+    for (let { from, to } of scaffold.renames) {
+      from = join(projectName, replacer.replace(from));
+      to = join(projectName, replacer.replace(to));
+      await rename(from, to);
+    }
+  }
+
   logger.info("Project initialized.");
 
+  const motdLines = [];
+
+  for (const { type, text } of scaffold.motd) {
+    const message = replacer
+      .replace(text)
+      .replaceAll("<hl>", "\x1b[96m")
+      .replaceAll("</hl>", "\x1b[39m");
+    switch (type) {
+      case "title":
+        motdLines.push(chalk.bgGreenBright.black(`  ${message}  `));
+        break;
+      case "regular":
+        motdLines.push(message);
+        break;
+      case "command":
+        motdLines.push(
+          message
+            .trim()
+            .split("\n")
+            .map(msg => "    " + chalk.yellowBright(msg))
+            .join("\n"),
+        );
+        break;
+      case "hint":
+        motdLines.push(chalk.gray(message));
+        break;
+    }
+  }
+
   logger.infoWithoutPrefix(
-    boxen(
-      text`
-        ${chalk.greenBright(
-          `Project has been successfully created in ${chalk.cyanBright(projectName)}.`,
-        )}
-
-        To start the project, run the following commands:
-
-            ${chalk.yellowBright(`cd ${projectName} && npm start`)}
-      `,
-      { padding: 1, margin: 1, borderColor: "greenBright" },
-    ),
+    boxen(motdLines.join("\n\n"), {
+      padding: 1,
+      margin: 1,
+      borderColor: "greenBright",
+    }),
   );
 }
