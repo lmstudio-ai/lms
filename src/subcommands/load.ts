@@ -168,30 +168,7 @@ export const load = command({
     logger.debug("Initial filtered models length:", initialFilteredModels.length);
 
     let model: DownloadedModel;
-    if (initialFilteredModels.length !== 1 && !yes) {
-      if (path === undefined) {
-        console.info();
-        model = await selectModelToLoad(models, modelPaths, "", 4, lastLoadedMap);
-      } else if (initialFilteredModels.length === 0) {
-        console.info();
-        console.info(
-          chalk.redBright(text`
-            ! Cannot find a model matching the provided path (${chalk.yellowBright(path)}). Please
-            select one from the list below.
-          `),
-        );
-        path = "";
-        model = await selectModelToLoad(models, modelPaths, path, 5, lastLoadedMap);
-      } else {
-        console.info();
-        console.info(
-          text`
-            ! Multiple models match the provided path. Please select one.
-          `,
-        );
-        model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
-      }
-    } else {
+    if (yes) {
       if (initialFilteredModels.length === 0) {
         logger.errorWithoutPrefix(
           makeTitledPrettyError(
@@ -212,6 +189,34 @@ export const load = command({
         process.exit(1);
       }
       model = models[initialFilteredModels[0].index];
+    } else {
+      console.info();
+      if (path === undefined) {
+        model = await selectModelToLoad(models, modelPaths, "", 4, lastLoadedMap);
+      } else if (initialFilteredModels.length === 0) {
+        console.info(
+          chalk.redBright(text`
+            ! Cannot find a model matching the provided path (${chalk.yellowBright(path)}). Please
+            select one from the list below.
+          `),
+        );
+        path = "";
+        model = await selectModelToLoad(models, modelPaths, path, 5, lastLoadedMap);
+      } else if (initialFilteredModels.length === 1) {
+        console.info(
+          text`
+            ! Confirm model selection, or select a different model.
+          `,
+        );
+        model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
+      } else {
+        console.info(
+          text`
+            ! Multiple models match the provided path. Please select one.
+          `,
+        );
+        model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
+      }
     }
 
     const modelInLastLoadedModelsIndex = lastLoadedModels.indexOf(model.path);

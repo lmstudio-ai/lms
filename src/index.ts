@@ -1,4 +1,5 @@
 import { run, subcommands } from "cmd-ts";
+import { bootstrap } from "./subcommands/bootstrap";
 import { create } from "./subcommands/create";
 import { ls, ps } from "./subcommands/list";
 import { load } from "./subcommands/load";
@@ -24,6 +25,7 @@ const cli = subcommands({
     unload,
     create,
     version,
+    bootstrap,
   },
 });
 

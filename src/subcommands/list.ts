@@ -140,14 +140,14 @@ function printDownloadedModelsTable(
         if (models.length === 1) {
           const model = models[0];
           return {
-            path: group,
-            sizeBytes: formatSizeBytes1000(model.sizeBytes),
-            arch: architecture(model.architecture),
+            path: chalk.cyanBright(group),
+            sizeBytes: chalk.cyanBright(formatSizeBytes1000(model.sizeBytes)),
+            arch: chalk.cyanBright(architecture(model.architecture)),
             loaded: loadedCheck(model.loadedIdentifiers.length),
           };
         } else {
           return {
-            path: group,
+            path: chalk.cyanBright(group),
             arch: chalk.gray(`(...${models.length} options)`),
             loaded: loadedCheck(
               models.reduce((acc, model) => acc + model.loadedIdentifiers.length, 0),
@@ -166,14 +166,14 @@ function printDownloadedModelsTable(
             align: "left",
           },
           path: {
-            headingTransform: () => chalk.greenBright(title),
+            headingTransform: () => chalk(title),
           },
           sizeBytes: {
-            headingTransform: () => chalk.greenBright("SIZE"),
+            headingTransform: () => chalk("SIZE"),
             align: "right",
           },
           arch: {
-            headingTransform: () => chalk.greenBright("ARCHITECTURE"),
+            headingTransform: () => chalk("ARCHITECTURE"),
             align: "center",
           },
         },

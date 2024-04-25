@@ -15,6 +15,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@lmstudio/lms-common": "^0.5.1",
+    "@lmstudio/lms-lmstudio": "^0.0.3",
     "@lmstudio/sdk": "^0.0.4",
     "boxen": "^5.1.2",
     "chalk": "^4.1.2",
