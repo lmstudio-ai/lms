@@ -1,6 +1,6 @@
 {
   "name": "@lmstudio/lms-cli",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,8 +14,8 @@
   "author": "",
   "license": "Apache-2.0",
   "dependencies": {
-    "@lmstudio/lms-common": "^0.5.1",
-    "@lmstudio/lms-lmstudio": "^0.0.3",
+    "@lmstudio/lms-common": "^0.5.2",
+    "@lmstudio/lms-lmstudio": "^0.0.4",
     "@lmstudio/sdk": "^0.0.4",
     "boxen": "^5.1.2",
     "chalk": "^4.1.2",
@@ -44,5 +44,5 @@
     "shx": "^0.3.4",
     "typescript": "^5.3.3"
   },
-  "gitHead": "d821c81d24bde49e43181177a4af37424bc13120"
+  "gitHead": "d40dc744ffe4a2b2245336dde463fb07dd812353"
 }
