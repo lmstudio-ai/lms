@@ -1,4 +1,4 @@
-import { filteredArray, type SimpleLogger } from "@lmstudio/lms-common";
+import { filteredArray, text, type SimpleLogger } from "@lmstudio/lms-common";
 import boxen from "boxen";
 import chalk from "chalk";
 import { exec, spawn } from "child_process";
@@ -115,10 +115,10 @@ export const create = command({
     if (selectedIndex === -1) {
       console.info();
       if (scaffoldName === undefined) {
-        selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, "", 5);
+        selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, "", 0);
       } else {
         // const initialFilteredResults = fuzzy.filter(scaffold, searchKeys);
-        selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, scaffoldName, 5);
+        selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, scaffoldName, 0);
       }
     }
 
@@ -147,18 +147,23 @@ async function selectScaffold(
   leaveEmptyLines: number,
 ) {
   inquirer.registerPrompt("autocomplete", inquirerPrompt);
-  console.info(chalk.gray("! Please select a scaffold from the list below."));
   console.info(
-    chalk.gray("! use the arrow keys to navigate, type to filter, and press enter to select."),
+    boxen(
+      text`
+        ${chalk.greenBright.underline(" Welcome to LM Studio Interactive Project Creator ")}
+
+        ${chalk.white("Select a scaffold to use from the list below.")}
+      `,
+      { padding: 1, margin: 1, borderColor: "greenBright", textAlignment: "center" },
+    ),
   );
-  console.info();
   const { selected } = await inquirer.prompt({
     type: "autocomplete",
     name: "selected",
     message: chalk.greenBright("Select a scaffold to use") + chalk.gray(" |"),
     initialSearch,
     loop: false,
-    pageSize: terminalSize().rows - leaveEmptyLines,
+    pageSize: terminalSize().rows - leaveEmptyLines - 10,
     emptyText: "No scaffold matched the filter",
     source: async (_: any, input: string) => {
       const options = fuzzy.filter(input ?? "", searchKeys, {
