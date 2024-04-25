@@ -1,6 +1,6 @@
 {
   "name": "@lmstudio/lms-cli",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -44,5 +44,5 @@
     "shx": "^0.3.4",
     "typescript": "^5.3.3"
   },
-  "gitHead": "a84a6c848e943bdd93d58502e312e317ed1ff721"
+  "gitHead": "e9d3d252d6daea1db060d5d3a7404c887e9e7e9c"
 }
