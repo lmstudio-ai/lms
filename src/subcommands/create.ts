@@ -60,27 +60,10 @@ type ScaffoldBasicsList = z.infer<typeof scaffoldBasicsListSchema>;
 async function getScaffolds(logger: SimpleLogger) {
   const url = "https://scaffolds-manifest.lmstudio.ai";
   const response = await fetch(url);
-  let json = await response.json();
+  const json = await response.json();
   if (!Array.isArray(json)) {
     throw new Error("Invalid response from the server.");
   }
-  json = [
-    {
-      $schema: "./../scaffold-json-schema-v1.json",
-      scaffoldVersion: 1,
-      name: "node-typescript",
-      displayName: "Node.js with TypeScript",
-      description: "Empty Node.js TypeScript project with lmstudio.js",
-      args: [
-        {
-          name: "Project Name",
-          default: "node-typescript",
-          replaceFrom: ["@lmstudio/scaffold-node-typescript"],
-          isProjectName: true,
-        },
-      ],
-    },
-  ];
 
   return json as Array<unknown>;
 }
