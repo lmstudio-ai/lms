@@ -339,7 +339,7 @@ export const ps = command({
 
     for (const { identifier, path } of loadedModels) {
       const model = downloadedModels.find(model => model.path === path);
-      console.info(chalk.greenBright(`identifier: ${chalk.green(identifier)}`));
+      console.info(chalk.greenBright(`Identifier: ${chalk.green(identifier)}`));
       if (model === undefined) {
         console.info(chalk.gray("  Cannot find more information"));
       } else {
