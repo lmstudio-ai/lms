@@ -13,11 +13,9 @@
 
 # Installation
 
-`lms` ships with [LM Studio](https://lmstudio.ai/). To set it up:
+`lms` ships with [LM Studio](https://lmstudio.ai/) 0.2.22 and newer. 
 
-## Set up `lms` (CLI)
-
-`lms` is the CLI tool for LM Studio. It is shipped with the latest versions of [LM Studio](https://lmstudio.ai/). To set it up, run the following command:
+To set it up, run the built-in `bootstrap` command like so:
 
 - **Windows**:
 
@@ -31,7 +29,7 @@
   ~/.cache/lm-studio/bin/lms bootstrap
   ```
 
-To check if the bootstrapping was successful, run the following in a new terminal window:
+To check if the bootstrapping was successful, run the following in a **👉 new terminal window 👈**:
 
 ```shell
 lms
@@ -39,7 +37,9 @@ lms
 
 # Usage
 
-You can use `lms --help` to see a list of all available subcommands. For specific details about each subcommand, use `lms <subcommand> --help`.
+You can use `lms --help` to see a list of all available subcommands. 
+
+For details about each **subcommand**, run `lms <subcommand> --help`.
 
 Here are some frequently used commands:
 
@@ -57,4 +57,6 @@ Here are some frequently used commands:
   - `lms unload --all` - To unload all models
 - `lms create` - To create a new project with LM Studio SDK
 
-Please note that most commands, except those controlling the server, internally use [lmstudio.js](https://github.com/lmstudio-ai/lmstudio.js). Therefore, ensure the server is running before utilizing these commands. You can start the server using `lms server start`.
+Please note that most commands, except those controlling the server, internally use [lmstudio.js](https://github.com/lmstudio-ai/lmstudio.js). Therefore, ensure the API server is running before utilizing these commands. 
+
+You can start the API server using `lms server start`.
