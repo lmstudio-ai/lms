@@ -274,7 +274,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     let stdout = "";
     const child = spawn(
       process.platform === "win32" ? "npm.cmd" : "npm",
-      ["pack", `@lmstudio/scaffold-${scaffold.name}@latest`],
+      ["pack", `@lmstudio/scaffold-${scaffold.name}@latest`, "--prefer-online"],
       { cwd: tempDir, shell: true },
     );
     child.stdout.on("data", data => {
