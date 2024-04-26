@@ -106,6 +106,17 @@ export const create = command({
       logger.warn("Please update LM Studio from https://lmstudio.ai");
     }
 
+    console.info(
+      boxen(
+        text`
+          ${chalk.greenBright.underline(" Welcome to LM Studio Interactive Project Creator ")}
+
+          ${chalk.white("Select a scaffold to use from the list below.")}
+        `,
+        { padding: 1, margin: 1, borderColor: "greenBright", textAlignment: "center" },
+      ),
+    );
+
     // Try exact match first.
     let selectedIndex = scaffoldBasicsList.findIndex(({ name }) => name === scaffoldName);
 
@@ -113,12 +124,11 @@ export const create = command({
       return `${displayName} (${name})`;
     });
     if (selectedIndex === -1) {
-      console.info();
       if (scaffoldName === undefined) {
-        selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, "", 0);
+        selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, "", 7);
       } else {
         // const initialFilteredResults = fuzzy.filter(scaffold, searchKeys);
-        selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, scaffoldName, 0);
+        selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, scaffoldName, 7);
       }
     }
 
@@ -147,23 +157,13 @@ async function selectScaffold(
   leaveEmptyLines: number,
 ) {
   inquirer.registerPrompt("autocomplete", inquirerPrompt);
-  console.info(
-    boxen(
-      text`
-        ${chalk.greenBright.underline(" Welcome to LM Studio Interactive Project Creator ")}
-
-        ${chalk.white("Select a scaffold to use from the list below.")}
-      `,
-      { padding: 1, margin: 1, borderColor: "greenBright", textAlignment: "center" },
-    ),
-  );
   const { selected } = await inquirer.prompt({
     type: "autocomplete",
     name: "selected",
     message: chalk.greenBright("Select a scaffold to use") + chalk.gray(" |"),
     initialSearch,
     loop: false,
-    pageSize: terminalSize().rows - leaveEmptyLines - 10,
+    pageSize: terminalSize().rows - leaveEmptyLines - 3,
     emptyText: "No scaffold matched the filter",
     source: async (_: any, input: string) => {
       const options = fuzzy.filter(input ?? "", searchKeys, {

@@ -231,7 +231,7 @@ const start = command({
         logger.warnWithoutPrefix(text`
           ${"\n"}${chalk.bold.underline.greenBright("About to Launch LM Studio")}
 
-          By default, if the LM Studio is not running, using the command ${chalk.yellow(
+          By default, if LM Studio is not running, using the command ${chalk.yellow(
             "lms server start",
           )} will launch LM Studio in minimized mode and then start the server.
 
