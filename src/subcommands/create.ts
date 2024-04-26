@@ -275,7 +275,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     const child = spawn(
       process.platform === "win32" ? "npm.cmd" : "npm",
       ["pack", `@lmstudio/scaffold-${scaffold.name}@latest`],
-      { cwd: tempDir },
+      { cwd: tempDir, shell: true },
     );
     child.stdout.on("data", data => {
       const str = data.toString();
@@ -327,6 +327,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["install"], {
       cwd: projectName,
       stdio: "inherit",
+      shell: true,
     });
     child.on("error", reject);
     child.on("exit", code => {
