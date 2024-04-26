@@ -300,7 +300,7 @@ async function loadModel(
     process.exit(1);
   };
   process.addListener("SIGINT", sigintListener);
-  await client.llm.load(path, {
+  const llmModel = await client.llm.load(path, {
     verbose: false,
     onProgress: progress => {
       progressBar.setRatio(progress);
@@ -317,4 +317,13 @@ async function loadModel(
     Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.
     (${formatSizeBytes1000(sizeBytes)})
   `);
+  const info = await llmModel.getModelInfo();
+  logger.info(text`
+    To use the model in the API/SDK, use the identifier "${chalk.greenBright(info!.identifier)}".
+  `);
+  if (identifier === undefined) {
+    logger.info(text`
+      To set a custom identifier, use the ${chalk.yellowBright("--identifier <identifier>")} option.
+    `);
+  }
 }
