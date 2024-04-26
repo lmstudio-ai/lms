@@ -261,13 +261,10 @@ const start = command({
         });
       }
 
-      logger.warn("Launching LM Studio minimized...");
-      logger.warn(
-        chalk.grey(text`
-          If you don't want LM Studio to launch automatically, please use the
-          ${chalk.yellow("--no-launch")} flag.
-        `),
-      );
+      logger.warnText`
+        Launching LM Studio minimized... (If you don't want LM Studio to launch automatically,
+        please use the ${chalk.yellow("--no-launch")} flag.)
+      `;
 
       const launched = await launchApplication(logger);
       if (launched) {
