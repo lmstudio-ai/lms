@@ -15,25 +15,27 @@
 
 `lms` ships with [LM Studio](https://lmstudio.ai/). To set it up:
 
-#### macOS / Linux
+## Set up `lms` (CLI)
 
-- **Zsh**
+`lms` is the CLI tool for LM Studio. It is shipped with the latest versions of [LM Studio](https://lmstudio.ai/). To set it up, run the following command:
 
-```bash
-echo 'export PATH="$HOME/.cache/lmstudio/bin:$PATH"' >> ~/.zshrc
+- **Windows**:
+
+  ```shell
+  cmd /c %USERPROFILE%/.cache/lm-studio/bin/lms.exe bootstrap
+  ```
+
+- **Linux/macOS**:
+
+  ```shell
+  ~/.cache/lm-studio/bin/lms bootstrap
+  ```
+
+To check if the bootstrapping was successful, run the following in a new terminal window:
+
+```shell
+lms
 ```
-
-- **Bash**
-
-```bash
-echo 'export PATH="$HOME/.cache/lmstudio/bin:$PATH"' >> ~/.bashrc
-```
-
-> Not sure which shell you're using? Pop open your terminal and run `echo $SHELL` to find out. `/bin/zsh` means you're using Zsh, `/bin/bash` means you're using Bash.
-
-#### Windows
-
-- `lms.exe` should already be in your PATH after installation. Test it by running `lms` in powershell or cmd.
 
 # Usage
 
@@ -45,6 +47,14 @@ Here are some frequently used commands:
 - `lms server start` - To start the local API server.
 - `lms server stop` - To stop the local API server.
 - `lms ls` - To list all downloaded models.
+  - `lms ls --detailed` - To list all downloaded models with detailed information.
+  - `lms ls --json` - To list all downloaded models in machine-readable JSON format.
 - `lms ps` - To list all loaded models available for inferencing.
+  - `lms ps --json` - To list all loaded models available for inferencing in machine-readable JSON format.
+- `lms load --gpu max` - To load a model with maximum GPU acceleration
+  - `lms load <model path> --gpu max -y` - To load a model with maximum GPU acceleration without confirmation
+- `lms unload <model identifier>` - To unload a model
+  - `lms unload --all` - To unload all models
+- `lms create` - To create a new project with LM Studio SDK
 
 Please note that most commands, except those controlling the server, internally use [lmstudio.js](https://github.com/lmstudio-ai/lmstudio.js). Therefore, ensure the server is running before utilizing these commands. You can start the server using `lms server start`.
