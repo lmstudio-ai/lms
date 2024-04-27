@@ -51,7 +51,7 @@ export const load = command({
       type: gpuOptionType,
       long: "gpu",
       description: text`
-        How much to offload to the GPU.If "off", GPU offloading is disabled. If "max", all layers
+        How much to offload to the GPU. If "off", GPU offloading is disabled. If "max", all layers
         are offloaded to GPU. If "auto", LM Studio will decide how much to offload to the GPU. If a
         number between 0 and 1, that fraction of layers will be offloaded to the GPU.
       `,
