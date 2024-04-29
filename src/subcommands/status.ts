@@ -2,7 +2,7 @@ import { text } from "@lmstudio/lms-common";
 import boxen from "boxen";
 import chalk from "chalk";
 import { command } from "cmd-ts";
-import { createClient } from "../createClient";
+import { createClient, createClientArgs } from "../createClient";
 import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000";
 import { createLogger, logLevelArgs } from "../logLevel";
 import { checkHttpServer, getServerLastStatus } from "./server";
@@ -12,6 +12,7 @@ export const status = command({
   description: "Prints the status of LM Studio",
   args: {
     ...logLevelArgs,
+    ...createClientArgs,
   },
   async handler(args) {
     const logger = createLogger(args);
@@ -32,7 +33,7 @@ export const status = command({
       `;
       content += "\n\n";
 
-      const client = await createClient(logger);
+      const client = await createClient(logger, args);
       const loadedModels = await client.llm.listLoaded();
       const downloadedModels = await client.system.listDownloadedModels();
       content += chalk.cyanBright("Loaded Models");

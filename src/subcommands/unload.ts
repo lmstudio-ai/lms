@@ -4,7 +4,7 @@ import { boolean, command, flag, optional, positional, string } from "cmd-ts";
 import fuzzy from "fuzzy";
 import inquirer from "inquirer";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
-import { createClient } from "../createClient";
+import { createClient, createClientArgs } from "../createClient";
 import { createLogger, logLevelArgs } from "../logLevel";
 import terminalSize from "../terminalSize";
 
@@ -12,6 +12,8 @@ export const unload = command({
   name: "unload",
   description: "Unload a model",
   args: {
+    ...logLevelArgs,
+    ...createClientArgs,
     identifier: positional({
       type: optional(string),
       description: text`
@@ -26,12 +28,11 @@ export const unload = command({
       long: "all",
       short: "a",
     }),
-    ...logLevelArgs,
   },
   handler: async args => {
     const { identifier, all } = args;
     const logger = createLogger(args);
-    const client = await createClient(logger);
+    const client = await createClient(logger, args);
 
     if (all && identifier !== undefined) {
       logger.errorWithoutPrefix(

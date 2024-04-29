@@ -7,7 +7,7 @@ import fuzzy from "fuzzy";
 import inquirer from "inquirer";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
 import { getCliPref } from "../cliPref";
-import { createClient } from "../createClient";
+import { createClient, createClientArgs } from "../createClient";
 import { formatElapsedTime } from "../formatElapsedTime";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000";
 import { createLogger, logLevelArgs } from "../logLevel";
@@ -42,6 +42,7 @@ export const load = command({
   description: "Load a model",
   args: {
     ...logLevelArgs,
+    ...createClientArgs,
     path: positional({
       type: optional(string),
       description: "The path of the model to load. If not provided, ",
@@ -62,8 +63,9 @@ export const load = command({
       long: "yes",
       short: "y",
       description: text`
-        Answer yes to all prompts. If there are multiple models matching the path, the first one
-        will be loaded. Fails if the path provided does not match any model.
+        Suppress all confirmations and warnings. Useful for scripting. If there are multiple
+        models matching the path, the first one will be loaded. Fails if the path provided does not
+        match any model.
       `,
     }),
     exact: flag({
@@ -87,7 +89,7 @@ export const load = command({
     const { gpu, yes, exact, identifier } = args;
     let { path } = args;
     const logger = createLogger(args);
-    const client = await createClient(logger);
+    const client = await createClient(logger, args);
     const cliPref = await getCliPref(logger);
 
     const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];
@@ -103,19 +105,6 @@ export const load = command({
         const bIndex = lastLoadedMap.get(b.path) ?? lastLoadedMap.size + 1;
         return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
       });
-
-    if (exact && yes) {
-      logger.errorWithoutPrefix(
-        makeTitledPrettyError(
-          "Invalid usage",
-          text`
-            The ${chalk.yellowBright("--exact")} and ${chalk.yellowBright("--yes")} flags cannot be
-            used together.
-          `,
-        ).message,
-      );
-      process.exit(1);
-    }
 
     if (exact) {
       const model = models.find(model => model.path === path);
@@ -187,6 +176,11 @@ export const load = command({
           ).message,
         );
         process.exit(1);
+      }
+      if (initialFilteredModels.length > 1) {
+        logger.warnText`
+          ${initialFilteredModels.length} models match the provided path. Loading the first one.
+        `;
       }
       model = models[initialFilteredModels[0].index];
     } else {

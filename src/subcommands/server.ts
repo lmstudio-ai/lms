@@ -162,78 +162,57 @@ export async function getServerLastStatus(logger: SimpleLogger) {
   return lastStatus;
 }
 
-const start = command({
-  name: "start",
-  description: "Starts the local server",
-  args: {
-    port: option({
-      type: optional(number),
-      description: text`
-        Port to run the server on. If not provided, the server will run on the same port as the last
-        time it was started.
-      `,
-      long: "port",
-      short: "p",
-    }),
-    noLaunch: flag({
-      description: text`
-        Do not launch LM Studio if it is not running. If LM Studio is not running, the server will
-        not be started.
-      `,
-      long: "no-launch",
-    }),
-    cors: flag({
-      description: text`
-        Enable CORS on the server. Allows any website you visit to access the server. This is
-        required if you are developing a web application.
-      `,
-      long: "cors",
-    }),
-    ...logLevelArgs,
-  },
-  handler: async args => {
-    let { port } = args;
-    const { noLaunch, cors } = args;
-    const logger = createLogger(args);
-    if (port === undefined) {
-      try {
-        port = (await getServerLastStatus(logger)).port;
-        logger.debug(`Read from last status: port=${port}`);
-      } catch (e) {
-        logger.debug(`Failed to read last status`, e);
-        port = 1234;
-        logger.debug(`Using default port ${port}`);
-      }
-    } else {
-      logger.debug(`Using provided port ${port}`);
+export interface StartServerOpts {
+  port?: number;
+  cors?: boolean;
+  noLaunch?: boolean;
+  yes?: boolean;
+}
+export async function startServer(
+  logger: SimpleLogger,
+  { port, cors, noLaunch, yes }: StartServerOpts = {},
+): Promise<boolean> {
+  if (port === undefined) {
+    try {
+      port = (await getServerLastStatus(logger)).port;
+      logger.debug(`Read from last status: port=${port}`);
+    } catch (e) {
+      logger.debug(`Failed to read last status`, e);
+      port = 1234;
+      logger.debug(`Using default port ${port}`);
     }
-    if (cors) {
-      logger.warnText`
-        CORS is enabled. This means any website you visit can use the LM Studio server.
+  } else {
+    logger.debug(`Using provided port ${port}`);
+  }
+  if (cors) {
+    logger.warnText`
+      CORS is enabled. This means any website you visit can use the LM Studio server.
+    `;
+  }
+  logger.info(`Attempting to start the server on port ${port}...`);
+  await writeToServerCtl(logger, { type: "start", port, cors });
+  if (await waitForCtlFileClear(logger, 100, 10)) {
+    logger.info(`Requested the server to be started on port ${port}.`);
+  } else {
+    if (noLaunch) {
+      logger.errorText`
+        LM Studio is not running. Since --no-launch is provided, LM Studio will not be launched.
       `;
+      logger.errorText`
+        The server is not started. Please make sure LM Studio is running and try again.
+      `;
+      return false;
     }
-    logger.info(`Attempting to start the server on port ${port}...`);
-    await writeToServerCtl(logger, { type: "start", port, cors });
-    if (await waitForCtlFileClear(logger, 100, 10)) {
-      logger.info(`Requested the server to be started on port ${port}.`);
-    } else {
-      if (noLaunch) {
-        logger.errorText`
-          LM Studio is not running. Since --no-launch is provided, LM Studio will not be launched.
-        `;
-        logger.errorText`
-          The server is not started. Please make sure LM Studio is running and try again.
-        `;
-        process.exit(1);
-      }
-      const cliPref = await getCliPref(logger);
-      if (!cliPref.get().autoLaunchMinimizedWarned) {
+    const cliPref = await getCliPref(logger);
+    if (!cliPref.get().autoLaunchMinimizedWarned) {
+      if (yes) {
+        logger.warn(`Auto-launch warning suppressed by ${chalk.yellowBright("--yes")} flag`);
+      } else {
         logger.warnWithoutPrefix(text`
           ${"\n"}${chalk.bold.underline.greenBright("About to Launch LM Studio")}
 
-          By default, if LM Studio is not running, using the command ${chalk.yellow(
-            "lms server start",
-          )} will launch LM Studio in minimized mode and then start the server.
+          By default, if LM Studio is not running, attempting to start the server will launch LM
+          Studio in minimized mode and then start the server.
 
           ${chalk.grey(text`
             If you don't want LM Studio to launch automatically, please use the ${chalk.yellow(
@@ -260,37 +239,82 @@ const start = command({
           pref.autoLaunchMinimizedWarned = true;
         });
       }
+    }
 
-      logger.warnText`
-        Launching LM Studio minimized... (If you don't want LM Studio to launch automatically,
-        please use the ${chalk.yellow("--no-launch")} flag.)
-      `;
+    logger.warnText`
+      Launching LM Studio minimized... (If you don't want LM Studio to launch automatically,
+      please use the ${chalk.yellow("--no-launch")} flag.)
+    `;
 
-      const launched = await launchApplication(logger);
-      if (launched) {
-        logger.debug(`LM Studio launched`);
-        // At this point, LM Studio is launching. Once it is ready, it will consume the control file
-        // and start the server. Let's wait for that to happen.
-        if (await waitForCtlFileClear(logger, 1000, 10)) {
-          logger.info(`Requested the server to be started on port ${port}.`);
-        } else {
-          logger.error(`Failed to start the server on port ${port}`);
-          process.exit(1);
-        }
+    const launched = await launchApplication(logger);
+    if (launched) {
+      logger.debug(`LM Studio launched`);
+      // At this point, LM Studio is launching. Once it is ready, it will consume the control file
+      // and start the server. Let's wait for that to happen.
+      if (await waitForCtlFileClear(logger, 1000, 10)) {
+        logger.info(`Requested the server to be started on port ${port}.`);
       } else {
-        logger.errorText`
-          Failed to launch LM Studio. Please make sure it is installed and have run it at least
-          once.
-        `;
+        logger.error(`Failed to start the server on port ${port}`);
         process.exit(1);
       }
-    }
-    logger.info("Verifying the server is running...");
-
-    if (await checkHttpServerWithRetries(logger, port, 5)) {
-      logger.info(`Verification succeeded. The server is running on port ${port}.`);
     } else {
-      logger.error("Failed to verify the server is running. Please try to use another port.");
+      logger.errorText`
+        Failed to launch LM Studio. Please make sure it is installed and have run it at least
+        once.
+      `;
+      return false;
+    }
+  }
+  logger.info("Verifying the server is running...");
+
+  if (await checkHttpServerWithRetries(logger, port, 5)) {
+    logger.info(`Verification succeeded. The server is running on port ${port}.`);
+    return true;
+  } else {
+    logger.error("Failed to verify the server is running. Please try to use another port.");
+    return false;
+  }
+}
+
+const start = command({
+  name: "start",
+  description: "Starts the local server",
+  args: {
+    port: option({
+      type: optional(number),
+      description: text`
+        Port to run the server on. If not provided, the server will run on the same port as the last
+        time it was started.
+      `,
+      long: "port",
+      short: "p",
+    }),
+    noLaunch: flag({
+      description: text`
+        Do not launch LM Studio if it is not running. If LM Studio is not running, the server will
+        not be started.
+      `,
+      long: "no-launch",
+    }),
+    yes: flag({
+      description: text`
+        Suppress all confirmations and warnings. Useful for scripting.
+      `,
+      long: "yes",
+    }),
+    cors: flag({
+      description: text`
+        Enable CORS on the server. Allows any website you visit to access the server. This is
+        required if you are developing a web application.
+      `,
+      long: "cors",
+    }),
+    ...logLevelArgs,
+  },
+  handler: async args => {
+    const { port, noLaunch, cors } = args;
+    const logger = createLogger(args);
+    if (!(await startServer(logger, { port, noLaunch, cors }))) {
       process.exit(1);
     }
   },

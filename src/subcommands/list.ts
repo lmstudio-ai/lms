@@ -4,7 +4,7 @@ import chalk from "chalk";
 import { command, flag } from "cmd-ts";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations";
-import { createClient } from "../createClient";
+import { createClient, createClientArgs } from "../createClient";
 import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000";
 import { createLogger, logLevelArgs } from "../logLevel";
 
@@ -189,6 +189,7 @@ export const ls = command({
   description: "List all downloaded models",
   args: {
     ...logLevelArgs,
+    ...createClientArgs,
     llm: flag({
       long: "llm",
       description: "Show only LLM models",
@@ -208,7 +209,7 @@ export const ls = command({
   },
   handler: async args => {
     const logger = createLogger(args);
-    const client = await createClient(logger);
+    const client = await createClient(logger, args);
 
     const { llm, embedding, json, detailed } = args;
 
@@ -299,6 +300,7 @@ export const ps = command({
   description: "List all loaded models",
   args: {
     ...logLevelArgs,
+    ...createClientArgs,
     json: flag({
       long: "json",
       description: "Outputs in JSON format to stdout",
@@ -306,7 +308,7 @@ export const ps = command({
   },
   handler: async args => {
     const logger = createLogger(args);
-    const client = await createClient(logger);
+    const client = await createClient(logger, args);
 
     const { json } = args;
 
