@@ -3,6 +3,7 @@ import { bootstrap } from "./subcommands/bootstrap";
 import { create } from "./subcommands/create";
 import { ls, ps } from "./subcommands/list";
 import { load } from "./subcommands/load";
+import { log } from "./subcommands/log";
 import { server } from "./subcommands/server";
 import { status } from "./subcommands/status";
 import { unload } from "./subcommands/unload";
@@ -24,6 +25,7 @@ const cli = subcommands({
     load,
     unload,
     create,
+    log,
     version,
     bootstrap,
   },
