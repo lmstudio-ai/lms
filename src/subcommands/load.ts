@@ -45,7 +45,11 @@ export const load = command({
     ...createClientArgs,
     path: positional({
       type: optional(string),
-      description: "The path of the model to load. If not provided, ",
+      description: text`
+        The path of the model to load. If not provided, you will be prompted to select one. If
+        multiple models match the path, you will also be prompted to select one. If you don't wish
+        to be prompted, please use the --exact or the --yes flag.
+      `,
       displayName: "path",
     }),
     gpu: option({
