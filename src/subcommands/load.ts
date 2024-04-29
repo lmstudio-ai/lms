@@ -122,6 +122,7 @@ export const load = command({
   handler: async args => {
     const { gpu, contextLength, yes, exact, identifier } = args;
     const loadConfig: LLMLoadModelConfig = {
+      gpuOffload: gpu,
       contextLength,
     };
     let { path } = args;
@@ -184,7 +185,7 @@ export const load = command({
         );
         process.exit(1);
       }
-      await loadModel(logger, client, model, identifier, gpu, loadConfig);
+      await loadModel(logger, client, model, identifier, loadConfig);
       return;
     }
 
@@ -263,7 +264,7 @@ export const load = command({
       draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
     });
 
-    await loadModel(logger, client, model, identifier, gpu, loadConfig);
+    await loadModel(logger, client, model, identifier, loadConfig);
   },
 });
 
@@ -315,13 +316,12 @@ async function loadModel(
   client: LMStudioClient,
   model: DownloadedModel,
   identifier: string | undefined,
-  gpu: LLMAccelerationOffload,
   config: LLMLoadModelConfig,
 ) {
   const { path, sizeBytes } = model;
   logger.info(`Loading model "${path}"...`);
   logger.debug("Identifier:", identifier);
-  logger.debug("GPU offload:", gpu);
+  logger.debug("Config:", config);
   const progressBar = new ProgressBar();
   const startTime = Date.now();
   const abortController = new AbortController();
@@ -339,7 +339,6 @@ async function loadModel(
     },
     signal: abortController.signal,
     noHup: true,
-    acceleration: { offload: gpu },
     config,
     identifier,
   });
