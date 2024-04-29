@@ -1,6 +1,10 @@
 import { makeTitledPrettyError, type SimpleLogger, text } from "@lmstudio/lms-common";
 import { type DownloadedModel } from "@lmstudio/lms-shared-types";
-import { type LLMAccelerationOffload, type LMStudioClient } from "@lmstudio/sdk";
+import {
+  type LLMAccelerationOffload,
+  type LLMLoadModelConfig,
+  type LMStudioClient,
+} from "@lmstudio/sdk";
 import chalk from "chalk";
 import { boolean, command, flag, option, optional, positional, string, type Type } from "cmd-ts";
 import fuzzy from "fuzzy";
@@ -37,6 +41,24 @@ const gpuOptionType: Type<string, LLMAccelerationOffload> = {
   description: `a number between 0 to 1, or one of "off", "auto", "max"`,
 };
 
+const positiveIntegerOptionType: Type<string, number> = {
+  async from(str) {
+    const num = +str;
+    if (Number.isNaN(num)) {
+      throw new Error("Not a number");
+    }
+    if (Number.isInteger(num) === false) {
+      throw new Error("Not an integer");
+    }
+    if (num <= 0) {
+      throw new Error("Number out of range, must be greater than 0");
+    }
+    return num;
+  },
+  displayName: "number",
+  description: `a positive integer`,
+};
+
 export const load = command({
   name: "load",
   description: "Load a model",
@@ -61,6 +83,14 @@ export const load = command({
         number between 0 and 1, that fraction of layers will be offloaded to the GPU.
       `,
       defaultValue: () => "auto" as const,
+    }),
+    contextLength: option({
+      type: optional(positiveIntegerOptionType),
+      long: "context-length",
+      description: text`
+        The number of tokens to consider as context when generating text. If not provided, the
+        default value will be used.
+      `,
     }),
     yes: flag({
       type: boolean,
@@ -90,7 +120,10 @@ export const load = command({
     }),
   },
   handler: async args => {
-    const { gpu, yes, exact, identifier } = args;
+    const { gpu, contextLength, yes, exact, identifier } = args;
+    const loadConfig: LLMLoadModelConfig = {
+      contextLength,
+    };
     let { path } = args;
     const logger = createLogger(args);
     const client = await createClient(logger, args);
@@ -151,7 +184,7 @@ export const load = command({
         );
         process.exit(1);
       }
-      await loadModel(logger, client, model, identifier, gpu);
+      await loadModel(logger, client, model, identifier, gpu, loadConfig);
       return;
     }
 
@@ -230,7 +263,7 @@ export const load = command({
       draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
     });
 
-    await loadModel(logger, client, model, identifier, gpu);
+    await loadModel(logger, client, model, identifier, gpu, loadConfig);
   },
 });
 
@@ -283,6 +316,7 @@ async function loadModel(
   model: DownloadedModel,
   identifier: string | undefined,
   gpu: LLMAccelerationOffload,
+  config: LLMLoadModelConfig,
 ) {
   const { path, sizeBytes } = model;
   logger.info(`Loading model "${path}"...`);
@@ -306,6 +340,7 @@ async function loadModel(
     signal: abortController.signal,
     noHup: true,
     acceleration: { offload: gpu },
+    config,
     identifier,
   });
   process.removeListener("SIGINT", sigintListener);
