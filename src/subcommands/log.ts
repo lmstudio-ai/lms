@@ -26,24 +26,26 @@ const stream = command({
       if (json) {
         console.log(JSON.stringify(log));
       } else {
-        console.log("Time: " + chalk.greenBright(new Date(log.timestamp).toLocaleString()));
-        console.log("Type: " + chalk.greenBright(log.data.type));
+        console.log("timestamp: " + chalk.greenBright(new Date(log.timestamp).toLocaleString()));
+        console.log("type: " + chalk.greenBright(log.data.type));
         switch (log.data.type) {
-          case "llm.prediction": {
+          case "llm.prediction.input": {
             printLlmPredictionLogEvent(log.data);
           }
         }
+        console.log();
+        console.log();
       }
     });
   },
 });
 
-function printLlmPredictionLogEvent(data: DiagnosticsLogEventData & { type: "llm.prediction" }) {
-  console.log("Model Identifier: " + chalk.greenBright(data.modelIdentifier));
-  console.log("Model Path: " + chalk.greenBright(data.modelPath));
-  console.log(chalk.underline("Full Prompt"));
-  console.log(chalk.cyanBright(data.input));
-  console.log();
+function printLlmPredictionLogEvent(
+  data: DiagnosticsLogEventData & { type: "llm.prediction.input" },
+) {
+  console.log("modelIdentifier: " + chalk.greenBright(data.modelIdentifier));
+  console.log("modelPath: " + chalk.greenBright(data.modelPath));
+  console.log(`input: "${chalk.green(data.input)}"`);
 }
 
 export const log = subcommands({

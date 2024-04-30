@@ -1,4 +1,5 @@
 import { filteredArray, text, type SimpleLogger } from "@lmstudio/lms-common";
+import { terminalSize } from "@lmstudio/lms-isomorphic";
 import boxen from "boxen";
 import chalk from "chalk";
 import { exec, spawn } from "child_process";
@@ -16,7 +17,6 @@ import util from "util";
 import { z } from "zod";
 import { createLogger, logLevelArgs } from "../logLevel";
 import { ProgressBar } from "../ProgressBar";
-import terminalSize from "../terminalSize";
 
 const execAsync = util.promisify(exec);
 const illegalPathChars = ["/", "\\", ":", "*", "?", '"', "<", ">", "|"];
@@ -156,8 +156,9 @@ async function selectScaffold(
   initialSearch: string,
   leaveEmptyLines: number,
 ) {
-  inquirer.registerPrompt("autocomplete", inquirerPrompt);
-  const { selected } = await inquirer.prompt({
+  const prompt = inquirer.createPromptModule({ output: process.stderr });
+  prompt.registerPrompt("autocomplete", inquirerPrompt);
+  const { selected } = await prompt({
     type: "autocomplete",
     name: "selected",
     message: chalk.greenBright("Select a scaffold to use") + chalk.gray(" |"),
@@ -221,7 +222,9 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     const { name, replaceFrom, default: originalDefaultValue } = arg;
     const defaultValue = replacer.replace(originalDefaultValue);
 
-    const { value } = await inquirer.prompt({
+    const { value } = await inquirer.createPromptModule({
+      output: process.stderr,
+    })({
       type: "input",
       name: "value",
       message: `${name}`,

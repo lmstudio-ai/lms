@@ -38,12 +38,14 @@ async function maybeTryStartServer(logger: SimpleLogger, startServerOpts: StartS
   const { yes } = startServerOpts;
   const pref = await getCliPref(logger);
   if (pref.get().autoStartServer === undefined && !yes) {
-    logger.warnWithoutPrefix(text`
+    process.stderr.write(text`
       ${"\n"}${chalk.greenBright.underline("Server Auto Start")}
 
-      LM Studio needs to be running in server mode to perform this operation.${"\n"}
+      LM Studio needs to be running in server mode to perform this operation.${"\n\n"}
     `);
-    const { cont } = await inquirer.prompt([
+    const { cont } = await inquirer.createPromptModule({
+      output: process.stderr,
+    })([
       {
         type: "confirm",
         name: "cont",

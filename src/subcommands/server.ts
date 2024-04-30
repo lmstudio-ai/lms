@@ -208,7 +208,7 @@ export async function startServer(
       if (yes) {
         logger.warn(`Auto-launch warning suppressed by ${chalk.yellowBright("--yes")} flag`);
       } else {
-        logger.warnWithoutPrefix(text`
+        process.stderr.write(text`
           ${"\n"}${chalk.bold.underline.greenBright("About to Launch LM Studio")}
 
           By default, if LM Studio is not running, attempting to start the server will launch LM
@@ -220,9 +220,11 @@ export async function startServer(
             )} flag.
           `)}
 
-          ${chalk.gray("This confirmation will not be shown again.")}${"\n"}
+          ${chalk.gray("This confirmation will not be shown again.")}${"\n\n"}
         `);
-        await inquirer.prompt([
+        await inquirer.createPromptModule({
+          output: process.stderr,
+        })([
           {
             type: "input",
             name: "confirmation",

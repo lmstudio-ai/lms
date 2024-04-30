@@ -16,6 +16,7 @@
   "dependencies": {
     "@lmstudio/lms-common": "^0.5.5",
     "@lmstudio/lms-lmstudio": "^0.0.9",
+    "@lmstudio/lms-isomorphic": "^0.3.1",
     "@lmstudio/sdk": "^0.0.10",
     "boxen": "^5.1.2",
     "chalk": "^4.1.2",

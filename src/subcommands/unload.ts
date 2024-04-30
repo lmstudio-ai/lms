@@ -1,4 +1,5 @@
 import { makeTitledPrettyError, text } from "@lmstudio/lms-common";
+import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
 import { boolean, command, flag, optional, positional, string } from "cmd-ts";
 import fuzzy from "fuzzy";
@@ -6,7 +7,6 @@ import inquirer from "inquirer";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
 import { createClient, createClientArgs } from "../createClient";
 import { createLogger, logLevelArgs } from "../logLevel";
-import terminalSize from "../terminalSize";
 
 export const unload = command({
   name: "unload",
@@ -98,14 +98,15 @@ export const unload = command({
         logger.error(`You don't have any models loaded. Use "lms load --gpu max" to load a model.`);
         process.exit(1);
       }
-      inquirer.registerPrompt("autocomplete", inquirerPrompt);
       console.info();
       console.info(
         chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
       );
       console.info(chalk.gray("! To unload all models, use the --all flag."));
       console.info();
-      const { selected } = await inquirer.prompt({
+      const prompt = inquirer.createPromptModule({ output: process.stderr });
+      prompt.registerPrompt("autocomplete", inquirerPrompt);
+      const { selected } = await prompt({
         type: "autocomplete",
         name: "selected",
         message: chalk.greenBright("Select a model to unload") + chalk.gray(" |"),

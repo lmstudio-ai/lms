@@ -1,4 +1,5 @@
 import { makeTitledPrettyError, type SimpleLogger, text } from "@lmstudio/lms-common";
+import { terminalSize } from "@lmstudio/lms-isomorphic";
 import { type DownloadedModel } from "@lmstudio/lms-shared-types";
 import {
   type LLMAccelerationOffload,
@@ -16,7 +17,6 @@ import { formatElapsedTime } from "../formatElapsedTime";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000";
 import { createLogger, logLevelArgs } from "../logLevel";
 import { ProgressBar } from "../ProgressBar";
-import terminalSize from "../terminalSize";
 
 const gpuOptionType: Type<string, LLMAccelerationOffload> = {
   async from(str) {
@@ -275,12 +275,13 @@ async function selectModelToLoad(
   leaveEmptyLines: number,
   _lastLoadedMap: Map<string, number>,
 ) {
-  inquirer.registerPrompt("autocomplete", inquirerPrompt);
   console.info(
     chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
   );
   console.info();
-  const { selected } = await inquirer.prompt({
+  const prompt = inquirer.createPromptModule({ output: process.stderr });
+  prompt.registerPrompt("autocomplete", inquirerPrompt);
+  const { selected } = await prompt({
     type: "autocomplete",
     name: "selected",
     message: chalk.greenBright("Select a model to load") + chalk.gray(" |"),
