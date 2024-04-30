@@ -27,15 +27,20 @@ export const logLevelArgs = {
   }),
 };
 
-export function createLogger({
-  logLevel,
-  verbose,
-  quiet,
-}: {
+export interface LogLevelArgs {
   logLevel: "debug" | "info" | "warn" | "error" | "none" | undefined;
   verbose: boolean;
   quiet: boolean;
-}): SimpleLogger {
+}
+
+export interface LogLevelMap {
+  debug: boolean;
+  info: boolean;
+  warn: boolean;
+  error: boolean;
+}
+
+export function getLogLevelMap({ logLevel, verbose, quiet }: LogLevelArgs): LogLevelMap {
   let numSpecified = 0;
   if (logLevel !== undefined) {
     numSpecified++;
@@ -61,15 +66,25 @@ export function createLogger({
     logLevel = "debug";
   }
   const level = levels.indexOf(logLevel ?? "info");
+  return {
+    debug: level <= levels.indexOf("debug"),
+    info: level <= levels.indexOf("info"),
+    warn: level <= levels.indexOf("warn"),
+    error: level <= levels.indexOf("error"),
+  };
+}
+
+export function createLogger({ logLevel, verbose, quiet }: LogLevelArgs): SimpleLogger {
   const console = new Console({
     stdout: process.stderr,
     stderr: process.stderr,
   });
+  const levelMap = getLogLevelMap({ logLevel, verbose, quiet });
   const consoleObj = {
-    info: level <= levels.indexOf("info") ? console.info : () => {},
-    warn: level <= levels.indexOf("warn") ? console.warn : () => {},
-    error: level <= levels.indexOf("error") ? console.error : () => {},
-    debug: level <= levels.indexOf("debug") ? console.debug : () => {},
+    debug: levelMap.debug ? console.debug : () => {},
+    info: levelMap.info ? console.info : () => {},
+    warn: levelMap.warn ? console.warn : () => {},
+    error: levelMap.error ? console.error : () => {},
   };
   return new SimpleLogger("", consoleObj);
 }

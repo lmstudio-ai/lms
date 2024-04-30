@@ -1,3 +1,5 @@
+import { type DiagnosticsLogEventData } from "@lmstudio/lms-shared-types";
+import chalk from "chalk";
 import { command, flag, subcommands } from "cmd-ts";
 import { createClient, createClientArgs } from "../createClient";
 import { createLogger, logLevelArgs } from "../logLevel";
@@ -24,15 +26,25 @@ const stream = command({
       if (json) {
         console.log(JSON.stringify(log));
       } else {
-        const better = {
-          ...log,
-          timestamp: new Date(log.timestamp).toISOString(),
-        };
-        console.log(better);
+        console.log("Time: " + chalk.greenBright(new Date(log.timestamp).toLocaleString()));
+        console.log("Type: " + chalk.greenBright(log.data.type));
+        switch (log.data.type) {
+          case "llm.prediction": {
+            printLlmPredictionLogEvent(log.data);
+          }
+        }
       }
     });
   },
 });
+
+function printLlmPredictionLogEvent(data: DiagnosticsLogEventData & { type: "llm.prediction" }) {
+  console.log("Model Identifier: " + chalk.greenBright(data.modelIdentifier));
+  console.log("Model Path: " + chalk.greenBright(data.modelPath));
+  console.log(chalk.underline("Full Prompt"));
+  console.log(chalk.cyanBright(data.input));
+  console.log();
+}
 
 export const log = subcommands({
   name: "log",

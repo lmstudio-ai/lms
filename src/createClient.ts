@@ -1,10 +1,11 @@
-import { text, type SimpleLogger } from "@lmstudio/lms-common";
+import { SimpleLogger, text } from "@lmstudio/lms-common";
 import { LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { flag } from "cmd-ts";
 import inquirer from "inquirer";
 import { platform } from "os";
 import { getCliPref } from "./cliPref";
+import { getLogLevelMap, type LogLevelArgs, type LogLevelMap } from "./logLevel";
 import {
   checkHttpServer,
   getServerLastStatus,
@@ -113,28 +114,71 @@ async function maybeTryStartServer(logger: SimpleLogger, startServerOpts: StartS
   }
 }
 
+/**
+ * Creates a logger that will self delete messages at info level.
+ */
+function createSelfDeletingLogger(logger: SimpleLogger, levelMap: LogLevelMap) {
+  return new SimpleLogger(
+    "",
+    {
+      debug: levelMap.debug
+        ? (...messages) => {
+            process.stderr.clearLine(0);
+            logger.debug(...messages);
+          }
+        : () => {},
+      info: levelMap.info
+        ? (...messages) => {
+            process.stderr.clearLine(0);
+            logger.info(...messages);
+            if (!levelMap.debug) {
+              process.stderr.moveCursor(0, -1);
+            }
+          }
+        : () => {},
+      warn: levelMap.warn
+        ? (...messages) => {
+            process.stderr.clearLine(0);
+            logger.warn(...messages);
+          }
+        : () => {},
+      error: levelMap.error
+        ? (...messages) => {
+            process.stderr.clearLine(0);
+            logger.error(...messages);
+          }
+        : () => {},
+    },
+
+    { useLogLevelPrefixes: false },
+  );
+}
+
 export interface CreateClientOpts {}
 
 export async function createClient(
   logger: SimpleLogger,
-  { noLaunch, yes }: CreateClientArgs,
+  args: CreateClientArgs & LogLevelArgs,
   _opts: CreateClientOpts = {},
 ) {
+  const { noLaunch, yes } = args;
   let port: number;
+  const selfDeletingLogger = createSelfDeletingLogger(logger, getLogLevelMap(args));
   try {
-    const lastStatus = await getServerLastStatus(logger);
+    const lastStatus = await getServerLastStatus(selfDeletingLogger);
     port = lastStatus.port;
   } catch (e) {
-    logger.debug("Failed to get last server status", e);
+    selfDeletingLogger.debug("Failed to get last server status", e);
     port = 1234;
   }
-  if (!(await checkHttpServer(logger, port))) {
-    if (!(await maybeTryStartServer(logger, { port, noLaunch, yes }))) {
+  if (!(await checkHttpServer(selfDeletingLogger, port))) {
+    if (!(await maybeTryStartServer(selfDeletingLogger, { port, noLaunch, yes }))) {
       process.exit(1);
     }
   }
   const baseUrl = `ws://127.0.0.1:${port}`;
-  logger.debug(`Connecting to server with baseUrl ${port}`);
+  selfDeletingLogger.debug(`Connecting to server with baseUrl ${port}`);
+  process.stderr.clearLine(0);
   return new LMStudioClient({
     baseUrl,
     logger,
