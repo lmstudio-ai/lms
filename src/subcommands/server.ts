@@ -4,7 +4,7 @@ import { spawn } from "child_process";
 import { command, flag, number, option, optional, subcommands } from "cmd-ts";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import inquirer from "inquirer";
-import os from "os";
+import os, { platform } from "os";
 import path from "path";
 import { getCliPref } from "../cliPref";
 import { createLogger, logLevelArgs } from "../logLevel";
@@ -194,6 +194,13 @@ export async function startServer(
   if (await waitForCtlFileClear(logger, 100, 10)) {
     logger.info(`Requested the server to be started on port ${port}.`);
   } else {
+    if (platform() === "linux") {
+      // Sorry, linux users :(
+      logger.errorText`
+        LM Studio is not running. Please start LM Studio and try again.
+      `;
+      return false;
+    }
     if (noLaunch) {
       logger.errorText`
         LM Studio is not running. Since --no-launch is provided, LM Studio will not be launched.
