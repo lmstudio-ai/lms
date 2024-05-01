@@ -1,8 +1,9 @@
+import chalk from "chalk";
 import { command, flag } from "cmd-ts";
 
 function getVersion() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  return require("../../package.json").version;
+  // We are not using the package version, because we want the version to be the same as LM Studio.
+  return "0.2.22";
 }
 
 export function printVersion() {
@@ -13,9 +14,7 @@ export function printVersion() {
     String.raw`/____/_/  /_/ /___/\__/\_,_/\_,_/_/\___/  \___/____/___/  `,
   ];
 
-  // Using a selection of softer color codes from the ANSI 256-color palette
-  // const colorCodes = [39, 45, 51, 75, 69, 63]; // These codes correspond to lighter shades
-  const colorCodes = [166, 214, 226, 46, 51, 141]; // Selected for a vivid rainbow effect
+  const colorCodes = [166, 214, 226, 46, 51, 141];
 
   lines.forEach((line, index) => {
     const colorCode = colorCodes[index % colorCodes.length];
@@ -23,7 +22,9 @@ export function printVersion() {
   });
 
   console.info();
-  console.info(`\x1b[38;5;231mlms - LM Studio CLI - v${getVersion()}\x1b[0m`); // White for the version text
+  console.info(`\x1b[38;5;231mlms - LM Studio CLI - v${getVersion()}\x1b[0m`);
+  // console.info("Licensed under the MIT License");
+  console.info(chalk.gray("GitHub: https://github.com/lmstudio-ai/lmstudio-cli"));
 }
 
 export const version = command({
