@@ -13,7 +13,7 @@
 
 # Installation
 
-`lms` ships with [LM Studio](https://lmstudio.ai/) 0.2.22 and newer. 
+`lms` ships with [LM Studio](https://lmstudio.ai/) 0.2.22 and newer.
 
 To set it up, run the built-in `bootstrap` command like so:
 
@@ -37,7 +37,7 @@ lms
 
 # Usage
 
-You can use `lms --help` to see a list of all available subcommands. 
+You can use `lms --help` to see a list of all available subcommands.
 
 For details about each **subcommand**, run `lms <subcommand> --help`.
 
@@ -56,7 +56,8 @@ Here are some frequently used commands:
 - `lms unload <model identifier>` - To unload a model
   - `lms unload --all` - To unload all models
 - `lms create` - To create a new project with LM Studio SDK
+- `lms log stream` - To stream logs from LM Studio
 
-Please note that most commands, except those controlling the server, internally use [lmstudio.js](https://github.com/lmstudio-ai/lmstudio.js). Therefore, ensure the API server is running before utilizing these commands. 
+Please note that most commands, except those controlling the server, internally use [lmstudio.js](https://github.com/lmstudio-ai/lmstudio.js). Therefore, ensure the API server is running before utilizing these commands.
 
 You can start the API server using `lms server start`.
