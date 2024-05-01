@@ -1,7 +1,7 @@
 {
   "name": "@lmstudio/lms-cli",
   "version": "0.3.20",
-  "description": "",
+  "description": "LM Studio CLI",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": "dist/index.js",
@@ -11,7 +11,7 @@
     "clean": "shx rm -rf ./dist && shx rm -f ./tsconfig.tsbuildinfo",
     "postinstall": "patch-package"
   },
-  "author": "",
+  "author": "LM Studio <team@lmstudio.ai> (https://lmstudio.ai)",
   "license": "Apache-2.0",
   "dependencies": {
     "@lmstudio/lms-common": "^0.5.7",
