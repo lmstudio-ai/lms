@@ -5,7 +5,7 @@ import { flag } from "cmd-ts";
 import inquirer from "inquirer";
 import { platform } from "os";
 import { getCliPref } from "./cliPref";
-import { getLogLevelMap, type LogLevelArgs, type LogLevelMap } from "./logLevel";
+import { type LogLevelArgs, type LogLevelMap } from "./logLevel";
 import {
   checkHttpServer,
   getServerLastStatus,
@@ -165,21 +165,21 @@ export async function createClient(
 ) {
   const { noLaunch, yes } = args;
   let port: number;
-  const selfDeletingLogger = createSelfDeletingLogger(logger, getLogLevelMap(args));
+  // const selfDeletingLogger = createSelfDeletingLogger(logger, getLogLevelMap(args));
   try {
-    const lastStatus = await getServerLastStatus(selfDeletingLogger);
+    const lastStatus = await getServerLastStatus(logger);
     port = lastStatus.port;
   } catch (e) {
-    selfDeletingLogger.debug("Failed to get last server status", e);
+    logger.debug("Failed to get last server status", e);
     port = 1234;
   }
-  if (!(await checkHttpServer(selfDeletingLogger, port))) {
-    if (!(await maybeTryStartServer(selfDeletingLogger, { port, noLaunch, yes }))) {
+  if (!(await checkHttpServer(logger, port))) {
+    if (!(await maybeTryStartServer(logger, { port, noLaunch, yes, useReducedLogging: true }))) {
       process.exit(1);
     }
   }
   const baseUrl = `ws://127.0.0.1:${port}`;
-  selfDeletingLogger.debug(`Connecting to server with baseUrl ${port}`);
+  logger.debug(`Connecting to server with baseUrl ${port}`);
   process.stderr.clearLine(0);
   return new LMStudioClient({
     baseUrl,

@@ -167,10 +167,11 @@ export interface StartServerOpts {
   cors?: boolean;
   noLaunch?: boolean;
   yes?: boolean;
+  useReducedLogging?: boolean;
 }
 export async function startServer(
   logger: SimpleLogger,
-  { port, cors, noLaunch, yes }: StartServerOpts = {},
+  { port, cors, noLaunch, yes, useReducedLogging }: StartServerOpts = {},
 ): Promise<boolean> {
   if (port === undefined) {
     try {
@@ -189,10 +190,16 @@ export async function startServer(
       CORS is enabled. This means any website you visit can use the LM Studio server.
     `;
   }
-  logger.info(`Attempting to start the server on port ${port}...`);
+  logger.logAtLevel(
+    useReducedLogging ? "debug" : "info",
+    `Attempting to start the server on port ${port}...`,
+  );
   await writeToServerCtl(logger, { type: "start", port, cors });
   if (await waitForCtlFileClear(logger, 100, 10)) {
-    logger.info(`Requested the server to be started on port ${port}.`);
+    logger.logAtLevel(
+      useReducedLogging ? "debug" : "info",
+      `Requested the server to be started on port ${port}.`,
+    );
   } else {
     if (platform() === "linux") {
       // Sorry, linux users :(
@@ -261,7 +268,10 @@ export async function startServer(
       // At this point, LM Studio is launching. Once it is ready, it will consume the control file
       // and start the server. Let's wait for that to happen.
       if (await waitForCtlFileClear(logger, 1000, 10)) {
-        logger.info(`Requested the server to be started on port ${port}.`);
+        logger.logAtLevel(
+          useReducedLogging ? "debug" : "info",
+          `Requested the server to be started on port ${port}.`,
+        );
       } else {
         logger.error(`Failed to start the server on port ${port}`);
         process.exit(1);
@@ -274,10 +284,16 @@ export async function startServer(
       return false;
     }
   }
-  logger.info("Verifying the server is running...");
+  logger.logAtLevel(useReducedLogging ? "debug" : "info", "Verifying the server is running...");
 
   if (await checkHttpServerWithRetries(logger, port, 5)) {
-    logger.info(`Verification succeeded. The server is running on port ${port}.`);
+    logger.logAtLevel(
+      useReducedLogging ? "debug" : "info",
+      `Verification succeeded. The server is running on port ${port}.`,
+    );
+    if (useReducedLogging) {
+      logger.info("Successfully started the server and verified it is running.");
+    }
     return true;
   } else {
     logger.error("Failed to verify the server is running. Please try to use another port.");
