@@ -39,7 +39,7 @@ lms
 
 You can use `lms --help` to see a list of all available subcommands.
 
-For details about each **subcommand**, run `lms <subcommand> --help`.
+For details about each subcommand, run `lms <subcommand> --help`.
 
 Here are some frequently used commands:
 
@@ -57,7 +57,3 @@ Here are some frequently used commands:
   - `lms unload --all` - To unload all models
 - `lms create` - To create a new project with LM Studio SDK
 - `lms log stream` - To stream logs from LM Studio
-
-Please note that most commands, except those controlling the server, internally use [lmstudio.js](https://github.com/lmstudio-ai/lmstudio.js). Therefore, ensure the API server is running before utilizing these commands.
-
-You can start the API server using `lms server start`.
