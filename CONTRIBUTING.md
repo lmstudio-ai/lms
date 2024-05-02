@@ -11,7 +11,7 @@ If you are planning to add a feature or fix a bug, please open an issue first to
 _Developing `lms` requires Node.js 18.6.0_
 
 1. Fork this repository
-2. Clone your fork: `git clone git@github.com:your-username/lmstudio-cli.git` onto your local development machine
+2. Clone your fork: `git clone git@github.com:lmstudio-ai/lmstudio-cli.git` onto your local development machine
 3. Run `npm install` to install the dependencies
 4. Run `npm run watch` to start the development server
 5. Go to `dist` folder and run `node ./index.js <subcommand>` to test your changes
