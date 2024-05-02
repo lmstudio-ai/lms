@@ -4,6 +4,7 @@ import chalk from "chalk";
 import { flag } from "cmd-ts";
 import inquirer from "inquirer";
 import { platform } from "os";
+import { clearLine, moveCursor } from "readline";
 import { getCliPref } from "./cliPref";
 import { type LogLevelArgs, type LogLevelMap } from "./logLevel";
 import {
@@ -125,28 +126,28 @@ function createSelfDeletingLogger(logger: SimpleLogger, levelMap: LogLevelMap) {
     {
       debug: levelMap.debug
         ? (...messages) => {
-            process.stderr.clearLine(0);
+            clearLine(process.stderr, 0);
             logger.debug(...messages);
           }
         : () => {},
       info: levelMap.info
         ? (...messages) => {
-            process.stderr.clearLine(0);
+            clearLine(process.stderr, 0);
             logger.info(...messages);
             if (!levelMap.debug) {
-              process.stderr.moveCursor(0, -1);
+              moveCursor(process.stderr, 0, -1);
             }
           }
         : () => {},
       warn: levelMap.warn
         ? (...messages) => {
-            process.stderr.clearLine(0);
+            clearLine(process.stderr, 0);
             logger.warn(...messages);
           }
         : () => {},
       error: levelMap.error
         ? (...messages) => {
-            process.stderr.clearLine(0);
+            clearLine(process.stderr, 0);
             logger.error(...messages);
           }
         : () => {},
@@ -180,7 +181,6 @@ export async function createClient(
   }
   const baseUrl = `ws://127.0.0.1:${port}`;
   logger.debug(`Connecting to server with baseUrl ${port}`);
-  process.stderr.clearLine(0);
   return new LMStudioClient({
     baseUrl,
     logger,

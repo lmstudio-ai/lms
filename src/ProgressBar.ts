@@ -1,3 +1,5 @@
+import { clearLine, cursorTo } from "readline";
+
 const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 export class ProgressBar {
@@ -18,8 +20,8 @@ export class ProgressBar {
       throw new Error("ProgressBar already stopped");
     }
     this.stopped = true;
-    process.stdout.clearLine(0);
-    process.stdout.cursorTo(0);
+    clearLine(process.stdout, 0);
+    cursorTo(process.stdout, 0);
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
