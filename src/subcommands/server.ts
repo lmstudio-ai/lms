@@ -251,7 +251,7 @@ export async function startServer(
             },
           },
         ]);
-        cliPref.setWithImmer(pref => {
+        cliPref.setWithProducer(pref => {
           pref.autoLaunchMinimizedWarned = true;
         });
       }

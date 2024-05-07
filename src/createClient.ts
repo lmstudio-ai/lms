@@ -70,7 +70,7 @@ async function maybeTryStartServer(logger: SimpleLogger, startServerOpts: StartS
         ${chalk.greenBright("~/.cache/lm-studio/.internal/cli-pref.json")}
       `);
     }
-    pref.setWithImmer(draft => {
+    pref.setWithProducer(draft => {
       draft.autoStartServer = cont;
     });
     if (!cont) {

@@ -259,7 +259,7 @@ export const load = command({
     }
     lastLoadedModels.unshift(model.path);
     logger.debug("Updating cliPref");
-    cliPref.setWithImmer(draft => {
+    cliPref.setWithProducer(draft => {
       // Keep only the last 20 loaded models
       draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
     });

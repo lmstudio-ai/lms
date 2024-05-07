@@ -1,4 +1,5 @@
-import { Signal, type SignalSetter, type SimpleLogger } from "@lmstudio/lms-common";
+import { Signal, type Setter, type SimpleLogger } from "@lmstudio/lms-common";
+import { isAvailable, type StripNotAvailable } from "@lmstudio/lms-common/dist/LazySignal";
 import { existsSync, writeFileSync } from "fs";
 import { mkdir, readFile, watch } from "fs/promises";
 import path from "path";
@@ -28,7 +29,7 @@ export class FileData<TData, TSerialized> {
     return this.internalDataSignal;
   }
   private readonly internalDataSignal!: Signal<TData>;
-  private readonly setData!: SignalSetter<TData>;
+  private readonly setData!: Setter<TData>;
   private lastWroteString: string | null = null;
   private initializationState: InitializationState = { type: "notStarted" };
   public constructor(
@@ -75,7 +76,7 @@ export class FileData<TData, TSerialized> {
     if (data === null) {
       data = this.defaultData;
     }
-    this.setData(data);
+    this.setData(data as StripNotAvailable<TData>);
     this.startWatcher().catch(e => {
       this.logger?.error(`Watcher failed: ${e}`);
     });
@@ -89,8 +90,8 @@ export class FileData<TData, TSerialized> {
       if (event.eventType === "change") {
         this.logger?.debug("File changed, reading data");
         const data: TData | null = await this.readData();
-        if (data !== null) {
-          this.setData(data);
+        if (data !== null && isAvailable(data)) {
+          this.setData(data as any);
         }
       }
     }
@@ -128,12 +129,15 @@ export class FileData<TData, TSerialized> {
   }
 
   public set(data: TData) {
+    if (!isAvailable(data)) {
+      throw new Error("Cannot set data to NOT_AVAILABLE");
+    }
     this.setData(data);
     this.writeData(this.dataSignal.get());
   }
 
-  public setWithImmer(producer: (draft: TData) => void) {
-    this.setData.withImmer(producer);
+  public setWithProducer(producer: (draft: TData) => void) {
+    this.setData.withProducer(producer);
     this.writeData(this.dataSignal.get());
   }
 
