@@ -3,7 +3,7 @@ import { command, flag } from "cmd-ts";
 
 function getVersion() {
   // We are not using the package version, because we want the version to be the same as LM Studio.
-  return "0.2.22";
+  return "0.2.23";
 }
 
 export function printVersion() {
