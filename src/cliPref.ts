@@ -7,12 +7,14 @@ import { SimpleFileData } from "./SimpleFileData";
 export async function getCliPref(logger?: SimpleLogger) {
   const cliPrefSchema = z.object({
     autoLaunchMinimizedWarned: z.boolean(),
+    importWillMoveWarned: z.boolean().optional(),
     lastLoadedModels: z.array(z.string()).optional(),
     autoStartServer: z.boolean().optional(),
   });
   type CliPref = z.infer<typeof cliPrefSchema>;
   const defaultCliPref: CliPref = {
     autoLaunchMinimizedWarned: false,
+    importWillMoveWarned: false,
     lastLoadedModels: [],
     autoStartServer: undefined,
   };
