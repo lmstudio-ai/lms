@@ -184,5 +184,6 @@ export async function createClient(
   return new LMStudioClient({
     baseUrl,
     logger,
+    clientIdentifier: "lms-cli",
   });
 }
