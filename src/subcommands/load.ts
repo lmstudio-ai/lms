@@ -4,7 +4,7 @@ import {
   type DownloadedModel,
   type LLMLlamaAccelerationOffloadRatio,
 } from "@lmstudio/lms-shared-types";
-import { type LLMLlamaLoadModelConfig, type LMStudioClient } from "@lmstudio/sdk";
+import { type LLMLoadModelConfig, type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { boolean, command, flag, option, optional, positional, string, type Type } from "cmd-ts";
 import fuzzy from "fuzzy";
@@ -120,7 +120,7 @@ export const load = command({
   },
   handler: async args => {
     const { gpu, contextLength, yes, exact, identifier } = args;
-    const loadConfig: LLMLlamaLoadModelConfig = {
+    const loadConfig: LLMLoadModelConfig = {
       gpuOffload: {
         ratio: gpu,
         mainGpu: 0,
@@ -320,7 +320,7 @@ async function loadModel(
   client: LMStudioClient,
   model: DownloadedModel,
   identifier: string | undefined,
-  config: LLMLlamaLoadModelConfig,
+  config: LLMLoadModelConfig,
 ) {
   const { path, sizeBytes } = model;
   logger.info(`Loading model "${path}"...`);
