@@ -16,7 +16,8 @@
     "proxying",
     "replit",
     "starcoder",
-    "Streamable"
+    "Streamable",
+    "tsbuildinfo"
   ],
   "rewrap.wrappingColumn": 100,
   "typescript.tsdk": "node_modules\\typescript\\lib",
