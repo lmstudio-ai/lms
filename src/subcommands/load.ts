@@ -22,8 +22,6 @@ const gpuOptionType: Type<string, LLMLlamaAccelerationOffloadRatio> = {
     str = str.trim().toLowerCase();
     if (str === "off") {
       return 0;
-    } else if (str === "auto") {
-      return "auto";
     } else if (str === "max") {
       return 1;
     }
@@ -36,8 +34,8 @@ const gpuOptionType: Type<string, LLMLlamaAccelerationOffloadRatio> = {
     }
     return num;
   },
-  displayName: "0-1|off|auto|max",
-  description: `a number between 0 to 1, or one of "off", "auto", "max"`,
+  displayName: "0-1|off|max",
+  description: `a number between 0 to 1, or one of "off" or "max"`,
 };
 
 const positiveIntegerOptionType: Type<string, number> = {
@@ -74,14 +72,13 @@ export const load = command({
       displayName: "path",
     }),
     gpu: option({
-      type: gpuOptionType,
+      type: optional(gpuOptionType),
       long: "gpu",
       description: text`
         How much to offload to the GPU. If "off", GPU offloading is disabled. If "max", all layers
-        are offloaded to GPU. If "auto", LM Studio will decide how much to offload to the GPU. If a
-        number between 0 and 1, that fraction of layers will be offloaded to the GPU.
+        are offloaded to GPU. If a number between 0 and 1, that fraction of layers will be offloaded
+        to the GPU. By default, LM Studio will decide how much to offload to the GPU.
       `,
-      defaultValue: () => "auto" as const,
     }),
     contextLength: option({
       type: optional(positiveIntegerOptionType),
@@ -121,13 +118,15 @@ export const load = command({
   handler: async args => {
     const { gpu, contextLength, yes, exact, identifier } = args;
     const loadConfig: LLMLoadModelConfig = {
-      gpuOffload: {
-        ratio: gpu,
-        mainGpu: 0,
-        tensorSplit: [0],
-      },
       contextLength,
     };
+    if (gpu !== undefined) {
+      loadConfig.gpuOffload = {
+        ratio: gpu,
+        mainGpu: 0,
+        tensorSplit: [],
+      };
+    }
     let { path } = args;
     const logger = createLogger(args);
     const client = await createClient(logger, args);
