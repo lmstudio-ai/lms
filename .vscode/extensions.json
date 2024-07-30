@@ -2,7 +2,6 @@
   "recommendations": [
     "streetsidesoftware.code-spell-checker",
     "dbaeumer.vscode-eslint",
-    "esbenp.prettier-vscode",
-    "stkb.rewrap",
+    "esbenp.prettier-vscode"
   ]
 }
