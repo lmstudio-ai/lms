@@ -4,7 +4,9 @@
     "es6": true,
     "node": true
   },
-  "plugins": ["eslint-plugin-tsdoc"],
+  "plugins": [
+    "eslint-plugin-tsdoc"
+  ],
   "extends": [
     "eslint:recommended",
     "plugin:@typescript-eslint/eslint-recommended",
