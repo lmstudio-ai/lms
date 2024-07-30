@@ -1,5 +1,17 @@
 {
   "image": "mcr.microsoft.com/devcontainers/universal:2",
-  "features": {
-  }
+  "features": {},
+  "extensions": [
+    "ms-python.python",
+    "visualstudioexptteam.vscodeintellicode",
+    "ms-azuretools.vscode-docker",
+    "ms-vscode-remote.remote-containers"
+  ]
+}
+  "ms-azuretools.vscode-docker",
+  "ms-vscode-remote.remote-containers"
+],
+"settings": {
+  "python.pythonPath": "/usr/local/bin/python",
+  "python.autoComplete.addBrackets": true
 }
