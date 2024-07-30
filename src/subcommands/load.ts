@@ -1,3 +1,7 @@
+npm uninstall @lmstudio/lms-common
+
+npm install @lmstudio/lms-common
+
 import { makeTitledPrettyError, type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import { type DownloadedModel } from "@lmstudio/lms-shared-types";
