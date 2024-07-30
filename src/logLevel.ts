@@ -86,5 +86,7 @@ export function createLogger({ logLevel, verbose, quiet }: LogLevelArgs): Simple
     warn: levelMap.warn ? console.warn : () => {},
     error: levelMap.error ? console.error : () => {},
   };
-  return new SimpleLogger("", consoleObj);
+  return new SimpleLogger("", consoleObj, {
+    useLogLevelPrefixes: true,
+  });
 }
