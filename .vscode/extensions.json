@@ -4,5 +4,6 @@
     "dbaeumer.vscode-eslint",
     "esbenp.prettier-vscode",
     "stkb.rewrap",
+    "ms-vscode-remote.remote-containers",
   ]
 }
