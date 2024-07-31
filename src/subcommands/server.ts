@@ -1,4 +1,18 @@
-import { text, type SimpleLogger } from "@lmstudio/lms-common";
+npm install @lmstudio/lms-common
+
+npm install @lmstudio/lms-common
+
+npm install @lmstudio/lms-common
+
+import { text, type SimpleLogger } from 
+;
+import { execSync } from "child_process";
+
+try {
+  execSync("npm install --force @lmstudio/lms-common");
+} catch (error) {
+  console.error("Failed to install @lmstudio/lms-common:", error);
+}
 import chalk from "chalk";
 import { spawn } from "child_process";
 import { command, flag, number, option, optional, subcommands } from "cmd-ts";

@@ -17,6 +17,7 @@
     "@lmstudio/lms-common": "^0.5.7",
     "@lmstudio/lms-isomorphic": "^0.3.2",
     "@lmstudio/lms-lmstudio": "^0.0.11",
+    "@lmstudio/lms-shared-types": "^0.4.5",
     "@lmstudio/sdk": "^0.0.12",
     "boxen": "^5.1.2",
     "chalk": "^4.1.2",

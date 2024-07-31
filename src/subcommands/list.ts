@@ -1,4 +1,7 @@
 import { text } from "@lmstudio/lms-common";
+import { execSync } from "child_process";
+
+execSync("npm install @lmstudio/lms-common");
 import { type DownloadedModel } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { command, flag } from "cmd-ts";

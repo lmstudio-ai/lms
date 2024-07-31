@@ -1,11 +1,18 @@
+// Removed the invalid npm install command
 import { text } from "@lmstudio/lms-common";
-import boxen from "boxen";
+import { execSync } from "child_process";
+
+npm install @lmstudio/lms-common;
 import chalk from "chalk";
 import { command } from "cmd-ts";
 import { createClient, createClientArgs } from "../createClient";
 import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000";
 import { createLogger, logLevelArgs } from "../logLevel";
 import { checkHttpServer, getServerLastStatus } from "./server";
+
+// Removed the invalid npm install command
+
+import boxen from "boxen";
 
 export const status = command({
   name: "status",

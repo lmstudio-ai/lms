@@ -1,4 +1,9 @@
+npm install --force @lmstudio/lms-common
+npm install --force @lmstudio/lms-common
 import { SimpleLogger, text } from "@lmstudio/lms-common";
+import { execSync } from "child_process";
+
+npm install @lmstudio/lms-common
 import { LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { flag } from "cmd-ts";

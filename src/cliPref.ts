@@ -4,6 +4,8 @@ import path from "path";
 import { z } from "zod";
 import { SimpleFileData } from "./SimpleFileData";
 
+npm install @lmstudio/lms-common;
+
 export async function getCliPref(logger?: SimpleLogger) {
   const cliPrefSchema = z.object({
     autoLaunchMinimizedWarned: z.boolean(),

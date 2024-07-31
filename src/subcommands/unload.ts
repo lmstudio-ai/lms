@@ -7,6 +7,7 @@ import inquirer from "inquirer";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
 import { createClient, createClientArgs } from "../createClient";
 import { createLogger, logLevelArgs } from "../logLevel";
+import { install } from "cmd-ts";
 
 export const unload = command({
   name: "unload",
