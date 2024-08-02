@@ -341,7 +341,6 @@ async function loadModel(
       progressBar.setRatio(progress);
     },
     signal: abortController.signal,
-    noHup: true,
     config,
     identifier,
   });
