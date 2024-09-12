@@ -34,7 +34,7 @@ function getServerCtlPath() {
 }
 
 function getServerLastStatusPath() {
-  return path.join(os.homedir(), ".cache/lm-studio/.internal/http-server-last-status.json");
+  return path.join(os.homedir(), ".cache/lm-studio/.internal/http-server-config.json");
 }
 
 function getAppInstallLocationPath() {

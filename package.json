@@ -14,7 +14,7 @@
   "author": "LM Studio <team@lmstudio.ai> (https://lmstudio.ai)",
   "license": "Apache-2.0",
   "dependencies": {
-    "@lmstudio/lms-common": "^0.5.7",
+    "@lmstudio/lms-common": "^0.6.0",
     "@lmstudio/lms-isomorphic": "^0.3.2",
     "@lmstudio/lms-lmstudio": "^0.0.11",
     "@lmstudio/sdk": "^0.0.12",
