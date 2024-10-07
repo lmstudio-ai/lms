@@ -5,7 +5,7 @@ import { command } from "cmd-ts";
 import { createClient, createClientArgs } from "../createClient";
 import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000";
 import { createLogger, logLevelArgs } from "../logLevel";
-import { checkHttpServer, getServerLastStatus } from "./server";
+import { checkHttpServer, getServerConfig } from "./server";
 
 export const status = command({
   name: "status",
@@ -16,16 +16,23 @@ export const status = command({
   },
   async handler(args) {
     const logger = createLogger(args);
-    let port: null | number = null;
-    try {
-      port = (await getServerLastStatus(logger)).port;
-    } catch (e) {
-      logger.debug(`Failed to read last status`, e);
+    let { host, port } = args;
+    if (host === undefined) {
+      host = "127.0.0.1";
     }
-    let running = false;
-    if (port !== null) {
-      running = await checkHttpServer(logger, port);
+    if (port === undefined) {
+      if (host === "127.0.0.1") {
+        try {
+          port = (await getServerConfig(logger)).port;
+        } catch (e) {
+          logger.debug(`Failed to read last status`, e);
+          port = 1234;
+        }
+      } else {
+        port = 1234;
+      }
     }
+    const running = await checkHttpServer(logger, port, host);
     let content = "";
     if (running) {
       content += text`

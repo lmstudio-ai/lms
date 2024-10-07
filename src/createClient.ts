@@ -1,7 +1,7 @@
 import { SimpleLogger, text } from "@lmstudio/lms-common";
 import { LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
-import { flag } from "cmd-ts";
+import { flag, option, optional, string } from "cmd-ts";
 import inquirer from "inquirer";
 import { platform } from "os";
 import { clearLine, moveCursor } from "readline";
@@ -9,10 +9,11 @@ import { getCliPref } from "./cliPref";
 import { type LogLevelArgs, type LogLevelMap } from "./logLevel";
 import {
   checkHttpServer,
-  getServerLastStatus,
+  getServerConfig,
   startServer,
   type StartServerOpts,
 } from "./subcommands/server";
+import { refinedNumber } from "./types/refinedNumber";
 
 export const createClientArgs = {
   yes: flag({
@@ -28,11 +29,28 @@ export const createClientArgs = {
       Don't launch LM Studio if it's not running. Have no effect if auto start server is disabled.
     `,
   }),
+  host: option({
+    type: optional(string),
+    long: "host",
+    description: text`
+      The host to connect to. Default is "127.0.0.1".
+    `,
+  }),
+  port: option({
+    type: optional(refinedNumber({ integer: true, min: 0, max: 65535 })),
+    long: "port",
+    description: text`
+      The port to connect to. If not provided and the host is set to "127.0.0.1" (default), the last
+      used port will be used; otherwise, 1234 will be used.
+    `,
+  }),
 };
 
 interface CreateClientArgs {
   yes?: boolean;
   noLaunch?: boolean;
+  host?: string;
+  port?: number;
 }
 
 async function maybeTryStartServer(logger: SimpleLogger, startServerOpts: StartServerOpts) {
@@ -165,21 +183,48 @@ export async function createClient(
   _opts: CreateClientOpts = {},
 ) {
   const { noLaunch, yes } = args;
-  let port: number;
-  // const selfDeletingLogger = createSelfDeletingLogger(logger, getLogLevelMap(args));
-  try {
-    const lastStatus = await getServerLastStatus(logger);
-    port = lastStatus.port;
-  } catch (e) {
-    logger.debug("Failed to get last server status", e);
-    port = 1234;
+  let { host, port } = args;
+  if (host === undefined) {
+    host = "127.0.0.1";
+  } else if (host.includes("://")) {
+    logger.error("Host should not include the protocol.");
+    process.exit(1);
+  } else if (host.includes(":")) {
+    logger.error(
+      `Host should not include the port number. Use ${chalk.yellowBright("--port")} instead.`,
+    );
+    process.exit(1);
   }
-  if (!(await checkHttpServer(logger, port))) {
-    if (!(await maybeTryStartServer(logger, { port, noLaunch, yes, useReducedLogging: true }))) {
+  if (port === undefined) {
+    if (host === "127.0.0.1") {
+      try {
+        const config = await getServerConfig(logger);
+        port = config.port;
+      } catch (e) {
+        logger.debug("Failed to get last server status", e);
+        port = 1234;
+      }
+    } else {
+      port = 1234;
+    }
+  }
+  logger.debug(`Connecting to server at ${host}:${port}`);
+  if (!(await checkHttpServer(logger, port, host))) {
+    if (host === "127.0.0.1") {
+      if (!(await maybeTryStartServer(logger, { port, noLaunch, yes, useReducedLogging: true }))) {
+        process.exit(1);
+      }
+    } else {
+      logger.error(
+        text`
+          The server does not appear to be running at ${host}:${port}. Please make sure the server
+          is running and accessible at the specified address.
+        `,
+      );
       process.exit(1);
     }
   }
-  const baseUrl = `ws://127.0.0.1:${port}`;
+  const baseUrl = `ws://${host}:${port}`;
   logger.debug(`Connecting to server with baseUrl ${port}`);
   return new LMStudioClient({
     baseUrl,
