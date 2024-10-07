@@ -16,6 +16,7 @@ import { formatElapsedTime } from "../formatElapsedTime";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000";
 import { createLogger, logLevelArgs } from "../logLevel";
 import { ProgressBar } from "../ProgressBar";
+import { refinedNumber } from "../types/refinedNumber";
 
 const gpuOptionType: Type<string, LLMLlamaAccelerationOffloadRatio> = {
   async from(str) {
@@ -36,24 +37,6 @@ const gpuOptionType: Type<string, LLMLlamaAccelerationOffloadRatio> = {
   },
   displayName: "0-1|off|max",
   description: `a number between 0 to 1, or one of "off" or "max"`,
-};
-
-const positiveIntegerOptionType: Type<string, number> = {
-  async from(str) {
-    const num = +str;
-    if (Number.isNaN(num)) {
-      throw new Error("Not a number");
-    }
-    if (Number.isInteger(num) === false) {
-      throw new Error("Not an integer");
-    }
-    if (num <= 0) {
-      throw new Error("Number out of range, must be greater than 0");
-    }
-    return num;
-  },
-  displayName: "number",
-  description: `a positive integer`,
 };
 
 export const load = command({
@@ -81,7 +64,7 @@ export const load = command({
       `,
     }),
     contextLength: option({
-      type: optional(positiveIntegerOptionType),
+      type: optional(refinedNumber({ integer: true, min: 1 })),
       long: "context-length",
       description: text`
         The number of tokens to consider as context when generating text. If not provided, the
@@ -139,7 +122,6 @@ export const load = command({
 
     const models = (await client.system.listDownloadedModels())
       .filter(model => !model.architecture?.toLowerCase().includes("clip"))
-      .filter(model => model.type === "llm")
       .sort((a, b) => {
         const aIndex = lastLoadedMap.get(a.path) ?? lastLoadedMap.size + 1;
         const bIndex = lastLoadedMap.get(b.path) ?? lastLoadedMap.size + 1;
@@ -335,7 +317,7 @@ async function loadModel(
     process.exit(1);
   };
   process.addListener("SIGINT", sigintListener);
-  const llmModel = await client.llm.load(path, {
+  const llmModel = await (model.type === "llm" ? client.llm : client.embedding).load(path, {
     verbose: false,
     onProgress: progress => {
       progressBar.setRatio(progress);

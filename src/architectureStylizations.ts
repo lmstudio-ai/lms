@@ -62,6 +62,10 @@ export const architectureInfoLookup = InfoLookup.createWithKeyMapper({
     name: "Phi-2",
     colorer: llmColorer,
   })
+  .register("phi3", "phi-3", {
+    name: "Phi-3",
+    colorer: llmColorer,
+  })
   .register("mistral", {
     name: "Mistral",
     colorer: llmColorer,
@@ -112,6 +116,14 @@ export const architectureInfoLookup = InfoLookup.createWithKeyMapper({
   })
   .register("gemma", {
     name: "Gemma",
+    colorer: llmColorer,
+  })
+  .register("gemma2", {
+    name: "Gemma 2",
+    colorer: llmColorer,
+  })
+  .register("deepseek2", {
+    name: "DeepSeek 2",
     colorer: llmColorer,
   })
   .register("bert", {

@@ -19,7 +19,7 @@ type HttpServerCtl =
       type: "stop";
     };
 
-interface HttpServerLastStatus {
+interface HttpServerConfig {
   port: number;
 }
 
@@ -33,8 +33,8 @@ function getServerCtlPath() {
   return path.join(os.homedir(), ".cache/lm-studio/.internal/http-server-ctl.json");
 }
 
-function getServerLastStatusPath() {
-  return path.join(os.homedir(), ".cache/lm-studio/.internal/http-server-last-status.json");
+function getServerConfigPath() {
+  return path.join(os.homedir(), ".cache/lm-studio/.internal/http-server-config.json");
 }
 
 function getAppInstallLocationPath() {
@@ -113,8 +113,12 @@ async function waitForCtlFileClear(
 /**
  * Checks if the HTTP server is running.
  */
-export async function checkHttpServer(logger: SimpleLogger, port: number) {
-  const url = `http://127.0.0.1:${port}/lmstudio-greeting`;
+export async function checkHttpServer(
+  logger: SimpleLogger,
+  port: number,
+  host: string = "127.0.0.1",
+) {
+  const url = `http://${host}:${port}/lmstudio-greeting`;
   logger.debug(`Checking server at ${url}`);
   try {
     const abortController = new AbortController();
@@ -155,10 +159,10 @@ async function checkHttpServerWithRetries(logger: SimpleLogger, port: number, ma
 /**
  * Gets the last status of the server.
  */
-export async function getServerLastStatus(logger: SimpleLogger) {
-  const lastStatusPath = getServerLastStatusPath();
+export async function getServerConfig(logger: SimpleLogger) {
+  const lastStatusPath = getServerConfigPath();
   logger.debug(`Reading last status from ${lastStatusPath}`);
-  const lastStatus = JSON.parse(await readFile(lastStatusPath, "utf-8")) as HttpServerLastStatus;
+  const lastStatus = JSON.parse(await readFile(lastStatusPath, "utf-8")) as HttpServerConfig;
   return lastStatus;
 }
 
@@ -175,7 +179,7 @@ export async function startServer(
 ): Promise<boolean> {
   if (port === undefined) {
     try {
-      port = (await getServerLastStatus(logger)).port;
+      port = (await getServerConfig(logger)).port;
       logger.debug(`Read from last status: port=${port}`);
     } catch (e) {
       logger.debug(`Failed to read last status`, e);
@@ -355,7 +359,7 @@ const stop = command({
     const logger = createLogger(args);
     let port: number;
     try {
-      port = (await getServerLastStatus(logger)).port;
+      port = (await getServerConfig(logger)).port;
     } catch (e) {
       logger.error(`The server is not running.`);
       process.exit(1);
@@ -393,7 +397,7 @@ const status = command({
     const { json } = args;
     let port: null | number = null;
     try {
-      port = (await getServerLastStatus(logger)).port;
+      port = (await getServerConfig(logger)).port;
     } catch (e) {
       logger.debug(`Failed to read last status`, e);
     }
