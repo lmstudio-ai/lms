@@ -1,6 +1,6 @@
 {
   "name": "@lmstudio/lms-cli",
-  "version": "0.3.22",
+  "version": "0.3.23",
   "description": "LM Studio CLI",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,10 +14,10 @@
   "author": "LM Studio <team@lmstudio.ai> (https://lmstudio.ai)",
   "license": "Apache-2.0",
   "dependencies": {
-    "@lmstudio/lms-common": "^0.6.0",
+    "@lmstudio/lms-common": "^0.6.1",
     "@lmstudio/lms-isomorphic": "^0.3.2",
-    "@lmstudio/lms-lmstudio": "^0.0.12",
-    "@lmstudio/sdk": "^0.1.0",
+    "@lmstudio/lms-lmstudio": "^0.0.13",
+    "@lmstudio/sdk": "^0.2.0",
     "boxen": "^5.1.2",
     "chalk": "^4.1.2",
     "cmd-ts": "^0.13.0",
@@ -45,5 +45,5 @@
     "shx": "^0.3.4",
     "typescript": "^5.3.3"
   },
-  "gitHead": "ab025759dd55d60eee6c4682bdd0210ad71a57cd"
+  "gitHead": "96f419904258c472237e2a50496711c7552ed8af"
 }
