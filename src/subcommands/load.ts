@@ -43,8 +43,6 @@ export const load = command({
   name: "load",
   description: "Load a model",
   args: {
-    ...logLevelArgs,
-    ...createClientArgs,
     path: positional({
       type: optional(string),
       description: text`
@@ -71,16 +69,6 @@ export const load = command({
         default value will be used.
       `,
     }),
-    yes: flag({
-      type: boolean,
-      long: "yes",
-      short: "y",
-      description: text`
-        Suppress all confirmations and warnings. Useful for scripting. If there are multiple
-        models matching the path, the first one will be loaded. Fails if the path provided does not
-        match any model.
-      `,
-    }),
     exact: flag({
       type: boolean,
       long: "exact",
@@ -95,6 +83,18 @@ export const load = command({
       description: text`
         The identifier to assign to the loaded model. The identifier can be used to refer to the
         model in the API.
+      `,
+    }),
+    ...logLevelArgs,
+    ...createClientArgs,
+    yes: flag({
+      type: boolean,
+      long: "yes",
+      short: "y",
+      description: text`
+        Suppress all confirmations and warnings. Useful for scripting. If there are multiple
+        models matching the path, the first one will be loaded. Fails if the path provided does not
+        match any model.
       `,
     }),
   },

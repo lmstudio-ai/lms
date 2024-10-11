@@ -8,6 +8,7 @@ export class ProgressBar {
   private spinnerIndex = 0;
   public constructor(
     private ratio = 0,
+    private text = "",
     private readonly totalBlocks = 50,
   ) {
     this.timer = setInterval(() => {
@@ -26,15 +27,21 @@ export class ProgressBar {
       clearInterval(this.timer);
       this.timer = null;
     }
+    process.stdout.write("\x1B[?25h");
   }
-  public setRatio(ratio: number) {
+  public setRatio(ratio: number, text?: string) {
     this.ratio = Math.max(0, Math.min(1, ratio));
+    this.text = text ?? "";
     this.refresh();
   }
   private refresh() {
+    process.stdout.write("\x1B[?25l");
     process.stdout.write(`\r${spinnerFrames[this.spinnerIndex % spinnerFrames.length]} [`);
     this.drawBar();
     process.stdout.write(`] ${(this.ratio * 100).toFixed(2)}%`);
+    if (this.text) {
+      process.stdout.write(` | ${this.text}`);
+    }
   }
   private drawBar() {
     let blocks: string;
