@@ -62,9 +62,9 @@ export const get = command({
       long: "always-show-download-options",
       short: "a",
       description: text`
-        By default, the system automatically selects a download option if there's only one available
-        or a specific one is recommended for your machine. Specifying this flag prompts you to
-        always choose a download option.
+        By default, if there an exact match for your query, the system will automatically select a
+        quantization based on your hardware. Specifying this flag will always prompt you to choose
+        a download option.
       `,
     }),
     ...logLevelArgs,
@@ -75,8 +75,10 @@ export const get = command({
       short: "y",
       description: text`
         Suppress all confirmations and warnings. Useful for scripting. If there are multiple
-        models matching the search term, the first one will be used. Fails if you have specified
-        a quantization via the "@" syntax and the quantization does not exist in the options.
+        models matching the search term, the first one will be used. If there are multiple download
+        options, the recommended one based on your hardware will be chosen. Fails if you have
+        specified a quantization via the "@" syntax and the quantization does not exist in the
+        options.
       `,
     }),
   },
@@ -144,8 +146,9 @@ export const get = command({
     }
 
     const exactMatchIndex = results.findIndex(result => result.isExactMatch());
+    const hasExactMatch = exactMatchIndex !== -1;
     let model: ModelSearchResultEntry;
-    if (exactMatchIndex !== -1 && !alwaysShowAllResults) {
+    if (hasExactMatch && !alwaysShowAllResults) {
       logger.debug("Automatically selecting an exact match model at index", exactMatchIndex);
       model = results[exactMatchIndex];
     } else {
@@ -197,17 +200,19 @@ export const get = command({
         currentChoiceIndex = specifiedQuantOptionIndex;
         shouldShowOptions = false;
       }
-    } else if (recommendedOptionIndex !== -1) {
-      if (!alwaysShowDownloadOptions) {
+    } else {
+      if (recommendedOptionIndex !== -1) {
+        currentChoiceIndex = recommendedOptionIndex;
+      }
+      if (hasExactMatch && !alwaysShowDownloadOptions) {
         logger.info(
           "Based on your hardware, choosing the recommended option:",
-          formatOptionShortName(options[recommendedOptionIndex]),
+          formatOptionShortName(options[currentChoiceIndex]),
         );
+        shouldShowOptions = false;
+      } else {
+        shouldShowOptions = true;
       }
-      currentChoiceIndex = recommendedOptionIndex;
-      shouldShowOptions = false;
-    } else if (options.length === 1) {
-      shouldShowOptions = false;
     }
 
     if (alwaysShowDownloadOptions) {
@@ -336,7 +341,7 @@ async function askToChooseDownloadOption(
       choices: downloadOptions.map(option => {
         let name = "";
         if (option.quantization) {
-          name += chalk.whiteBright(`${option.quantization} `.padEnd(7));
+          name += chalk.whiteBright(`${option.quantization} `.padEnd(9));
         }
         name += chalk.whiteBright(`${formatSizeBytes1000(option.sizeBytes)} `.padStart(11));
         name += chalk.gray(option.name) + " ";
@@ -370,10 +375,10 @@ async function askToChooseDownloadOption(
 
 function formatOptionShortName(option: ModelSearchResultDownloadOption) {
   let name = "";
-  if (option.quantization) {
-    name += `[${option.quantization}] `;
-  }
   name += option.name;
+  if (option.quantization) {
+    name += ` [${option.quantization}]`;
+  }
   name += ` (${formatSizeBytes1000(option.sizeBytes)})`;
   return name;
 }
