@@ -33,15 +33,15 @@ export const createClientArgs = {
     type: optional(string),
     long: "host",
     description: text`
-      The host to connect to. Default is "127.0.0.1".
+      The host where LM Studio can be reached. Default is "127.0.0.1".
     `,
   }),
   port: option({
     type: optional(refinedNumber({ integer: true, min: 0, max: 65535 })),
     long: "port",
     description: text`
-      The port to connect to. If not provided and the host is set to "127.0.0.1" (default), the last
-      used port will be used; otherwise, 1234 will be used.
+      The port where LM Studio can be reached. If not provided and the host is set to "127.0.0.1"
+      (default), the last used port will be used; otherwise, 1234 will be used.
     `,
   }),
 };

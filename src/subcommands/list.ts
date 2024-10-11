@@ -312,7 +312,10 @@ export const ps = command({
 
     const { json } = args;
 
-    const loadedModels = await client.llm.listLoaded();
+    const loadedModels = [
+      ...(await client.llm.listLoaded()),
+      ...(await client.embedding.listLoaded()),
+    ];
     const downloadedModels = await client.system.listDownloadedModels();
 
     if (json) {
@@ -345,7 +348,12 @@ export const ps = command({
       if (model === undefined) {
         console.info(chalk.gray("  Cannot find more information"));
       } else {
-        console.info(dot + chalk.whiteBright(`Type: ${chalk.bgGreenBright.black(" LLM ")}`));
+        console.info(
+          dot +
+            chalk.whiteBright(
+              `Type: ${chalk.bgGreenBright.black(model.type === "llm" ? " LLM " : " Embedding ")}`,
+            ),
+        );
         console.info(dot + chalk.whiteBright(`Path: ${chalk.white(path)}`));
         console.info(
           dot + chalk.whiteBright(`Size: ${formatSizeBytesWithColor1000(model.sizeBytes)}`),
