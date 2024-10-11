@@ -18,7 +18,7 @@ export const get = command({
     modelName: positional({
       type: optional(string),
       description: text`
-        The model to search for. If not provided, staff picked models will be shown. For models that
+        The model to download. If not provided, staff picked models will be shown. For models that
         have multiple quantizations, you can specify the quantization by appending it with "@". For
         example, use "llama-3.1-8b@q4_k_m" to download the llama-3.1-8b model with the specified
         quantization.
@@ -30,7 +30,7 @@ export const get = command({
       description: text`
         Whether to include MLX models in the search results. If any of "--mlx" or "--gguf" flag is
         specified, only models that match the specified flags will be shown; Otherwise only models
-        supported by your installed runtimes will be shown.
+        supported by your installed LM Runtimes will be shown.
       `,
     }),
     gguf: flag({
@@ -39,21 +39,21 @@ export const get = command({
       description: text`
         Whether to include GGUF models in the search results. If any of "--mlx" or "--gguf" flag
         is specified, only models that match the specified flags will be shown; Otherwise only
-        models supported by your installed runtimes will be shown.
+        models supported by your installed LM Runtimes will be shown.
       `,
     }),
     limit: option({
       type: optional(refinedNumber({ integer: true, min: 1 })),
       long: "limit",
       short: "n",
-      description: "Limit the number of search results.",
+      description: "Limit the number of model options.",
     }),
     alwaysShowAllResults: flag({
       type: boolean,
       long: "always-show-all-results",
       description: text`
         By default, an exact model match to the query is automatically selected. If this flag is
-        specified, you're prompted to choose from the search results, even when there's an exact
+        specified, you're prompted to choose from the model results, even when there's an exact
         match.
       `,
     }),
