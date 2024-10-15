@@ -1,12 +1,9 @@
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
-import chalk from "chalk";
-import { spawn } from "child_process";
 import { command, flag, number, option, optional, subcommands } from "cmd-ts";
 import { mkdir, readFile, writeFile } from "fs/promises";
-import inquirer from "inquirer";
-import os, { platform } from "os";
+import os from "os";
 import path from "path";
-import { getCliPref } from "../cliPref";
+import { wakeUpService } from "../createClient";
 import { createLogger, logLevelArgs } from "../logLevel";
 
 type HttpServerCtl =
@@ -23,22 +20,12 @@ interface HttpServerConfig {
   port: number;
 }
 
-interface AppInstallLocation {
-  path: string;
-  argv: Array<string>;
-  cwd: string;
-}
-
 function getServerCtlPath() {
   return path.join(os.homedir(), ".cache/lm-studio/.internal/http-server-ctl.json");
 }
 
 function getServerConfigPath() {
   return path.join(os.homedir(), ".cache/lm-studio/.internal/http-server-config.json");
-}
-
-function getAppInstallLocationPath() {
-  return path.join(os.homedir(), ".cache/lm-studio/.internal/app-install-location.json");
 }
 
 /**
@@ -52,41 +39,6 @@ async function writeToServerCtl(logger: SimpleLogger, controlObject: HttpServerC
   await mkdir(dir, { recursive: true });
   logger.debug(`Writing control object to ${serverCtlPath}:`, controlObject);
   await writeFile(serverCtlPath, JSON.stringify(controlObject));
-}
-
-/**
- * Launches the LM Studio application.
- */
-async function launchApplication(logger: SimpleLogger): Promise<boolean> {
-  logger.debug("Launching LM Studio application...");
-  const appInstallLocationPath = getAppInstallLocationPath();
-  logger.debug(`Resolved appInstallLocationPath: ${appInstallLocationPath}`);
-  try {
-    const appInstallLocation = JSON.parse(
-      await readFile(appInstallLocationPath, "utf-8"),
-    ) as AppInstallLocation;
-    logger.debug(`Read executable pointer:`, appInstallLocation);
-
-    const args: Array<string> = [];
-    const { path, argv, cwd } = appInstallLocation;
-    if (argv[1] === ".") {
-      // We are in development environment
-      args.push(".");
-    }
-    // Add the minimized flag
-    args.push("--minimized");
-
-    logger.debug(`Spawning process:`, { path, args, cwd });
-
-    const child = spawn(path, args, { cwd, detached: true, stdio: "ignore" });
-    child.unref();
-
-    logger.debug(`Process spawned`);
-    return true;
-  } catch (e) {
-    logger.debug(`Failed to launch application`, e);
-    return false;
-  }
 }
 
 /**
@@ -169,13 +121,11 @@ export async function getServerConfig(logger: SimpleLogger) {
 export interface StartServerOpts {
   port?: number;
   cors?: boolean;
-  noLaunch?: boolean;
-  yes?: boolean;
   useReducedLogging?: boolean;
 }
 export async function startServer(
   logger: SimpleLogger,
-  { port, cors, noLaunch, yes, useReducedLogging }: StartServerOpts = {},
+  { port, cors, useReducedLogging }: StartServerOpts = {},
 ): Promise<boolean> {
   if (port === undefined) {
     try {
@@ -205,70 +155,9 @@ export async function startServer(
       `Requested the server to be started on port ${port}.`,
     );
   } else {
-    if (platform() === "linux") {
-      // Sorry, linux users :(
-      logger.errorText`
-        LM Studio is not running. Please start LM Studio and try again.
-      `;
-      return false;
-    }
-    if (noLaunch) {
-      logger.errorText`
-        LM Studio is not running. Since --no-launch is provided, LM Studio will not be launched.
-      `;
-      logger.errorText`
-        The server is not started. Please make sure LM Studio is running and try again.
-      `;
-      return false;
-    }
-    const cliPref = await getCliPref(logger);
-    if (!cliPref.get().autoLaunchMinimizedWarned) {
-      if (yes) {
-        logger.warn(`Auto-launch warning suppressed by ${chalk.yellowBright("--yes")} flag`);
-      } else {
-        process.stderr.write(text`
-          ${"\n"}${chalk.bold.underline.greenBright("About to Launch LM Studio")}
-
-          By default, if LM Studio is not running, attempting to start the server will launch LM
-          Studio in minimized mode and then start the server.
-
-          ${chalk.grey(text`
-            If you don't want LM Studio to launch automatically, please use the ${chalk.yellow(
-              "--no-launch",
-            )} flag.
-          `)}
-
-          ${chalk.gray("This confirmation will not be shown again.")}${"\n\n"}
-        `);
-        await inquirer.createPromptModule({
-          output: process.stderr,
-        })([
-          {
-            type: "input",
-            name: "confirmation",
-            message: `Type "${chalk.greenBright("OK")}" to acknowledge:`,
-            validate: value => {
-              if (value.toLowerCase() === "ok") {
-                return true;
-              }
-              return 'You need to type "OK" to continue.';
-            },
-          },
-        ]);
-        cliPref.setWithProducer(pref => {
-          pref.autoLaunchMinimizedWarned = true;
-        });
-      }
-    }
-
-    logger.infoText`
-      Launching LM Studio minimized... (Disable auto-launching via the
-      ${chalk.yellow("--no-launch")} flag.)
-    `;
-
-    const launched = await launchApplication(logger);
+    const launched = await wakeUpService(logger);
     if (launched) {
-      logger.debug(`LM Studio launched`);
+      logger.debug(`LM Studio service is running.`);
       // At this point, LM Studio is launching. Once it is ready, it will consume the control file
       // and start the server. Let's wait for that to happen.
       if (await waitForCtlFileClear(logger, 1000, 10)) {
@@ -282,8 +171,8 @@ export async function startServer(
       }
     } else {
       logger.errorText`
-        Failed to launch LM Studio. Please make sure it is installed and have run it at least
-        once.
+        Failed to start LM Studio service. Please make sure it is installed and have run it at
+        least once.
       `;
       return false;
     }
@@ -318,19 +207,6 @@ const start = command({
       long: "port",
       short: "p",
     }),
-    noLaunch: flag({
-      description: text`
-        Do not launch LM Studio if it is not running. If LM Studio is not running, the server will
-        not be started.
-      `,
-      long: "no-launch",
-    }),
-    yes: flag({
-      description: text`
-        Suppress all confirmations and warnings. Useful for scripting.
-      `,
-      long: "yes",
-    }),
     cors: flag({
       description: text`
         Enable CORS on the server. Allows any website you visit to access the server. This is
@@ -341,9 +217,9 @@ const start = command({
     ...logLevelArgs,
   },
   handler: async args => {
-    const { port, noLaunch, cors } = args;
+    const { port, cors } = args;
     const logger = createLogger(args);
-    if (!(await startServer(logger, { port, noLaunch, cors }))) {
+    if (!(await startServer(logger, { port, cors }))) {
       process.exit(1);
     }
   },

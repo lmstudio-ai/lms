@@ -2,8 +2,7 @@ import chalk from "chalk";
 import { command, flag } from "cmd-ts";
 
 function getVersion() {
-  // We are not using the package version, because we want the version to be the same as LM Studio.
-  return "0.2.24";
+  return "<LMS-CLI-CURRENT-VERSION>";
 }
 
 export function printVersion() {
