@@ -88,5 +88,9 @@ export function createLogger({ logLevel, verbose, quiet }: LogLevelArgs): Simple
   };
   return new SimpleLogger("", consoleObj, {
     useLogLevelPrefixes: true,
+    infoPrefix:
+      verbose || logLevel === "debug"
+        ? undefined // If it is verbose, we use the default I
+        : null, // Otherwise, no I
   });
 }
