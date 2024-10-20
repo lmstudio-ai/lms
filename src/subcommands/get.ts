@@ -5,11 +5,22 @@ import { type ModelSearchResultDownloadOption, type ModelSearchResultEntry } fro
 import chalk from "chalk";
 import { boolean, command, flag, option, optional, positional, string } from "cmd-ts";
 import inquirer from "inquirer";
+import { askQuestion } from "../confirm";
 import { createClient, createClientArgs } from "../createClient";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000";
 import { createLogger, logLevelArgs } from "../logLevel";
 import { ProgressBar } from "../ProgressBar";
 import { refinedNumber } from "../types/refinedNumber";
+
+function formatRemainingTime(timeSeconds: number) {
+  const seconds = timeSeconds % 60;
+  const minutes = Math.floor(timeSeconds / 60) % 60;
+  const hours = Math.floor(timeSeconds / 3600);
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 export const get = command({
   name: "get",
@@ -247,44 +258,101 @@ export const get = command({
 
     logger.info("Downloading", formatOptionShortName(option));
 
+    let isAskingExitingBehavior = false;
     let canceled = false;
-    const pb = new ProgressBar();
+    const pb = new ProgressBar(0, "", 22);
     const abortController = new AbortController();
     const sigintListener = () => {
       process.removeListener("SIGINT", sigintListener);
-      pb.stop();
-      logger.warn("Download canceled.");
-      abortController.abort();
-      canceled = true;
+      process.on("SIGINT", () => {
+        logger.infoWithoutPrefix();
+        logger.info("Download will continue in the background.");
+        process.exit(1);
+      });
+      pb.stopWithoutClear();
+      isAskingExitingBehavior = true;
+      logger.infoWithoutPrefix();
+      process.stdin.resume();
+      askQuestion("Continue to download in the background? (Y/N): ").then(confirmed => {
+        if (confirmed) {
+          logger.info("Download will continue in the background.");
+          process.exit(1);
+        } else {
+          logger.warn("Download canceled.");
+          abortController.abort();
+          canceled = true;
+        }
+      });
     };
     process.addListener("SIGINT", sigintListener);
-    await option.download({
-      onProgress: (downloadedBytes, totalBytes) => {
-        if (canceled) {
-          return;
-        }
-        pb.setRatio(
-          downloadedBytes / totalBytes,
-          `${formatSizeBytes1000(downloadedBytes).padStart(9)} / ${formatSizeBytes1000(totalBytes)}`,
-        );
-      },
-      onStartFinalizing: () => {
-        if (canceled) {
-          return;
-        }
-        pb.stop();
-        logger.info("Finalizing download...");
-      },
-      signal: abortController.signal,
-    });
-    if (canceled) {
-      process.exit(1);
+    let longestDownloadedBytesStringLength = 6;
+    let longestTotalBytesStringLength = 6;
+    let longestSpeedBytesPerSecondStringLength = 6;
+    try {
+      let alreadyExisted = true;
+      const defaultIdentifier = await option.download({
+        onProgress: ({ downloadedBytes, totalBytes, speedBytesPerSecond }) => {
+          alreadyExisted = false;
+          if (isAskingExitingBehavior) {
+            return;
+          }
+          const downloadedBytesString = formatSizeBytes1000(downloadedBytes);
+          if (downloadedBytesString.length > longestDownloadedBytesStringLength) {
+            longestDownloadedBytesStringLength = downloadedBytesString.length;
+          }
+          const totalBytesString = formatSizeBytes1000(totalBytes);
+          if (totalBytesString.length > longestTotalBytesStringLength) {
+            longestTotalBytesStringLength = totalBytesString.length;
+          }
+          const speedBytesPerSecondString = formatSizeBytes1000(speedBytesPerSecond);
+          if (speedBytesPerSecondString.length > longestSpeedBytesPerSecondStringLength) {
+            longestSpeedBytesPerSecondStringLength = speedBytesPerSecondString.length;
+          }
+          const timeLeftSeconds = Math.round((totalBytes - downloadedBytes) / speedBytesPerSecond);
+          pb.setRatio(
+            downloadedBytes / totalBytes,
+            text`
+              ${downloadedBytesString.padStart(longestDownloadedBytesStringLength)} /
+              ${totalBytesString.padStart(longestTotalBytesStringLength)} |
+              ${speedBytesPerSecondString.padStart(longestSpeedBytesPerSecondStringLength)}/s | ETA
+              ${formatRemainingTime(timeLeftSeconds)}
+            `,
+          );
+        },
+        onStartFinalizing: () => {
+          alreadyExisted = false;
+          if (isAskingExitingBehavior) {
+            return;
+          }
+          pb.stop();
+          logger.info("Finalizing download...");
+        },
+        signal: abortController.signal,
+      });
+      pb.stopIfNotStopped();
+      if (canceled) {
+        process.exit(1);
+      }
+      process.removeListener("SIGINT", sigintListener);
+      if (alreadyExisted) {
+        logger.infoText`
+          You already have this model. You can load it with:
+          ${chalk.yellowBright("\n\n    lms load " + defaultIdentifier)}
+        `;
+      } else {
+        logger.infoText`
+          Download completed. You can load the model with:
+          ${chalk.yellowBright("\n\n    lms load " + defaultIdentifier)}
+        `;
+      }
+      logger.info();
+    } catch (e: any) {
+      if (e.name === "AbortError") {
+        process.exit(1);
+      } else {
+        throw e;
+      }
     }
-    process.removeListener("SIGINT", sigintListener);
-    logger.infoText`
-      Download completed. You can load the model with:
-      ${chalk.yellowBright("\n\n    lms load " + option.indexedModelIdentifier)}
-    `;
   },
 });
 
