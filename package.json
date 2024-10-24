@@ -18,6 +18,7 @@
     "@lmstudio/lms-isomorphic": "^0.3.2",
     "@lmstudio/lms-lmstudio": "^0.0.13",
     "@lmstudio/sdk": "^0.2.0",
+    "@lmstudio/lms-es-plugin-runner": "^0.0.1",
     "boxen": "^5.1.2",
     "chalk": "^4.1.2",
     "cmd-ts": "^0.13.0",
