@@ -1,7 +1,7 @@
 import { SimpleLogger, Validator } from "@lmstudio/lms-common";
 import { Esbuild, EsPluginRunnerWatcher } from "@lmstudio/lms-es-plugin-runner";
 import { pluginManifestSchema } from "@lmstudio/lms-shared-types/dist/PluginManifest";
-import { type ChildProcessWithoutNullStreams, spawn } from "child_process";
+import { type ChildProcess, spawn } from "child_process";
 import { command } from "cmd-ts";
 import { access, readFile } from "fs/promises";
 import { dirname, join, resolve } from "path";
@@ -45,13 +45,12 @@ class PluginProcess {
     private readonly env: Record<string, string>,
     private readonly logger: SimpleLogger,
   ) {}
-  private stdoutLogger = new SimpleLogger("stdout", this.logger);
-  private stderrLogger = new SimpleLogger("stderr", this.logger);
-  private currentProcess: ChildProcessWithoutNullStreams | null = null;
+  private currentProcess: ChildProcess | null = null;
   private status: PluginProcessStatus = "stopped";
 
   private startProcess() {
     this.currentProcess = spawn(this.executable, this.args, {
+      stdio: "inherit",
       env: {
         FORCE_COLOR: "1",
         ...this.env,
@@ -72,12 +71,6 @@ class PluginProcess {
       } else {
         this.status = "stopped";
       }
-    });
-    this.currentProcess.stdout.on("data", data => {
-      this.stdoutLogger.info(data.toString("utf-8").trimEnd());
-    });
-    this.currentProcess.stderr.on("data", data => {
-      this.stderrLogger.error(data.toString("utf-8").trimEnd());
     });
     this.status = "running";
   }
