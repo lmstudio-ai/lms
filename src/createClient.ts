@@ -86,7 +86,12 @@ export async function wakeUpService(logger: SimpleLogger): Promise<boolean> {
 
     logger.debug(`Spawning process:`, { path, args, cwd });
 
-    const child = spawn(path, args, { cwd, detached: true, stdio: "ignore" });
+    const env = {
+      ...(process.platform === "linux" ? { DISPLAY: ":0" } : {}),
+      ...process.env,
+    };
+
+    const child = spawn(path, args, { cwd, detached: true, stdio: "ignore", env });
     child.unref();
 
     logger.debug(`Process spawned`);
