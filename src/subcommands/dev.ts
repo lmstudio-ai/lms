@@ -40,6 +40,7 @@ type PluginProcessStatus = "stopped" | "running" | "restarting";
 
 class PluginProcess {
   public constructor(
+    private readonly cwd: string,
     private readonly executable: string,
     private readonly args: Array<string>,
     private readonly env: Record<string, string>,
@@ -55,6 +56,7 @@ class PluginProcess {
         FORCE_COLOR: "1",
         ...this.env,
       },
+      cwd: this.cwd,
     });
     this.currentProcess.on("exit", (code, signal) => {
       if (code !== null) {
@@ -132,11 +134,12 @@ export const dev = command({
     const watcher = new EsPluginRunnerWatcher(new Esbuild(), cwd(), logger);
 
     const pluginProcess = new PluginProcess(
+      projectPath,
       process.platform === "win32" ? "node.exe" : "node",
-      ["--enable-source-maps", join(projectPath, ".lmstudio", "dev.js")],
+      ["--enable-source-maps", join(".lmstudio", "dev.js")],
       {
-        LMS_CLIENT_IDENTIFIER: `dev-plugin-${manifest.owner}/${manifest.name}`,
-        LMS_CLIENT_PASSKEY: `dev-plugin-${manifest.owner}/${manifest.name}`,
+        LMS_PLUGIN_CLIENT_IDENTIFIER: `dev-plugin-${manifest.owner}/${manifest.name}`,
+        LMS_PLUGIN_CLIENT_PASSKEY: `dev-plugin-${manifest.owner}/${manifest.name}`,
       },
       pluginServerLogger,
     );
