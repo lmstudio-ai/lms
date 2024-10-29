@@ -1,11 +1,14 @@
 import { SimpleLogger, Validator } from "@lmstudio/lms-common";
 import { Esbuild, EsPluginRunnerWatcher } from "@lmstudio/lms-es-plugin-runner";
+import { generateRandomBase64 } from "@lmstudio/lms-isomorphic";
 import { pluginManifestSchema } from "@lmstudio/lms-shared-types/dist/PluginManifest";
-import { type ChildProcess, spawn } from "child_process";
+import { type LMStudioClient, type RegisterDevelopmentPluginOpts } from "@lmstudio/sdk";
+import { type ChildProcessWithoutNullStreams, spawn } from "child_process";
 import { command } from "cmd-ts";
 import { access, readFile } from "fs/promises";
 import { dirname, join, resolve } from "path";
 import { cwd } from "process";
+import { createClient, createClientArgs } from "../createClient";
 import { createLogger, logLevelArgs } from "../logLevel";
 
 /**
@@ -36,36 +39,50 @@ async function findProjectFolder(logger: SimpleLogger, cwd: string) {
   return null;
 }
 
-type PluginProcessStatus = "stopped" | "running" | "restarting";
+type PluginProcessStatus = "stopped" | "starting" | "running" | "restarting";
 
 class PluginProcess {
   public constructor(
+    private readonly client: LMStudioClient,
+    private readonly registerDevelopmentPluginOpts: RegisterDevelopmentPluginOpts,
     private readonly cwd: string,
     private readonly executable: string,
     private readonly args: Array<string>,
     private readonly env: Record<string, string>,
     private readonly logger: SimpleLogger,
   ) {}
-  private currentProcess: ChildProcess | null = null;
+  private serverLogger = new SimpleLogger("plugin-server", this.logger);
+  private stderrLogger = new SimpleLogger("stderr", this.logger);
+  private currentProcess: ChildProcessWithoutNullStreams | null = null;
   private status: PluginProcessStatus = "stopped";
+  private endPlugin: (() => Promise<void>) | null = null;
 
-  private startProcess() {
+  private async startProcess() {
+    this.status = "starting";
+    this.endPlugin = await this.client.plugins.registerDevelopmentPlugin(
+      this.registerDevelopmentPluginOpts,
+    );
     this.currentProcess = spawn(this.executable, this.args, {
-      stdio: "inherit",
       env: {
         FORCE_COLOR: "1",
         ...this.env,
       },
       cwd: this.cwd,
     });
-    this.currentProcess.on("exit", (code, signal) => {
+    this.currentProcess.stdout.on("data", data => this.logger.info(data.toString("utf-8").trim()));
+    this.currentProcess.stderr.on("data", data =>
+      this.stderrLogger.error(data.toString("utf-8").trim()),
+    );
+    this.currentProcess.on("exit", async (code, signal) => {
+      await this.endPlugin?.();
+      this.endPlugin = null;
       if (code !== null) {
-        this.logger.warn(`Plugin process exited with code ${code}`);
+        this.serverLogger.warn(`Plugin process exited with code ${code}`);
       } else {
         if (signal === "SIGKILL") {
           // OK to ignore because we killed it
         } else {
-          this.logger.warn(`Plugin process exited with signal ${signal}`);
+          this.serverLogger.warn(`Plugin process exited with signal ${signal}`);
         }
       }
       if (this.status === "restarting") {
@@ -82,10 +99,22 @@ class PluginProcess {
         this.startProcess();
         break;
       }
+      case "starting": {
+        // Already starting. Do nothing.
+        break;
+      }
       case "running": {
         this.status = "restarting";
-        this.currentProcess?.kill("SIGKILL");
-        this.currentProcess = null;
+        if (this.endPlugin === null) {
+          this.currentProcess?.kill("SIGKILL");
+          this.currentProcess = null;
+        } else {
+          this.endPlugin().then(() => {
+            this.endPlugin = null;
+            this.currentProcess?.kill("SIGKILL");
+            this.currentProcess = null;
+          });
+        }
         break;
       }
       case "restarting": {
@@ -101,9 +130,11 @@ export const dev = command({
   description: "Starts the development server for the plugin in the current folder.",
   args: {
     ...logLevelArgs,
+    ...createClientArgs,
   },
   handler: async args => {
     const logger = createLogger(args);
+    const client = await createClient(logger, args);
     const projectPath = await findProjectFolder(logger, cwd());
     if (projectPath === null) {
       logger.errorText`
@@ -129,19 +160,26 @@ export const dev = command({
 
     logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
 
-    const pluginServerLogger = new SimpleLogger("plugin-server", logger);
+    const pluginClientIdentifier = `plugin:dev:${manifest.owner}/${manifest.name}`;
+    const pluginClientPasskey = generateRandomBase64();
 
     const watcher = new EsPluginRunnerWatcher(new Esbuild(), cwd(), logger);
 
     const pluginProcess = new PluginProcess(
+      client,
+      {
+        clientIdentifier: pluginClientIdentifier,
+        clientPasskey: pluginClientPasskey,
+        manifest,
+      },
       projectPath,
       process.platform === "win32" ? "node.exe" : "node",
       ["--enable-source-maps", join(".lmstudio", "dev.js")],
       {
-        LMS_PLUGIN_CLIENT_IDENTIFIER: `dev-plugin-${manifest.owner}/${manifest.name}`,
-        LMS_PLUGIN_CLIENT_PASSKEY: `dev-plugin-${manifest.owner}/${manifest.name}`,
+        LMS_PLUGIN_CLIENT_IDENTIFIER: pluginClientIdentifier,
+        LMS_PLUGIN_CLIENT_PASSKEY: pluginClientPasskey,
       },
-      pluginServerLogger,
+      logger,
     );
 
     watcher.updatedEvent.subscribe(() => {
