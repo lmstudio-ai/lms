@@ -65,6 +65,7 @@ class PluginProcess {
     this.currentProcess = spawn(this.executable, this.args, {
       env: {
         FORCE_COLOR: "1",
+        ...process.env,
         ...this.env,
       },
       cwd: this.cwd,
