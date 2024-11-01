@@ -1,6 +1,5 @@
 import { SimpleLogger, Validator } from "@lmstudio/lms-common";
 import { Esbuild, EsPluginRunnerWatcher } from "@lmstudio/lms-es-plugin-runner";
-import { generateRandomBase64 } from "@lmstudio/lms-isomorphic";
 import { pluginManifestSchema } from "@lmstudio/lms-shared-types/dist/PluginManifest";
 import { type LMStudioClient, type RegisterDevelopmentPluginOpts } from "@lmstudio/sdk";
 import { type ChildProcessWithoutNullStreams, spawn } from "child_process";
@@ -46,27 +45,28 @@ class PluginProcess {
     private readonly client: LMStudioClient,
     private readonly registerDevelopmentPluginOpts: RegisterDevelopmentPluginOpts,
     private readonly cwd: string,
-    private readonly executable: string,
-    private readonly args: Array<string>,
-    private readonly env: Record<string, string>,
     private readonly logger: SimpleLogger,
   ) {}
-  private serverLogger = new SimpleLogger("plugin-server", this.logger);
-  private stderrLogger = new SimpleLogger("stderr", this.logger);
+  private readonly executable = process.platform === "win32" ? "node.exe" : "node";
+  private readonly args = ["--enable-source-maps", join(".lmstudio", "dev.js")];
+  private readonly serverLogger = new SimpleLogger("plugin-server", this.logger);
+  private readonly stderrLogger = new SimpleLogger("stderr", this.logger);
+
   private currentProcess: ChildProcessWithoutNullStreams | null = null;
   private status: PluginProcessStatus = "stopped";
-  private endPlugin: (() => Promise<void>) | null = null;
+  private unregister: (() => Promise<void>) | null = null;
 
   private async startProcess() {
     this.status = "starting";
-    this.endPlugin = await this.client.plugins.registerDevelopmentPlugin(
-      this.registerDevelopmentPluginOpts,
-    );
+    const { unregister, clientIdentifier, clientPasskey } =
+      await this.client.plugins.registerDevelopmentPlugin(this.registerDevelopmentPluginOpts);
+    this.unregister = unregister;
     this.currentProcess = spawn(this.executable, this.args, {
       env: {
         FORCE_COLOR: "1",
         ...process.env,
-        ...this.env,
+        LMS_PLUGIN_CLIENT_IDENTIFIER: clientIdentifier,
+        LMS_PLUGIN_CLIENT_PASSKEY: clientPasskey,
       },
       cwd: this.cwd,
     });
@@ -75,8 +75,8 @@ class PluginProcess {
       this.stderrLogger.error(data.toString("utf-8").trim()),
     );
     this.currentProcess.on("exit", async (code, signal) => {
-      await this.endPlugin?.();
-      this.endPlugin = null;
+      await this.unregister?.();
+      this.unregister = null;
       if (code !== null) {
         this.serverLogger.warn(`Plugin process exited with code ${code}`);
       } else {
@@ -106,12 +106,12 @@ class PluginProcess {
       }
       case "running": {
         this.status = "restarting";
-        if (this.endPlugin === null) {
+        if (this.unregister === null) {
           this.currentProcess?.kill("SIGKILL");
           this.currentProcess = null;
         } else {
-          this.endPlugin().then(() => {
-            this.endPlugin = null;
+          this.unregister().then(() => {
+            this.unregister = null;
             this.currentProcess?.kill("SIGKILL");
             this.currentProcess = null;
           });
@@ -161,27 +161,9 @@ export const dev = command({
 
     logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
 
-    const pluginClientIdentifier = `plugin:dev:${manifest.owner}/${manifest.name}`;
-    const pluginClientPasskey = generateRandomBase64();
-
     const watcher = new EsPluginRunnerWatcher(new Esbuild(), cwd(), logger);
 
-    const pluginProcess = new PluginProcess(
-      client,
-      {
-        clientIdentifier: pluginClientIdentifier,
-        clientPasskey: pluginClientPasskey,
-        manifest,
-      },
-      projectPath,
-      process.platform === "win32" ? "node.exe" : "node",
-      ["--enable-source-maps", join(".lmstudio", "dev.js")],
-      {
-        LMS_PLUGIN_CLIENT_IDENTIFIER: pluginClientIdentifier,
-        LMS_PLUGIN_CLIENT_PASSKEY: pluginClientPasskey,
-      },
-      logger,
-    );
+    const pluginProcess = new PluginProcess(client, { manifest }, projectPath, logger);
 
     watcher.updatedEvent.subscribe(() => {
       pluginProcess.run();
