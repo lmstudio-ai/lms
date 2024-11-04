@@ -1,8 +1,8 @@
 import { SimpleLogger, Validator } from "@lmstudio/lms-common";
-import { Esbuild, EsPluginRunnerWatcher } from "@lmstudio/lms-es-plugin-runner";
+import { EsPluginRunnerWatcher, UtilBinary } from "@lmstudio/lms-es-plugin-runner";
 import { pluginManifestSchema } from "@lmstudio/lms-shared-types/dist/PluginManifest";
 import { type LMStudioClient, type RegisterDevelopmentPluginOpts } from "@lmstudio/sdk";
-import { type ChildProcessWithoutNullStreams, spawn } from "child_process";
+import { type ChildProcessWithoutNullStreams } from "child_process";
 import { command } from "cmd-ts";
 import { access, readFile } from "fs/promises";
 import { dirname, join, resolve } from "path";
@@ -47,7 +47,7 @@ class PluginProcess {
     private readonly cwd: string,
     private readonly logger: SimpleLogger,
   ) {}
-  private readonly executable = process.platform === "win32" ? "node.exe" : "node";
+  private readonly node = new UtilBinary("node");
   private readonly args = ["--enable-source-maps", join(".lmstudio", "dev.js")];
   private readonly serverLogger = new SimpleLogger("plugin-server", this.logger);
   private readonly stderrLogger = new SimpleLogger("stderr", this.logger);
@@ -61,7 +61,7 @@ class PluginProcess {
     const { unregister, clientIdentifier, clientPasskey } =
       await this.client.plugins.registerDevelopmentPlugin(this.registerDevelopmentPluginOpts);
     this.unregister = unregister;
-    this.currentProcess = spawn(this.executable, this.args, {
+    this.currentProcess = this.node.spawn(this.args, {
       env: {
         FORCE_COLOR: "1",
         ...process.env,
@@ -161,7 +161,8 @@ export const dev = command({
 
     logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
 
-    const watcher = new EsPluginRunnerWatcher(new Esbuild(), cwd(), logger);
+    const esbuild = new UtilBinary("esbuild");
+    const watcher = new EsPluginRunnerWatcher(esbuild, cwd(), logger);
 
     const pluginProcess = new PluginProcess(client, { manifest }, projectPath, logger);
 
