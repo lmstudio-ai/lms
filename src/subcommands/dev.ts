@@ -250,4 +250,9 @@ async function handleDevServer(
     pluginProcess.run();
   });
   await watcher.start();
+
+  client.system.whenDisconnected().then(() => {
+    logger.info("Disconnected from the server. Stopping the development server.");
+    process.exit(1);
+  });
 }
