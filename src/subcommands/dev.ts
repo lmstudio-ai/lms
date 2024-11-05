@@ -1,13 +1,20 @@
-import { SimpleLogger, Validator } from "@lmstudio/lms-common";
+import { SimpleLogger, text, Validator } from "@lmstudio/lms-common";
 import { EsPluginRunnerWatcher, UtilBinary } from "@lmstudio/lms-es-plugin-runner";
 import { pluginManifestSchema } from "@lmstudio/lms-shared-types/dist/PluginManifest";
-import { type LMStudioClient, type RegisterDevelopmentPluginOpts } from "@lmstudio/sdk";
+import {
+  type LMStudioClient,
+  type PluginManifest,
+  type RegisterDevelopmentPluginOpts,
+} from "@lmstudio/sdk";
 import { type ChildProcessWithoutNullStreams } from "child_process";
-import { command } from "cmd-ts";
-import { access, readFile } from "fs/promises";
+import { boolean, command, flag } from "cmd-ts";
+import { access, cp, mkdir, readFile } from "fs/promises";
 import { dirname, join, resolve } from "path";
 import { cwd } from "process";
+import { askQuestion } from "../confirm";
 import { createClient, createClientArgs } from "../createClient";
+import { exists } from "../exists";
+import { pluginsFolderPath } from "../lmstudioPaths";
 import { createLogger, logLevelArgs } from "../logLevel";
 
 /**
@@ -130,6 +137,25 @@ export const dev = command({
   name: "dev",
   description: "Starts the development server for the plugin in the current folder.",
   args: {
+    install: flag({
+      type: boolean,
+      long: "install",
+      short: "i",
+      description: text`
+        When specified, instead of starting the development server, installs the plugin to
+        LM Studio.
+      `,
+    }),
+    yes: flag({
+      type: boolean,
+      long: "yes",
+      short: "y",
+      description: text`
+        Suppress all confirmations and warnings. Useful for scripting.
+
+        - When used with --install, it will overwrite the plugin without asking.
+      `,
+    }),
     ...logLevelArgs,
     ...createClientArgs,
   },
@@ -137,6 +163,7 @@ export const dev = command({
     const logger = createLogger(args);
     const client = await createClient(logger, args);
     const projectPath = await findProjectFolder(logger, cwd());
+    const { install, yes } = args;
     if (projectPath === null) {
       logger.errorText`
         Could not find the project folder. Please invoke this command in a folder with a
@@ -159,16 +186,68 @@ export const dev = command({
     }
     const manifest = manifestParseResult.data;
 
-    logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
-
-    const esbuild = new UtilBinary("esbuild");
-    const watcher = new EsPluginRunnerWatcher(esbuild, cwd(), logger);
-
-    const pluginProcess = new PluginProcess(client, { manifest }, projectPath, logger);
-
-    watcher.updatedEvent.subscribe(() => {
-      pluginProcess.run();
-    });
-    await watcher.start();
+    if (install) {
+      process.exit(await handleInstall(projectPath, manifest, logger, client, { yes }));
+    } else {
+      await handleDevServer(projectPath, manifest, logger, client);
+    }
   },
 });
+
+async function handleInstall(
+  projectPath: string,
+  manifest: PluginManifest,
+  logger: SimpleLogger,
+  client: LMStudioClient,
+  { yes }: { yes: boolean },
+): Promise<number> {
+  // Currently, we naively copy paste the entire plugin folder to LM Studio, and then trigger a
+  // plugin re-index.
+  logger.info(`Installing the plugin ${manifest.owner}/${manifest.name}...`);
+  logger.debug("Copying from", projectPath);
+  const destinationPath = join(pluginsFolderPath, manifest.owner, manifest.name);
+  logger.debug("To", pluginsFolderPath);
+
+  if ((await exists(destinationPath)) && !yes) {
+    const result = await askQuestion(text`
+      Plugin ${manifest.owner}/${manifest.name} already exists. Do you want to overwrite it?
+    `);
+    if (!result) {
+      logger.info("Installation cancelled.");
+      return 1;
+    }
+  }
+
+  await mkdir(destinationPath, { recursive: true });
+  const startTime = Date.now();
+  await cp(projectPath, destinationPath, {
+    recursive: true,
+    dereference: true,
+  });
+  const endTime = Date.now();
+  logger.debug(`Copied in ${endTime - startTime}ms.`);
+
+  logger.debug("Reindexing plugins...");
+  await client.plugins.reindexPlugins();
+
+  return 0;
+}
+
+async function handleDevServer(
+  projectPath: string,
+  manifest: PluginManifest,
+  logger: SimpleLogger,
+  client: LMStudioClient,
+) {
+  logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
+
+  const esbuild = new UtilBinary("esbuild");
+  const watcher = new EsPluginRunnerWatcher(esbuild, cwd(), logger);
+
+  const pluginProcess = new PluginProcess(client, { manifest }, projectPath, logger);
+
+  watcher.updatedEvent.subscribe(() => {
+    pluginProcess.run();
+  });
+  await watcher.start();
+}
