@@ -8,42 +8,15 @@ import {
 } from "@lmstudio/sdk";
 import { type ChildProcessWithoutNullStreams } from "child_process";
 import { boolean, command, flag } from "cmd-ts";
-import { access, cp, mkdir, readFile } from "fs/promises";
-import { dirname, join, resolve } from "path";
+import { cp, mkdir, readFile } from "fs/promises";
+import { join } from "path";
 import { cwd } from "process";
 import { askQuestion } from "../confirm";
 import { createClient, createClientArgs } from "../createClient";
 import { exists } from "../exists";
+import { findProjectFolderOrExit } from "../findProjectFolder";
 import { pluginsFolderPath } from "../lmstudioPaths";
 import { createLogger, logLevelArgs } from "../logLevel";
-
-/**
- * From the given folder, recursively travels back up, until finds one folder with manifest.json.
- */
-async function findProjectFolder(logger: SimpleLogger, cwd: string) {
-  let currentDir = resolve(cwd);
-
-  let maximumDepth = 20;
-  while (maximumDepth > 0) {
-    maximumDepth--;
-    const manifestPath = join(currentDir, "manifest.json");
-    logger.debug("Trying to access", manifestPath);
-    try {
-      await access(manifestPath);
-      logger.debug("Found manifest.json at", currentDir);
-      return currentDir;
-    } catch (err) {
-      const parentDir = dirname(currentDir);
-      if (parentDir === currentDir) {
-        // Reached the root directory without finding manifest.json
-        return null;
-      }
-      currentDir = parentDir;
-    }
-  }
-  logger.debug("Reached maximum depth without finding manifest.json");
-  return null;
-}
 
 type PluginProcessStatus = "stopped" | "starting" | "running" | "restarting";
 
@@ -162,19 +135,8 @@ export const dev = command({
   handler: async args => {
     const logger = createLogger(args);
     const client = await createClient(logger, args);
-    const projectPath = await findProjectFolder(logger, cwd());
+    const projectPath = await findProjectFolderOrExit(logger, cwd());
     const { install, yes } = args;
-    if (projectPath === null) {
-      logger.errorText`
-        Could not find the project folder. Please invoke this command in a folder with a
-        manifest.json file.
-      `;
-      logger.errorText`
-        To create an empty plugin, use the \`lms create\` command, or create a new plugin in
-        LM Studio.
-      `;
-      process.exit(1);
-    }
     const manifestPath = join(projectPath, "manifest.json");
     const manifestParseResult = pluginManifestSchema.safeParse(
       JSON.parse(await readFile(manifestPath, "utf-8")),

@@ -7,6 +7,7 @@ import { importCmd } from "./subcommands/importCmd";
 import { ls, ps } from "./subcommands/list";
 import { load } from "./subcommands/load";
 import { log } from "./subcommands/log";
+import { push } from "./subcommands/push";
 import { server } from "./subcommands/server";
 import { status } from "./subcommands/status";
 import { unload } from "./subcommands/unload";
@@ -31,6 +32,7 @@ const cli = subcommands({
     create,
     log,
     dev,
+    push,
     import: importCmd,
     version,
     bootstrap,
