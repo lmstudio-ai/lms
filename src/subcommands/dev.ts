@@ -35,11 +35,21 @@ class PluginProcess {
   private currentProcess: ChildProcessWithoutNullStreams | null = null;
   private status: PluginProcessStatus = "stopped";
   private unregister: (() => Promise<void>) | null = null;
+  private firstTime = true;
 
   private async startProcess() {
     this.status = "starting";
     const { unregister, clientIdentifier, clientPasskey } =
       await this.client.plugins.registerDevelopmentPlugin(this.registerDevelopmentPluginOpts);
+    if (this.firstTime) {
+      const manifest = this.registerDevelopmentPluginOpts.manifest;
+      const identifier = `${manifest.owner}/${manifest.name}`;
+      await this.client.system.notify({
+        title: `Plugin "${identifier}" started`,
+        description: "This plugin is run by lms CLI development server.",
+      });
+      this.firstTime = false;
+    }
     this.unregister = unregister;
     this.currentProcess = this.node.spawn(this.args, {
       env: {
