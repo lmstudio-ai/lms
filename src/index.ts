@@ -29,6 +29,8 @@ const cli = subcommands({
     unload,
     create,
     log,
+    // dev,
+    // push,
     import: importCmd,
     version,
     bootstrap,

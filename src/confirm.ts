@@ -10,7 +10,7 @@ export async function askQuestion(prompt: string): Promise<boolean> {
   cleaner.register(() => rl.close());
   let answer: boolean | undefined;
   do {
-    const answerText = await rl.question(prompt);
+    const answerText = await rl.question(prompt + " (Y/N): ");
     if (answerText.toUpperCase() === "Y") {
       answer = true;
     } else if (answerText.toUpperCase() === "N") {

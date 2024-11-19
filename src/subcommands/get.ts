@@ -273,7 +273,7 @@ export const get = command({
       isAskingExitingBehavior = true;
       logger.infoWithoutPrefix();
       process.stdin.resume();
-      askQuestion("Continue to download in the background? (Y/N): ").then(confirmed => {
+      askQuestion("Continue to download in the background?").then(confirmed => {
         if (confirmed) {
           logger.info("Download will continue in the background.");
           process.exit(1);
