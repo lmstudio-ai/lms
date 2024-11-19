@@ -641,6 +641,10 @@ async function findFileNameBreakPoints(fileName: string) {
   return breakingPoints;
 }
 
+async function cleanFileName(fileName: string) {
+  return fileName.replace(/-I?Q\d[_0-9A-Za-z]{0,6}/, "");
+}
+
 const searchResultSchema = z.array(
   z.object({
     id: z.string(),
@@ -675,6 +679,12 @@ async function queryHuggingFace(logger: SimpleLogger, term: string) {
   }
 }
 
+const userScores = new Map([
+  ["lmstudio-community", 3],
+  ["bartowski", 2],
+  ["TheBloke", 1],
+]);
+
 /**
  * Find candidate user and repository names on Hugging Face.
  *
@@ -683,13 +693,14 @@ async function queryHuggingFace(logger: SimpleLogger, term: string) {
  * @returns A promise that resolves with the candidate user and repository names.
  */
 async function findCandidateHuggingFaceUserRepos(logger: SimpleLogger, fileName: string) {
-  const breakingPoints = await findFileNameBreakPoints(fileName);
-  breakingPoints.push(fileName.length);
+  const fullSearchTerm = await cleanFileName(fileName);
+  const breakingPoints = await findFileNameBreakPoints(fullSearchTerm);
+  breakingPoints.push(fullSearchTerm.length);
 
   const candidates: Array<[string, string]> = [];
 
   for (let i = breakingPoints.length - 1; i >= 0; i--) {
-    const term = fileName.substring(0, breakingPoints[i]);
+    const term = fullSearchTerm.substring(0, breakingPoints[i]);
     const repos = await queryHuggingFace(logger, term);
     for (const repo of repos) {
       if (
@@ -705,6 +716,13 @@ async function findCandidateHuggingFaceUserRepos(logger: SimpleLogger, fileName:
       break;
     }
   }
+
+  candidates.sort((a, b) => {
+    const aScore = userScores.get(a[0]) ?? 0;
+    const bScore = userScores.get(b[0]) ?? 0;
+    return bScore - aScore;
+  });
+
   logger.debug("Candidates found", candidates);
   return candidates;
 }
