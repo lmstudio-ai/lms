@@ -1,5 +1,4 @@
 import { run, subcommands } from "cmd-ts";
-import { bootstrap } from "./subcommands/bootstrap.js";
 import { create } from "./subcommands/create.js";
 import { dev } from "./subcommands/dev.js";
 import { get } from "./subcommands/get.js";
@@ -35,7 +34,6 @@ const cli = subcommands({
     push,
     import: importCmd,
     version,
-    bootstrap,
   },
 });
 

@@ -1,6 +1,6 @@
 import { makeTitledPrettyError, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
-import * as chalk from "chalk";
+import chalk from "chalk";
 import { boolean, command, flag, optional, positional, string } from "cmd-ts";
 import fuzzy from "fuzzy";
 import inquirer from "inquirer";

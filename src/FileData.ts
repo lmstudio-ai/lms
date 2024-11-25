@@ -8,7 +8,7 @@ import {
 
 import { existsSync, writeFileSync } from "fs";
 import { mkdir, readFile, watch } from "fs/promises";
-import * as path from "path";
+import path from "path";
 import { type ZodSchema } from "zod";
 
 const fileDataGlobalCache: Map<string, FileData<any, any>> = new Map();

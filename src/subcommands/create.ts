@@ -1,7 +1,7 @@
 import { filteredArray, text, type SimpleLogger } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import boxen from "boxen";
-import * as chalk from "chalk";
+import chalk from "chalk";
 import { exec, spawn } from "child_process";
 import { command, optional, positional, string } from "cmd-ts";
 import fg from "fast-glob";

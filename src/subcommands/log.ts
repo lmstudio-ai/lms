@@ -1,5 +1,5 @@
 import { type DiagnosticsLogEventData } from "@lmstudio/lms-shared-types";
-import * as chalk from "chalk";
+import chalk from "chalk";
 import { command, flag, subcommands } from "cmd-ts";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";

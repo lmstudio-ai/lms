@@ -1,4 +1,4 @@
-import * as chalk from "chalk";
+import chalk from "chalk";
 import { command, flag } from "cmd-ts";
 
 function getVersion() {

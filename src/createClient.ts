@@ -1,11 +1,11 @@
 import { apiServerPorts, type SimpleLogger, text } from "@lmstudio/lms-common";
 import { LMStudioClient } from "@lmstudio/sdk";
-import * as chalk from "chalk";
+import chalk from "chalk";
 import { spawn } from "child_process";
 import { option, optional, string } from "cmd-ts";
 import { readFile } from "fs/promises";
 import { homedir } from "os";
-import * as path from "path";
+import path from "path";
 import { type LogLevelArgs } from "./logLevel.js";
 import { checkHttpServer } from "./subcommands/server.js";
 import { refinedNumber } from "./types/refinedNumber.js";

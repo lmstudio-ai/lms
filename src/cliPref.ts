@@ -1,6 +1,6 @@
 import { SimpleLogger } from "@lmstudio/lms-common";
 import os from "os";
-import * as path from "path";
+import path from "path";
 import { z } from "zod";
 import { SimpleFileData } from "./SimpleFileData.js";
 

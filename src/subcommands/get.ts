@@ -2,7 +2,7 @@ import { text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import { type ModelCompatibilityType } from "@lmstudio/lms-shared-types";
 import { type ModelSearchResultDownloadOption, type ModelSearchResultEntry } from "@lmstudio/sdk";
-import * as chalk from "chalk";
+import chalk from "chalk";
 import { boolean, command, flag, option, optional, positional, string } from "cmd-ts";
 import inquirer from "inquirer";
 import { askQuestion } from "../confirm.js";

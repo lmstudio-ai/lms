@@ -1,4 +1,4 @@
-import * as chalk from "chalk";
+import chalk from "chalk";
 
 export class InfoLookup<TInnerKey, TLookupKey, TValue> {
   private readonly lookup = new Map<TInnerKey, TValue>();

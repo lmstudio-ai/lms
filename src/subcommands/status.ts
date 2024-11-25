@@ -1,6 +1,6 @@
 import { text } from "@lmstudio/lms-common";
 import boxen from "boxen";
-import * as chalk from "chalk";
+import chalk from "chalk";
 import { command } from "cmd-ts";
 import { createClient, createClientArgs } from "../createClient.js";
 import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";

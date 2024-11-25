@@ -1,4 +1,4 @@
-import * as chalk from "chalk";
+import chalk from "chalk";
 
 const kB = 1000;
 const mB = 1000 * kB;
