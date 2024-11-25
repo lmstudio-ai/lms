@@ -6,7 +6,7 @@ import {
   text,
 } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
-import chalk from "chalk";
+import * as chalk from "chalk";
 import { boolean, command, flag, option, optional, positional, type Type } from "cmd-ts";
 import { File } from "cmd-ts/batteries/fs";
 import { access, copyFile, link, mkdir, readFile, rename, symlink } from "fs/promises";

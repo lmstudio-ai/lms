@@ -1,8 +1,14 @@
-import { Signal, type Setter, type SimpleLogger } from "@lmstudio/lms-common";
-import { isAvailable, type StripNotAvailable } from "@lmstudio/lms-common/dist/LazySignal";
+import {
+  isAvailable,
+  Signal,
+  type Setter,
+  type SimpleLogger,
+  type StripNotAvailable,
+} from "@lmstudio/lms-common";
+
 import { existsSync, writeFileSync } from "fs";
 import { mkdir, readFile, watch } from "fs/promises";
-import path from "path";
+import * as path from "path";
 import { type ZodSchema } from "zod";
 
 const fileDataGlobalCache: Map<string, FileData<any, any>> = new Map();

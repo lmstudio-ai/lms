@@ -1,5 +1,5 @@
 import { makePrettyError, SimpleLogger, text } from "@lmstudio/lms-common";
-import chalk from "chalk";
+import * as chalk from "chalk";
 import { flag, oneOf, option, optional } from "cmd-ts";
 import { Console } from "console";
 

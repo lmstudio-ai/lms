@@ -2,7 +2,7 @@ import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { command, flag, number, option, optional, subcommands } from "cmd-ts";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import os from "os";
-import path from "path";
+import * as path from "path";
 import { wakeUpService } from "../createClient.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 

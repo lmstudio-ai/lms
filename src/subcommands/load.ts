@@ -5,7 +5,7 @@ import {
   type LLMLlamaAccelerationOffloadRatio,
 } from "@lmstudio/lms-shared-types";
 import { type LLMLoadModelConfig, type LMStudioClient } from "@lmstudio/sdk";
-import chalk from "chalk";
+import * as chalk from "chalk";
 import { boolean, command, flag, option, optional, positional, string, type Type } from "cmd-ts";
 import fuzzy from "fuzzy";
 import inquirer from "inquirer";

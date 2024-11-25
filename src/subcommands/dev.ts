@@ -1,6 +1,6 @@
 import { SimpleLogger, text, Validator } from "@lmstudio/lms-common";
 import { EsPluginRunnerWatcher, UtilBinary } from "@lmstudio/lms-es-plugin-runner";
-import { pluginManifestSchema } from "@lmstudio/lms-shared-types/dist/PluginManifest";
+import { pluginManifestSchema } from "@lmstudio/lms-shared-types";
 import {
   type LMStudioClient,
   type PluginManifest,

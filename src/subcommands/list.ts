@@ -1,6 +1,6 @@
 import { text } from "@lmstudio/lms-common";
 import { type DownloadedModel } from "@lmstudio/sdk";
-import chalk from "chalk";
+import * as chalk from "chalk";
 import { command, flag } from "cmd-ts";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
