@@ -1,12 +1,10 @@
 import { run, subcommands } from "cmd-ts";
 import { create } from "./subcommands/create.js";
-import { dev } from "./subcommands/dev.js";
 import { get } from "./subcommands/get.js";
 import { importCmd } from "./subcommands/importCmd.js";
 import { ls, ps } from "./subcommands/list.js";
 import { load } from "./subcommands/load.js";
 import { log } from "./subcommands/log.js";
-import { push } from "./subcommands/push.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
@@ -30,8 +28,8 @@ const cli = subcommands({
     unload,
     create,
     log,
-    dev,
-    push,
+    // dev,
+    // push,
     import: importCmd,
     version,
   },
