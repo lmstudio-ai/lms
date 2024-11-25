@@ -11,12 +11,12 @@ import { boolean, command, flag } from "cmd-ts";
 import { cp, mkdir, readFile } from "fs/promises";
 import { join } from "path";
 import { cwd } from "process";
-import { askQuestion } from "../confirm";
-import { createClient, createClientArgs } from "../createClient";
-import { exists } from "../exists";
-import { findProjectFolderOrExit } from "../findProjectFolder";
-import { pluginsFolderPath } from "../lmstudioPaths";
-import { createLogger, logLevelArgs } from "../logLevel";
+import { askQuestion } from "../confirm.js";
+import { createClient, createClientArgs } from "../createClient.js";
+import { exists } from "../exists.js";
+import { findProjectFolderOrExit } from "../findProjectFolder.js";
+import { pluginsFolderPath } from "../lmstudioPaths.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
 
 type PluginProcessStatus = "stopped" | "starting" | "running" | "restarting";
 

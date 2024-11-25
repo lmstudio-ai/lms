@@ -5,12 +5,12 @@ import { type ModelSearchResultDownloadOption, type ModelSearchResultEntry } fro
 import chalk from "chalk";
 import { boolean, command, flag, option, optional, positional, string } from "cmd-ts";
 import inquirer from "inquirer";
-import { askQuestion } from "../confirm";
-import { createClient, createClientArgs } from "../createClient";
-import { formatSizeBytes1000 } from "../formatSizeBytes1000";
-import { createLogger, logLevelArgs } from "../logLevel";
-import { ProgressBar } from "../ProgressBar";
-import { refinedNumber } from "../types/refinedNumber";
+import { askQuestion } from "../confirm.js";
+import { createClient, createClientArgs } from "../createClient.js";
+import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
+import { ProgressBar } from "../ProgressBar.js";
+import { refinedNumber } from "../types/refinedNumber.js";
 
 function formatRemainingTime(timeSeconds: number) {
   const seconds = timeSeconds % 60;

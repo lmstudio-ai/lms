@@ -1,8 +1,8 @@
 import { command } from "cmd-ts";
 import { cwd } from "process";
-import { createClient, createClientArgs } from "../createClient";
-import { findProjectFolderOrExit } from "../findProjectFolder";
-import { createLogger, logLevelArgs } from "../logLevel";
+import { createClient, createClientArgs } from "../createClient.js";
+import { findProjectFolderOrExit } from "../findProjectFolder.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
 
 export const push = command({
   name: "push",

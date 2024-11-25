@@ -3,10 +3,10 @@ import { type DownloadedModel } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { command, flag } from "cmd-ts";
 import columnify from "columnify";
-import { architectureInfoLookup } from "../architectureStylizations";
-import { createClient, createClientArgs } from "../createClient";
-import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000";
-import { createLogger, logLevelArgs } from "../logLevel";
+import { architectureInfoLookup } from "../architectureStylizations.js";
+import { createClient, createClientArgs } from "../createClient.js";
+import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
 
 function loadedCheckBoxed(count: number) {
   if (count === 0) {

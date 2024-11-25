@@ -15,8 +15,8 @@ import { join } from "path";
 import * as tar from "tar";
 import util from "util";
 import { z } from "zod";
-import { createLogger, logLevelArgs } from "../logLevel";
-import { ProgressBar } from "../ProgressBar";
+import { createLogger, logLevelArgs } from "../logLevel.js";
+import { ProgressBar } from "../ProgressBar.js";
 
 const execAsync = util.promisify(exec);
 const illegalPathChars = ["/", "\\", ":", "*", "?", '"', "<", ">", "|"];

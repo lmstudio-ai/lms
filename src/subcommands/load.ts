@@ -10,13 +10,13 @@ import { boolean, command, flag, option, optional, positional, string, type Type
 import fuzzy from "fuzzy";
 import inquirer from "inquirer";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
-import { getCliPref } from "../cliPref";
-import { createClient, createClientArgs } from "../createClient";
-import { formatElapsedTime } from "../formatElapsedTime";
-import { formatSizeBytes1000 } from "../formatSizeBytes1000";
-import { createLogger, logLevelArgs } from "../logLevel";
-import { ProgressBar } from "../ProgressBar";
-import { refinedNumber } from "../types/refinedNumber";
+import { getCliPref } from "../cliPref.js";
+import { createClient, createClientArgs } from "../createClient.js";
+import { formatElapsedTime } from "../formatElapsedTime.js";
+import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
+import { ProgressBar } from "../ProgressBar.js";
+import { refinedNumber } from "../types/refinedNumber.js";
 
 const gpuOptionType: Type<string, LLMLlamaAccelerationOffloadRatio> = {
   async from(str) {

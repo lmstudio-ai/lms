@@ -6,9 +6,9 @@ import { option, optional, string } from "cmd-ts";
 import { readFile } from "fs/promises";
 import { homedir } from "os";
 import path from "path";
-import { type LogLevelArgs } from "./logLevel";
-import { checkHttpServer } from "./subcommands/server";
-import { refinedNumber } from "./types/refinedNumber";
+import { type LogLevelArgs } from "./logLevel.js";
+import { checkHttpServer } from "./subcommands/server.js";
+import { refinedNumber } from "./types/refinedNumber.js";
 
 interface AppInstallLocation {
   path: string;
