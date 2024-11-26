@@ -7,20 +7,11 @@ import { boolean, command, flag, option, optional, positional, string } from "cm
 import inquirer from "inquirer";
 import { askQuestion } from "../confirm.js";
 import { createClient, createClientArgs } from "../createClient.js";
+import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { refinedNumber } from "../types/refinedNumber.js";
-
-function formatRemainingTime(timeSeconds: number) {
-  const seconds = timeSeconds % 60;
-  const minutes = Math.floor(timeSeconds / 60) % 60;
-  const hours = Math.floor(timeSeconds / 3600);
-  if (hours > 0) {
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  }
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
 
 export const get = command({
   name: "get",
@@ -261,6 +252,7 @@ export const get = command({
     let isAskingExitingBehavior = false;
     let canceled = false;
     const pb = new ProgressBar(0, "", 22);
+    const updatePb = createDownloadPbUpdater(pb);
     const abortController = new AbortController();
     const sigintListener = () => {
       process.removeListener("SIGINT", sigintListener);
@@ -285,39 +277,15 @@ export const get = command({
       });
     };
     process.addListener("SIGINT", sigintListener);
-    let longestDownloadedBytesStringLength = 6;
-    let longestTotalBytesStringLength = 6;
-    let longestSpeedBytesPerSecondStringLength = 6;
     try {
       let alreadyExisted = true;
       const defaultIdentifier = await option.download({
-        onProgress: ({ downloadedBytes, totalBytes, speedBytesPerSecond }) => {
+        onProgress: update => {
           alreadyExisted = false;
           if (isAskingExitingBehavior) {
             return;
           }
-          const downloadedBytesString = formatSizeBytes1000(downloadedBytes);
-          if (downloadedBytesString.length > longestDownloadedBytesStringLength) {
-            longestDownloadedBytesStringLength = downloadedBytesString.length;
-          }
-          const totalBytesString = formatSizeBytes1000(totalBytes);
-          if (totalBytesString.length > longestTotalBytesStringLength) {
-            longestTotalBytesStringLength = totalBytesString.length;
-          }
-          const speedBytesPerSecondString = formatSizeBytes1000(speedBytesPerSecond);
-          if (speedBytesPerSecondString.length > longestSpeedBytesPerSecondStringLength) {
-            longestSpeedBytesPerSecondStringLength = speedBytesPerSecondString.length;
-          }
-          const timeLeftSeconds = Math.round((totalBytes - downloadedBytes) / speedBytesPerSecond);
-          pb.setRatio(
-            downloadedBytes / totalBytes,
-            text`
-              ${downloadedBytesString.padStart(longestDownloadedBytesStringLength)} /
-              ${totalBytesString.padStart(longestTotalBytesStringLength)} |
-              ${speedBytesPerSecondString.padStart(longestSpeedBytesPerSecondStringLength)}/s | ETA
-              ${formatRemainingTime(timeLeftSeconds)}
-            `,
-          );
+          updatePb(update);
         },
         onStartFinalizing: () => {
           alreadyExisted = false;

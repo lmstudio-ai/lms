@@ -31,6 +31,7 @@ const cli = subcommands({
     log,
     // dev,
     // push,
+    // pull,
     import: importCmd,
     bootstrap,
     version,
@@ -38,6 +39,6 @@ const cli = subcommands({
 });
 
 run(cli, process.argv.slice(2)).catch(error => {
-  console.error(error?.message ?? error);
+  console.error(error?.stack ?? error);
   process.exit(1);
 });
