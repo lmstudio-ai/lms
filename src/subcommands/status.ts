@@ -2,10 +2,10 @@ import { text } from "@lmstudio/lms-common";
 import boxen from "boxen";
 import chalk from "chalk";
 import { command } from "cmd-ts";
-import { createClient, createClientArgs } from "../createClient";
-import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000";
-import { createLogger, logLevelArgs } from "../logLevel";
-import { checkHttpServer, getServerConfig } from "./server";
+import { createClient, createClientArgs } from "../createClient.js";
+import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
+import { checkHttpServer, getServerConfig } from "./server.js";
 
 export const status = command({
   name: "status",

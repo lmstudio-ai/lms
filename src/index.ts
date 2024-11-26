@@ -1,15 +1,15 @@
 import { run, subcommands } from "cmd-ts";
-import { bootstrap } from "./subcommands/bootstrap";
-import { create } from "./subcommands/create";
-import { get } from "./subcommands/get";
-import { importCmd } from "./subcommands/importCmd";
-import { ls, ps } from "./subcommands/list";
-import { load } from "./subcommands/load";
-import { log } from "./subcommands/log";
-import { server } from "./subcommands/server";
-import { status } from "./subcommands/status";
-import { unload } from "./subcommands/unload";
-import { printVersion, version } from "./subcommands/version";
+import { bootstrap } from "./subcommands/bootstrap.js";
+import { create } from "./subcommands/create.js";
+import { get } from "./subcommands/get.js";
+import { importCmd } from "./subcommands/importCmd.js";
+import { ls, ps } from "./subcommands/list.js";
+import { load } from "./subcommands/load.js";
+import { log } from "./subcommands/log.js";
+import { server } from "./subcommands/server.js";
+import { status } from "./subcommands/status.js";
+import { unload } from "./subcommands/unload.js";
+import { printVersion, version } from "./subcommands/version.js";
 
 if (process.argv.length === 2) {
   printVersion();
@@ -32,8 +32,8 @@ const cli = subcommands({
     // dev,
     // push,
     import: importCmd,
-    version,
     bootstrap,
+    version,
   },
 });
 

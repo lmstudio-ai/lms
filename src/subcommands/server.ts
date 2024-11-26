@@ -3,8 +3,8 @@ import { command, flag, number, option, optional, subcommands } from "cmd-ts";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import os from "os";
 import path from "path";
-import { wakeUpService } from "../createClient";
-import { createLogger, logLevelArgs } from "../logLevel";
+import { wakeUpService } from "../createClient.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
 
 type HttpServerCtl =
   | {

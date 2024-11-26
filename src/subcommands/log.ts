@@ -1,8 +1,8 @@
 import { type DiagnosticsLogEventData } from "@lmstudio/lms-shared-types";
 import chalk from "chalk";
 import { command, flag, subcommands } from "cmd-ts";
-import { createClient, createClientArgs } from "../createClient";
-import { createLogger, logLevelArgs } from "../logLevel";
+import { createClient, createClientArgs } from "../createClient.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
 
 const stream = command({
   name: "stream",

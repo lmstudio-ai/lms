@@ -1,4 +1,4 @@
-import { installCli } from "@lmstudio/lms-lmstudio/dist/installCli";
+import { installCli } from "@lmstudio/lms-lmstudio/install-cli";
 import { command } from "cmd-ts";
 import { platform } from "os";
 

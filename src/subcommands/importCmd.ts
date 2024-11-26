@@ -16,8 +16,8 @@ import inquirerPrompt from "inquirer-autocomplete-prompt";
 import { homedir } from "os";
 import { basename, dirname, join } from "path";
 import { z } from "zod";
-import { getCliPref } from "../cliPref";
-import { createLogger, logLevelArgs } from "../logLevel";
+import { getCliPref } from "../cliPref.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
 
 const userRepoType: Type<string, [string, string]> = {
   async from(str) {

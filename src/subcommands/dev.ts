@@ -1,6 +1,7 @@
 import { SimpleLogger, text, Validator } from "@lmstudio/lms-common";
-import { EsPluginRunnerWatcher, UtilBinary } from "@lmstudio/lms-es-plugin-runner";
-import { pluginManifestSchema } from "@lmstudio/lms-shared-types/dist/PluginManifest";
+import { EsPluginRunnerWatcher } from "@lmstudio/lms-es-plugin-runner/runner-watcher";
+import { UtilBinary } from "@lmstudio/lms-es-plugin-runner/util-binary";
+import { pluginManifestSchema } from "@lmstudio/lms-shared-types";
 import {
   type LMStudioClient,
   type PluginManifest,
@@ -11,12 +12,12 @@ import { boolean, command, flag } from "cmd-ts";
 import { cp, mkdir, readFile } from "fs/promises";
 import { join } from "path";
 import { cwd } from "process";
-import { askQuestion } from "../confirm";
-import { createClient, createClientArgs } from "../createClient";
-import { exists } from "../exists";
-import { findProjectFolderOrExit } from "../findProjectFolder";
-import { pluginsFolderPath } from "../lmstudioPaths";
-import { createLogger, logLevelArgs } from "../logLevel";
+import { askQuestion } from "../confirm.js";
+import { createClient, createClientArgs } from "../createClient.js";
+import { exists } from "../exists.js";
+import { findProjectFolderOrExit } from "../findProjectFolder.js";
+import { pluginsFolderPath } from "../lmstudioPaths.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
 
 type PluginProcessStatus = "stopped" | "starting" | "running" | "restarting";
 

@@ -5,8 +5,8 @@ import { boolean, command, flag, optional, positional, string } from "cmd-ts";
 import fuzzy from "fuzzy";
 import inquirer from "inquirer";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
-import { createClient, createClientArgs } from "../createClient";
-import { createLogger, logLevelArgs } from "../logLevel";
+import { createClient, createClientArgs } from "../createClient.js";
+import { createLogger, logLevelArgs } from "../logLevel.js";
 
 export const unload = command({
   name: "unload",

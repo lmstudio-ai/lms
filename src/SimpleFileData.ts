@@ -1,6 +1,6 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type ZodSchema } from "zod";
-import { FileData } from "./FileData";
+import { FileData } from "./FileData.js";
 
 export class SimpleFileData<TData> extends FileData<TData, TData> {
   public constructor(
