@@ -1,3 +1,4 @@
+import { text } from "@lmstudio/lms-common";
 import { kebabCaseRegex } from "@lmstudio/lms-shared-types";
 import { command, positional, string, type Type } from "cmd-ts";
 import { resolve } from "path";
@@ -13,7 +14,7 @@ const artifactIdentifierType: Type<string, { owner: string; name: string }> = {
     str = str.trim().toLowerCase();
     const parts = str.split("/");
     if (parts.length !== 2) {
-      throw new Error("Invalid plugin identifier. Must be in the form of 'owner/name'.");
+      throw new Error("Invalid artifact identifier. Must be in the form of 'owner/name'.");
     }
     const [owner, name] = parts;
     if (!kebabCaseRegex.test(owner)) {
@@ -28,16 +29,19 @@ const artifactIdentifierType: Type<string, { owner: string; name: string }> = {
 
 export const pull = command({
   name: "pull",
-  description: "Pull a plugin from LM Studio Hub to a local folder.",
+  description: "Pull an artifact from LM Studio Hub to a local folder.",
   args: {
     artifactIdentifier: positional({
-      displayName: "plugin-identifier",
-      description: "The identifier for the plugin. Must be in the form of 'owner/name'.",
+      displayName: "artifact-identifier",
+      description: "The identifier for the artifact. Must be in the form of 'owner/name'.",
       type: artifactIdentifierType,
     }),
     path: optionalPositional({
       displayName: "path",
-      description: "The path to the folder to pull the plugin to. I",
+      description: text`
+        The path to the folder to pull the resources into. If not provided, defaults to a new folder
+        with the artifact name in the current working directory.
+      `,
       type: string,
       default: "",
     }),
@@ -81,5 +85,6 @@ export const pull = command({
         logger.info("Finalizing download...");
       },
     });
+    logger.info(`Artifact successfully pulled to ${path}.`);
   },
 });
