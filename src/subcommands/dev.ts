@@ -206,12 +206,40 @@ async function handleInstall(
   return 0;
 }
 
+async function ensureNpmDependencies(path: string, logger: SimpleLogger, client: LMStudioClient) {
+  const packageJson = join(path, "package.json");
+  if (!(await exists(packageJson))) {
+    logger.error("No package.json found in the plugin folder.");
+    process.exit(1);
+  }
+  if (!(await exists(join(path, "node_modules")))) {
+    logger.info("Installing npm dependencies...");
+    await client.repository.installPluginDependencies(path);
+  } else {
+    logger.debug("node_modules already exists. Skipping npm install.");
+  }
+}
+
 async function handleDevServer(
   projectPath: string,
   manifest: PluginManifest,
   logger: SimpleLogger,
   client: LMStudioClient,
 ) {
+  if (manifest.type !== "plugin") {
+    logger.error("The version of lms you are using only supports plugins.");
+    process.exit(1);
+  }
+
+  if (manifest.runner !== "ecmascript") {
+    logger.error("The version of lms you are using only supports ECMAScript plugins.");
+    process.exit(1);
+  }
+
+  if (manifest.type === "plugin" && manifest.runner === "ecmascript") {
+    await ensureNpmDependencies(projectPath, logger, client);
+  }
+
   logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
 
   const esbuild = new UtilBinary("esbuild");
