@@ -15,6 +15,9 @@ export const push = command({
     const logger = createLogger(args);
     const client = await createClient(logger, args);
     const projectPath = await findProjectFolderOrExit(logger, cwd());
-    await client.repository.push(projectPath);
+    await client.repository.pushArtifact({
+      path: projectPath,
+      onMessage: message => logger.info(message),
+    });
   },
 });
