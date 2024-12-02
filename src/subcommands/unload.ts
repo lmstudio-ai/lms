@@ -45,7 +45,9 @@ export const unload = command({
         ).message,
       );
     }
-    const models = await client.llm.listLoaded();
+    const models = (
+      await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
+    ).flat();
     const modelSearchStrings = models.map(({ identifier, path }) => {
       // The question mark here is a hack to apply gray color to the path part of the string.
       // It cannot be a part of the path, so we can find it by .lastIndexOf.
