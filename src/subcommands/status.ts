@@ -41,7 +41,9 @@ export const status = command({
       content += "\n\n";
 
       const client = await createClient(logger, args);
-      const loadedModels = await client.llm.listLoaded();
+      const loadedModels = (
+        await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
+      ).flat();
       const downloadedModels = await client.system.listDownloadedModels();
       content += chalk.cyanBright("Loaded Models");
       if (loadedModels.length === 0) {
