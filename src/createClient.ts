@@ -1,11 +1,13 @@
 import { apiServerPorts, type SimpleLogger, text } from "@lmstudio/lms-common";
-import { LMStudioClient } from "@lmstudio/sdk";
+import { LMStudioClient, type LMStudioClientConstructorOpts } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { spawn } from "child_process";
 import { option, optional, string } from "cmd-ts";
+import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
 import { homedir } from "os";
 import path from "path";
+import { lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { checkHttpServer } from "./subcommands/server.js";
 import { refinedNumber } from "./types/refinedNumber.js";
@@ -21,7 +23,10 @@ export const createClientArgs = {
     type: optional(string),
     long: "host",
     description: text`
-      The host where LM Studio can be reached. Default is "127.0.0.1".
+      If you wish to connect to a remote LM Studio instance, specify the host here. Note that, in
+      this case, lms will connect using client identifier "lms-cli-remote-<random chars>", which
+      will not be a privileged client, and will restrict usage of functionalities such as
+      "lms push".
     `,
   }),
   port: option({
@@ -79,8 +84,6 @@ export async function wakeUpService(logger: SimpleLogger): Promise<boolean> {
       // We are in development environment
       args.push(".");
     }
-    // Add the minimized flag
-    args.push("--minimized");
     // Also add the headless flag
     args.push("--run-as-service");
 
@@ -110,7 +113,9 @@ export async function createClient(
   _opts: CreateClientOpts = {},
 ) {
   let { host, port } = args;
+  let isRemote = true;
   if (host === undefined) {
+    isRemote = false;
     host = "127.0.0.1";
   } else if (host.includes("://")) {
     logger.error("Host should not include the protocol.");
@@ -121,6 +126,32 @@ export async function createClient(
     );
     process.exit(1);
   }
+  let auth: LMStudioClientConstructorOpts;
+  if (isRemote) {
+    // If connecting to a remote server, we will use a random client identifier.
+    auth = {
+      clientIdentifier: `lms-cli-remote-${randomBytes(18).toString("base64")}`,
+    };
+  } else {
+    // Not remote. We need to check if this is a production build.
+    const lmsKey = "<LMS-CLI-LMS-KEY>";
+    if (lmsKey.startsWith("<") && !process.env.LMS_FORCE_PROD) {
+      // lmsKey not injected and we did not force prod, this is not a production build.
+      logger.warnText`
+        You are using a development build of lms-cli. Privileged features such as "lms push" will
+        not work.
+      `;
+      auth = {
+        clientIdentifier: "lms-cli-dev",
+      };
+    } else {
+      const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
+      auth = {
+        clientIdentifier: "lms-cli",
+        clientPasskey: lmsKey + lmsKey2,
+      };
+    }
+  }
   if (port === undefined && host === "127.0.0.1") {
     // We will now attempt to connect to the local API server.
     const localPort = await tryFindLocalAPIServer();
@@ -128,7 +159,7 @@ export async function createClient(
     if (localPort !== null) {
       const baseUrl = `ws://${host}:${localPort}`;
       logger.debug(`Found local API server at ${baseUrl}`);
-      return new LMStudioClient({ baseUrl, logger, clientIdentifier: "lms-cli" });
+      return new LMStudioClient({ baseUrl, logger, ...auth });
     }
 
     // At this point, the user wants to access the local LM Studio, but it is not running. We will
@@ -145,7 +176,7 @@ export async function createClient(
       if (localPort !== null) {
         const baseUrl = `ws://${host}:${localPort}`;
         logger.debug(`Found local API server at ${baseUrl}`);
-        return new LMStudioClient({ baseUrl, logger, clientIdentifier: "lms-cli" });
+        return new LMStudioClient({ baseUrl, logger, ...auth });
       }
     }
 
@@ -170,6 +201,6 @@ export async function createClient(
   return new LMStudioClient({
     baseUrl,
     logger,
-    clientIdentifier: "lms-cli",
+    ...auth,
   });
 }
