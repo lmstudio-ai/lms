@@ -330,7 +330,7 @@ export const ps = command({
 
           To load a model, run:
 
-              ${chalk.yellow("lms load --gpu max")}${"\n"}
+              ${chalk.yellow("lms load")}${"\n"}
         `,
       );
       return;

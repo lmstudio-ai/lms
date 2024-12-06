@@ -97,7 +97,7 @@ export const unload = command({
       logger.info(`Model "${identifier}" unloaded.`);
     } else {
       if (models.length === 0) {
-        logger.error(`You don't have any models loaded. Use "lms load --gpu max" to load a model.`);
+        logger.error(`You don't have any models loaded. Use "lms load" to load a model.`);
         process.exit(1);
       }
       console.info();
