@@ -4,6 +4,7 @@ import { command, positional, string, type Type } from "cmd-ts";
 import { resolve } from "path";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
+import { ensureAuthenticated } from "../ensureAuthenticated.js";
 import { exists } from "../exists.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 import { optionalPositional } from "../optionalPositional.js";
@@ -51,6 +52,7 @@ export const pull = command({
   handler: async args => {
     const logger = createLogger(args);
     const client = await createClient(logger, args);
+    await ensureAuthenticated(client, logger);
     const { owner, name } = args.artifactIdentifier;
     let path = args.path;
     let autoNamed: boolean;
