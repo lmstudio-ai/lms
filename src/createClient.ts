@@ -106,6 +106,7 @@ export async function wakeUpService(logger: SimpleLogger): Promise<boolean> {
 }
 
 export interface CreateClientOpts {}
+const lmsKey = "<LMS-CLI-LMS-KEY>";
 
 export async function createClient(
   logger: SimpleLogger,
@@ -134,7 +135,6 @@ export async function createClient(
     };
   } else {
     // Not remote. We need to check if this is a production build.
-    const lmsKey = "<LMS-CLI-LMS-KEY>";
     if (lmsKey.startsWith("<") && !process.env.LMS_FORCE_PROD) {
       // lmsKey not injected and we did not force prod, this is not a production build.
       logger.warnText`
@@ -176,6 +176,16 @@ export async function createClient(
       if (localPort !== null) {
         const baseUrl = `ws://${host}:${localPort}`;
         logger.debug(`Found local API server at ${baseUrl}`);
+
+        if (auth.clientIdentifier === "lms-cli") {
+          // We need to refetch the lms key due to the possibility of a new key being generated.
+          const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
+          auth = {
+            ...auth,
+            clientPasskey: lmsKey + lmsKey2,
+          };
+        }
+
         return new LMStudioClient({ baseUrl, logger, ...auth });
       }
     }

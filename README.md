@@ -52,8 +52,8 @@ Here are some frequently used commands:
   - `lms ls --json` - To list all downloaded models in machine-readable JSON format.
 - `lms ps` - To list all loaded models available for inferencing.
   - `lms ps --json` - To list all loaded models available for inferencing in machine-readable JSON format.
-- `lms load --gpu max` - To load a model with maximum GPU acceleration
-  - `lms load <model path> --gpu max -y` - To load a model with maximum GPU acceleration without confirmation
+- `lms load` - To load a model
+  - `lms load <model path> -y` - To load a model with maximum GPU acceleration without confirmation
 - `lms unload <model identifier>` - To unload a model
   - `lms unload --all` - To unload all models
 - `lms create` - To create a new project with LM Studio SDK
