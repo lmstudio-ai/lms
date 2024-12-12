@@ -1,9 +1,9 @@
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { command, flag, number, option, optional, subcommands } from "cmd-ts";
 import { mkdir, readFile, writeFile } from "fs/promises";
-import os from "os";
 import path from "path";
 import { wakeUpService } from "../createClient.js";
+import { serverConfigPath, serverCtlPath } from "../lmstudioPaths.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 
 type HttpServerCtl =
@@ -20,19 +20,10 @@ interface HttpServerConfig {
   port: number;
 }
 
-function getServerCtlPath() {
-  return path.join(os.homedir(), ".cache/lm-studio/.internal/http-server-ctl.json");
-}
-
-function getServerConfigPath() {
-  return path.join(os.homedir(), ".cache/lm-studio/.internal/http-server-config.json");
-}
-
 /**
  * Write a control object to the server control file.
  */
 async function writeToServerCtl(logger: SimpleLogger, controlObject: HttpServerCtl) {
-  const serverCtlPath = getServerCtlPath();
   logger.debug(`Resolved serverCtlPath: ${serverCtlPath}`);
   const dir = path.dirname(serverCtlPath);
   logger.debug(`Making sure directory exists: ${dir}`);
@@ -51,7 +42,7 @@ async function waitForCtlFileClear(
 ) {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise(resolve => setTimeout(resolve, checkIntervalMs));
-    const isEmpty = (await readFile(getServerCtlPath(), "utf-8")).length === 0;
+    const isEmpty = (await readFile(serverCtlPath, "utf-8")).length === 0;
     if (isEmpty) {
       logger.debug(`Attempt ${i + 1}: File has been cleared`);
       return true;
@@ -112,7 +103,7 @@ async function checkHttpServerWithRetries(logger: SimpleLogger, port: number, ma
  * Gets the last status of the server.
  */
 export async function getServerConfig(logger: SimpleLogger) {
-  const lastStatusPath = getServerConfigPath();
+  const lastStatusPath = serverConfigPath;
   logger.debug(`Reading last status from ${lastStatusPath}`);
   const lastStatus = JSON.parse(await readFile(lastStatusPath, "utf-8")) as HttpServerConfig;
   return lastStatus;

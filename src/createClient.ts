@@ -5,9 +5,7 @@ import { spawn } from "child_process";
 import { option, optional, string } from "cmd-ts";
 import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
-import { homedir } from "os";
-import path from "path";
-import { lmsKey2Path } from "./lmstudioPaths.js";
+import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { checkHttpServer } from "./subcommands/server.js";
 import { refinedNumber } from "./types/refinedNumber.js";
@@ -64,13 +62,9 @@ async function tryFindLocalAPIServer(): Promise<number | null> {
   );
 }
 
-function getAppInstallLocationPath() {
-  return path.join(homedir(), ".cache/lm-studio/.internal/app-install-location.json");
-}
-
 export async function wakeUpService(logger: SimpleLogger): Promise<boolean> {
   logger.info("Waking up LM Studio service...");
-  const appInstallLocationPath = getAppInstallLocationPath();
+  const appInstallLocationPath = appInstallLocationFilePath;
   logger.debug(`Resolved appInstallLocationPath: ${appInstallLocationPath}`);
   try {
     const appInstallLocation = JSON.parse(
