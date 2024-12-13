@@ -17,6 +17,7 @@ import { homedir } from "os";
 import { basename, dirname, join } from "path";
 import { z } from "zod";
 import { getCliPref } from "../cliPref.js";
+import { defaultModelsFolder } from "../lmstudioPaths.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 
 const userRepoType: Type<string, [string, string]> = {
@@ -327,7 +328,7 @@ async function locateSettingsJson(logger: SimpleLogger) {
  */
 async function resolveModelsFolderPath(logger: SimpleLogger) {
   const settingsJsonPath = await locateSettingsJson(logger);
-  let modelsFolderPath = join(homedir(), ".cache", "lm-studio", "models");
+  let modelsFolderPath = defaultModelsFolder;
   if (settingsJsonPath === null) {
     logger.warn(
       "Could not locate LM Studio configuration file, using default path:",

@@ -16,19 +16,7 @@
 
 `lms` ships with [LM Studio](https://lmstudio.ai/) 0.2.22 and newer.
 
-To set it up, run the built-in `bootstrap` command like so:
-
-- **Windows**:
-
-  ```shell
-  cmd /c %USERPROFILE%/.cache/lm-studio/bin/lms.exe bootstrap
-  ```
-
-- **Linux/macOS**:
-
-  ```shell
-  ~/.cache/lm-studio/bin/lms bootstrap
-  ```
+If you have trouble running the command, try running `npx lmstudio install-cli` to add it to path.
 
 To check if the bootstrapping was successful, run the following in a **👉 new terminal window 👈**:
 

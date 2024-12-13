@@ -1,8 +1,7 @@
 import { SimpleLogger } from "@lmstudio/lms-common";
-import os from "os";
-import path from "path";
 import { z } from "zod";
 import { SimpleFileData } from "./SimpleFileData.js";
+import { cliPrefPath } from "./lmstudioPaths.js";
 
 export async function getCliPref(logger?: SimpleLogger) {
   const cliPrefSchema = z.object({
@@ -19,7 +18,7 @@ export async function getCliPref(logger?: SimpleLogger) {
     autoStartServer: undefined,
   };
   const cliPref = new SimpleFileData(
-    path.join(os.homedir(), ".cache/lm-studio/.internal/cli-pref.json"),
+    cliPrefPath,
     defaultCliPref,
     cliPrefSchema,
     new SimpleLogger("CliPref", logger),
