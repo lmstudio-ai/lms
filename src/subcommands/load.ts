@@ -108,6 +108,7 @@ export const load = command({
         ratio: gpu,
         mainGpu: 0,
         tensorSplit: [],
+        splitStrategy: "evenly",
       };
     }
     let { path } = args;
