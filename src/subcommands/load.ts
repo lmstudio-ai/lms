@@ -52,6 +52,13 @@ export const load = command({
       `,
       displayName: "path",
     }),
+    ttl: option({
+      type: optional(refinedNumber({ integer: true, min: 1 })),
+      long: "ttl",
+      description: text`
+        TTL (seconds): If provided, when the model is not used for this number of seconds, it will be unloaded.
+      `,
+    }),
     gpu: option({
       type: optional(gpuOptionType),
       long: "gpu",
@@ -99,7 +106,7 @@ export const load = command({
     }),
   },
   handler: async args => {
-    const { gpu, contextLength, yes, exact, identifier } = args;
+    const { ttl: ttlSeconds, gpu, contextLength, yes, exact, identifier } = args;
     const loadConfig: LLMLoadModelConfig = {
       contextLength,
     };
@@ -170,7 +177,7 @@ export const load = command({
         );
         process.exit(1);
       }
-      await loadModel(logger, client, model, identifier, loadConfig);
+      await loadModel(logger, client, model, identifier, loadConfig, ttlSeconds);
       return;
     }
 
@@ -249,7 +256,7 @@ export const load = command({
       draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
     });
 
-    await loadModel(logger, client, model, identifier, loadConfig);
+    await loadModel(logger, client, model, identifier, loadConfig, ttlSeconds);
   },
 });
 
@@ -303,6 +310,7 @@ async function loadModel(
   model: DownloadedModel,
   identifier: string | undefined,
   config: LLMLoadModelConfig,
+  ttlSeconds: number | undefined,
 ) {
   const { path, sizeBytes } = model;
   logger.info(`Loading model "${path}"...`);
@@ -320,6 +328,7 @@ async function loadModel(
   process.addListener("SIGINT", sigintListener);
   const llmModel = await (model.type === "llm" ? client.llm : client.embedding).load(path, {
     verbose: false,
+    ttl: ttlSeconds,
     onProgress: progress => {
       progressBar.setRatio(progress);
     },
