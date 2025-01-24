@@ -56,7 +56,7 @@ export const load = command({
       type: optional(refinedNumber({ integer: true, min: 1 })),
       long: "ttl",
       description: text`
-        If provided, when the model is not used for this number of seconds, it will be unloaded.
+        TTL (seconds): If provided, when the model is not used for this number of seconds, it will be unloaded.
       `,
     }),
     gpu: option({
