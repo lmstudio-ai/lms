@@ -49,36 +49,37 @@ function printDownloadedModelsTable(
   loadedModels: Array<{ path: string; identifier: string }>,
   detailed: boolean,
 ) {
-  interface DownloadedModelWithExtraInfo extends DownloadedModel {
-    loadedIdentifiers: Array<string>;
-    group: string;
-    remaining: string;
-  }
-  const downloadedModelsGroups = downloadedModels
-    // Attach 1) all the loadedIdentifiers 2) group name (user/repo) to each model
-    .map(model => {
-      const segments = model.path.split("/");
-      return {
-        ...model,
-        loadedIdentifiers: loadedModels
-          .filter(loadedModel => loadedModel.path === model.path)
-          .map(loadedModel => loadedModel.identifier),
-        group: segments.slice(0, 2).join("/"),
-        remaining: segments.slice(2).join("/"),
-      };
-    })
-    // Group by group name into a map
-    .reduce((acc, model) => {
-      let group = acc.get(model.group);
-      if (!group) {
-        group = [];
-        acc.set(model.group, group);
-      }
-      group.push(model);
-      return acc;
-    }, new Map<string, Array<DownloadedModelWithExtraInfo>>());
-
   if (detailed) {
+    interface DownloadedModelWithExtraInfo {
+      model: DownloadedModel;
+      loadedIdentifiers: Array<string>;
+      group: string;
+      remaining: string;
+    }
+    const downloadedModelsGroups = downloadedModels
+      // Attach 1) all the loadedIdentifiers 2) group name (user/repo) to each model
+      .map(model => {
+        const segments = model.path.split("/");
+        return {
+          model,
+          loadedIdentifiers: loadedModels
+            .filter(loadedModel => loadedModel.path === model.path)
+            .map(loadedModel => loadedModel.identifier),
+          group: segments.slice(0, 2).join("/"),
+          remaining: segments.slice(2).join("/"),
+        };
+      })
+      // Group by group name into a map
+      .reduce((acc, model) => {
+        let group = acc.get(model.group);
+        if (!group) {
+          group = [];
+          acc.set(model.group, group);
+        }
+        group.push(model);
+        return acc;
+      }, new Map<string, Array<DownloadedModelWithExtraInfo>>());
+
     console.info(title);
     console.info();
 
@@ -89,8 +90,8 @@ function printDownloadedModelsTable(
           const model = models[0];
           return {
             path: chalk.grey(" ") + chalk.cyanBright(group),
-            sizeBytes: formatSizeBytesWithColor1000(model.sizeBytes),
-            arch: architectureColored(model.architecture),
+            sizeBytes: formatSizeBytesWithColor1000(model.model.sizeBytes),
+            arch: architectureColored(model.model.architecture),
             loaded: loadedCheckBoxed(model.loadedIdentifiers.length),
           };
         }
@@ -102,8 +103,10 @@ function printDownloadedModelsTable(
           // Models within the group
           ...models.map(model => ({
             path: chalk.grey("   ") + chalk.white("/" + model.remaining),
-            sizeBytes: formatSizeBytesWithColor1000(model.sizeBytes),
-            arch: architectureColored(model.architecture),
+            key: model.model.modelKey,
+            sizeBytes: formatSizeBytesWithColor1000(model.model.sizeBytes),
+            params: model.model.paramsString ?? "",
+            arch: architectureColored(model.model.architecture),
             loaded: loadedCheckBoxed(model.loadedIdentifiers.length),
           })),
         ];
@@ -112,18 +115,26 @@ function printDownloadedModelsTable(
 
     console.info(
       columnify(downloadedModelsAndHeadlines, {
-        columns: ["path", "sizeBytes", "arch", "loaded"],
+        columns: ["path", "key", "params", "arch", "sizeBytes", "loaded"],
         config: {
           path: {
             headingTransform: () => chalk.gray(" ") + chalk.greenBright("PATH"),
           },
-          sizeBytes: {
-            headingTransform: () => chalk.greenBright("SIZE"),
+          key: {
+            headingTransform: () => chalk.greenBright("KEY"),
+            align: "left",
+          },
+          params: {
+            headingTransform: () => chalk.greenBright("PARAMS"),
             align: "right",
           },
           arch: {
             headingTransform: () => chalk.greenBright("ARCHITECTURE"),
             align: "center",
+          },
+          sizeBytes: {
+            headingTransform: () => chalk.greenBright("SIZE"),
+            align: "right",
           },
           loaded: {
             headingTransform: () => chalk.greenBright("LOADED"),
@@ -135,31 +146,21 @@ function printDownloadedModelsTable(
       }),
     );
   } else {
-    const downloadedModelsAndHeadlines = [...downloadedModelsGroups.entries()].flatMap(
-      ([group, models]) => {
-        if (models.length === 1) {
-          const model = models[0];
-          return {
-            path: chalk.cyanBright(group),
-            sizeBytes: chalk.cyanBright(formatSizeBytes1000(model.sizeBytes)),
-            arch: chalk.cyanBright(architecture(model.architecture)),
-            loaded: loadedCheck(model.loadedIdentifiers.length),
-          };
-        } else {
-          return {
-            path: chalk.cyanBright(group),
-            arch: chalk.gray(`(...${models.length} options)`),
-            loaded: loadedCheck(
-              models.reduce((acc, model) => acc + model.loadedIdentifiers.length, 0),
-            ),
-          };
-        }
-      },
-    );
+    const downloadedModelsAndHeadlines = downloadedModels.map(model => {
+      return {
+        path: chalk.cyanBright(model.modelKey),
+        sizeBytes: chalk.cyanBright(formatSizeBytes1000(model.sizeBytes)),
+        params: chalk.cyanBright(model.paramsString ?? ""),
+        arch: chalk.cyanBright(architecture(model.architecture)),
+        loaded: loadedCheck(
+          loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
+        ),
+      };
+    });
 
     console.info(
       columnify(downloadedModelsAndHeadlines, {
-        columns: ["path", "sizeBytes", "arch", "loaded"],
+        columns: ["path", "params", "arch", "sizeBytes", "loaded"],
         config: {
           loaded: {
             headingTransform: () => "",
@@ -168,13 +169,17 @@ function printDownloadedModelsTable(
           path: {
             headingTransform: () => chalk(title),
           },
-          sizeBytes: {
-            headingTransform: () => chalk("SIZE"),
+          params: {
+            headingTransform: () => chalk("PARAMS"),
             align: "right",
           },
           arch: {
             headingTransform: () => chalk("ARCHITECTURE"),
             align: "center",
+          },
+          sizeBytes: {
+            headingTransform: () => chalk("SIZE"),
+            align: "right",
           },
         },
         preserveNewLines: true,
