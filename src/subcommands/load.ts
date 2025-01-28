@@ -111,11 +111,8 @@ export const load = command({
       contextLength,
     };
     if (gpu !== undefined) {
-      loadConfig.gpuOffload = {
+      loadConfig.gpu = {
         ratio: gpu,
-        mainGpu: 0,
-        tensorSplit: [],
-        splitStrategy: "evenly",
       };
     }
     let { path } = args;
