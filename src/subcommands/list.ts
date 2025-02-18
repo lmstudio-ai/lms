@@ -1,5 +1,5 @@
 import { text } from "@lmstudio/lms-common";
-import { type DownloadedModel } from "@lmstudio/sdk";
+import { type ModelInfo } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { command, flag } from "cmd-ts";
 import columnify from "columnify";
@@ -45,13 +45,13 @@ function architecture(architecture?: string) {
 
 function printDownloadedModelsTable(
   title: string,
-  downloadedModels: Array<DownloadedModel>,
+  downloadedModels: Array<ModelInfo>,
   loadedModels: Array<{ path: string; identifier: string }>,
   detailed: boolean,
 ) {
   if (detailed) {
     interface DownloadedModelWithExtraInfo {
-      model: DownloadedModel;
+      model: ModelInfo;
       loadedIdentifiers: Array<string>;
       group: string;
       remaining: string;

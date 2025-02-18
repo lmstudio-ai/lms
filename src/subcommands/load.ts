@@ -1,9 +1,6 @@
 import { makeTitledPrettyError, type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
-import {
-  type DownloadedModel,
-  type LLMLlamaAccelerationOffloadRatio,
-} from "@lmstudio/lms-shared-types";
+import { type LLMLlamaAccelerationOffloadRatio, type ModelInfo } from "@lmstudio/lms-shared-types";
 import { type LLMLoadModelConfig, type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { boolean, command, flag, option, optional, positional, string, type Type } from "cmd-ts";
@@ -183,7 +180,7 @@ export const load = command({
     const initialFilteredModels = fuzzy.filter(path ?? "", modelPaths);
     logger.debug("Initial filtered models length:", initialFilteredModels.length);
 
-    let model: DownloadedModel;
+    let model: ModelInfo;
     if (yes) {
       if (initialFilteredModels.length === 0) {
         logger.errorWithoutPrefix(
@@ -258,7 +255,7 @@ export const load = command({
 });
 
 async function selectModelToLoad(
-  models: DownloadedModel[],
+  models: ModelInfo[],
   modelPaths: string[],
   initialSearch: string,
   leaveEmptyLines: number,
@@ -304,7 +301,7 @@ async function selectModelToLoad(
 async function loadModel(
   logger: SimpleLogger,
   client: LMStudioClient,
-  model: DownloadedModel,
+  model: ModelInfo,
   identifier: string | undefined,
   config: LLMLoadModelConfig,
   ttlSeconds: number | undefined,
