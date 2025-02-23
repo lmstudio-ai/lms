@@ -257,13 +257,15 @@ const status = command({
     if (port !== null) {
       running = await checkHttpServer(logger, port);
     }
-    if (running) {
-      logger.info(`The server is running on port ${port}.`);
-    } else {
-      logger.info(`The server is not running.`);
-    }
+  
     if (json) {
       process.stdout.write(JSON.stringify({ running, port }) + "\n");
+    }else{
+      if (running) {
+        logger.info(`The server is running on port ${port}.`);
+      } else {
+        logger.info(`The server is not running.`);
+      }
     }
   },
 });
