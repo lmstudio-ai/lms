@@ -324,7 +324,9 @@ export const ps = command({
     const downloadedModels = await client.system.listDownloadedModels();
 
     if (json) {
-      console.info(JSON.stringify(loadedModels));
+      console.info(
+        JSON.stringify(await Promise.all(loadedModels.map(model => model.getModelInfo()))),
+      );
       return;
     }
 
