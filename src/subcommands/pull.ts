@@ -1,5 +1,5 @@
 import { text } from "@lmstudio/lms-common";
-import { kebabCaseRegex, kebabCaseWithDotRegex } from "@lmstudio/lms-shared-types";
+import { kebabCaseRegex, kebabCaseWithDotsRegex } from "@lmstudio/lms-shared-types";
 import { command, positional, string, type Type } from "cmd-ts";
 import { resolve } from "path";
 import { createClient, createClientArgs } from "../createClient.js";
@@ -21,7 +21,7 @@ const artifactIdentifierType: Type<string, { owner: string; name: string }> = {
     if (!kebabCaseRegex.test(owner)) {
       throw new Error("Invalid owner. Must be kebab-case.");
     }
-    if (!kebabCaseWithDotRegex.test(name)) {
+    if (!kebabCaseWithDotsRegex.test(name)) {
       throw new Error("Invalid name. Must be kebab-case (dots allowed).");
     }
     return { owner, name };
