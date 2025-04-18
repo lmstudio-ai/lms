@@ -1,14 +1,24 @@
-import { text } from "@lmstudio/lms-common";
+import { type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
-import { type ModelCompatibilityType } from "@lmstudio/lms-shared-types";
-import { type ModelSearchResultDownloadOption, type ModelSearchResultEntry } from "@lmstudio/sdk";
+import {
+  type ArtifactDownloadPlan,
+  type ArtifactDownloadPlanModelInfo,
+  kebabCaseRegex,
+  kebabCaseWithDotsRegex,
+  type ModelCompatibilityType,
+} from "@lmstudio/lms-shared-types";
+import {
+  type LMStudioClient,
+  type ModelSearchResultDownloadOption,
+  type ModelSearchResultEntry,
+} from "@lmstudio/sdk";
 import chalk from "chalk";
 import { boolean, command, flag, option, optional, positional, string } from "cmd-ts";
 import inquirer from "inquirer";
 import { askQuestion } from "../confirm.js";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
-import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { refinedNumber } from "../types/refinedNumber.js";
@@ -97,6 +107,48 @@ export const get = command({
       process.exit(1);
     }
     const client = await createClient(logger, args);
+
+    if (modelName !== undefined && modelName.split("/").length === 2) {
+      // New lms get behavior: download artifact
+      if (mlx) {
+        logger.error("You cannot use the --mlx flag when an exact artifact is specified.");
+        process.exit(1);
+      }
+      if (gguf) {
+        logger.error("You cannot use the --gguf flag when an exact artifact is specified.");
+        process.exit(1);
+      }
+      if (limit !== undefined) {
+        logger.error("You cannot use the --limit flag when an exact artifact is specified.");
+        process.exit(1);
+      }
+      if (alwaysShowAllResults) {
+        logger.error(
+          "You cannot use the --always-show-all-results flag when a exact artifact is specified.",
+        );
+        process.exit(1);
+      }
+      if (alwaysShowDownloadOptions) {
+        logger.errorText`
+          You cannot use the --always-show-download-options flag when a exact artifact is specified.
+        `;
+        process.exit(1);
+      }
+      const [owner, name] = modelName.split("/");
+      if (!kebabCaseRegex.test(owner)) {
+        logger.error("Invalid artifact owner:", owner);
+        process.exit(1);
+      }
+      if (!kebabCaseWithDotsRegex.test(name)) {
+        logger.error("Invalid artifact name:", name);
+        process.exit(1);
+      }
+      await downloadArtifact(client, logger, owner, name, yes);
+      return;
+    }
+
+    // Legacy lms get behavior
+
     let compatibilityTypes: Array<ModelCompatibilityType> | undefined = undefined;
     if (mlx || gguf) {
       compatibilityTypes = [];
@@ -256,9 +308,7 @@ export const get = command({
     const abortController = new AbortController();
     const sigintListener = () => {
       process.removeListener("SIGINT", sigintListener);
-      process.on("SIGINT", () => {
-        logger.infoWithoutPrefix();
-        logger.info("Download will continue in the background.");
+      process.once("SIGINT", () => {
         process.exit(1);
       });
       pb.stopWithoutClear();
@@ -417,4 +467,295 @@ function formatOptionShortName(option: ModelSearchResultDownloadOption) {
   }
   name += ` (${formatSizeBytes1000(option.sizeBytes)})`;
   return name;
+}
+
+const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const tableVerticalLine = chalk.gray("│");
+const tableBranch = chalk.gray("├");
+const tableLastBranch = chalk.gray("└");
+const tableHorizontalLine = chalk.gray("─");
+
+function modelToString(model: ArtifactDownloadPlanModelInfo) {
+  let result = model.displayName;
+  if (model.quantName !== undefined) {
+    result += ` ${model.quantName}`;
+  }
+  if (model.compatibilityType === "gguf") {
+    result += " [GGUF]";
+  } else if (model.compatibilityType === "safetensors") {
+    result += " [MLX]";
+  }
+  return result;
+}
+
+const toDownloadText = chalk.yellowBright("🡇 To download:");
+
+async function artifactDownloadPlanToString(
+  plan: ArtifactDownloadPlan,
+  lines: Array<string>,
+  spinnerFrame: number,
+  currentNodeIndex = 0,
+  selfPrefix = "",
+  subSequentPrefix = "",
+) {
+  const node = plan.nodes[currentNodeIndex];
+  if (node === undefined) {
+    lines.push(chalk.redBright("<Invalid: node not found>"));
+    return;
+  }
+  const nodeType = node.type;
+  switch (nodeType) {
+    case "artifact": {
+      // Logic to print artifact node.
+      let message: string;
+      const nodeState = node.state;
+      const artifactName = `${node.owner}/${node.name}`;
+      switch (nodeState) {
+        case "pending": {
+          message = `⧗ ${chalk.white(artifactName)} ${chalk.white("- Pending...")}`;
+          break;
+        }
+        case "fetching": {
+          message = `${spinnerFrames[(spinnerFrame + currentNodeIndex) % spinnerFrames.length]} ${chalk.whiteBright(artifactName)} ${chalk.gray("- Resolving...")}`;
+          break;
+        }
+        case "satisfied": {
+          message = `${chalk.greenBright("✓ Satisfied")} ${chalk.whiteBright(artifactName)}`;
+          break;
+        }
+        case "completed": {
+          message =
+            `${toDownloadText} ` +
+            `${node.artifactType} ${chalk.whiteBright(artifactName)} - ` +
+            `${formatSizeBytesWithColor1000(node.sizeBytes ?? 0)}`;
+          break;
+        }
+        default: {
+          const exhaustiveCheck: never = nodeState;
+          throw new Error(`Unexpected node state: ${exhaustiveCheck}`);
+        }
+      }
+      lines.push(selfPrefix + message);
+      for (let i = 0; i < node.dependencyNodes.length; i++) {
+        const isLast = i === node.dependencyNodes.length - 1;
+        artifactDownloadPlanToString(
+          plan,
+          lines,
+          spinnerFrame,
+          node.dependencyNodes[i],
+          isLast
+            ? subSequentPrefix + " " + tableLastBranch + tableHorizontalLine + " "
+            : subSequentPrefix + " " + tableBranch + tableHorizontalLine + " ",
+          isLast ? subSequentPrefix + "   " : subSequentPrefix + " " + tableVerticalLine + " ",
+        );
+      }
+      break;
+    }
+    case "model": {
+      let message: string;
+      const nodeState = node.state;
+      switch (nodeState) {
+        case "pending": {
+          message = `⧗ ${chalk.white("Concrete Model")} ${chalk.white("- Pending...")}`;
+          break;
+        }
+        case "fetching": {
+          message = `${spinnerFrames[(spinnerFrame + currentNodeIndex) % spinnerFrames.length]} ${chalk.gray(`Finding options based on your system... (${node.resolvedSources}/${node.totalSources})`)}`;
+          break;
+        }
+        case "satisfied": {
+          const owned = node.alreadyOwned;
+          if (owned === undefined) {
+            message = `${chalk.greenBright("✓ Satisfied")} ${chalk.whiteBright("Unknown")}`;
+          } else {
+            message = `${chalk.greenBright("✓ Satisfied")} ${chalk.whiteBright(modelToString(owned))}`;
+          }
+          break;
+        }
+        case "completed": {
+          const selected = node.selected;
+          if (selected === undefined) {
+            message = `${toDownloadText} ${chalk.whiteBright("Unknown")}`;
+          } else {
+            message =
+              `${toDownloadText} ` +
+              `${chalk.whiteBright(modelToString(selected))} - ` +
+              `${formatSizeBytesWithColor1000(selected.sizeBytes)}`;
+          }
+          break;
+        }
+        default: {
+          const exhaustiveCheck: never = nodeState;
+          throw new Error(`Unexpected node state: ${exhaustiveCheck}`);
+        }
+      }
+      lines.push(selfPrefix + message);
+      break;
+    }
+    default: {
+      const exhaustiveCheck: never = nodeType;
+      throw new Error(`Unexpected node type: ${exhaustiveCheck}`);
+    }
+  }
+}
+
+async function downloadArtifact(
+  client: LMStudioClient,
+  logger: SimpleLogger,
+  owner: string,
+  name: string,
+  yes: boolean,
+) {
+  console.info();
+  let downloadPlan: ArtifactDownloadPlan = {
+    nodes: [
+      {
+        type: "artifact",
+        owner,
+        name,
+        state: "pending",
+        dependencyNodes: [],
+      },
+    ],
+    downloadSizeBytes: 0,
+  };
+  let linesToClear: number = 0;
+  const reprintDownloadPlan = (isFinished: boolean) => {
+    // Move cursor up by lastLines
+    process.stdout.moveCursor(0, -linesToClear);
+    const lines: Array<string> = [];
+    const spinnerFrame = Math.floor(Date.now() / 100) % spinnerFrames.length;
+    artifactDownloadPlanToString(downloadPlan, lines, spinnerFrame, 0, "   ", "  ");
+    lines.push("");
+
+    if (isFinished) {
+      if (downloadPlan.downloadSizeBytes === 0) {
+        lines.push(chalk.greenBright("✓ You already have everything. Nothing to download."));
+      } else {
+        if (yes) {
+          lines.push(
+            chalk.yellowBright(
+              `Resolution completed. Downloading ${formatSizeBytes1000(downloadPlan.downloadSizeBytes)}...`,
+            ),
+          );
+        } else {
+          lines.push(
+            chalk.yellowBright(
+              `About to download ${formatSizeBytes1000(downloadPlan.downloadSizeBytes)}.`,
+            ),
+          );
+        }
+      }
+    } else {
+      if (downloadPlan.downloadSizeBytes > 0) {
+        lines.push(
+          chalk.gray(
+            spinnerFrames[spinnerFrame] +
+              ` Resolving download plan... (${formatSizeBytes1000(downloadPlan.downloadSizeBytes)})`,
+          ),
+        );
+      } else {
+        lines.push(
+          chalk.gray(
+            spinnerFrames[(spinnerFrame + 5) % spinnerFrames.length] +
+              " Resolving download plan...",
+          ),
+        );
+      }
+    }
+
+    linesToClear = Math.max(lines.length, linesToClear);
+    for (const line of lines) {
+      process.stdout.write("\r" + line + "\x1b[0K\n");
+    }
+  };
+  process.stdout.write("\x1B[?25l");
+  using downloadPlanner = client.repository.createArtifactDownloadPlanner({
+    owner,
+    name,
+    onPlanUpdated: newPlan => {
+      downloadPlan = newPlan;
+      reprintDownloadPlan(false);
+    },
+  });
+  reprintDownloadPlan(false);
+  const autoReprintInterval = setInterval(() => {
+    reprintDownloadPlan(false);
+  }, 50);
+  await downloadPlanner.untilReady();
+  reprintDownloadPlan(true);
+  process.stdout.write("\x1B[?25h");
+  clearInterval(autoReprintInterval);
+
+  if (downloadPlan.downloadSizeBytes === 0) {
+    process.exit(0);
+  }
+  if (!yes) {
+    const confirmed = await askQuestion("Continue?");
+    if (!confirmed) {
+      process.exit(1);
+    }
+  }
+
+  // Duplicated logic for downloading artifact. Will be cleaned up when we move to artifact download
+  // only.
+  let isAskingExitingBehavior = false;
+  let canceled = false;
+  const pb = new ProgressBar(0, "", 22);
+  const updatePb = createDownloadPbUpdater(pb);
+  const abortController = new AbortController();
+  const sigintListener = () => {
+    process.removeListener("SIGINT", sigintListener);
+    process.once("SIGINT", () => {
+      process.exit(1);
+    });
+    pb.stopWithoutClear();
+    isAskingExitingBehavior = true;
+    logger.infoWithoutPrefix();
+    process.stdin.resume();
+    askQuestion("Continue to download in the background?").then(confirmed => {
+      if (confirmed) {
+        logger.info("Download will continue in the background.");
+        process.exit(1);
+      } else {
+        logger.warn("Download canceled.");
+        abortController.abort();
+        canceled = true;
+      }
+    });
+  };
+  process.addListener("SIGINT", sigintListener);
+  try {
+    await downloadPlanner.download({
+      onProgress: update => {
+        if (isAskingExitingBehavior) {
+          return;
+        }
+        updatePb(update);
+      },
+      onStartFinalizing: () => {
+        if (isAskingExitingBehavior) {
+          return;
+        }
+        pb.stop();
+        logger.info("Finalizing download...");
+      },
+      signal: abortController.signal,
+    });
+    pb.stopIfNotStopped();
+    if (canceled) {
+      process.exit(1);
+    }
+    process.removeListener("SIGINT", sigintListener);
+    logger.infoText`
+      Download completed.
+    `;
+    logger.info();
+  } catch (e: any) {
+    if (e.name === "AbortError") {
+      process.exit(1);
+    } else {
+      throw e;
+    }
+  }
 }
