@@ -51,15 +51,15 @@ export const ask = command({
     try {
       model = await client.llm.model();
     } catch (e) {
-      logger.error("Failed to get the loaded model. Make sure a model is loaded:");
-      logger.error("  lms load <model-path>");
+      logger.error("No loaded model found, load one first:");
+      logger.error("  lms load");
       process.exit(1);
     }
 
     const history: ChatInput = [
       {
         role: "system",
-        content: args.systemPrompt ?? "You are a technical AI assistant. Answer questions clearly, concisely, to-the-point."
+        content: args.systemPrompt ?? "You are a technical AI assistant. Answer questions clearly, concisely and to-the-point."
       }
     ];
 
@@ -101,7 +101,7 @@ export const ask = command({
 
     if (args.print) {
       if (!initialPrompt) {
-        logger.error("Error: --print flag requires an initial prompt.");
+        logger.error("Error: --print flag requires an initial prompt, i.e. `lms ask --print <prompt>`.");
         process.exit(1);
       }
       process.exit(0);
@@ -111,9 +111,10 @@ export const ask = command({
       const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
-        prompt: "> ",
+        prompt: "› ",
       });
 
+      process.stdout.write("\n");
       rl.prompt();
 
       rl.on("line", async (line: string) => {
@@ -123,24 +124,37 @@ export const ask = command({
           return;
         }
 
+        // Skip empty input
+        if (!input) {
+          rl.prompt();
+          return;
+        }
+
         try {
           history.push({ role: "user", content: input });
-          process.stdout.write("\n");
+          process.stdout.write("\n● ");
           const prediction = model.respond(history);
+          
+          // Temporarily pause the readline interface
+          rl.pause();
+          
           for await (const fragment of prediction) {
             process.stdout.write(fragment.content);
           }
           const result = await prediction.result();
           history.push({ role: "assistant", content: result.content });
+          
+          // Resume readline and write a new prompt
+          process.stdout.write("\n\n");
+          rl.resume();
+          rl.prompt();
         } catch (err) {
           logger.error("Error during chat:", err);
+          rl.prompt();
         }
-
-        rl.prompt();
       });
 
       rl.on("close", () => {
-        logger.info("Chat session ended.");
         process.exit(0);
       });
     } else {
