@@ -134,7 +134,7 @@ export const get = command({
         `;
         process.exit(1);
       }
-      const [owner, name] = modelName.split("/");
+      const [owner, name] = modelName.toLowerCase().split("/");
       if (!kebabCaseRegex.test(owner)) {
         logger.error("Invalid artifact owner:", owner);
         process.exit(1);
