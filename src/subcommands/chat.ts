@@ -1,5 +1,5 @@
 import { type ChatInput } from "@lmstudio/sdk";
-import { boolean, command, flag, option, optional, restPositionals, string } from "cmd-ts";
+import { command, option, optional, restPositionals, string } from "cmd-ts";
 import * as readline from "readline";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
@@ -8,7 +8,7 @@ async function readStdin(): Promise<string> {
   return new Promise((resolve) => {
     let input = '';
     process.stdin.setEncoding('utf-8');
-    
+
     process.stdin.on('data', (chunk) => {
       input += chunk;
     });
@@ -19,22 +19,22 @@ async function readStdin(): Promise<string> {
   });
 }
 
-export const ask = command({
-  name: "ask",
+export const chat = command({
+  name: "chat",
   description: "Open a chat REPL with the currently loaded model",
   args: {
     ...logLevelArgs,
     ...createClientArgs,
-    prompt: restPositionals({
-      displayName: "prompt",
-      description: "Initial prompt to send",
+    model: restPositionals({
+      displayName: "model",
+      description: "Model name to use",
       type: string,
     }),
-    print: flag({
-      type: boolean,
-      long: "print",
+    prompt: option({
+      type: optional(string),
+      long: "prompt",
       short: "p",
-      description: "Print the response to the initial prompt and exit",
+      description: "Respond to prompt stdout and quit",
     }),
     systemPrompt: option({
       type: optional(string),
@@ -47,13 +47,35 @@ export const ask = command({
     const logger = createLogger(args);
     const client = await createClient(logger, args);
 
+    let initialPrompt = '';
+    if (args.prompt) {
+      initialPrompt = args.prompt;
+    } else if (!process.stdin.isTTY) {
+      initialPrompt = await readStdin();
+    }
+
     let model;
-    try {
-      model = await client.llm.model();
-    } catch (e) {
-      logger.error("No loaded model found, load one first:");
-      logger.error("  lms load");
-      process.exit(1);
+    const modelKey = args.model && args.model.length > 0 ? args.model[0] : undefined;
+    if (modelKey) {
+      try {
+        model = await client.llm.model(modelKey);
+
+      } catch (e) {
+        logger.error(`Model "${modelKey}" not found, check available models with:`);
+        logger.error("  lms ls");
+        process.exit(1);
+      }
+    } else {
+      try {
+        model = await client.llm.model();
+      } catch (e) {
+        logger.error("No loaded default model found, load one first:");
+        logger.error("  lms load");
+        process.exit(1);
+      }
+    }
+    if (!initialPrompt) {
+      logger.info(`Chatting with ${model.identifier}`);
     }
 
     const history: ChatInput = [
@@ -63,48 +85,28 @@ export const ask = command({
       }
     ];
 
-    let initialPrompt = '';
-    if (args.prompt.length > 0) {
-      initialPrompt = args.prompt.join(" ");
-    } else if (!process.stdin.isTTY) {
-      initialPrompt = await readStdin();
-      if (args.print) {
-        history.push({ role: "user", content: initialPrompt });
-        try {
-          const prediction = model.respond(history);
-          for await (const fragment of prediction) {
-            process.stdout.write(fragment.content);
-          }
-          process.stdout.write("\n");
-          process.exit(0);
-        } catch (err) {
-          logger.error("Error during chat:", err);
-          process.exit(1);
-        }
-      }
-    }
 
     if (initialPrompt) {
       history.push({ role: "user", content: initialPrompt });
       try {
         const prediction = model.respond(history);
+        let lastFragment = '';
         for await (const fragment of prediction) {
           process.stdout.write(fragment.content);
+          lastFragment = fragment.content;
         }
         const result = await prediction.result();
         history.push({ role: "assistant", content: result.content });
+
+        if(!lastFragment.endsWith('\n')) {
+          // Newline before new shell prompt if not already there
+          process.stdout.write('\n');
+        }
+        process.exit(0);
       } catch (err) {
         logger.error("Error during chat:", err);
         process.exit(1);
       }
-    }
-
-    if (args.print) {
-      if (!initialPrompt) {
-        logger.error("Error: --print flag requires an initial prompt, i.e. `lms ask --print <prompt>`.");
-        process.exit(1);
-      }
-      process.exit(0);
     }
 
     if (process.stdin.isTTY) {
@@ -134,16 +136,16 @@ export const ask = command({
           history.push({ role: "user", content: input });
           process.stdout.write("\n● ");
           const prediction = model.respond(history);
-          
+
           // Temporarily pause the readline interface
           rl.pause();
-          
+
           for await (const fragment of prediction) {
             process.stdout.write(fragment.content);
           }
           const result = await prediction.result();
           history.push({ role: "assistant", content: result.content });
-          
+
           // Resume readline and write a new prompt
           process.stdout.write("\n\n");
           rl.resume();
