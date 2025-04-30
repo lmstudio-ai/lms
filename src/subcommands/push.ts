@@ -1,21 +1,26 @@
-import { type SimpleLogger } from "@lmstudio/lms-common";
+import { type SimpleLogger, text } from "@lmstudio/lms-common";
 import {
   type ArtifactDependency,
+  artifactManifestSchema,
   kebabCaseRegex,
   kebabCaseWithDotsRegex,
+  type LocalArtifactFileList,
   type ModelDownloadSource,
   type ModelManifest,
   virtualModelDefinitionSchema,
 } from "@lmstudio/lms-shared-types";
-import { command } from "cmd-ts";
+import chalk from "chalk";
+import { boolean, command, flag } from "cmd-ts";
 import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { cwd } from "process";
 import YAML from "yaml";
+import { askQuestion } from "../confirm.js";
 import { createClient, createClientArgs } from "../createClient.js";
 import { ensureAuthenticated } from "../ensureAuthenticated.js";
 import { exists } from "../exists.js";
 import { findProjectFolderOrExit } from "../findProjectFolder.js";
+import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 
 export const push = command({
@@ -24,20 +29,69 @@ export const push = command({
   args: {
     ...logLevelArgs,
     ...createClientArgs,
+    yes: flag({
+      type: boolean,
+      long: "yes",
+      short: "y",
+      description: text`
+        Suppress all confirmations and warnings.
+      `,
+    }),
   },
   handler: async args => {
     const logger = createLogger(args);
     const client = await createClient(logger, args);
-    await ensureAuthenticated(client, logger);
+    const { yes } = args;
+    await ensureAuthenticated(client, logger, { yes });
     const currentPath = cwd();
     await maybeGenerateManifestJson(logger, currentPath);
     const projectPath = await findProjectFolderOrExit(logger, currentPath);
+
+    const manifestJsonPath = join(projectPath, "manifest.json");
+    const manifestContent = await readFile(manifestJsonPath, "utf-8");
+    const manifest = artifactManifestSchema.parse(JSON.parse(manifestContent));
+    // For now, we only require user to confirm if the manifest type is plugin.
+    const needsConfirmation = !args.yes && manifest.type === "plugin";
+
+    const fileList = await client.repository.getLocalArtifactFileList(projectPath);
+    printFileList(fileList, logger);
+
+    if (needsConfirmation) {
+      if (!(await askQuestion("Continue?"))) {
+        logger.info("Aborting push.");
+        process.exit(1);
+      }
+    }
+
     await client.repository.pushArtifact({
       path: projectPath,
       onMessage: message => logger.info(message),
     });
   },
 });
+
+function printFileList(fileList: LocalArtifactFileList, logger: SimpleLogger) {
+  logger.info();
+  logger.info("The following files will be pushed:");
+  logger.info();
+  for (const file of fileList.files) {
+    logger.info(
+      `   ${file.relativePath} ${chalk.gray(`(${formatSizeBytes1000(file.sizeBytes)})`)}`,
+    );
+  }
+  logger.info();
+  if (fileList.usedIgnoreFile) {
+    logger.info(chalk.gray(`(Used ignore file ${fileList.usedIgnoreFile})`));
+  } else {
+    logger.info(
+      chalk.gray(text`
+        (i) You can create a ${chalk.yellow(".lmsignore")} or ${chalk.yellow(".gitignore")} file to
+        filter out unwanted files.
+      `),
+    );
+  }
+  logger.info();
+}
 
 /**
  * Currently a temporary function that generates manifest.json file if there is a model.yaml file in
@@ -117,7 +171,6 @@ async function generateManifestJsonFromModelYaml(folderPath: string, modelYamlPa
     type: "model",
     owner,
     name,
-    description: virtualModelDefinition.description ?? "",
     dependencies,
     tags: virtualModelDefinition.tags,
   };
