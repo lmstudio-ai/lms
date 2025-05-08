@@ -1,8 +1,9 @@
-import { type ChatInput } from "@lmstudio/sdk";
-import { command, option, optional, restPositionals, string } from "cmd-ts";
+import { Chat } from "@lmstudio/sdk";
+import { command, option, optional, string } from "cmd-ts";
 import * as readline from "readline";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
+import { optionalPositional } from "../optionalPositional.js";
 
 async function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -25,10 +26,11 @@ export const chat = command({
   args: {
     ...logLevelArgs,
     ...createClientArgs,
-    model: restPositionals({
+    model: optionalPositional({
       displayName: "model",
       description: "Model name to use",
       type: string,
+      default: "",
     }),
     prompt: option({
       type: optional(string),
@@ -55,13 +57,11 @@ export const chat = command({
     }
 
     let model;
-    const modelKey = args.model && args.model.length > 0 ? args.model[0] : undefined;
-    if (modelKey) {
+    if (args.model) {
       try {
-        model = await client.llm.model(modelKey);
-
+        model = await client.llm.model(args.model);
       } catch (e) {
-        logger.error(`Model "${modelKey}" not found, check available models with:`);
+        logger.error(`Model "${args.model}" not found, check available models with:`);
         logger.error("  lms ls");
         process.exit(1);
       }
@@ -78,25 +78,20 @@ export const chat = command({
       logger.info(`Chatting with ${model.identifier}`);
     }
 
-    const history: ChatInput = [
-      {
-        role: "system",
-        content: args.systemPrompt ?? "You are a technical AI assistant. Answer questions clearly, concisely and to-the-point."
-      }
-    ];
-
+    const chat = Chat.empty();
+    chat.append("system", args.systemPrompt ?? "You are a technical AI assistant. Answer questions clearly, concisely and to-the-point.");
 
     if (initialPrompt) {
-      history.push({ role: "user", content: initialPrompt });
+      chat.append("user", initialPrompt);
       try {
-        const prediction = model.respond(history);
+        const prediction = model.respond(chat);
         let lastFragment = '';
         for await (const fragment of prediction) {
           process.stdout.write(fragment.content);
           lastFragment = fragment.content;
         }
         const result = await prediction.result();
-        history.push({ role: "assistant", content: result.content });
+        chat.append("assistant", result.content);
 
         if(!lastFragment.endsWith('\n')) {
           // Newline before new shell prompt if not already there
@@ -133,9 +128,9 @@ export const chat = command({
         }
 
         try {
-          history.push({ role: "user", content: input });
+          chat.append("user", input);
           process.stdout.write("\n● ");
-          const prediction = model.respond(history);
+          const prediction = model.respond(chat);
 
           // Temporarily pause the readline interface
           rl.pause();
@@ -144,7 +139,7 @@ export const chat = command({
             process.stdout.write(fragment.content);
           }
           const result = await prediction.result();
-          history.push({ role: "assistant", content: result.content });
+          chat.append("assistant", result.content);
 
           // Resume readline and write a new prompt
           process.stdout.write("\n\n");
