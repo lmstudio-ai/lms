@@ -10,7 +10,7 @@ import {
   virtualModelDefinitionSchema,
 } from "@lmstudio/lms-shared-types";
 import chalk from "chalk";
-import { boolean, command, flag } from "cmd-ts";
+import { boolean, command, flag, option, optional, string, type Type } from "cmd-ts";
 import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { cwd } from "process";
@@ -23,12 +23,31 @@ import { findProjectFolderOrExit } from "../findProjectFolder.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 
+const overridesType: Type<string, any> = {
+  async from(str) {
+    return JSON.parse(str);
+  },
+  displayName: "JSON",
+  description: "A JSON string",
+};
+
 export const push = command({
   name: "push",
   description: "Uploads the plugin in the current folder to LM Studio Hub.",
   args: {
     ...logLevelArgs,
     ...createClientArgs,
+    description: option({
+      type: optional(string),
+      long: "description",
+      description: text`
+        Description of the artifact. If provided, will overwrite the existing description.
+      `,
+    }),
+    overrides: option({
+      type: optional(overridesType),
+      long: "overrides",
+    }),
     yes: flag({
       type: boolean,
       long: "yes",
@@ -41,7 +60,7 @@ export const push = command({
   handler: async args => {
     const logger = createLogger(args);
     const client = await createClient(logger, args);
-    const { yes } = args;
+    const { yes, description, overrides } = args;
     await ensureAuthenticated(client, logger, { yes });
     const currentPath = cwd();
     await maybeGenerateManifestJson(logger, currentPath);
@@ -65,6 +84,8 @@ export const push = command({
 
     await client.repository.pushArtifact({
       path: projectPath,
+      description,
+      overrides,
       onMessage: message => logger.info(message),
     });
   },
