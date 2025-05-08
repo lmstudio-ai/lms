@@ -1,4 +1,4 @@
-import { Chat } from "@lmstudio/sdk";
+import { Chat, type LLM } from "@lmstudio/sdk";
 import { command, option, optional, string } from "cmd-ts";
 import * as readline from "readline";
 import { createClient, createClientArgs } from "../createClient.js";
@@ -6,15 +6,15 @@ import { createLogger, logLevelArgs } from "../logLevel.js";
 import { optionalPositional } from "../optionalPositional.js";
 
 async function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
-    let input = '';
-    process.stdin.setEncoding('utf-8');
+  return new Promise(resolve => {
+    let input = "";
+    process.stdin.setEncoding("utf-8");
 
-    process.stdin.on('data', (chunk) => {
+    process.stdin.on("data", chunk => {
       input += chunk;
     });
 
-    process.stdin.on('end', () => {
+    process.stdin.on("end", () => {
       resolve(input.trim());
     });
   });
@@ -22,7 +22,7 @@ async function readStdin(): Promise<string> {
 
 export const chat = command({
   name: "chat",
-  description: "Open a chat REPL with the currently loaded model",
+  description: "Open an interactive chat with the currently loaded model.",
   args: {
     ...logLevelArgs,
     ...createClientArgs,
@@ -36,7 +36,7 @@ export const chat = command({
       type: optional(string),
       long: "prompt",
       short: "p",
-      description: "Respond to prompt stdout and quit",
+      description: "Print response to stdout and quit",
     }),
     systemPrompt: option({
       type: optional(string),
@@ -49,14 +49,14 @@ export const chat = command({
     const logger = createLogger(args);
     const client = await createClient(logger, args);
 
-    let initialPrompt = '';
+    let initialPrompt = "";
     if (args.prompt) {
       initialPrompt = args.prompt;
     } else if (!process.stdin.isTTY) {
       initialPrompt = await readStdin();
     }
 
-    let model;
+    let model: LLM;
     if (args.model) {
       try {
         model = await client.llm.model(args.model);
@@ -75,17 +75,21 @@ export const chat = command({
       }
     }
     if (!initialPrompt) {
-      logger.info(`Chatting with ${model.identifier}`);
+      logger.info(`Chatting with ${model.identifier}.  Type 'exit', 'quit' or Ctrl+C to quit`);
     }
 
     const chat = Chat.empty();
-    chat.append("system", args.systemPrompt ?? "You are a technical AI assistant. Answer questions clearly, concisely and to-the-point.");
+    chat.append(
+      "system",
+      args.systemPrompt ??
+        "You are a technical AI assistant. Answer questions clearly, concisely and to-the-point.",
+    );
 
     if (initialPrompt) {
       chat.append("user", initialPrompt);
       try {
         const prediction = model.respond(chat);
-        let lastFragment = '';
+        let lastFragment = "";
         for await (const fragment of prediction) {
           process.stdout.write(fragment.content);
           lastFragment = fragment.content;
@@ -93,9 +97,9 @@ export const chat = command({
         const result = await prediction.result();
         chat.append("assistant", result.content);
 
-        if(!lastFragment.endsWith('\n')) {
+        if (!lastFragment.endsWith("\n")) {
           // Newline before new shell prompt if not already there
-          process.stdout.write('\n');
+          process.stdout.write("\n");
         }
         process.exit(0);
       } catch (err) {
