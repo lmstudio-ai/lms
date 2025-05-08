@@ -3,8 +3,8 @@ import { command } from "cmd-ts";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 
-export const auth = command({
-  name: "auth",
+export const login = command({
+  name: "login",
   description: "Authenticate with LM Studio",
   args: {
     ...logLevelArgs,
