@@ -1,5 +1,6 @@
 import { run, subcommands } from "cmd-ts";
 import { bootstrap } from "./subcommands/bootstrap.js";
+import { chat } from "./subcommands/chat.js";
 import { clone } from "./subcommands/clone.js";
 import { create } from "./subcommands/create.js";
 import { dev } from "./subcommands/dev.js";
@@ -25,6 +26,7 @@ if (process.argv.length === 2) {
 const cli = subcommands({
   name: "lms",
   cmds: {
+    chat,
     status,
     server,
     ls,
