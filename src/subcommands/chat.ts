@@ -52,6 +52,10 @@ export const chat = command({
     let initialPrompt = "";
     if (args.prompt) {
       initialPrompt = args.prompt;
+      if (!process.stdin.isTTY) {
+        const stdinContent = await readStdin();
+        initialPrompt = `${initialPrompt}\n\n${stdinContent}`;
+      }
     } else if (!process.stdin.isTTY) {
       initialPrompt = await readStdin();
     }
