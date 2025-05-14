@@ -61,7 +61,6 @@ export const push = command({
     const logger = createLogger(args);
     const client = await createClient(logger, args);
     const { yes, description, overrides } = args;
-    await ensureAuthenticated(client, logger, { yes });
     const currentPath = cwd();
     await maybeGenerateManifestJson(logger, currentPath);
     const projectPath = await findProjectFolderOrExit(logger, currentPath);
@@ -71,6 +70,16 @@ export const push = command({
     const manifest = artifactManifestSchema.parse(JSON.parse(manifestContent));
     // For now, we only require user to confirm if the manifest type is plugin.
     const needsConfirmation = !args.yes && manifest.type === "plugin";
+
+    if (manifest.owner === "local") {
+      logger.error("This artifact was created without a username.");
+      logger.error(
+        "Please edit the manifest.json and set the owner field to your LM Studio Hub username.",
+      );
+      process.exit(1);
+    }
+
+    await ensureAuthenticated(client, logger, { yes });
 
     const fileList = await client.repository.getLocalArtifactFileList(projectPath);
     printFileList(fileList, logger);
