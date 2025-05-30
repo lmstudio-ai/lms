@@ -150,7 +150,7 @@ export const dev = command({
       type: boolean,
       long: "no-notify",
       description: text`
-        When specified, the plugin will not send notifications to the LM Studio server.
+        When specified, will not produce the "Plugin started" notification in LM Studio.
       `,
     }),
     ...logLevelArgs,
