@@ -20,6 +20,9 @@ import { pluginsFolderPath } from "../lmstudioPaths.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 
 type PluginProcessStatus = "stopped" | "starting" | "running" | "restarting";
+interface PluginProcessOpts {
+  noNotify?: boolean;
+}
 
 class PluginProcess {
   public constructor(
@@ -27,6 +30,7 @@ class PluginProcess {
     private readonly registerDevelopmentPluginOpts: RegisterDevelopmentPluginOpts,
     private readonly cwd: string,
     private readonly logger: SimpleLogger,
+    private readonly opts: PluginProcessOpts = {},
   ) {}
   private readonly node = new UtilBinary("node");
   private readonly args = ["--enable-source-maps", join(".lmstudio", "dev.js")];
@@ -45,10 +49,12 @@ class PluginProcess {
     if (this.firstTime) {
       const manifest = this.registerDevelopmentPluginOpts.manifest;
       const identifier = `${manifest.owner}/${manifest.name}`;
-      await this.client.system.notify({
-        title: `Plugin "${identifier}" started`,
-        description: "This plugin is run by lms CLI development server.",
-      });
+      if (!this.opts.noNotify) {
+        await this.client.system.notify({
+          title: `Plugin "${identifier}" started`,
+          description: "This plugin is run by lms CLI development server.",
+        });
+      }
       this.firstTime = false;
     }
     this.unregister = unregister;
@@ -140,6 +146,13 @@ export const dev = command({
         - When used with --install, it will overwrite the plugin without asking.
       `,
     }),
+    noNotify: flag({
+      type: boolean,
+      long: "no-notify",
+      description: text`
+        When specified, will not produce the "Plugin started" notification in LM Studio.
+      `,
+    }),
     ...logLevelArgs,
     ...createClientArgs,
   },
@@ -147,7 +160,7 @@ export const dev = command({
     const logger = createLogger(args);
     const client = await createClient(logger, args);
     const projectPath = await findProjectFolderOrExit(logger, cwd());
-    const { install, yes } = args;
+    const { install, yes, noNotify } = args;
     const manifestPath = join(projectPath, "manifest.json");
     const manifestParseResult = pluginManifestSchema.safeParse(
       JSON.parse(await readFile(manifestPath, "utf-8")),
@@ -162,7 +175,7 @@ export const dev = command({
     if (install) {
       process.exit(await handleInstall(projectPath, manifest, logger, client, { yes }));
     } else {
-      await handleDevServer(projectPath, manifest, logger, client);
+      await handleDevServer(projectPath, manifest, logger, client, { noNotify });
     }
   },
 });
@@ -225,18 +238,22 @@ async function handleDevServer(
   manifest: PluginManifest,
   logger: SimpleLogger,
   client: LMStudioClient,
+  { noNotify }: { noNotify: boolean },
 ) {
   if (manifest.type !== "plugin") {
     logger.error("The version of lms you are using only supports plugins.");
     process.exit(1);
   }
 
-  if (manifest.runner !== "ecmascript") {
-    logger.error("The version of lms you are using only supports ECMAScript plugins.");
+  if (manifest.runner !== "ecmascript" && manifest.runner !== "node") {
+    logger.error("The version of lms you are using only supports node plugins.");
     process.exit(1);
   }
 
-  if (manifest.type === "plugin" && manifest.runner === "ecmascript") {
+  if (
+    manifest.type === "plugin" &&
+    (manifest.runner === "ecmascript" || manifest.runner === "node")
+  ) {
     await ensureNpmDependencies(projectPath, logger, client);
   }
 
@@ -245,7 +262,7 @@ async function handleDevServer(
   const esbuild = new UtilBinary("esbuild");
   const watcher = new EsPluginRunnerWatcher(esbuild, cwd(), logger);
 
-  const pluginProcess = new PluginProcess(client, { manifest }, projectPath, logger);
+  const pluginProcess = new PluginProcess(client, { manifest }, projectPath, logger, { noNotify });
 
   watcher.updatedEvent.subscribe(() => {
     pluginProcess.run();
