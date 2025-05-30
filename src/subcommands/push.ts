@@ -56,11 +56,27 @@ export const push = command({
         Suppress all confirmations and warnings.
       `,
     }),
+    makePrivate: flag({
+      type: boolean,
+      long: "private",
+      description: text`
+        When specified, the artifact will be marked as private. This flag is only effective if the
+        artifact did not exist before. (It will not change the visibility of an existing artifact.)
+      `,
+    }),
+    writeRevision: flag({
+      type: boolean,
+      long: "write-revision",
+      description: text`
+        When specified, the revision number will be written to the manifest.json file. This is
+        useful if you want to keep track of the revision number in your source control.
+      `,
+    }),
   },
   handler: async args => {
     const logger = createLogger(args);
     const client = await createClient(logger, args);
-    const { yes, description, overrides } = args;
+    const { yes, description, overrides, writeRevision, makePrivate } = args;
     const currentPath = cwd();
     await maybeGenerateManifestJson(logger, currentPath);
     const projectPath = await findProjectFolderOrExit(logger, currentPath);
@@ -94,6 +110,8 @@ export const push = command({
     await client.repository.pushArtifact({
       path: projectPath,
       description,
+      writeRevision,
+      makePrivate,
       overrides,
       onMessage: message => logger.info(message),
     });
