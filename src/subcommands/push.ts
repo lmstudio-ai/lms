@@ -60,8 +60,9 @@ export const push = command({
       type: boolean,
       long: "private",
       description: text`
-        When specified, the artifact will be marked as private. This flag is only effective if the
-        artifact did not exist before. (It will not change the visibility of an existing artifact.)
+        When specified, the published artifact will be marked as private. This flag is only
+        effective if the artifact did not exist before. (It will not change the visibility of an
+        existing artifact.)
       `,
     }),
     writeRevision: flag({
