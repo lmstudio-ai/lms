@@ -36,11 +36,7 @@ const cli = subcommands({
     unload,
     create,
     log,
-    ...(process.env.LMS_DEV
-      ? {
-          dev,
-        }
-      : {}),
+    dev,
     push,
     clone,
     login,
