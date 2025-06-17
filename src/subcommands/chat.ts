@@ -1,5 +1,5 @@
 import { Chat, type LLM } from "@lmstudio/sdk";
-import { command, option, optional, string } from "cmd-ts";
+import { command, flag, option, optional, string } from "cmd-ts";
 import * as readline from "readline";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
@@ -18,6 +18,29 @@ async function readStdin(): Promise<string> {
       resolve(input.trim());
     });
   });
+}
+
+function displayVerboseStats(stats: any, logger: any) {
+  logger.info("\n📊 Prediction Statistics:");
+  logger.info(`  Stop Reason: ${stats.stopReason}`);
+  if (stats.tokensPerSecond !== undefined) {
+    logger.info(`  Tokens/Second: ${stats.tokensPerSecond.toFixed(2)}`);
+  }
+  if (stats.numGpuLayers !== undefined) {
+    logger.info(`  GPU Layers: ${stats.numGpuLayers}`);
+  }
+  if (stats.timeToFirstTokenSec !== undefined) {
+    logger.info(`  Time to First Token: ${stats.timeToFirstTokenSec.toFixed(3)}s`);
+  }
+  if (stats.promptTokensCount !== undefined) {
+    logger.info(`  Prompt Tokens: ${stats.promptTokensCount}`);
+  }
+  if (stats.predictedTokensCount !== undefined) {
+    logger.info(`  Predicted Tokens: ${stats.predictedTokensCount}`);
+  }
+  if (stats.totalTokensCount !== undefined) {
+    logger.info(`  Total Tokens: ${stats.totalTokensCount}`);
+  }
 }
 
 export const chat = command({
@@ -43,6 +66,10 @@ export const chat = command({
       long: "system-prompt",
       short: "s",
       description: "Custom system prompt to use for the chat",
+    }),
+    verbose: flag({
+      long: "verbose",
+      description: "Display detailed prediction statistics after each response",
     }),
   },
   async handler(args) {
@@ -101,6 +128,10 @@ export const chat = command({
         const result = await prediction.result();
         chat.append("assistant", result.content);
 
+        if (args.verbose) {
+          displayVerboseStats(result.stats, logger);
+        }
+
         if (!lastFragment.endsWith("\n")) {
           // Newline before new shell prompt if not already there
           process.stdout.write("\n");
@@ -148,6 +179,10 @@ export const chat = command({
           }
           const result = await prediction.result();
           chat.append("assistant", result.content);
+
+          if (args.verbose) {
+            displayVerboseStats(result.stats, logger);
+          }
 
           // Resume readline and write a new prompt
           process.stdout.write("\n\n");
