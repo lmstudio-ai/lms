@@ -99,12 +99,12 @@ export const importCmd = command({
 
     // If no path is provided, show helpful usage information
     if (!path) {
-      const directoryStructure = chalk.yellow(`~/.lmstudio/models/
+      const directoryStructure = "\n\n" + chalk.yellow(`~/.lmstudio/models/
 └── publisher/
     └── model/
         └── model-file.gguf`);
 
-      const exampleStructure = chalk.yellow(`~/.lmstudio/models/
+      const exampleStructure = "\n\n" + chalk.yellow(`~/.lmstudio/models/
 └── infra-ai/
     └── ocelot-v1/
         └── ocelot-v1-instruct-q4_0.gguf`);
