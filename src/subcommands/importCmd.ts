@@ -7,8 +7,7 @@ import {
 } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
-import { boolean, command, flag, option, optional, positional, type Type } from "cmd-ts";
-import { File } from "cmd-ts/batteries/fs";
+import { boolean, command, flag, option, optional, string, type Type } from "cmd-ts";
 import { access, copyFile, link, mkdir, readFile, rename, symlink } from "fs/promises";
 import fuzzy from "fuzzy";
 import inquirer, { type PromptModule } from "inquirer";
@@ -19,6 +18,7 @@ import { z } from "zod";
 import { getCliPref } from "../cliPref.js";
 import { defaultModelsFolder } from "../lmstudioPaths.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
+import { optionalPositional } from "../optionalPositional.js";
 
 const userRepoType: Type<string, [string, string]> = {
   async from(str) {
@@ -34,9 +34,10 @@ export const importCmd = command({
   name: "import",
   description: "Import a model file into LM Studio",
   args: {
-    path: positional({
-      type: File,
+    path: optionalPositional({
+      type: string,
       displayName: "file-path",
+      default: "",
     }),
     yes: flag({
       type: boolean,
@@ -95,6 +96,40 @@ export const importCmd = command({
     const logger = createLogger(args);
     const { path, yes, copy, hardLink, symbolicLink, dryRun } = args;
     let { userRepo } = args;
+
+    // If no path is provided, show helpful usage information
+    if (!path) {
+      const directoryStructure = chalk.yellow(`~/.lmstudio/models/
+└── publisher/
+    └── model/
+        └── model-file.gguf`);
+
+      const exampleStructure = chalk.yellow(`~/.lmstudio/models/
+└── infra-ai/
+    └── ocelot-v1/
+        └── ocelot-v1-instruct-q4_0.gguf`);
+
+      const message = `To import a GGUF model you've downloaded outside of LM Studio, run the following command in your terminal:
+
+${chalk.cyan("lms import <path/to/model.gguf>")}
+
+LM Studio aims to preserve the directory structure of models downloaded from Hugging Face. The expected directory structure is as follows:
+
+${directoryStructure}
+
+For example, if you have a model named ocelot-v1 published by infra-ai, the structure would look like this:
+
+${exampleStructure}
+
+For more information about the expected model directory structure, visit:
+${chalk.blue("https://lmstudio.ai/docs/advanced/sideload#lm-studios-expected-models-directory-structure")}
+
+${chalk.gray("hint: for more information, try 'lms import --help'")}`;
+
+      console.error("\n" + makeTitledPrettyError("Usage", message).message);
+      process.exit(1);
+    }
+
     logger.debug("Importing model file", path);
 
     if (+copy + +hardLink + +symbolicLink > 1) {
