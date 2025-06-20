@@ -4,6 +4,8 @@ import * as readline from "readline";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 import { optionalPositional } from "../optionalPositional.js";
+import type { LLMPredictionStats } from "@lmstudio/lms-shared-types";
+import type { SimpleLogger } from "@lmstudio/lms-common";
 
 async function readStdin(): Promise<string> {
   return new Promise(resolve => {
@@ -20,14 +22,11 @@ async function readStdin(): Promise<string> {
   });
 }
 
-function displayVerboseStats(stats: any, logger: any) {
-  logger.info("\n📊 Prediction Statistics:");
+function displayVerboseStats(stats: LLMPredictionStats, logger: SimpleLogger) {
+  logger.info("\nPrediction Statistics:");
   logger.info(`  Stop Reason: ${stats.stopReason}`);
   if (stats.tokensPerSecond !== undefined) {
     logger.info(`  Tokens/Second: ${stats.tokensPerSecond.toFixed(2)}`);
-  }
-  if (stats.numGpuLayers !== undefined) {
-    logger.info(`  GPU Layers: ${stats.numGpuLayers}`);
   }
   if (stats.timeToFirstTokenSec !== undefined) {
     logger.info(`  Time to First Token: ${stats.timeToFirstTokenSec.toFixed(3)}s`);
@@ -67,8 +66,9 @@ export const chat = command({
       short: "s",
       description: "Custom system prompt to use for the chat",
     }),
-    verbose: flag({
-      long: "verbose",
+    stats: flag({
+      long: "stats",
+      short: "t",
       description: "Display detailed prediction statistics after each response",
     }),
   },
@@ -128,7 +128,7 @@ export const chat = command({
         const result = await prediction.result();
         chat.append("assistant", result.content);
 
-        if (args.verbose) {
+        if (args.stats) {
           displayVerboseStats(result.stats, logger);
         }
 
@@ -180,7 +180,7 @@ export const chat = command({
           const result = await prediction.result();
           chat.append("assistant", result.content);
 
-          if (args.verbose) {
+          if (args.stats) {
             displayVerboseStats(result.stats, logger);
           }
 
