@@ -1,9 +1,11 @@
 import { Chat, type LLM } from "@lmstudio/sdk";
-import { command, option, optional, string } from "cmd-ts";
+import { command, flag, option, optional, string } from "cmd-ts";
 import * as readline from "readline";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 import { optionalPositional } from "../optionalPositional.js";
+import type { LLMPredictionStats } from "@lmstudio/lms-shared-types";
+import type { SimpleLogger } from "@lmstudio/lms-common";
 
 async function readStdin(): Promise<string> {
   return new Promise(resolve => {
@@ -18,6 +20,26 @@ async function readStdin(): Promise<string> {
       resolve(input.trim());
     });
   });
+}
+
+function displayVerboseStats(stats: LLMPredictionStats, logger: SimpleLogger) {
+  logger.info("\n\nPrediction Stats:");
+  logger.info(`  Stop Reason: ${stats.stopReason}`);
+  if (stats.tokensPerSecond !== undefined) {
+    logger.info(`  Tokens/Second: ${stats.tokensPerSecond.toFixed(2)}`);
+  }
+  if (stats.timeToFirstTokenSec !== undefined) {
+    logger.info(`  Time to First Token: ${stats.timeToFirstTokenSec.toFixed(3)}s`);
+  }
+  if (stats.promptTokensCount !== undefined) {
+    logger.info(`  Prompt Tokens: ${stats.promptTokensCount}`);
+  }
+  if (stats.predictedTokensCount !== undefined) {
+    logger.info(`  Predicted Tokens: ${stats.predictedTokensCount}`);
+  }
+  if (stats.totalTokensCount !== undefined) {
+    logger.info(`  Total Tokens: ${stats.totalTokensCount}`);
+  }
 }
 
 export const chat = command({
@@ -43,6 +65,10 @@ export const chat = command({
       long: "system-prompt",
       short: "s",
       description: "Custom system prompt to use for the chat",
+    }),
+    stats: flag({
+      long: "stats",
+      description: "Display detailed prediction statistics after each response",
     }),
   },
   async handler(args) {
@@ -101,6 +127,10 @@ export const chat = command({
         const result = await prediction.result();
         chat.append("assistant", result.content);
 
+        if (args.stats) {
+          displayVerboseStats(result.stats, logger);
+        }
+
         if (!lastFragment.endsWith("\n")) {
           // Newline before new shell prompt if not already there
           process.stdout.write("\n");
@@ -148,6 +178,10 @@ export const chat = command({
           }
           const result = await prediction.result();
           chat.append("assistant", result.content);
+
+          if (args.stats) {
+            displayVerboseStats(result.stats, logger);
+          }
 
           // Resume readline and write a new prompt
           process.stdout.write("\n\n");
