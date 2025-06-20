@@ -68,7 +68,6 @@ export const chat = command({
     }),
     stats: flag({
       long: "stats",
-      short: "t",
       description: "Display detailed prediction statistics after each response",
     }),
   },
