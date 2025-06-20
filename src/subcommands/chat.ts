@@ -23,7 +23,7 @@ async function readStdin(): Promise<string> {
 }
 
 function displayVerboseStats(stats: LLMPredictionStats, logger: SimpleLogger) {
-  logger.info("\nPrediction Statistics:");
+  logger.info("\nPrediction Stats:");
   logger.info(`  Stop Reason: ${stats.stopReason}`);
   if (stats.tokensPerSecond !== undefined) {
     logger.info(`  Tokens/Second: ${stats.tokensPerSecond.toFixed(2)}`);
