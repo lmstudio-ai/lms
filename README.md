@@ -51,7 +51,7 @@ Here are some frequently used commands:
 
 You can build the project locally by following these steps:
 
-_Note: developing lms requires Node.js 18.6.0_
+_Note: make sure the version of Node you have installed matches the one specified in the `engines` of the `package.json`._
 
 ```bash
 git clone https://github.com/lmstudio-ai/lms.git
