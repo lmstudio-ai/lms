@@ -260,7 +260,7 @@ const status = command({
   
     if (json) {
       process.stdout.write(JSON.stringify({ running, port }) + "\n");
-    }else{
+    } else {
       if (running) {
         logger.info(`The server is running on port ${port}.`);
       } else {
