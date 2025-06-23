@@ -12,6 +12,10 @@
     "clean": "shx rm -rf ./dist && shx rm -f ./tsconfig.tsbuildinfo",
     "postinstall": "patch-package"
   },
+  "engines": {
+    "node": "18.6.0",
+    "npm": ">=8"
+  },
   "author": "LM Studio <team@lmstudio.ai> (https://lmstudio.ai)",
   "license": "Apache-2.0",
   "dependencies": {
