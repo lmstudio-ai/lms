@@ -46,3 +46,20 @@ Here are some frequently used commands:
   - `lms unload --all` - To unload all models
 - `lms create` - To create a new project with LM Studio SDK
 - `lms log stream` - To stream logs from LM Studio
+
+# Contributing
+
+You can build the project locally by following these steps:
+
+_Note: developing lms requires Node.js 18.6.0_
+
+```bash
+git clone https://github.com/lmstudio-ai/lms.git
+cd lms
+npm install
+npm run watch
+# To test your changes and run commands:
+node ./dist/index.js <subcommand>
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
