@@ -13,7 +13,7 @@
     "postinstall": "patch-package"
   },
   "engines": {
-    "node": "18.6.0",
+    "node": "^20.12.2",
     "npm": ">=8"
   },
   "author": "LM Studio <team@lmstudio.ai> (https://lmstudio.ai)",
