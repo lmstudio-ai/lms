@@ -18,16 +18,6 @@ There are many ways to help, from writing tutorials or blog posts, improving the
 - This allows us to provide guidance and ensures your time is well spent
 - **We discourage drive-by feature PRs** without prior discussion - we want to make sure your efforts align with our roadmap and won't go to waste
 
-## Development Workflow
-
-_Developing `lms` requires Node.js 18.6.0_
-
-1. Fork this repository
-2. Clone your fork: `git clone git@github.com:lmstudio-ai/lms.git` onto your local development machine
-3. Run `npm install` to install the dependencies
-4. Run `npm run watch` to start the development server
-5. Go to `dist` folder and run `node ./index.js <subcommand>` to test your changes
-
 ## Creating Good Pull Requests
 
 ### Keep PRs Small and Focused
