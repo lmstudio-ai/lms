@@ -22,8 +22,7 @@ export function printVersion() {
 
   console.info();
   console.info(`lms - LM Studio CLI - v${getVersion()}`);
-  // console.info("Licensed under the MIT License");
-  console.info(chalk.gray("GitHub: https://github.com/lmstudio-ai/lmstudio-cli"));
+  console.info(chalk.gray("GitHub: https://github.com/lmstudio-ai/lms"));
 }
 
 export const version = command({
