@@ -3,7 +3,7 @@ import chalk from "chalk";
 import { boolean, command, flag, option, optional, string } from "cmd-ts";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
-import open from 'open';
+import { openUrl } from "../openUrl.js";
 
 export const login = command({
   name: "login",
@@ -77,7 +77,7 @@ export const login = command({
         logger.info(chalk.greenBright(`    ${url}`));
         logger.info();
 
-        open(url);
+        openUrl(url);
       },
     });
     if (!askedToAuthenticate) {
