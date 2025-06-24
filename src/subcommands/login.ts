@@ -3,6 +3,7 @@ import chalk from "chalk";
 import { boolean, command, flag, option, optional, string } from "cmd-ts";
 import { createClient, createClientArgs } from "../createClient.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
+import { openUrl } from "../openUrl.js";
 
 export const login = command({
   name: "login",
@@ -69,9 +70,20 @@ export const login = command({
     }
     let askedToAuthenticate = false;
     await client.repository.ensureAuthenticated({
-      onAuthenticationUrl: url => {
+      onAuthenticationUrl: async url => {
         askedToAuthenticate = true;
-        logger.info("Please visit the following URL to authenticate:");
+
+        try {
+          await openUrl(url);
+          logger.infoText`
+            Opening browser for authentication...
+            If a browser window does not open automatically, visit the following URL directly:
+          `
+          ;
+        } catch {
+          logger.info("Please visit the following URL to authenticate:");
+        }
+
         logger.info();
         logger.info(chalk.greenBright(`    ${url}`));
         logger.info();
