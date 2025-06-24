@@ -13,13 +13,6 @@ function getCommandForPlatform(): string {
   }
 }
 
-/**
- * Error handling is deliberately minimal, as this function is to be easy to use for shell scripting
- *
- * @param url The URL to open
- * @param callback A function with a single error argument. Optional.
- */
-
 export function openUrl(url: string, callback?: (error: Error | null) => void) {
   const command = getCommandForPlatform();
   const child = spawn(command, [url]);

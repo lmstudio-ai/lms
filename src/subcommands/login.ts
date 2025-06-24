@@ -77,7 +77,11 @@ export const login = command({
         logger.info(chalk.greenBright(`    ${url}`));
         logger.info();
 
-        openUrl(url);
+        try {
+          openUrl(url);
+        } catch {
+          // ignore error
+        }
       },
     });
     if (!askedToAuthenticate) {
