@@ -9,31 +9,33 @@ function getCommandForPlatform(): string {
     case "linux":
       return "xdg-open";
     default:
-      throw new Error("Unsupported platform: " + process.platform);
+      return "open";
   }
 }
 
-export function openUrl(url: string, callback?: (error: Error | null) => void) {
-  const command = getCommandForPlatform();
-  const child = spawn(command, [url]);
-  let errorText = "";
+export async function openUrl(url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const command = getCommandForPlatform();
+    const child = spawn(command, [url]);
+    let errorText = "";
 
-  child.stderr.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
 
-  child.stderr.on("data", function (data) {
-    errorText += data;
-  });
+    child.stderr.on("data", function (data) {
+      errorText += data;
+    });
 
-  child.stderr.on("end", function () {
-    if (errorText.length > 0) {
-      const error = new Error(errorText);
-      if (callback) {
-        callback(error);
+    child.stderr.on("end", function () {
+      if (errorText.length > 0) {
+        const error = new Error(errorText);
+        reject(error);
       } else {
-        throw error;
+        resolve();
       }
-    } else if (callback) {
-      callback(null);
-    }
+    });
+
+    child.on("error", (error) => {
+      reject(error);
+    });
   });
 }

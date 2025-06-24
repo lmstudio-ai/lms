@@ -70,18 +70,23 @@ export const login = command({
     }
     let askedToAuthenticate = false;
     await client.repository.ensureAuthenticated({
-      onAuthenticationUrl: url => {
+      onAuthenticationUrl: async url => {
         askedToAuthenticate = true;
-        logger.info("Opening browser for authentication... If a browser window does not open automatically, visit the following URL directly:");
+
+        try {
+          await openUrl(url);
+          logger.infoText`
+            Opening browser for authentication...
+            If a browser window does not open automatically, visit the following URL directly:
+          `
+          ;
+        } catch {
+          logger.info("Please visit the following URL to authenticate:");
+        }
+
         logger.info();
         logger.info(chalk.greenBright(`    ${url}`));
         logger.info();
-
-        try {
-          openUrl(url);
-        } catch {
-          // ignore error
-        }
       },
     });
     if (!askedToAuthenticate) {
