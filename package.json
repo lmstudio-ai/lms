@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "clean": "shx rm -rf ./dist && shx rm -f ./tsconfig.tsbuildinfo",
+    "clean": "shx rm -rf ./dist ./tsconfig.tsbuildinfo",
     "postinstall": "patch-package"
   },
   "engines": {
