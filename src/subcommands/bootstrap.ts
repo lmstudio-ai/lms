@@ -6,7 +6,7 @@ export const bootstrap = command({
   name: "bootstrap",
   description: "Bootstrap the CLI",
   args: {
-    yes: flag({
+    skipConfirmation: flag({
       long: "yes",
       short: "y",
       description: "Skip confirmation prompts",
@@ -14,6 +14,6 @@ export const bootstrap = command({
     }),
   },
   handler: async args => {
-    await installCli({ skipConfirmation: args.yes || platform() !== "linux" });
+    await installCli({ skipConfirmation: args.skipConfirmation || platform() !== "linux" });
   },
 });
