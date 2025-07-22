@@ -622,7 +622,9 @@ async function downloadArtifact(
   let linesToClear: number = 0;
   const reprintDownloadPlan = (isFinished: boolean) => {
     // Move cursor up by lastLines
-    process.stdout.moveCursor(0, -linesToClear);
+    if (process.stdout.moveCursor) {
+      process.stdout.moveCursor(0, -linesToClear);
+    }
     const lines: Array<string> = [];
     const spinnerFrame = Math.floor(Date.now() / 100) % spinnerFrames.length;
     artifactDownloadPlanToString(downloadPlan, lines, spinnerFrame, 0, "   ", "  ");
