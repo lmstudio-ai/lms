@@ -46,7 +46,7 @@ const start = command({
         Port to run the server on. If not provided, the server will run on the same port as the last
         time it was started.
       `,
-      long: "port",
+      long: "api-port",
       short: "p",
     }),
     cors: flag({
