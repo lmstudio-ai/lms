@@ -1,42 +1,12 @@
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { command, flag, number, option, optional, subcommands } from "cmd-ts";
 import { readFile } from "fs/promises";
-import { createClient, createClientArgs } from "../createClient.js";
+import { checkHttpServer, createClient, createClientArgs } from "../createClient.js";
 import { serverConfigPath } from "../lmstudioPaths.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 
 interface HttpServerConfig {
   port: number;
-}
-
-/**
- * Checks if the HTTP server is running.
- */
-export async function checkHttpServer(
-  logger: SimpleLogger,
-  port: number,
-  host: string = "127.0.0.1",
-) {
-  const url = `http://${host}:${port}/lmstudio-greeting`;
-  logger.debug(`Checking server at ${url}`);
-  try {
-    const abortController = new AbortController();
-    setTimeout(() => abortController.abort(), 500).unref();
-    const response = await fetch(url, { signal: abortController.signal });
-    if (response.status !== 200) {
-      logger.debug(`Status is not 200: ${response.status}`);
-      return false;
-    }
-    const json = await response.json();
-    if (json?.lmstudio !== true) {
-      logger.debug(`Not an LM Studio server:`, json);
-      return false;
-    }
-  } catch (e) {
-    logger.debug(`Failed to check server:`, e);
-    return false;
-  }
-  return true;
 }
 
 /**
@@ -70,7 +40,7 @@ const start = command({
   description: "Starts the local server",
   args: {
     ...createClientArgs,
-    port: option({
+    apiPort: option({
       type: optional(number),
       description: text`
         Port to run the server on. If not provided, the server will run on the same port as the last
@@ -89,20 +59,20 @@ const start = command({
     ...logLevelArgs,
   },
   handler: async args => {
-    const { port, cors } = args;
+    const { apiPort, cors } = args;
     const logger = createLogger(args);
-    let assignedPort: number = port ?? 1234;
+    let assignedPort: number = apiPort ?? 1234;
     const client = await createClient(logger, args);
-    if (port === undefined) {
+    if (apiPort === undefined) {
       try {
         assignedPort = (await getServerConfig(logger)).port;
-        logger.debug(`Read from last status: port=${port}`);
+        logger.debug(`Read from last status: port=${apiPort}`);
       } catch (e) {
         logger.debug(`Failed to read last status`, e);
-        logger.debug(`Using default port ${port}`);
+        logger.debug(`Using default port ${apiPort}`);
       }
     } else {
-      logger.debug(`Using provided port ${port}`);
+      logger.debug(`Using provided port ${apiPort}`);
     }
     if (cors) {
       logger.warnText`
@@ -110,14 +80,13 @@ const start = command({
       `;
     }
 
-    logger.debug(`Attempting to start the server on port ${port}...`);
-    logger.info("Starting server...");
+    logger.debug(`Attempting to start the server on port ${assignedPort}...`);
 
     await client.system.startAPIServer(assignedPort, cors);
     logger.debug("Verifying the server is running...");
 
     if (await checkHttpServerWithRetries(logger, assignedPort, 5)) {
-      logger.info(`Success! Server is now running on port ${port}`);
+      logger.info(`Success! Server is now running on port ${assignedPort}`);
       return true;
     } else {
       logger.error("Failed to verify the server is running. Please try to use another port.");

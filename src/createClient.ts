@@ -7,8 +7,36 @@ import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
 import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
-import { checkHttpServer } from "./subcommands/server.js";
 import { refinedNumber } from "./types/refinedNumber.js";
+/**
+ * Checks if the HTTP server is running.
+ */
+export async function checkHttpServer(
+  logger: SimpleLogger,
+  port: number,
+  host: string = "127.0.0.1",
+) {
+  const url = `http://${host}:${port}/lmstudio-greeting`;
+  logger.debug(`Checking server at ${url}`);
+  try {
+    const abortController = new AbortController();
+    setTimeout(() => abortController.abort(), 500).unref();
+    const response = await fetch(url, { signal: abortController.signal });
+    if (response.status !== 200) {
+      logger.debug(`Status is not 200: ${response.status}`);
+      return false;
+    }
+    const json = await response.json();
+    if (json?.lmstudio !== true) {
+      logger.debug(`Not an LM Studio server:`, json);
+      return false;
+    }
+  } catch (e) {
+    logger.debug(`Failed to check server:`, e);
+    return false;
+  }
+  return true;
+}
 
 interface AppInstallLocation {
   path: string;
