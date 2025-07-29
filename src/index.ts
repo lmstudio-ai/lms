@@ -16,7 +16,6 @@ import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
 import { printVersion, version } from "./subcommands/version.js";
-import { env } from "./subcommands/env.js";
 
 if (process.argv.length === 2) {
   printVersion();
@@ -45,7 +44,6 @@ const cli = subcommands({
     flags: flagsCommand,
     bootstrap,
     version,
-    env,
   },
 });
 

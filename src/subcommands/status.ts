@@ -2,24 +2,36 @@ import { text } from "@lmstudio/lms-common";
 import boxen from "boxen";
 import chalk from "chalk";
 import { command } from "cmd-ts";
-import { createClient } from "../createClient.js";
-import { EnvironmentManager } from "../EnvironmentManager.js";
+import { createClient, createClientArgs } from "../createClient.js";
 import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
-import { checkHttpServer } from "./server.js";
+import { checkHttpServer, getServerConfig } from "./server.js";
 
 export const status = command({
   name: "status",
   description: "Prints the status of LM Studio",
   args: {
     ...logLevelArgs,
+    ...createClientArgs,
   },
   async handler(args) {
     const logger = createLogger(args);
-    const envManager = new EnvironmentManager(logger);
-    const currentEnv = await envManager.getCurrentEnvironment();
-    const host = currentEnv.host;
-    const port = currentEnv.port;
+    let { host, port } = args;
+    if (host === undefined) {
+      host = "127.0.0.1";
+    }
+    if (port === undefined) {
+      if (host === "127.0.0.1") {
+        try {
+          port = (await getServerConfig(logger)).port;
+        } catch (e) {
+          logger.debug(`Failed to read last status`, e);
+          port = 1234;
+        }
+      } else {
+        port = 1234;
+      }
+    }
     const running = await checkHttpServer(logger, port, host);
     let content = "";
     if (running) {
