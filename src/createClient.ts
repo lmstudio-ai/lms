@@ -7,14 +7,25 @@ import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { checkHttpServer } from "./subcommands/server.js";
 import { DEFAULT_LOCAL_ENVIRONMENT_NAME, EnvironmentManager } from "./EnvironmentManager.js";
-
+import { option, optional, string } from "cmd-ts";
 interface AppInstallLocation {
   path: string;
   argv: Array<string>;
   cwd: string;
 }
 
-export const createClientArgs = {};
+export const createClientArgs = {
+  env: option({
+    type: optional(string),
+    long: "env",
+    description: text`
+        If you wish to connect to a remote LM Studio instance, specify the env here. Note that, in
+        this case, lms will connect using client identifier "lms-cli-remote-<random chars>", which
+        will not be a privileged client, and will restrict usage of functionalities such as
+        "lms push".  Know more about envs using lms env.
+      `,
+  }),
+};
 
 interface CreateClientArgs {
   yes?: boolean;
@@ -84,11 +95,21 @@ export async function createClient(
   args: CreateClientArgs & LogLevelArgs,
   _opts: CreateClientOpts = {},
 ) {
-  const envManager = new EnvironmentManager();
-  const currentEnv = await envManager.getCurrentEnvironment();
-  const host = currentEnv.host;
-  const port = currentEnv.port;
-
+  const envManager = new EnvironmentManager(logger);
+  let currentEnv = await envManager.getCurrentEnvironment();
+  let host = currentEnv.host;
+  let port = currentEnv.port;
+  if (args.env) {
+    // If the user specified an environment, we will override the current environment with the specified one.
+    const specificedEnv = await envManager.tryGetEnvironment(args.env);
+    if (specificedEnv === undefined) {
+      logger.error(`Environment '${args.env}' not found`);
+      process.exit(1);
+    }
+    host = specificedEnv.host;
+    port = specificedEnv.port;
+    currentEnv = specificedEnv;
+  }
   const isRemote = currentEnv.name !== DEFAULT_LOCAL_ENVIRONMENT_NAME;
   let auth: LMStudioClientConstructorOpts;
   if (isRemote) {

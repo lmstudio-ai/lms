@@ -16,7 +16,7 @@ export const status = command({
   },
   async handler(args) {
     const logger = createLogger(args);
-    const envManager = new EnvironmentManager();
+    const envManager = new EnvironmentManager(logger);
     const currentEnv = await envManager.getCurrentEnvironment();
     const host = currentEnv.host;
     const port = currentEnv.port;

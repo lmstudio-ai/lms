@@ -32,7 +32,7 @@ const addEnvCommand = command({
   },
   handler: async ({ name, host, port, description, ...logArgs }) => {
     const logger = createLogger(logArgs);
-    const envManager = new EnvironmentManager();
+    const envManager = new EnvironmentManager(logger);
     try {
       await envManager.addEnvironment({
         name,
@@ -61,7 +61,7 @@ const removeEnvCommand = command({
   },
   handler: async ({ name, ...logArgs }) => {
     const logger = createLogger(logArgs);
-    const envManager = new EnvironmentManager();
+    const envManager = new EnvironmentManager(logger);
     try {
       await envManager.removeEnvironment(name);
       logger.info(`Environment '${name}' removed successfully`);
@@ -80,7 +80,7 @@ const listEnvCommand = command({
   },
   handler: async logArgs => {
     const logger = createLogger(logArgs);
-    const envManager = new EnvironmentManager();
+    const envManager = new EnvironmentManager(logger);
     try {
       const environments = await envManager.getAllEnvironments();
       const current = await envManager.getCurrentEnvironment();
@@ -124,7 +124,7 @@ const useEnvCommand = command({
   },
   handler: async ({ name, ...logArgs }) => {
     const logger = createLogger(logArgs);
-    const envManager = new EnvironmentManager();
+    const envManager = new EnvironmentManager(logger);
     try {
       await envManager.setCurrentEnvironment(name);
       logger.info(`Switched to environment '${name}'`);
@@ -143,7 +143,7 @@ const currentEnvCommand = command({
   },
   handler: async logArgs => {
     const logger = createLogger(logArgs);
-    const envManager = new EnvironmentManager();
+    const envManager = new EnvironmentManager(logger);
     try {
       const current = await envManager.getCurrentEnvironment();
       const desc = current.description ? ` - ${current.description}` : "";
@@ -168,7 +168,7 @@ const inspectEnvCommand = command({
   },
   handler: async ({ name, ...logArgs }) => {
     const logger = createLogger(logArgs);
-    const envManager = new EnvironmentManager();
+    const envManager = new EnvironmentManager(logger);
     try {
       const env = await envManager.tryGetEnvironment(name);
       if (!env) {
@@ -179,11 +179,8 @@ const inspectEnvCommand = command({
       logger.info(`Environment: ${env.name}`);
       logger.info(`Host: ${env.host}`);
       logger.info(`Port: ${env.port}`);
-      if (env.description) {
+      if (env.description !== undefined) {
         logger.info(`Description: ${env.description}`);
-      }
-      if (env.executablePath) {
-        logger.info(`Executable Path: ${env.executablePath}`);
       }
     } catch (error) {
       logger.error(`Failed to inspect environment: ${(error as Error).message}`);

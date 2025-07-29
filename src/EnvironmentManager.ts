@@ -1,14 +1,16 @@
-import { promises as fs } from "fs";
+import { readFile, writeFile, mkdir, access, unlink, readdir } from "fs/promises";
 import { join } from "path";
 import { lmsConfigFolder } from "./lmstudioPaths.js";
+import { z } from "zod";
+import { type SimpleLogger } from "@lmstudio/lms-common";
+const environmentConfigSchema = z.object({
+  name: z.string(),
+  host: z.string(),
+  port: z.number().int().min(0).max(65535),
+  description: z.string().optional(),
+});
 
-interface EnvironmentConfig {
-  name: string;
-  host: string;
-  port: number;
-  description?: string;
-  executablePath?: string;
-}
+export type EnvironmentConfig = z.infer<typeof environmentConfigSchema>;
 
 export const DEFAULT_LOCAL_ENVIRONMENT_NAME = "local";
 
@@ -23,41 +25,40 @@ export class EnvironmentManager {
   private environmentsDir: string;
   private currentEnvFile: string;
 
-  public constructor() {
+  public constructor(private readonly logger: SimpleLogger) {
     const configDir = lmsConfigFolder;
     this.environmentsDir = join(configDir, "environments");
     this.currentEnvFile = join(configDir, "current-env");
   }
 
   private async ensureDirExists(): Promise<void> {
-    await fs.mkdir(this.environmentsDir, { recursive: true });
+    await mkdir(this.environmentsDir, { recursive: true });
   }
 
   public async addEnvironment(config: EnvironmentConfig): Promise<void> {
     await this.ensureDirExists();
     const envPath = join(this.environmentsDir, `${config.name}.json`);
     try {
-      await fs.access(envPath);
+      await access(envPath);
       throw new Error(`Environment ${config.name} already exists.`);
     } catch {
-      await fs.writeFile(envPath, JSON.stringify(config, null, 2), "utf-8");
+      await writeFile(envPath, JSON.stringify(config, null, 2), "utf-8");
     }
   }
 
   public async removeEnvironment(name: string): Promise<void> {
     const envPath = join(this.environmentsDir, `${name}.json`);
     try {
-      await fs.unlink(envPath);
+      await unlink(envPath);
       // Check if this was the current environment
       try {
-        const currentEnv = await fs.readFile(this.currentEnvFile, "utf-8");
+        const currentEnv = await readFile(this.currentEnvFile, "utf-8");
         if (currentEnv === name) {
-          await fs.writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
-          process.env.LMS_ENV = DEFAULT_LOCAL_ENVIRONMENT_NAME;
+          await writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
         }
       } catch (error) {
         if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-          await fs.writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
+          await writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
         } else {
           // Re-throw other types of errors
           throw error;
@@ -75,14 +76,14 @@ export class EnvironmentManager {
   public async setCurrentEnvironment(name: string): Promise<void> {
     if (name === "local") {
       // Special case for local environment
-      await fs.writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
+      await writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
       return;
     }
     const envPath = join(this.environmentsDir, `${name}.json`);
     try {
-      const data = await fs.readFile(envPath, "utf-8");
-      JSON.parse(data) as EnvironmentConfig; // Validate exists
-      await fs.writeFile(this.currentEnvFile, name, "utf-8");
+      const data = await readFile(envPath, "utf-8");
+      environmentConfigSchema.parse(JSON.parse(data)); // Validate schema
+      await writeFile(this.currentEnvFile, name, "utf-8");
     } catch {
       throw new Error(`Environment ${name} does not exist.`);
     }
@@ -101,7 +102,7 @@ export class EnvironmentManager {
       envName = process.env.LMS_ENV;
     } else {
       try {
-        envName = (await fs.readFile(this.currentEnvFile, "utf-8")).trim();
+        envName = (await readFile(this.currentEnvFile, "utf-8")).trim();
       } catch {
         envName = DEFAULT_LOCAL_ENVIRONMENT_NAME;
       }
@@ -112,8 +113,8 @@ export class EnvironmentManager {
 
     const env = await this.tryGetEnvironment(envName);
     if (env === undefined) {
-      console.warn(`Environment ${envName} not found, falling back to local.`);
-      await fs.writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
+      this.logger.warn(`Environment ${envName} not found, falling back to local.`);
+      await writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
       return DEFAULT_ENVIRONMENT_CONFIG;
     }
 
@@ -122,12 +123,17 @@ export class EnvironmentManager {
 
   public async getAllEnvironments(): Promise<EnvironmentConfig[]> {
     await this.ensureDirExists();
-    const files = await fs.readdir(this.environmentsDir);
+    const files = await readdir(this.environmentsDir);
     const environments: EnvironmentConfig[] = [DEFAULT_ENVIRONMENT_CONFIG];
     for (const file of files) {
       if (file.endsWith(".json")) {
-        const data = await fs.readFile(join(this.environmentsDir, file), "utf-8");
-        environments.push(JSON.parse(data) as EnvironmentConfig);
+        try {
+          const data = await readFile(join(this.environmentsDir, file), "utf-8");
+          const parsed = environmentConfigSchema.parse(JSON.parse(data));
+          environments.push(parsed);
+        } catch (error) {
+          this.logger.error(`Failed to load environment from ${file}: ${(error as Error).message}`);
+        }
       }
     }
     return environments;
@@ -140,8 +146,8 @@ export class EnvironmentManager {
     await this.ensureDirExists();
     const envPath = join(this.environmentsDir, `${name}.json`);
     try {
-      const data = await fs.readFile(envPath, "utf-8");
-      return JSON.parse(data) as EnvironmentConfig;
+      const data = await readFile(envPath, "utf-8");
+      return environmentConfigSchema.parse(JSON.parse(data));
     } catch {
       return undefined; // Environment does not exist
     }
