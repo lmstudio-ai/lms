@@ -2,7 +2,6 @@ import { findLMStudioHome } from "@lmstudio/lms-common-server";
 import { join } from "path";
 
 const lmstudioHome = findLMStudioHome();
-export const lmsConfigFolder = join(lmstudioHome, "lms"); //TODO: Temporary path
 export const pluginsFolderPath = join(lmstudioHome, "extensions", "plugins");
 export const lmsKey2Path = join(lmstudioHome, ".internal", "lms-key-2");
 export const cliPrefPath = join(lmstudioHome, ".internal", "cli-pref.json");
