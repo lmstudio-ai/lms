@@ -132,7 +132,7 @@ export class EnvironmentManager {
           const parsed = environmentConfigSchema.parse(JSON.parse(data));
           environments.push(parsed);
         } catch (error) {
-          this.logger.error(`Failed to load environment from ${file}: ${(error as Error).message}`);
+          this.logger.warn(`Failed to load environment from ${file}: ${(error as Error).message}`);
         }
       }
     }

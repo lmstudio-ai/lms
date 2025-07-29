@@ -19,11 +19,11 @@ export const createClientArgs = {
     type: optional(string),
     long: "env",
     description: text`
-        If you wish to connect to a remote LM Studio instance, specify the env here. Note that, in
-        this case, lms will connect using client identifier "lms-cli-remote-<random chars>", which
-        will not be a privileged client, and will restrict usage of functionalities such as
-        "lms push".  Know more about envs using lms env.
-      `,
+      If you wish to connect to a remote LM Studio instance, specify the env here. Note that, in
+      this case, lms will connect using client identifier "lms-cli-remote-<random chars>", which
+      will not be a privileged client, and will restrict usage of functionalities such as
+      "lms push".  Know more about envs using lms env.
+    `,
   }),
 };
 
