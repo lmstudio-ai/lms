@@ -694,6 +694,15 @@ async function downloadArtifact(
     process.exit(0);
   }
   if (!yes) {
+    const plan = downloadPlanner.getPlan();
+    const containsPlugin = plan.nodes.some(
+      node => node.type === "artifact" && node.artifactType === "plugin",
+    );
+    if (containsPlugin) {
+      process.stdout.write(
+        "(i) Plugins can execute code. Only install plugins from authors you trust.\n\n",
+      );
+    }
     const confirmed = await askQuestion("Continue?");
     if (!confirmed) {
       process.exit(1);
