@@ -53,11 +53,20 @@ export class EnvironmentManager {
           await fs.writeFile(this.currentEnvFile, "local", "utf-8");
           process.env.LMS_ENV = "local";
         }
-      } catch {
-        // Current env file doesn't exist, nothing to update
+      } catch (error) {
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+          await fs.writeFile(this.currentEnvFile, "local", "utf-8");
+        } else {
+          // Re-throw other types of errors
+          throw error;
+        }
       }
-    } catch {
-      throw new Error(`Environment ${name} does not exist.`);
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        throw new Error(`Environment ${name} does not exist.`);
+      } else {
+        throw new Error(`Failed to remove environment ${name}: ${(error as Error).message}`);
+      }
     }
   }
 
