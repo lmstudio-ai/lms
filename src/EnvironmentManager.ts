@@ -10,8 +10,10 @@ interface EnvironmentConfig {
   executablePath?: string;
 }
 
+export const DEFAULT_LOCAL_ENVIRONMENT_NAME = "local";
+
 const DEFAULT_ENVIRONMENT_CONFIG: EnvironmentConfig = {
-  name: "local",
+  name: DEFAULT_LOCAL_ENVIRONMENT_NAME,
   host: "localhost",
   port: 1234,
   description: "Default local environment",
@@ -50,12 +52,12 @@ export class EnvironmentManager {
       try {
         const currentEnv = await fs.readFile(this.currentEnvFile, "utf-8");
         if (currentEnv === name) {
-          await fs.writeFile(this.currentEnvFile, "local", "utf-8");
-          process.env.LMS_ENV = "local";
+          await fs.writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
+          process.env.LMS_ENV = DEFAULT_LOCAL_ENVIRONMENT_NAME;
         }
       } catch (error) {
         if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-          await fs.writeFile(this.currentEnvFile, "local", "utf-8");
+          await fs.writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
         } else {
           // Re-throw other types of errors
           throw error;
@@ -90,17 +92,17 @@ export class EnvironmentManager {
       try {
         envName = (await fs.readFile(this.currentEnvFile, "utf-8")).trim();
       } catch {
-        envName = "local";
+        envName = DEFAULT_LOCAL_ENVIRONMENT_NAME;
       }
     }
-    if (envName === undefined || envName === "" || envName === "local") {
+    if (envName === undefined || envName === "" || envName === DEFAULT_LOCAL_ENVIRONMENT_NAME) {
       return DEFAULT_ENVIRONMENT_CONFIG;
     }
 
     const env = await this.tryGetEnvironment(envName);
     if (env === undefined) {
       console.warn(`Environment ${envName} not found, falling back to local.`);
-      await fs.writeFile(this.currentEnvFile, "local", "utf-8");
+      await fs.writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
       return DEFAULT_ENVIRONMENT_CONFIG;
     }
 

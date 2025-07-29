@@ -171,7 +171,7 @@ export const env = subcommands({
   cmds: {
     add: addEnvCommand,
     remove: removeEnvCommand,
-    list: listEnvCommand,
+    ls: listEnvCommand,
     use: useEnvCommand,
     current: currentEnvCommand,
   },

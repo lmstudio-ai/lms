@@ -6,7 +6,7 @@ import { readFile } from "fs/promises";
 import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { checkHttpServer } from "./subcommands/server.js";
-import { EnvironmentManager } from "./EnvironmentManager.js";
+import { DEFAULT_LOCAL_ENVIRONMENT_NAME, EnvironmentManager } from "./EnvironmentManager.js";
 
 interface AppInstallLocation {
   path: string;
@@ -89,7 +89,7 @@ export async function createClient(
   const host = currentEnv.host;
   const port = currentEnv.port;
 
-  const isRemote = host !== "127.0.0.1" && host !== "localhost";
+  const isRemote = currentEnv.name !== DEFAULT_LOCAL_ENVIRONMENT_NAME;
   let auth: LMStudioClientConstructorOpts;
   if (isRemote) {
     // If connecting to a remote server, we will use a random client identifier.
@@ -115,7 +115,7 @@ export async function createClient(
       };
     }
   }
-  if (host === "127.0.0.1" || host === "localhost") {
+  if (isRemote === false) {
     // We will now attempt to connect to the local API server.
     const localPort = await tryFindLocalAPIServer();
 
