@@ -16,6 +16,7 @@ import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
 import { printVersion, version } from "./subcommands/version.js";
+import { env } from "./subcommands/env.js";
 
 if (process.argv.length === 2) {
   printVersion();
@@ -46,6 +47,7 @@ program.addCommand(push);
 
 program.commandsGroup("System Management:");
 program.addCommand(bootstrap);
+progrma.addCommand(env);
 program.addCommand(flags);
 program.addCommand(log);
 program.addCommand(status);

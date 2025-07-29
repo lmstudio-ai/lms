@@ -1,7 +1,6 @@
 import { Option, type Command, type OptionValues } from "@commander-js/extra-typings";
 import { apiServerPorts, text, type SimpleLogger } from "@lmstudio/lms-common";
 import { LMStudioClient, type LMStudioClientConstructorOpts } from "@lmstudio/sdk";
-import chalk from "chalk";
 import { spawn } from "child_process";
 import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
@@ -9,6 +8,7 @@ import { exists } from "./exists.js";
 import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { createRefinedNumberParser } from "./types/refinedNumber.js";
+import { DEFAULT_LOCAL_ENVIRONMENT_NAME, EnvironmentManager } from "./EnvironmentManager.js";
 /**
  * Checks if the HTTP server is running.
  */
@@ -78,13 +78,22 @@ export function addCreateClientOptions<
           (default), the last used port will be used; otherwise, 1234 will be used.
         `,
       ).argParser(createRefinedNumberParser({ integer: true, min: 0, max: 65535 })),
+    )
+    .addOption(
+      new Option(
+        "--env <env>",
+        text`
+          If you wish to connect to a remote LM Studio instance, specify the env here
+          `,
+      ),
     );
 }
 
-interface CreateClientArgs {
+export interface CreateClientArgs {
   yes?: boolean;
   host?: string;
   port?: number;
+  env?: string;
 }
 
 async function isLocalServerAtPortLMStudioServerOrThrow(port: number) {
@@ -151,12 +160,48 @@ export async function createClient(
   args: CreateClientArgs & LogLevelArgs,
   _opts: CreateClientOpts = {},
 ) {
-  let { host, port } = args;
-  let isRemote = true;
-  if (host === undefined) {
-    isRemote = false;
-    host = "127.0.0.1";
-  } else if (host.includes("://")) {
+  const envManager = new EnvironmentManager(logger, args);
+  let currentEnv = await envManager.getCurrentEnvironment();
+  let host = currentEnv.host;
+  let port = currentEnv.port;
+
+  // If the user has provided both host and port and env, we will throw an error.
+  if (args.host !== undefined && args.port !== undefined && args.env !== undefined) {
+    logger.error(
+      text`
+        You cannot specify both --host/--port and --env at the same time. Please choose one method
+        to specify the server to connect to.
+        `,
+    );
+    process.exit(1);
+  }
+  if (args.env !== undefined) {
+    // If the user specified an environment, we will override the current environment with the specified one.
+    const specificedEnv = await envManager.tryGetEnvironment(args.env);
+    if (specificedEnv === undefined) {
+      logger.error(`Environment '${args.env}' not found`);
+      process.exit(1);
+    }
+    host = specificedEnv.host;
+    port = specificedEnv.port;
+    currentEnv = specificedEnv;
+  }
+  let isRemote = currentEnv.name !== DEFAULT_LOCAL_ENVIRONMENT_NAME;
+
+  // If host and port are provided, they take precedence over the environment.
+  if (args.host !== undefined) {
+    host = args.host;
+
+    // If host is anything but remote, set isRemote to false
+    if (host === "127.0.0.1" || host === "localhost" || host === "0.0.0.0") {
+      isRemote = false;
+    }
+  }
+  if (args.port !== undefined) {
+    port = args.port;
+  }
+
+  if (host.includes("://")) {
     logger.error("Host should not include the protocol.");
     process.exit(1);
   } else if (host.includes(":")) {
@@ -202,7 +247,7 @@ export async function createClient(
       }
     }
   }
-  if (port === undefined && host === "127.0.0.1") {
+  if (isRemote === false) {
     // We will now attempt to connect to the local API server.
     const localPort = await tryFindLocalAPIServer();
 
@@ -242,11 +287,6 @@ export async function createClient(
 
     logger.error("");
   }
-
-  if (port === undefined) {
-    port = 1234;
-  }
-
   logger.debug(`Connecting to server at ${host}:${port}`);
   if (!(await checkHttpServer(logger, port, host))) {
     logger.error(

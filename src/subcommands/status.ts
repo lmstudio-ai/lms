@@ -5,6 +5,7 @@ import { addCreateClientOptions, checkHttpServer, createClient } from "../create
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { getServerConfig } from "./server.js";
+import { EnvironmentManager } from "../EnvironmentManager.js";
 
 export const status = addLogLevelOptions(
   addCreateClientOptions(
@@ -12,7 +13,11 @@ export const status = addLogLevelOptions(
   ),
 ).action(async options => {
   const logger = createLogger(options);
-  let { host, port } = options;
+  const envManager = new EnvironmentManager(logger, options);
+  const currentEnv = await envManager.getCurrentEnvironment();
+  let host = currentEnv.host;
+  let port = currentEnv.port;
+
   if (host === undefined) {
     host = "127.0.0.1";
   }
