@@ -134,6 +134,9 @@ export class EnvironmentManager {
   }
 
   public async tryGetEnvironment(name: string): Promise<EnvironmentConfig | undefined> {
+    if (name === DEFAULT_LOCAL_ENVIRONMENT_NAME) {
+      return DEFAULT_ENVIRONMENT_CONFIG; // Return default local environment
+    }
     await this.ensureDirExists();
     const envPath = join(this.environmentsDir, `${name}.json`);
     try {

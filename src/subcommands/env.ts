@@ -155,6 +155,43 @@ const currentEnvCommand = command({
   },
 });
 
+const inspectEnvCommand = command({
+  name: "inspect",
+  description: "Show detailed information about an environment",
+  args: {
+    name: positional({
+      type: string,
+      displayName: "name",
+      description: "Environment name to inspect",
+    }),
+    ...logLevelArgs,
+  },
+  handler: async ({ name, ...logArgs }) => {
+    const logger = createLogger(logArgs);
+    const envManager = new EnvironmentManager();
+    try {
+      const env = await envManager.tryGetEnvironment(name);
+      if (!env) {
+        logger.error(`Environment '${name}' not found`);
+        process.exit(1);
+      }
+
+      logger.info(`Environment: ${env.name}`);
+      logger.info(`Host: ${env.host}`);
+      logger.info(`Port: ${env.port}`);
+      if (env.description) {
+        logger.info(`Description: ${env.description}`);
+      }
+      if (env.executablePath) {
+        logger.info(`Executable Path: ${env.executablePath}`);
+      }
+    } catch (error) {
+      logger.error(`Failed to inspect environment: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  },
+});
+
 export const env = subcommands({
   name: "env",
   description: text`
@@ -167,5 +204,6 @@ export const env = subcommands({
     ls: listEnvCommand,
     use: useEnvCommand,
     current: currentEnvCommand,
+    inspect: inspectEnvCommand,
   },
 });
