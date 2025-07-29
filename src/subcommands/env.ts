@@ -126,13 +126,6 @@ const useEnvCommand = command({
     const logger = createLogger(logArgs);
     const envManager = new EnvironmentManager();
     try {
-      if (name === "local") {
-        // Special case for local environment
-        process.env.LMS_ENV = "local";
-        logger.info("Switched to local environment");
-        return;
-      }
-
       await envManager.setCurrentEnvironment(name);
       logger.info(`Switched to environment '${name}'`);
     } catch (error) {

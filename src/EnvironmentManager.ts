@@ -73,6 +73,11 @@ export class EnvironmentManager {
   }
 
   public async setCurrentEnvironment(name: string): Promise<void> {
+    if (name === "local") {
+      // Special case for local environment
+      await fs.writeFile(this.currentEnvFile, DEFAULT_LOCAL_ENVIRONMENT_NAME, "utf-8");
+      return;
+    }
     const envPath = join(this.environmentsDir, `${name}.json`);
     try {
       const data = await fs.readFile(envPath, "utf-8");
@@ -86,7 +91,13 @@ export class EnvironmentManager {
   public async getCurrentEnvironment(): Promise<EnvironmentConfig> {
     let envName: string;
 
-    if (process.env.LMS_ENV) {
+    // Check if LMS_ENV is set in the environment variables
+    // This takes precedence over the currentEnvFile
+    if (
+      process.env.LMS_ENV &&
+      process.env.LMS_ENV !== "undefined" &&
+      process.env.LMS_ENV !== "null"
+    ) {
       envName = process.env.LMS_ENV;
     } else {
       try {
