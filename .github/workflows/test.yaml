@@ -1,0 +1,68 @@
+name: LMS CLI Tests
+
+# Group workflow runs by branch and cancel in-progress runs on new commits to avoid PR wastefulness
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+jobs:
+  build-and-test:
+    name: Build and Test LMS CLI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout lmstudio.js repo
+        uses: actions/checkout@v4
+        with:
+          repository: lmstudioai/lmstudio.js
+          path: lmstudio.js
+
+      - name: Checkout lms-cli branch
+        run: |
+          cd lmstudio.js/packages/lms-cli
+          git checkout ${{ github.ref_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: lmstudio.js/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd lmstudio.js
+          npm ci
+
+      - name: Build lmstudio.js
+        run: |
+          cd lmstudio.js
+          npm run build
+
+      - name: Run the llmster docker image
+        id: run
+        uses: ./.github/actions/docker-daemon-run
+        with:
+          docker-image: lmstudio/llmster-preview
+          container-name: llmster-test
+
+      - name: Ensure the model needed for testing is available
+        run: |
+          docker exec ${{ steps.run.outputs.container-name }} lms get gemma-3-1b --yes
+
+      - name: Run lms-cli tests
+        run: |
+          cd lmstudio.js/packages/lms-cli
+          npm run test
+
+      - name: Cleanup container
+        if: always()
+        run: |
+          docker stop ${{ steps.run.outputs.container-name }} || true
+          docker rm ${{ steps.run.outputs.container-name }} || true
+          docker rmi ${{ steps.build.outputs.docker-image }} || true
