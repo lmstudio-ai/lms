@@ -82,7 +82,8 @@ jobs:
       - name: Ensure the model needed for testing is available
         run: |
           docker exec ${{ steps.run.outputs.container-name }} lms get gemma-3-1b --yes
-
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v2
       - name: Run lms-cli tests
         run: |
           cd lmstudio.js
