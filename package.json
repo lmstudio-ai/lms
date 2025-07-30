@@ -10,8 +10,7 @@
     "build": "tsc",
     "watch": "tsc -w",
     "clean": "shx rm -rf ./dist ./tsconfig.tsbuildinfo",
-    "postinstall": "patch-package",
-    "test": "jest --runInBand"
+    "postinstall": "patch-package"
   },
   "engines": {
     "node": "^20.12.2",
@@ -48,7 +47,6 @@
     "eslint-plugin-import": "^2.29.1",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-tsdoc": "^0.2.17",
-    "execa": "^9.6.0",
     "patch-package": "^8.0.0",
     "prettier": "^3.2.5",
     "shx": "^0.3.4",
