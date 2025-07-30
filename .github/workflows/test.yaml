@@ -39,7 +39,12 @@ jobs:
       - name: Install dependencies
         run: |
           cd lmstudio.js
-          npm ci
+          npm install
+
+      - name: Install lms-cli dependencies
+        run: |
+          cd lmstudio.js/packages/lms-cli
+          npm install
 
       - name: Build lmstudio.js
         run: |
