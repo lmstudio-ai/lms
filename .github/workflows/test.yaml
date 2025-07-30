@@ -30,7 +30,7 @@ jobs:
           LMS_JS_BRANCH=""
 
           if [ -z "$LMS_JS_BRANCH" ]; then
-            LMS_JS_BRANCH=$(echo "$PR_BODY" | grep -oP 'lmstudio-js-branch:\s*\K\S+' || echo "")
+            LMS_JS_BRANCH=$(echo "$PR_BODY" | grep -o 'lmstudio-js-branch:[[:space:]]*[^[:space:]]*' | sed 's/lmstudio-js-branch:[[:space:]]*//' || echo "")
           fi
 
           if [ -z "$LMS_JS_BRANCH" ]; then
