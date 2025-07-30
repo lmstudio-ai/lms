@@ -26,14 +26,9 @@ jobs:
       - name: Determine lmstudio.js branch
         id: branch
         run: |
-          PR_BODY=$(cat << 'EOF'
-           ${{ github.event.pull_request.body }}
-           EOF
-           )
-           LMS_JS_BRANCH=""
-          if [ -z "$LMS_JS_BRANCH" ]; then
-            LMS_JS_BRANCH=$(echo "$PR_BODY" | grep -o 'lmstudio-js-branch:[[:space:]]*[^[:space:]]*' | sed 's/lmstudio-js-branch:[[:space:]]*//' || echo "")
-          fi
+          echo '${{ github.event.pull_request.body }}' | tee pr_body.txt
+          LMS_JS_BRANCH=$(grep -oP 'lmstudio-js-branch:\s*\K\S+' pr_body.txt || echo "main")
+          echo "branch=$LMS_JS_BRANCH" >> $GITHUB_OUTPUT
 
           if [ -z "$LMS_JS_BRANCH" ]; then
             LMS_JS_BRANCH="main"
