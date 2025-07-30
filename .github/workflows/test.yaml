@@ -19,7 +19,7 @@ jobs:
       - name: Checkout lmstudio.js repo
         uses: actions/checkout@v4
         with:
-          repository: lmstudioai/lmstudio.js
+          repository: lmstudio-ai/lmstudio-js
           path: lmstudio.js
 
       - name: Checkout lms-cli branch
