@@ -53,7 +53,7 @@ jobs:
 
       - name: Run the llmster docker image
         id: run
-        uses: ./packages/lms-cli/.github/actions/docker-daemon-run
+        uses: ./lmstudio.js/packages/lms-cli/.github/actions/docker-daemon-run
         with:
           docker-image: lmstudio/llmster-preview
           container-name: llmster-test
