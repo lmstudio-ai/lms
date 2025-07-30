@@ -21,7 +21,7 @@ jobs:
         with:
           repository: lmstudio-ai/lmstudio-js
           path: lmstudio.js
-          fetch-depth: 0
+          submodules: true
 
       - name: Fetch and checkout lms-cli branch
         run: |
