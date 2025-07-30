@@ -23,6 +23,28 @@ jobs:
           path: lmstudio.js
           submodules: true
 
+      - name: Determine lmstudio.js branch
+        id: branch
+        run: |
+          PR_BODY="${{ github.event.pull_request.body }}"
+          LMS_JS_BRANCH=""
+
+          if [ -z "$LMS_JS_BRANCH" ]; then
+            LMS_JS_BRANCH=$(echo "$PR_BODY" | grep -oP 'lmstudio-js-branch:\s*\K\S+' || echo "")
+          fi
+
+          if [ -z "$LMS_JS_BRANCH" ]; then
+            LMS_JS_BRANCH="main"
+          fi
+
+          echo "branch=$LMS_JS_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Checkout lmstudio.js branch
+        run: |
+          cd lmstudio.js
+          git fetch origin ${{ steps.branch.outputs.branch }}
+          git checkout ${{ steps.branch.outputs.branch }}
+
       - name: Fetch and checkout lms-cli branch
         run: |
           cd lmstudio.js/packages/lms-cli
@@ -64,8 +86,8 @@ jobs:
 
       - name: Run lms-cli tests
         run: |
-          cd lmstudio.js/packages/lms-cli
-          npm run test
+          cd lmstudio.js
+          npm run test-cli
 
       - name: Cleanup container
         if: always()
