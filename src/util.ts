@@ -1,4 +1,4 @@
-import { spawnSync, type SpawnSyncOptions } from "child_process";
+import { execaSync } from "execa";
 
 export interface ExecResult {
   stdout: string;
@@ -9,19 +9,18 @@ export interface ExecResult {
 /**
  * Runs a command synchronously and returns the result.
  */
-export function runCommandSync(command: string, options: SpawnSyncOptions = {}): ExecResult {
+export function runCommandSync(command: string, options = {}): ExecResult {
   const [cmd, ...args] = command.split(" ");
-  args.push("--port", "1234");
-  const result = spawnSync(cmd, args, {
-    stdio: "pipe",
-    encoding: "utf-8",
-    shell: true,
+
+  const result = execaSync(cmd, args, {
+    encoding: "utf8",
+    reject: false,
     ...options,
   });
 
   return {
-    stdout: result.stdout?.toString() ?? "",
-    stderr: result.stderr?.toString() ?? "",
-    status: result.status ?? (result.error ? 1 : 0),
+    stdout: result.stdout,
+    stderr: result.stderr,
+    status: result.exitCode ?? 0,
   };
 }

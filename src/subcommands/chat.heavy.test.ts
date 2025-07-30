@@ -9,7 +9,7 @@ describe("chat heavy", () => {
   beforeAll(async () => {
     // Ensure the test model is loaded
     const { status } = runCommandSync(
-      `node ${cliPath} load ${modelToUse} --identifier ${modelIdentifier} --yes`,
+      `node ${cliPath} load ${modelToUse} --identifier ${modelIdentifier} --yes --host localhost --port 1234`,
     );
     if (status !== 0) {
       throw new Error(`Failed to load test model: ${modelIdentifier}`);
@@ -18,7 +18,9 @@ describe("chat heavy", () => {
 
   afterAll(async () => {
     // Clean up by unloading the model
-    const { status } = runCommandSync(`node ${cliPath} unload ${modelIdentifier}`);
+    const { status } = runCommandSync(
+      `node ${cliPath} unload ${modelIdentifier} --host localhost --port 1234`,
+    );
     if (status !== 0) {
       console.warn(`Failed to unload test model: ${modelIdentifier}`);
     }
@@ -26,7 +28,7 @@ describe("chat heavy", () => {
 
   it("should respond to simple prompt with specific model", () => {
     const { status, stdout, stderr } = runCommandSync(
-      `echo "What is 2+2?" | node ${cliPath} chat ${modelIdentifier} --prompt "Answer briefly:"`,
+      `echo "What is 2+2?" | node ${cliPath} chat ${modelIdentifier} --prompt "Answer briefly:" --host localhost --port 1234`,
     );
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -36,7 +38,7 @@ describe("chat heavy", () => {
 
   it("should respond to stdin input", () => {
     const { status, stdout, stderr } = runCommandSync(
-      `echo "What color is the sky?" | node ${cliPath} chat ${modelIdentifier}`,
+      `echo "What color is the sky?" | node ${cliPath} chat ${modelIdentifier} --host localhost --port 1234`,
     );
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -46,7 +48,7 @@ describe("chat heavy", () => {
 
   it("should use custom system prompt", () => {
     const { status, stdout, stderr } = runCommandSync(
-      `echo "What is your role?" | node ${cliPath} chat ${modelIdentifier} --system-prompt "You are a helpful assistant."`,
+      `echo "What is your role?" | node ${cliPath} chat ${modelIdentifier} --system-prompt "You are a helpful assistant." --host localhost --port 1234`,
     );
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -56,7 +58,7 @@ describe("chat heavy", () => {
 
   it("should display stats when --stats flag is used", () => {
     const { status, stderr } = runCommandSync(
-      `echo "Hi" | node ${cliPath} chat ${modelIdentifier} --stats`,
+      `echo "Hi" | node ${cliPath} chat ${modelIdentifier} --stats --host localhost --port 1234`,
     );
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -68,7 +70,7 @@ describe("chat heavy", () => {
 
   it("should combine prompt and stdin input", () => {
     const { status, stdout, stderr } = runCommandSync(
-      `echo "The capital of France" | node ${cliPath} chat ${modelIdentifier} --prompt "Complete this sentence:"`,
+      `echo "The capital of France" | node ${cliPath} chat ${modelIdentifier} --prompt "Complete this sentence:" --host localhost --port 1234`,
     );
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -78,7 +80,7 @@ describe("chat heavy", () => {
 
   it("should work with default model when no model specified", () => {
     const { status, stdout, stderr } = runCommandSync(
-      `echo "Say hello" | node ${cliPath} chat --prompt "Respond with just 'hello'"`,
+      `echo "Say hello" | node ${cliPath} chat --prompt "Respond with just 'hello'" --host localhost --port 1234`,
     );
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -88,7 +90,7 @@ describe("chat heavy", () => {
 
   it("should handle mathematical questions", () => {
     const { status, stdout, stderr } = runCommandSync(
-      `echo "What is 15 * 7?" | node ${cliPath} chat ${modelIdentifier}`,
+      `echo "What is 15 * 7?" | node ${cliPath} chat ${modelIdentifier} --host localhost --port 1234`,
     );
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -98,7 +100,7 @@ describe("chat heavy", () => {
 
   it("should fail gracefully with non-existent model", () => {
     const { status, stderr } = runCommandSync(
-      `echo "test" | node ${cliPath} chat non-existent-model`,
+      `echo "test" | node ${cliPath} chat non-existent-model --host localhost --port 1234`,
     );
 
     expect(status).not.toBe(0);
@@ -108,7 +110,7 @@ describe("chat heavy", () => {
 
   it("should handle empty input gracefully", () => {
     const { status, stdout, stderr } = runCommandSync(
-      `echo "" | node ${cliPath} chat ${modelIdentifier} --prompt "Say OK"`,
+      `echo "" | node ${cliPath} chat ${modelIdentifier} --prompt "Say OK" --host localhost --port 1234`,
     );
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -118,7 +120,7 @@ describe("chat heavy", () => {
 
   it("should respond to coding questions", () => {
     const { status, stdout, stderr } = runCommandSync(
-      `echo "Write a simple hello world in Python" | node ${cliPath} chat ${modelIdentifier}`,
+      `echo "Write a simple hello world in Python" | node ${cliPath} chat ${modelIdentifier} --host localhost --port 1234`,
     );
 
     if (status !== 0) console.error("Chat stderr:", stderr);
