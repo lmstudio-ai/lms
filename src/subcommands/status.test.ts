@@ -6,7 +6,14 @@ describe("status", () => {
 
   describe("status command", () => {
     it("should show LM Studio status", () => {
-      const { status } = runCommandSync(`node ${cliPath} status --host localhost --port 1234`);
+      const { status } = runCommandSync("node", [
+        cliPath,
+        "status",
+        "--host",
+        "localhost",
+        "--port",
+        "1234",
+      ]);
       expect(status).toBe(0);
     });
   });
