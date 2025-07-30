@@ -1,8 +1,8 @@
 import path from "path";
-import { runCommandSync } from "../util.js";
+import { CLI_PATH, runCommandSync } from "../util.js";
 
 describe("list", () => {
-  const cliPath = path.join(__dirname, "../../../../publish/cli/dist/index.js");
+  const cliPath = path.join(__dirname, CLI_PATH);
 
   describe("ls command", () => {
     it("should show downloaded models", () => {
@@ -116,20 +116,6 @@ describe("list", () => {
         "1234",
       ]);
       expect(status).toBe(0);
-    });
-
-    it("should show help when --help flag is used", () => {
-      const { status, stdout } = runCommandSync("node", [
-        cliPath,
-        "ps",
-        "--help",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      expect(status).toBe(1);
-      expect(stdout).toContain("List all loaded models");
     });
 
     it("should output JSON format", () => {

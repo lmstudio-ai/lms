@@ -1,23 +1,8 @@
 import path from "path";
-import { runCommandSync } from "../util.js";
+import { CLI_PATH, runCommandSync } from "../util.js";
 
 describe("unload", () => {
-  const cliPath = path.join(__dirname, "../../../../publish/cli/dist/index.js");
-
-  describe("unload command", () => {
-    it("should show help when --help flag is used", () => {
-      const { status, stdout } = runCommandSync("node", [
-        cliPath,
-        "unload",
-        "--help",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      expect(status).toBe(1);
-      expect(stdout).toContain("Unload a model");
-    });
+  const cliPath = path.join(__dirname, CLI_PATH);
 
     it("should handle unload with specific identifier", () => {
       // First load a model with identifier

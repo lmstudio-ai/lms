@@ -27,3 +27,5 @@ export function runCommandSync(
     status: result.status ?? (result.error ? 1 : 0),
   };
 }
+
+export const CLI_PATH = "../../../../publish/cli/dist/index.js";

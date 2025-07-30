@@ -1,8 +1,8 @@
 import path from "path";
-import { runCommandSync } from "../util.js";
+import { CLI_PATH, runCommandSync } from "../util.js";
 
 describe("version", () => {
-  const cliPath = path.join(__dirname, "../../../../publish/cli/dist/index.js");
+  const cliPath = path.join(__dirname, CLI_PATH);
 
   describe("version command", () => {
     it("should display version with ASCII art", () => {
