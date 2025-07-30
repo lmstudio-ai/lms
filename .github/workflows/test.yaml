@@ -25,7 +25,7 @@ jobs:
       - name: Checkout lms-cli branch
         run: |
           cd lmstudio.js/packages/lms-cli
-          git checkout ${{ github.ref_name }}
+          git checkout ${{ github.head_ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
