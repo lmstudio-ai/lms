@@ -44,6 +44,7 @@ export const unload = command({
           `,
         ).message,
       );
+      process.exit(1);
     }
     const models = (
       await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
@@ -90,7 +91,7 @@ export const unload = command({
             `,
           ).message,
         );
-        return;
+        process.exit(1);
       }
       logger.debug(`Unloading "${identifier}"...`);
       await client.llm.unload(identifier);
