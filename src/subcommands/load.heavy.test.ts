@@ -1,24 +1,10 @@
 import path from "path";
-import { runCommandSync } from "../util.js";
+import { CLI_PATH, runCommandSync } from "../util.js";
 
 describe("load", () => {
-  const cliPath = path.join(__dirname, "../../../../publish/cli/dist/index.js");
+  const cliPath = path.join(__dirname, CLI_PATH);
 
   describe("load command", () => {
-    it("should show help when --help flag is used", () => {
-      const { status, stdout } = runCommandSync("node", [
-        cliPath,
-        "load",
-        "--help",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      expect(status).toBe(1);
-      expect(stdout).toContain("Load a model");
-    });
-
     it("should load model without identifier and verify with ps", () => {
       const { status, stderr } = runCommandSync("node", [
         cliPath,

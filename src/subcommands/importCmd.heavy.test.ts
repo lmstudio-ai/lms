@@ -1,9 +1,9 @@
 import path from "path";
 import fs from "fs";
-import { runCommandSync } from "../util.js";
+import { CLI_PATH, runCommandSync } from "../util.js";
 
 describe("import dry run", () => {
-  const cliPath = path.join(__dirname, "../../../../publish/cli/dist/index.js");
+  const cliPath = path.join(__dirname, CLI_PATH);
   const testModelPath = path.join(__dirname, "../../../test-fixtures/test-model.gguf");
 
   beforeAll(() => {
