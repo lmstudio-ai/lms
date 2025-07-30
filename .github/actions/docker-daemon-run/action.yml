@@ -1,0 +1,90 @@
+name: Run Daemon Docker Container
+description: Pulls and runs LM Studio Daemon Docker image for testing
+
+inputs:
+  docker-image:
+    description: "Full Docker image name"
+    required: true
+  container-name:
+    description: "Name for the container"
+    required: false
+    default: "llmster-test"
+  port:
+    description: "Port to expose (host:container)"
+    required: false
+    default: "1234:1234"
+  use-local-image:
+    description: "Use local Docker image instead of pulling from registry"
+    required: false
+    default: "false"
+
+outputs:
+  container-id:
+    description: "The ID of the running container"
+    value: ${{ steps.run-container.outputs.container-id }}
+  container-name:
+    description: "The name of the running container"
+    value: ${{ inputs.container-name }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Pull Docker image
+      if: ${{ inputs.use-local-image != 'true' }}
+      shell: bash
+      run: |
+        echo "Pulling image: ${{ inputs.docker-image }}"
+        docker pull ${{ inputs.docker-image }}
+
+    - name: Run container
+      id: run-container
+      shell: bash
+      run: |
+        echo "Starting container: ${{ inputs.container-name }}"
+        if [ "${{ inputs.use-local-image }}" = "true" ]; then
+          echo "Using local image: ${{ inputs.docker-image }}"
+        else
+          echo "Using registry image: ${{ inputs.docker-image }}"
+        fi
+        CONTAINER_ID=$(docker run -d --name ${{ inputs.container-name }} -p ${{ inputs.port }} ${{ inputs.docker-image }})
+        echo "Container ID: $CONTAINER_ID"
+        echo "container-id=$CONTAINER_ID" >> $GITHUB_OUTPUT
+
+        # Wait for container to become healthy
+        TIMEOUT=120  # timeout in seconds (increased to account for start-period)
+        START_TIME=$(date +%s)
+        END_TIME=$((START_TIME + TIMEOUT))
+
+        # Start with 1 second delay, then exponentially increase
+        DELAY=1
+        MAX_DELAY=16  # Cap maximum delay at 16 seconds
+
+        while [ $(date +%s) -lt $END_TIME ]; do
+          HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' ${{ inputs.container-name }} 2>/dev/null || echo "unknown")
+
+          if [ "$HEALTH_STATUS" = "healthy" ]; then
+            echo "Container is running!"
+            break
+          elif [ "$HEALTH_STATUS" = "unhealthy" ]; then
+            echo "Container is unhealthy - exiting"
+            docker logs ${{ inputs.container-name }}
+            exit 1
+          fi
+
+          ELAPSED=$(($(date +%s) - START_TIME))
+
+          sleep $DELAY
+          DELAY=$((DELAY * 2))
+          if [ $DELAY -gt $MAX_DELAY ]; then
+            DELAY=$MAX_DELAY
+          fi
+        done
+
+        # Final check after waiting for the maximum timeout
+        # Print logs and the health status
+        if [ $(date +%s) -ge $END_TIME ]; then
+          echo "Container health check timed out after ${TIMEOUT} seconds"
+          echo "Final health status: $(docker inspect --format='{{.State.Health.Status}}' ${{ inputs.container-name }})"
+          docker logs ${{ inputs.container-name }}
+          exit 1
+        fi
