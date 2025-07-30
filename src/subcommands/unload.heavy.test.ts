@@ -4,6 +4,7 @@ import { CLI_PATH, runCommandSync } from "../util.js";
 describe("unload", () => {
   const cliPath = path.join(__dirname, CLI_PATH);
 
+  describe("unload command", () => {
     it("should handle unload with specific identifier", () => {
       // First load a model with identifier
       const { status: loadStatus, stderr: loadStderr } = runCommandSync("node", [
