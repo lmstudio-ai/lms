@@ -11,6 +11,7 @@ export interface ExecResult {
  */
 export function runCommandSync(command: string, options: SpawnSyncOptions = {}): ExecResult {
   const [cmd, ...args] = command.split(" ");
+  args.push("--port", "1234");
   const result = spawnSync(cmd, args, {
     stdio: "pipe",
     encoding: "utf-8",
