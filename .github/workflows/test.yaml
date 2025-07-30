@@ -26,7 +26,7 @@ jobs:
       - name: Determine lmstudio.js branch
         id: branch
         run: |
-          PR_BODY="${{ github.event.pull_request.body }}"
+          PR_BODY='${{ github.event.pull_request.body }}'
           LMS_JS_BRANCH=""
 
           if [ -z "$LMS_JS_BRANCH" ]; then
