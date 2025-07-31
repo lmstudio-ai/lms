@@ -42,7 +42,9 @@ async function waitForCtlFileClear(
 ) {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise(resolve => setTimeout(resolve, checkIntervalMs));
-    const isEmpty = (await readFile(serverCtlPath, "utf-8")).length === 0;
+    const content = await readFile(serverCtlPath, "utf-8");
+    const isEmpty = content.length === 0;
+
     if (isEmpty) {
       logger.debug(`Attempt ${i + 1}: File has been cleared`);
       return true;
