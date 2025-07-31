@@ -29,7 +29,9 @@ async function writeToServerCtl(logger: SimpleLogger, controlObject: HttpServerC
   logger.debug(`Making sure directory exists: ${dir}`);
   await mkdir(dir, { recursive: true });
   logger.debug(`Writing control object to ${serverCtlPath}:`, controlObject);
-  await writeFile(serverCtlPath, JSON.stringify(controlObject));
+  await writeFile(serverCtlPath, JSON.stringify(controlObject), {
+    flush: true,
+  });
 }
 
 /**
