@@ -45,7 +45,7 @@ const start = command({
         Port to run the server on. If not provided, the server will run on the same port as the last
         time it was started.
       `,
-      long: "api-port",
+      long: "port",
       short: "p",
     }),
     cors: flag({
@@ -88,7 +88,6 @@ const stop = command({
   description: "Stops the local server",
   args: {
     ...logLevelArgs,
-    ...createClientArgs,
   },
   handler: async args => {
     const logger = createLogger(args);
