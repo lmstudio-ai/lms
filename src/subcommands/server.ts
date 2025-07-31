@@ -39,8 +39,7 @@ const start = command({
   name: "start",
   description: "Starts the local server",
   args: {
-    ...createClientArgs,
-    apiPort: option({
+    port: option({
       type: optional(number),
       description: text`
         Port to run the server on. If not provided, the server will run on the same port as the last
@@ -59,34 +58,23 @@ const start = command({
     ...logLevelArgs,
   },
   handler: async args => {
-    const { apiPort, cors } = args;
+    const { port, cors, ...logArgs } = args;
     const logger = createLogger(args);
-    let assignedPort: number = apiPort ?? 1234;
-    const client = await createClient(logger, args);
-    if (apiPort === undefined) {
-      try {
-        assignedPort = (await getServerConfig(logger)).port;
-        logger.debug(`Read from last status: port=${apiPort}`);
-      } catch (e) {
-        logger.debug(`Failed to read last status`, e);
-        logger.debug(`Using default port ${apiPort}`);
-      }
-    } else {
-      logger.debug(`Using provided port ${apiPort}`);
-    }
+    const client = await createClient(logger, logArgs);
     if (cors) {
       logger.warnText`
         CORS is enabled. This means any website you visit can use the LM Studio server.
       `;
     }
 
-    logger.debug(`Attempting to start the server on port ${assignedPort}...`);
+    const resolvedPort = port ?? (await getServerConfig(logger)).port ?? 1234;
+    logger.debug(`Attempting to start the server on port ${resolvedPort}...`);
 
-    await client.system.startAPIServer(assignedPort, cors);
+    await client.system.startAPIServer(resolvedPort, cors);
     logger.debug("Verifying the server is running...");
 
-    if (await checkHttpServerWithRetries(logger, assignedPort, 5)) {
-      logger.info(`Success! Server is now running on port ${assignedPort}`);
+    if (await checkHttpServerWithRetries(logger, resolvedPort, 5)) {
+      logger.info(`Success! Server is now running on port ${resolvedPort}`);
       return true;
     } else {
       logger.error("Failed to verify the server is running. Please try to use another port.");
