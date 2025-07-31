@@ -145,7 +145,7 @@ export async function startServer(
   logger.debug(`Attempting to start the server on port ${port}...`);
   logger.info("Starting server...");
   await writeToServerCtl(logger, { type: "start", port, cors });
-  if (await waitForCtlFileClear(logger, 500, 10)) {
+  if (await waitForCtlFileClear(logger, 2000, 10)) {
     logger.debug(`Requested the server to be started on port ${port}.`);
   } else {
     const launched = await wakeUpService(logger);
