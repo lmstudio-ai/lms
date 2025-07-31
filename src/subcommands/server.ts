@@ -43,6 +43,12 @@ async function waitForCtlFileClear(
   maxAttempts: number,
 ) {
   for (let i = 0; i < maxAttempts; i++) {
+    // Console log with time stamp
+    const timestamp = new Date().toISOString();
+    logger.debug(
+      `[${timestamp}] Waiting for control file to be cleared... Attempt ${i + 1}/${maxAttempts}`,
+    );
+    // Wait for the specified interval
     await new Promise(resolve => setTimeout(resolve, checkIntervalMs));
     const isEmpty = (await readFile(serverCtlPath, "utf-8")).length === 0;
     if (isEmpty) {
