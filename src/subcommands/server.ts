@@ -70,7 +70,7 @@ const start = command({
     const resolvedPort = port ?? (await getServerConfig(logger)).port ?? 1234;
     logger.debug(`Attempting to start the server on port ${resolvedPort}...`);
 
-    await client.system.startHTTPServer({
+    await client.system.startHttpServer({
       port: resolvedPort,
       cors,
     });
@@ -108,7 +108,7 @@ const stop = command({
     }
 
     const client = await createClient(logger, args);
-    await client.system.stopHTTPServer();
+    await client.system.stopHttpServer();
     logger.info(`Stopped the server on port ${port}.`);
   },
 });
