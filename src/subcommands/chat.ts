@@ -143,14 +143,66 @@ export const chat = command({
     }
 
     if (process.stdin.isTTY) {
+      let isProcessing = false;
       const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
         prompt: "› ",
       });
 
+      const lineQueue: string[] = [];
+      let currentAbortController: AbortController | null = null;
+
+      const processQueue = async () => {
+        if (isProcessing || lineQueue.length === 0) return;
+        isProcessing = true;
+
+        const line = lineQueue.shift()!;
+
+        try {
+          currentAbortController = new AbortController();
+          chat.append("user", line);
+          process.stdout.write("\n● ");
+          const prediction = model.respond(chat, {
+            signal: currentAbortController.signal,
+          });
+
+          for await (const fragment of prediction) {
+            process.stdout.write(fragment.content);
+          }
+          const result = await prediction.result();
+          chat.append("assistant", result.content);
+
+          if (args.stats) {
+            displayVerboseStats(result.stats, logger);
+          }
+
+          // Resume readline and write a new prompt
+          process.stdout.write("\n\n");
+          rl.prompt();
+        } catch (err) {
+          process.stdout.write("\n");
+          rl.prompt();
+
+          // Process any remaining queue items after interruption
+          setTimeout(() => processQueue(), 10);
+        } finally {
+          currentAbortController = null;
+          isProcessing = false;
+        }
+      };
+
       process.stdout.write("\n");
       rl.prompt();
+
+      rl.on("SIGINT", () => {
+        if (isProcessing && currentAbortController) {
+          currentAbortController.abort();
+        } else {
+          process.stdout.write("\n");
+          process.exit(0);
+        }
+      });
 
       rl.on("line", async (line: string) => {
         const input = line.trim();
@@ -165,32 +217,8 @@ export const chat = command({
           return;
         }
 
-        try {
-          chat.append("user", input);
-          process.stdout.write("\n● ");
-          const prediction = model.respond(chat);
-
-          // Temporarily pause the readline interface
-          rl.pause();
-
-          for await (const fragment of prediction) {
-            process.stdout.write(fragment.content);
-          }
-          const result = await prediction.result();
-          chat.append("assistant", result.content);
-
-          if (args.stats) {
-            displayVerboseStats(result.stats, logger);
-          }
-
-          // Resume readline and write a new prompt
-          process.stdout.write("\n\n");
-          rl.resume();
-          rl.prompt();
-        } catch (err) {
-          logger.error("Error during chat:", err);
-          rl.prompt();
-        }
+        lineQueue.push(input);
+        processQueue();
       });
 
       rl.on("close", () => {
