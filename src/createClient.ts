@@ -13,8 +13,8 @@ import { refinedNumber } from "./types/refinedNumber.js";
  */
 export async function checkHttpServer(
   logger: SimpleLogger,
-  host: string = "127.0.0.1",
   port: number,
+  host: string = "127.0.0.1",
 ) {
   const url = `http://${host}:${port}/lmstudio-greeting`;
   logger.debug(`Checking server at ${url}`);

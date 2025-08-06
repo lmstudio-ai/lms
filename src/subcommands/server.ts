@@ -70,7 +70,10 @@ const start = command({
     const resolvedPort = port ?? (await getServerConfig(logger)).port ?? 1234;
     logger.debug(`Attempting to start the server on port ${resolvedPort}...`);
 
-    await client.system.startAPIServer(resolvedPort, cors);
+    await client.system.startHTTPServer({
+      port: resolvedPort,
+      cors,
+    });
     logger.debug("Verifying the server is running...");
 
     if (await checkHttpServerWithRetries(logger, resolvedPort, 5)) {
@@ -105,7 +108,7 @@ const stop = command({
     }
 
     const client = await createClient(logger, args);
-    await client.system.stopAPIServer();
+    await client.system.stopHTTPServer();
     logger.info(`Stopped the server on port ${port}.`);
   },
 });
