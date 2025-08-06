@@ -13,14 +13,14 @@ import { refinedNumber } from "./types/refinedNumber.js";
  */
 export async function checkHttpServer(
   logger: SimpleLogger,
-  port: number,
   host: string = "127.0.0.1",
+  port: number,
 ) {
   const url = `http://${host}:${port}/lmstudio-greeting`;
   logger.debug(`Checking server at ${url}`);
   try {
     const abortController = new AbortController();
-    setTimeout(() => abortController.abort(), 500).unref();
+    setTimeout(() => abortController.abort(new Error("Connection timed out.")), 500).unref();
     const response = await fetch(url, { signal: abortController.signal });
     if (response.status !== 200) {
       logger.debug(`Status is not 200: ${response.status}`);
