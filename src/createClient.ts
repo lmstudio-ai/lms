@@ -59,6 +59,7 @@ export const createClientArgs = {
 
 interface CreateClientArgs {
   yes?: boolean;
+  env?: string;
 }
 
 async function isLocalServerAtPortLMStudioServerOrThrow(port: number) {
