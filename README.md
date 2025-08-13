@@ -49,17 +49,26 @@ Here are some frequently used commands:
 
 # Contributing
 
-You can build the project locally by following these steps:
+The CLI is part of the [lmstudio.js monorepo](https://github.com/lmstudio-ai/lmstudio.js) and cannot be built standalone.
 
-_Note: make sure the version of Node you have installed matches the one specified in the `engines` of the `package.json`._
+## Building and Testing the CLI
 
 ```bash
-git clone https://github.com/lmstudio-ai/lms.git
-cd lms
+# Clone and build the entire monorepo
+git clone https://github.com/lmstudio-ai/lmstudio-js.git --recursive
+cd lmstudio-js
 npm install
-npm run watch
-# To test your changes and run commands:
-node ./dist/index.js <subcommand>
+npm run build
+
+# Test your CLI changes
+node publish/cli/dist/index.js <subcommand>
+```
+
+**Example:**
+
+```bash
+node publish/cli/dist/index.js --help
+node publish/cli/dist/index.js status
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
