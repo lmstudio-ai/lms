@@ -1,3 +1,4 @@
+import { Command, InvalidArgumentError, Option } from "@commander-js/extra-typings";
 import { type SimpleLogger, text } from "@lmstudio/lms-common";
 import {
   type ArtifactDependency,
@@ -10,113 +11,108 @@ import {
   virtualModelDefinitionSchema,
 } from "@lmstudio/lms-shared-types";
 import chalk from "chalk";
-import { boolean, command, flag, option, optional, string, type Type } from "cmd-ts";
 import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { cwd } from "process";
 import YAML from "yaml";
 import { askQuestion } from "../confirm.js";
-import { createClient, createClientArgs } from "../createClient.js";
+import { addCreateClientOptions, createClient } from "../createClient.js";
 import { ensureAuthenticated } from "../ensureAuthenticated.js";
 import { exists } from "../exists.js";
 import { findProjectFolderOrExit } from "../findProjectFolder.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
-import { createLogger, logLevelArgs } from "../logLevel.js";
+import { addLogLevelOptions, createLogger } from "../logLevel.js";
 
-const overridesType: Type<string, any> = {
-  async from(str) {
+const overridesParser = (str: string): any => {
+  try {
     return JSON.parse(str);
-  },
-  displayName: "JSON",
-  description: "A JSON string",
+  } catch (error) {
+    throw new InvalidArgumentError("Invalid JSON string");
+  }
 };
 
-export const push = command({
-  name: "push",
-  description: "Uploads the plugin in the current folder to LM Studio Hub.",
-  args: {
-    ...logLevelArgs,
-    ...createClientArgs,
-    description: option({
-      type: optional(string),
-      long: "description",
-      description: text`
-        Description of the artifact. If provided, will overwrite the existing description.
-      `,
-    }),
-    overrides: option({
-      type: optional(overridesType),
-      long: "overrides",
-    }),
-    yes: flag({
-      type: boolean,
-      long: "yes",
-      short: "y",
-      description: text`
-        Suppress all confirmations and warnings.
-      `,
-    }),
-    makePrivate: flag({
-      type: boolean,
-      long: "private",
-      description: text`
-        When specified, the published artifact will be marked as private. This flag is only
-        effective if the artifact did not exist before. (It will not change the visibility of an
-        existing artifact.)
-      `,
-    }),
-    writeRevision: flag({
-      type: boolean,
-      long: "write-revision",
-      description: text`
-        When specified, the revision number will be written to the manifest.json file. This is
-        useful if you want to keep track of the revision number in your source control.
-      `,
-    }),
-  },
-  handler: async args => {
-    const logger = createLogger(args);
-    const client = await createClient(logger, args);
-    const { yes, description, overrides, writeRevision, makePrivate } = args;
-    const currentPath = cwd();
-    await maybeGenerateManifestJson(logger, currentPath);
-    const projectPath = await findProjectFolderOrExit(logger, currentPath);
+export const push = addLogLevelOptions(
+  addCreateClientOptions(
+    new Command()
+      .name("push")
+      .description("Uploads the plugin in the current folder to LM Studio Hub.")
+      .option(
+        "--description <value>",
+        text`
+          Description of the artifact. If provided, will overwrite the existing description.
+        `,
+      )
+      .addOption(new Option("--overrides <value>", "JSON string").argParser(overridesParser))
+      .option(
+        "-y, --yes",
+        text`
+          Suppress all confirmations and warnings.
+        `,
+      )
+      .option(
+        "--private",
+        text`
+          When specified, the published artifact will be marked as private. This flag is only
+          effective if the artifact did not exist before. (It will not change the visibility of an
+          existing artifact.)
+        `,
+      )
+      .option(
+        "--write-revision",
+        text`
+          When specified, the revision number will be written to the manifest.json file. This is
+          useful if you want to keep track of the revision number in your source control.
+        `,
+      ),
+  ),
+).action(async options => {
+  const logger = createLogger(options);
+  const client = await createClient(logger, options);
+  const {
+    yes = false,
+    description,
+    overrides,
+    writeRevision = false,
+    private: makePrivate = false,
+  } = options;
+  const currentPath = cwd();
+  await maybeGenerateManifestJson(logger, currentPath);
+  const projectPath = await findProjectFolderOrExit(logger, currentPath);
 
-    const manifestJsonPath = join(projectPath, "manifest.json");
-    const manifestContent = await readFile(manifestJsonPath, "utf-8");
-    const manifest = artifactManifestSchema.parse(JSON.parse(manifestContent));
-    // For now, we only require user to confirm if the manifest type is plugin.
-    const needsConfirmation = !args.yes && manifest.type === "plugin";
+  const manifestJsonPath = join(projectPath, "manifest.json");
+  const manifestContent = await readFile(manifestJsonPath, "utf-8");
+  const manifest = artifactManifestSchema.parse(JSON.parse(manifestContent));
+  // For now, we only require user to confirm if the manifest type is plugin.
+  const needsConfirmation = !yes && manifest.type === "plugin";
 
-    if (manifest.owner === "local") {
-      logger.error("This artifact was created without a username.");
-      logger.error(
-        "Please edit the manifest.json and set the owner field to your LM Studio Hub username.",
-      );
+  if (manifest.owner === "local") {
+    logger.error("This artifact was created without a username.");
+    logger.error(
+      "Please edit the manifest.json and set the owner field to your LM Studio Hub username.",
+    );
+    process.exit(1);
+  }
+
+  await ensureAuthenticated(client, logger, { yes });
+
+  const fileList = await client.repository.getLocalArtifactFileList(projectPath);
+  printFileList(fileList, logger);
+
+  if (needsConfirmation) {
+    if (!(await askQuestion("Continue?"))) {
+      logger.info("Aborting push.");
       process.exit(1);
     }
+  }
 
-    await ensureAuthenticated(client, logger, { yes });
-
-    const fileList = await client.repository.getLocalArtifactFileList(projectPath);
-    printFileList(fileList, logger);
-
-    if (needsConfirmation) {
-      if (!(await askQuestion("Continue?"))) {
-        logger.info("Aborting push.");
-        process.exit(1);
-      }
-    }
-
-    await client.repository.pushArtifact({
-      path: projectPath,
-      description,
-      writeRevision,
-      makePrivate,
-      overrides,
-      onMessage: message => logger.info(message),
-    });
-  },
+  await client.repository.pushArtifact({
+    path: projectPath,
+    description,
+    writeRevision,
+    makePrivate,
+    overrides,
+    onMessage: message => logger.info(message),
+  });
 });
 
 function printFileList(fileList: LocalArtifactFileList, logger: SimpleLogger) {

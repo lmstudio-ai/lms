@@ -1,10 +1,10 @@
-import { run, subcommands } from "cmd-ts";
+import { program } from "@commander-js/extra-typings";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat.js";
 import { clone } from "./subcommands/clone.js";
 import { create } from "./subcommands/create.js";
 import { dev } from "./subcommands/dev.js";
-import { flagsCommand } from "./subcommands/flags.js";
+import { flags } from "./subcommands/flags.js";
 import { get } from "./subcommands/get.js";
 import { importCmd } from "./subcommands/importCmd.js";
 import { ls, ps } from "./subcommands/list.js";
@@ -23,31 +23,28 @@ if (process.argv.length === 2) {
   console.info("Usage");
 }
 
-const cli = subcommands({
-  name: "lms",
-  cmds: {
-    chat,
-    status,
-    server,
-    ls,
-    ps,
-    get,
-    load,
-    unload,
-    create,
-    log,
-    dev,
-    push,
-    clone,
-    login,
-    import: importCmd,
-    flags: flagsCommand,
-    bootstrap,
-    version,
-  },
-});
+program.name("lms").description("LM Studio CLI");
 
-run(cli, process.argv.slice(2)).catch(error => {
+program.addCommand(chat);
+program.addCommand(status);
+program.addCommand(server);
+program.addCommand(ls);
+program.addCommand(ps);
+program.addCommand(get);
+program.addCommand(load);
+program.addCommand(unload);
+program.addCommand(create);
+program.addCommand(log);
+program.addCommand(dev);
+program.addCommand(push);
+program.addCommand(clone);
+program.addCommand(login);
+program.addCommand(importCmd);
+program.addCommand(flags);
+program.addCommand(bootstrap);
+program.addCommand(version);
+
+program.parseAsync(process.argv).catch((error: any) => {
   console.error(error?.stack ?? error);
   process.exit(1);
 });

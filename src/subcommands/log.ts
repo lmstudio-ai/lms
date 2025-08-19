@@ -1,43 +1,38 @@
+import { Command } from "@commander-js/extra-typings";
 import { type DiagnosticsLogEventData } from "@lmstudio/lms-shared-types";
 import chalk from "chalk";
-import { command, flag, subcommands } from "cmd-ts";
-import { createClient, createClientArgs } from "../createClient.js";
-import { createLogger, logLevelArgs } from "../logLevel.js";
+import { addCreateClientOptions, createClient } from "../createClient.js";
+import { addLogLevelOptions, createLogger } from "../logLevel.js";
 
-const stream = command({
-  name: "stream",
-  description: "Stream logs from LM Studio",
-  args: {
-    json: flag({
-      long: "json",
-      description: "Outputs in JSON format, separated by newline",
-    }),
-    ...logLevelArgs,
-    ...createClientArgs,
-  },
-  async handler(args) {
-    const logger = createLogger(args);
-    const client = await createClient(logger, args);
-    const { json } = args;
+const stream = addLogLevelOptions(
+  addCreateClientOptions(
+    new Command()
+      .name("stream")
+      .description("Stream logs from LM Studio")
+      .option("--json", "Outputs in JSON format, separated by newline"),
+  ),
+).action(async options => {
+  const logger = createLogger(options);
+  const client = await createClient(logger, options);
+  const { json = false } = options;
 
-    logger.info("Streaming logs from LM Studio\n");
+  logger.info("Streaming logs from LM Studio\n");
 
-    client.diagnostics.unstable_streamLogs(log => {
-      if (json) {
-        console.log(JSON.stringify(log));
-      } else {
-        console.log("timestamp: " + chalk.greenBright(new Date(log.timestamp).toLocaleString()));
-        console.log("type: " + chalk.greenBright(log.data.type));
-        switch (log.data.type) {
-          case "llm.prediction.input": {
-            printLlmPredictionLogEvent(log.data);
-          }
+  client.diagnostics.unstable_streamLogs(log => {
+    if (json) {
+      console.log(JSON.stringify(log));
+    } else {
+      console.log("timestamp: " + chalk.greenBright(new Date(log.timestamp).toLocaleString()));
+      console.log("type: " + chalk.greenBright(log.data.type));
+      switch (log.data.type) {
+        case "llm.prediction.input": {
+          printLlmPredictionLogEvent(log.data);
         }
-        console.log();
-        console.log();
       }
-    });
-  },
+      console.log();
+      console.log();
+    }
+  });
 });
 
 function printLlmPredictionLogEvent(
@@ -48,11 +43,9 @@ function printLlmPredictionLogEvent(
   console.log(`input: "${chalk.green(data.input)}"`);
 }
 
-export const log = subcommands({
-  name: "log",
-  description:
+export const log = new Command()
+  .name("log")
+  .description(
     "Log operations. Currently only supports streaming logs from LM Studio via `lms log stream`",
-  cmds: {
-    stream,
-  },
-});
+  )
+  .addCommand(stream);

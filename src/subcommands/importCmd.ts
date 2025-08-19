@@ -1,3 +1,4 @@
+import { Command, InvalidArgumentError } from "@commander-js/extra-typings";
 import {
   doesFileNameIndicateModel,
   makeTitledPrettyError,
@@ -7,8 +8,7 @@ import {
 } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
-import { boolean, command, flag, option, optional, positional, type Type } from "cmd-ts";
-import { File } from "cmd-ts/batteries/fs";
+import { existsSync, statSync } from "fs";
 import { access, copyFile, link, mkdir, readFile, rename, symlink } from "fs/promises";
 import fuzzy from "fuzzy";
 import inquirer, { type PromptModule } from "inquirer";
@@ -18,150 +18,159 @@ import { basename, dirname, join } from "path";
 import { z } from "zod";
 import { getCliPref } from "../cliPref.js";
 import { defaultModelsFolder } from "../lmstudioPaths.js";
-import { createLogger, logLevelArgs } from "../logLevel.js";
+import { addLogLevelOptions, createLogger } from "../logLevel.js";
 
-const userRepoType: Type<string, [string, string]> = {
-  async from(str) {
-    const parts = str.split("/");
-    if (parts.length !== 2) {
-      throw new Error("Must be user and repo separated by a slash.");
-    }
-    return parts as [string, string];
-  },
-};
+/**
+ * Parse user/repo string into tuple
+ */
+function parseUserRepo(value: string): [string, string] {
+  const parts = value.split("/");
+  if (parts.length !== 2) {
+    throw new InvalidArgumentError("Must be user and repo separated by a slash.");
+  }
+  return parts as [string, string];
+}
 
-export const importCmd = command({
-  name: "import",
-  description: "Import a model file into LM Studio",
-  args: {
-    path: positional({
-      type: File,
-      displayName: "file-path",
-    }),
-    yes: flag({
-      type: boolean,
-      long: "yes",
-      short: "y",
-      description: text`
+/**
+ * Validate that a file path exists and is a file (not directory)
+ */
+function validateFilePath(filePath: string): void {
+  if (!existsSync(filePath)) {
+    throw new InvalidArgumentError(`File does not exist`);
+  }
+
+  const stats = statSync(filePath);
+  if (!stats.isFile()) {
+    throw new InvalidArgumentError(`Path is not a file`);
+  }
+}
+
+export const importCmd = addLogLevelOptions(
+  new Command()
+    .name("import")
+    .description("Import a model file into LM Studio")
+    .argument("<file-path>", "Path to the model file to import", value => {
+      validateFilePath(value);
+      return value;
+    })
+    .option(
+      "-y, --yes",
+      text`
         Suppress all confirmations and warnings. Will also attempt to automatically resolve the
         user and repository from the file name.
       `,
-    }),
-    userRepo: option({
-      type: optional(userRepoType),
-      long: "user-repo",
-      description: text`
+    )
+    .option(
+      "--user-repo <user/repo>",
+      text`
         Manually provide the user and repository in the format "user/repo". Specifying this will
         skip prompts about how to categorize the model file.
       `,
-    }),
-    copy: flag({
-      type: boolean,
-      long: "copy",
-      short: "c",
-      description: text`
+      parseUserRepo,
+    )
+    .option(
+      "-c, --copy",
+      text`
         Copy the file instead of moving it. This is useful when you want to keep the original file
         in place.
       `,
-    }),
-    hardLink: flag({
-      type: boolean,
-      long: "hard-link",
-      short: "L",
-      description: text`
+    )
+    .option(
+      "-L, --hard-link",
+      text`
         Create a hard link instead of moving or copying the file. This is useful when you want to
         keep the original file in place.
       `,
-    }),
-    symbolicLink: flag({
-      type: boolean,
-      long: "symbolic-link",
-      short: "l",
-      description: text`
+    )
+    .option(
+      "-l, --symbolic-link",
+      text`
         Create a symbolic link instead of moving or copying the file. This is useful when you want
         to keep the original file in place.
       `,
-    }),
-    dryRun: flag({
-      type: boolean,
-      long: "dry-run",
-      description: text`
+    )
+    .option(
+      "--dry-run",
+      text`
         Do not actually perform the import, just show what would be done.
       `,
-    }),
-    ...logLevelArgs,
-  },
-  async handler(args) {
-    const logger = createLogger(args);
-    const { path, yes, copy, hardLink, symbolicLink, dryRun } = args;
-    let { userRepo } = args;
-    logger.debug("Importing model file", path);
+    ),
+).action(async (path, options) => {
+  const logger = createLogger(options);
+  const {
+    yes = false,
+    copy = false,
+    hardLink = false,
+    symbolicLink = false,
+    dryRun = false,
+  } = options;
+  let { userRepo } = options;
+  logger.debug("Importing model file", path);
 
-    if (+copy + +hardLink + +symbolicLink > 1) {
-      logger.error(
-        makeTitledPrettyError(
-          "Invalid Usage",
-          "Cannot specify more than one of --copy, --hard-link, or --symbolic-link",
-        ),
-      );
-      process.exit(1);
-    }
-    let move = false;
-    if (!copy && !hardLink && !symbolicLink) {
-      move = true;
-    }
-    const pm = inquirer.createPromptModule({
-      output: process.stderr,
-    });
-    await validateModelNameOrWarn(logger, pm, path, yes);
-    if (symbolicLink) {
-      await maybeWarnAboutWindowsSymlink(logger);
-    }
-    const modelsFolderPath = await resolveModelsFolderPath(logger);
+  if (+copy + +hardLink + +symbolicLink > 1) {
+    logger.error(
+      makeTitledPrettyError(
+        "Invalid Usage",
+        "Cannot specify more than one of --copy, --hard-link, or --symbolic-link",
+      ),
+    );
+    process.exit(1);
+  }
+  let move = false;
+  if (!copy && !hardLink && !symbolicLink) {
+    move = true;
+  }
+  const pm = inquirer.createPromptModule({
+    output: process.stderr,
+  });
+  await validateModelNameOrWarn(logger, pm, path, yes);
+  if (symbolicLink) {
+    await maybeWarnAboutWindowsSymlink(logger);
+  }
+  const modelsFolderPath = await resolveModelsFolderPath(logger);
+  if (move) {
+    await warnAboutMove(logger, pm, yes, modelsFolderPath);
+  }
+
+  if (userRepo === undefined) {
+    userRepo = await resolveUserRepo(logger, pm, path, yes);
+  }
+
+  const [user, repo] = userRepo;
+
+  const targetPath = join(modelsFolderPath, user, repo, basename(path));
+
+  logger.debug("Target path", targetPath);
+  try {
+    await access(targetPath);
+    logger.error("Target file already exists:", targetPath);
+    process.exit(1);
+  } catch (error) {
+    /* ignore */
+  }
+
+  if (dryRun) {
     if (move) {
-      await warnAboutMove(logger, pm, yes, modelsFolderPath);
+      logger.info("Would move the file to", targetPath);
+    } else if (copy) {
+      logger.info("Would copy the file to", targetPath);
+    } else if (hardLink) {
+      logger.info("Would create a hard link at", targetPath);
+    } else if (symbolicLink) {
+      logger.info("Would create a symbolic link at", targetPath);
     }
-
-    if (userRepo === undefined) {
-      userRepo = await resolveUserRepo(logger, pm, path, yes);
+    logger.info(`But not actually doing it because of ${chalk.yellow("--dry-run")}`);
+  } else {
+    if (move) {
+      await importViaMove(logger, path, targetPath);
+    } else if (copy) {
+      await importViaCopy(logger, path, targetPath);
+    } else if (hardLink) {
+      await importViaHardLink(logger, path, targetPath);
+    } else if (symbolicLink) {
+      await importViaSymbolicLink(logger, path, targetPath);
     }
-
-    const [user, repo] = userRepo;
-
-    const targetPath = join(modelsFolderPath, user, repo, basename(path));
-
-    logger.debug("Target path", targetPath);
-    try {
-      await access(targetPath);
-      logger.error("Target file already exists:", targetPath);
-      process.exit(1);
-    } catch (error) {
-      /* ignore */
-    }
-
-    if (dryRun) {
-      if (move) {
-        logger.info("Would move the file to", targetPath);
-      } else if (copy) {
-        logger.info("Would copy the file to", targetPath);
-      } else if (hardLink) {
-        logger.info("Would create a hard link at", targetPath);
-      } else if (symbolicLink) {
-        logger.info("Would create a symbolic link at", targetPath);
-      }
-      logger.info(`But not actually doing it because of ${chalk.yellow("--dry-run")}`);
-    } else {
-      if (move) {
-        await importViaMove(logger, path, targetPath);
-      } else if (copy) {
-        await importViaCopy(logger, path, targetPath);
-      } else if (hardLink) {
-        await importViaHardLink(logger, path, targetPath);
-      } else if (symbolicLink) {
-        await importViaSymbolicLink(logger, path, targetPath);
-      }
-    }
-  },
+  }
 });
 
 /**
@@ -393,7 +402,7 @@ async function warnAboutMove(
     If you want to create a ${chalk.cyanBright("hard link")} instead, use the
     ${chalk.yellow("--hard-link")} flag.
 
-    This message will only show up once. You can always look up the usage via the 
+    This message will only show up once. You can always look up the usage via the
     ${chalk.yellow("--help")} flag.${"\n\n"}
   `);
   const { cont } = await pm([

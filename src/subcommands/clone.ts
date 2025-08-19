@@ -1,90 +1,85 @@
+import { Command, InvalidArgumentError } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import { kebabCaseRegex, kebabCaseWithDotsRegex } from "@lmstudio/lms-shared-types";
-import { command, positional, string, type Type } from "cmd-ts";
 import { resolve } from "path";
-import { createClient, createClientArgs } from "../createClient.js";
+import { addCreateClientOptions, createClient } from "../createClient.js";
 import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
 import { exists } from "../exists.js";
-import { createLogger, logLevelArgs } from "../logLevel.js";
-import { optionalPositional } from "../optionalPositional.js";
+import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 
-const artifactIdentifierType: Type<string, { owner: string; name: string }> = {
-  async from(str) {
-    str = str.trim().toLowerCase();
-    const parts = str.split("/");
-    if (parts.length !== 2) {
-      throw new Error("Invalid artifact identifier. Must be in the form of 'owner/name'.");
-    }
-    const [owner, name] = parts;
-    if (!kebabCaseRegex.test(owner)) {
-      throw new Error("Invalid owner. Must be kebab-case.");
-    }
-    if (!kebabCaseWithDotsRegex.test(name)) {
-      throw new Error("Invalid name. Must be kebab-case (dots allowed).");
-    }
-    return { owner, name };
-  },
+const artifactIdentifierParser = (str: string): { owner: string; name: string } => {
+  str = str.trim().toLowerCase();
+  const parts = str.split("/");
+  if (parts.length !== 2) {
+    throw new InvalidArgumentError(
+      "Invalid artifact identifier. Must be in the form of 'owner/name'.",
+    );
+  }
+  const [owner, name] = parts;
+  if (!kebabCaseRegex.test(owner)) {
+    throw new InvalidArgumentError("Invalid owner. Must be kebab-case.");
+  }
+  if (!kebabCaseWithDotsRegex.test(name)) {
+    throw new InvalidArgumentError("Invalid name. Must be kebab-case (dots allowed).");
+  }
+  return { owner, name };
 };
 
-export const clone = command({
-  name: "clone",
-  description: "Clone an artifact from LM Studio Hub to a local folder.",
-  args: {
-    artifactIdentifier: positional({
-      displayName: "artifact-identifier",
-      description: "The identifier for the artifact. Must be in the form of 'owner/name'.",
-      type: artifactIdentifierType,
-    }),
-    path: optionalPositional({
-      displayName: "path",
-      description: text`
-        The path to the folder to clone the resources into. If not provided, defaults to a new
-        folder with the artifact name in the current working directory.
+export const clone = addLogLevelOptions(
+  addCreateClientOptions(
+    new Command()
+      .name("clone")
+      .description("Clone an artifact from LM Studio Hub to a local folder.")
+      .argument(
+        "<artifact-id>",
+        "The identifier for the artifact. Must be in the form of 'owner/name'.",
+        artifactIdentifierParser,
+      )
+      .argument(
+        "[path]",
+        text`
+          The path to the folder to clone the resources into. If not provided, defaults to a new
+          folder with the artifact name in the current working directory.
       `,
-      type: string,
-      default: "",
-    }),
-    ...logLevelArgs,
-    ...createClientArgs,
-  },
-  handler: async args => {
-    const logger = createLogger(args);
-    const client = await createClient(logger, args);
-    const { owner, name } = args.artifactIdentifier;
-    let path = args.path;
-    let autoNamed: boolean;
-    if (path === "") {
-      path = resolve(`./${name}`);
-      autoNamed = true;
-      logger.debug(`Path not provided. Using default: ${path}`);
-    } else {
-      path = resolve(path);
-      autoNamed = false;
-      logger.debug(`Using provided path: ${path}`);
+      ),
+  ),
+).action(async (artifactIdentifier, path = "", options) => {
+  const logger = createLogger(options);
+  const client = await createClient(logger, options);
+  const { owner, name } = artifactIdentifier;
+  let resolvedPath = path;
+  let autoNamed: boolean;
+  if (resolvedPath === "") {
+    resolvedPath = resolve(`./${name}`);
+    autoNamed = true;
+    logger.debug(`Path not provided. Using default: ${resolvedPath}`);
+  } else {
+    resolvedPath = resolve(resolvedPath);
+    autoNamed = false;
+    logger.debug(`Using provided path: ${resolvedPath}`);
+  }
+  if (await exists(resolvedPath)) {
+    logger.error(`Path already exists: ${resolvedPath}`);
+    if (autoNamed) {
+      logger.error("You can provide a different path by providing it as a second argument.");
     }
-    if (await exists(path)) {
-      logger.error(`Path already exists: ${path}`);
-      if (autoNamed) {
-        logger.error("You can provide a different path by providing it as a second argument.");
-      }
-      process.exit(1);
-    }
-    const pb = new ProgressBar(0, "", 22);
-    const updatePb = createDownloadPbUpdater(pb);
-    await client.repository.downloadArtifact({
-      owner,
-      name,
-      revisionNumber: -1, // -1 means the latest revision.
-      path,
-      onProgress: update => {
-        updatePb(update);
-      },
-      onStartFinalizing: () => {
-        pb.stop();
-        logger.info("Finalizing download...");
-      },
-    });
-    logger.info(`Artifact successfully cloned to ${path}.`);
-  },
+    process.exit(1);
+  }
+  const pb = new ProgressBar(0, "", 22);
+  const updatePb = createDownloadPbUpdater(pb);
+  await client.repository.downloadArtifact({
+    owner,
+    name,
+    revisionNumber: -1, // -1 means the latest revision.
+    path: resolvedPath,
+    onProgress: update => {
+      updatePb(update);
+    },
+    onStartFinalizing: () => {
+      pb.stop();
+      logger.info("Finalizing download...");
+    },
+  });
+  logger.info(`Artifact successfully cloned to ${resolvedPath}.`);
 });

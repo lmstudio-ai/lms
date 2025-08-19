@@ -1,257 +1,249 @@
+import { Command, InvalidArgumentError, Option } from "@commander-js/extra-typings";
 import { makeTitledPrettyError, type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import { type LLMLlamaAccelerationOffloadRatio, type ModelInfo } from "@lmstudio/lms-shared-types";
 import { type LLMLoadModelConfig, type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
-import { boolean, command, flag, option, optional, positional, string, type Type } from "cmd-ts";
 import fuzzy from "fuzzy";
 import inquirer from "inquirer";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
 import { getCliPref } from "../cliPref.js";
-import { createClient, createClientArgs } from "../createClient.js";
+import { addCreateClientOptions, createClient } from "../createClient.js";
 import { formatElapsedTime } from "../formatElapsedTime.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
-import { createLogger, logLevelArgs } from "../logLevel.js";
+import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
-import { refinedNumber } from "../types/refinedNumber.js";
+import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
-const gpuOptionType: Type<string, LLMLlamaAccelerationOffloadRatio> = {
-  async from(str) {
-    str = str.trim().toLowerCase();
-    if (str === "off") {
-      return 0;
-    } else if (str === "max") {
-      return 1;
-    }
-    const num = +str;
-    if (Number.isNaN(num)) {
-      throw new Error("Not a number");
-    }
-    if (num < 0 || num > 1) {
-      throw new Error("Number out of range, must be between 0 and 1");
-    }
-    return num;
-  },
-  displayName: "0-1|off|max",
-  description: `a number between 0 to 1, or one of "off" or "max"`,
+const gpuOptionParser = (str: string): LLMLlamaAccelerationOffloadRatio => {
+  str = str.trim().toLowerCase();
+  if (str === "off") {
+    return 0;
+  } else if (str === "max") {
+    return 1;
+  }
+  const num = +str;
+  if (Number.isNaN(num)) {
+    throw new InvalidArgumentError("Not a number");
+  }
+  if (num < 0 || num > 1) {
+    throw new InvalidArgumentError("Number out of range, must be between 0 and 1");
+  }
+  return num;
 };
 
-export const load = command({
-  name: "load",
-  description: "Load a model",
-  args: {
-    path: positional({
-      type: optional(string),
-      description: text`
-        The path of the model to load. If not provided, you will be prompted to select one. If
-        multiple models match the path, you will also be prompted to select one. If you don't wish
-        to be prompted, please use the --exact or the --yes flag.
-      `,
-      displayName: "path",
-    }),
-    ttl: option({
-      type: optional(refinedNumber({ integer: true, min: 1 })),
-      long: "ttl",
-      description: text`
-        TTL (seconds): If provided, when the model is not used for this number of seconds, it will be unloaded.
-      `,
-    }),
-    gpu: option({
-      type: optional(gpuOptionType),
-      long: "gpu",
-      description: text`
-        How much to offload to the GPU. If "off", GPU offloading is disabled. If "max", all layers
-        are offloaded to GPU. If a number between 0 and 1, that fraction of layers will be offloaded
-        to the GPU. By default, LM Studio will decide how much to offload to the GPU.
-      `,
-    }),
-    contextLength: option({
-      type: optional(refinedNumber({ integer: true, min: 1 })),
-      long: "context-length",
-      description: text`
-        The number of tokens to consider as context when generating text. If not provided, the
-        default value will be used.
-      `,
-    }),
-    exact: flag({
-      type: boolean,
-      long: "exact",
-      description: text`
-        Only load the model if the path provided matches the model exactly. Fails if the path
-        provided does not match any model.
-      `,
-    }),
-    identifier: option({
-      type: optional(string),
-      long: "identifier",
-      description: text`
-        The identifier to assign to the loaded model. The identifier can be used to refer to the
-        model in the API.
-      `,
-    }),
-    ...logLevelArgs,
-    ...createClientArgs,
-    yes: flag({
-      type: boolean,
-      long: "yes",
-      short: "y",
-      description: text`
-        Suppress all confirmations and warnings. Useful for scripting. If there are multiple
-        models matching the path, the first one will be loaded. Fails if the path provided does not
-        match any model.
-      `,
-    }),
-  },
-  handler: async args => {
-    const { ttl: ttlSeconds, gpu, contextLength, yes, exact, identifier } = args;
-    const loadConfig: LLMLoadModelConfig = {
-      contextLength,
-    };
-    if (gpu !== undefined) {
-      loadConfig.gpu = {
-        ratio: gpu,
-      };
-    }
-    let { path } = args;
-    const logger = createLogger(args);
-    const client = await createClient(logger, args);
-    const cliPref = await getCliPref(logger);
-
-    const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];
-    const lastLoadedIndexToPathMap = [...lastLoadedModels.entries()];
-    const lastLoadedMap = new Map(lastLoadedIndexToPathMap.map(([index, path]) => [path, index]));
-    logger.debug(`Last loaded map loaded with ${lastLoadedMap.size} models.`);
-
-    const models = (await client.system.listDownloadedModels())
-      .filter(model => !model.architecture?.toLowerCase().includes("clip"))
-      .sort((a, b) => {
-        const aIndex = lastLoadedMap.get(a.path) ?? lastLoadedMap.size + 1;
-        const bIndex = lastLoadedMap.get(b.path) ?? lastLoadedMap.size + 1;
-        return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
-      });
-
-    if (exact) {
-      const model = models.find(model => model.path === path);
-      if (path === undefined) {
-        logger.errorWithoutPrefix(
-          makeTitledPrettyError(
-            "Path not provided",
-            text`
-              The parameter ${chalk.cyanBright("[path]")} is required when using the
-              ${chalk.yellowBright("--exact")} flag.
-            `,
-          ).message,
-        );
-        process.exit(1);
-      }
-      if (model === undefined) {
-        const shortestName = models.reduce((shortest, model) => {
-          if (model.path.length < shortest.length) {
-            return model.path;
-          }
-          return shortest;
-        }, models[0].path);
-        logger.errorWithoutPrefix(
-          makeTitledPrettyError(
-            "Model not found",
-            text`
-              No model found with path being exactly "${chalk.yellowBright(path)}".
-
-              To disable exact matching, remove the ${chalk.yellowBright("--exact")} flag.
-
-              To see a list of all downloaded models, run:
-
-                  ${chalk.yellowBright("lms ls --detailed")}
-
-              Note, you need to provide the full model path. For example:
-
-                  ${chalk.yellowBright(`lms load --exact "${chalk.yellow(shortestName)}"`)}
-            `,
-          ).message,
-        );
-        process.exit(1);
-      }
-      await loadModel(logger, client, model, identifier, loadConfig, ttlSeconds);
-      return;
-    }
-
-    const modelPaths = models.map(model => model.path);
-
-    const initialFilteredModels = fuzzy.filter(path ?? "", modelPaths);
-    logger.debug("Initial filtered models length:", initialFilteredModels.length);
-
-    let model: ModelInfo;
-    if (yes) {
-      if (initialFilteredModels.length === 0) {
-        logger.errorWithoutPrefix(
-          makeTitledPrettyError(
-            "Model not found",
-            text`
-              No model found that matches path "${chalk.yellowBright(path)}".
-
-              To see a list of all downloaded models, run:
-
-                  ${chalk.yellowBright("lms ls --detailed")}
-
-              To select a model interactively, remove the ${chalk.yellowBright("--yes")} flag:
-
-                  ${chalk.yellowBright("lms load")}
-            `,
-          ).message,
-        );
-        process.exit(1);
-      }
-      if (initialFilteredModels.length > 1) {
-        logger.warnText`
-          ${initialFilteredModels.length} models match the provided path. Loading the first one.
-        `;
-      }
-      model = models[initialFilteredModels[0].index];
-    } else {
-      console.info();
-      if (path === undefined) {
-        model = await selectModelToLoad(models, modelPaths, "", 4, lastLoadedMap);
-      } else if (initialFilteredModels.length === 0) {
-        console.info(
-          chalk.redBright(text`
-            ! Cannot find a model matching the provided path (${chalk.yellowBright(path)}). Please
-            select one from the list below.
-          `),
-        );
-        path = "";
-        model = await selectModelToLoad(models, modelPaths, path, 5, lastLoadedMap);
-      } else if (initialFilteredModels.length === 1) {
-        model = models[initialFilteredModels[0].index];
-        // console.info(
-        //   text`
-        //     ! Confirm model selection, or select a different model.
-        //   `,
-        // );
-        // model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
-      } else {
-        console.info(
+export const load = addLogLevelOptions(
+  addCreateClientOptions(
+    new Command()
+      .name("load")
+      .description("Load a model")
+      .argument(
+        "[path]",
+        text`
+          The path of the model to load. If not provided, you will be prompted to select one. If
+          multiple models match the path, you will also be prompted to select one. If you don't wish
+          to be prompted, please use the --exact or the --yes flag.
+        `,
+      )
+      .addOption(
+        new Option(
+          "--ttl <seconds>",
           text`
-            ! Multiple models match the provided path. Please select one.
+            TTL: If provided, when the model is not used for this number of seconds, it will be unloaded.
           `,
-        );
-        model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
-      }
-    }
+        ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
+      )
+      .addOption(
+        new Option(
+          "--gpu <offload-ratio>",
+          text`
+            How much to offload to the GPU. If "off", GPU offloading is disabled. If "max", all layers
+            are offloaded to GPU. If a number between 0 and 1, that fraction of layers will be offloaded
+            to the GPU. By default, LM Studio will decide how much to offload to the GPU.
+          `,
+        ).argParser(gpuOptionParser),
+      )
+      .addOption(
+        new Option(
+          "--context-length <length>",
+          text`
+            The number of tokens to consider as context when generating text. If not provided, the
+            default value will be used.
+          `,
+        ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
+      )
+      .option(
+        "--exact",
+        text`
+          Only load the model if the path provided matches the model exactly. Fails if the path
+          provided does not match any model.
+        `,
+      )
+      .option(
+        "--identifier <identifier>",
+        text`
+          The identifier to assign to the loaded model. The identifier can be used to refer to the
+          model in the API.
+        `,
+      )
+      .option(
+        "-y, --yes",
+        text`
+          Suppress all confirmations and warnings. Useful for scripting. If there are multiple
+          models matching the path, the first one will be loaded. Fails if the path provided does not
+          match any model.
+        `,
+      ),
+  ),
+).action(async (pathArg, options) => {
+  const { ttl: ttlSeconds, gpu, contextLength, yes, exact, identifier } = options;
+  const loadConfig: LLMLoadModelConfig = {
+    contextLength,
+  };
+  if (gpu !== undefined) {
+    loadConfig.gpu = {
+      ratio: gpu,
+    };
+  }
+  let path = pathArg;
+  const logger = createLogger(options);
+  const client = await createClient(logger, options);
+  const cliPref = await getCliPref(logger);
 
-    const modelInLastLoadedModelsIndex = lastLoadedModels.indexOf(model.path);
-    if (modelInLastLoadedModelsIndex !== -1) {
-      logger.debug("Removing model from last loaded models:", model.path);
-      lastLoadedModels.splice(modelInLastLoadedModelsIndex, 1);
-    }
-    lastLoadedModels.unshift(model.path);
-    logger.debug("Updating cliPref");
-    cliPref.setWithProducer(draft => {
-      // Keep only the last 20 loaded models
-      draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
+  const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];
+  const lastLoadedIndexToPathMap = [...lastLoadedModels.entries()];
+  const lastLoadedMap = new Map(lastLoadedIndexToPathMap.map(([index, path]) => [path, index]));
+  logger.debug(`Last loaded map loaded with ${lastLoadedMap.size} models.`);
+
+  const models = (await client.system.listDownloadedModels())
+    .filter(model => !model.architecture?.toLowerCase().includes("clip"))
+    .sort((a, b) => {
+      const aIndex = lastLoadedMap.get(a.path) ?? lastLoadedMap.size + 1;
+      const bIndex = lastLoadedMap.get(b.path) ?? lastLoadedMap.size + 1;
+      return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
     });
 
+  if (exact) {
+    const model = models.find(model => model.path === path);
+    if (path === undefined) {
+      logger.errorWithoutPrefix(
+        makeTitledPrettyError(
+          "Path not provided",
+          text`
+            The parameter ${chalk.cyanBright("[path]")} is required when using the
+            ${chalk.yellowBright("--exact")} flag.
+          `,
+        ).message,
+      );
+      process.exit(1);
+    }
+    if (model === undefined) {
+      const shortestName = models.reduce((shortest, model) => {
+        if (model.path.length < shortest.length) {
+          return model.path;
+        }
+        return shortest;
+      }, models[0].path);
+      logger.errorWithoutPrefix(
+        makeTitledPrettyError(
+          "Model not found",
+          text`
+            No model found with path being exactly "${chalk.yellowBright(path)}".
+
+            To disable exact matching, remove the ${chalk.yellowBright("--exact")} flag.
+
+            To see a list of all downloaded models, run:
+
+                ${chalk.yellowBright("lms ls --detailed")}
+
+            Note, you need to provide the full model path. For example:
+
+                ${chalk.yellowBright(`lms load --exact "${chalk.yellow(shortestName)}"`)}
+          `,
+        ).message,
+      );
+      process.exit(1);
+    }
     await loadModel(logger, client, model, identifier, loadConfig, ttlSeconds);
-  },
+    return;
+  }
+
+  const modelPaths = models.map(model => model.path);
+
+  const initialFilteredModels = fuzzy.filter(path ?? "", modelPaths);
+  logger.debug("Initial filtered models length:", initialFilteredModels.length);
+
+  let model: ModelInfo;
+  if (yes) {
+    if (initialFilteredModels.length === 0) {
+      logger.errorWithoutPrefix(
+        makeTitledPrettyError(
+          "Model not found",
+          text`
+            No model found that matches path "${chalk.yellowBright(path)}".
+
+            To see a list of all downloaded models, run:
+
+                ${chalk.yellowBright("lms ls --detailed")}
+
+            To select a model interactively, remove the ${chalk.yellowBright("--yes")} flag:
+
+                ${chalk.yellowBright("lms load")}
+          `,
+        ).message,
+      );
+      process.exit(1);
+    }
+    if (initialFilteredModels.length > 1) {
+      logger.warnText`
+        ${initialFilteredModels.length} models match the provided path. Loading the first one.
+      `;
+    }
+    model = models[initialFilteredModels[0].index];
+  } else {
+    console.info();
+    if (path === undefined) {
+      model = await selectModelToLoad(models, modelPaths, "", 4, lastLoadedMap);
+    } else if (initialFilteredModels.length === 0) {
+      console.info(
+        chalk.redBright(text`
+          ! Cannot find a model matching the provided path (${chalk.yellowBright(path)}). Please
+          select one from the list below.
+        `),
+      );
+      path = "";
+      model = await selectModelToLoad(models, modelPaths, path, 5, lastLoadedMap);
+    } else if (initialFilteredModels.length === 1) {
+      model = models[initialFilteredModels[0].index];
+      // console.info(
+      //   text`
+      //     ! Confirm model selection, or select a different model.
+      //   `,
+      // );
+      // model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
+    } else {
+      console.info(
+        text`
+          ! Multiple models match the provided path. Please select one.
+        `,
+      );
+      model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
+    }
+  }
+
+  const modelInLastLoadedModelsIndex = lastLoadedModels.indexOf(model.path);
+  if (modelInLastLoadedModelsIndex !== -1) {
+    logger.debug("Removing model from last loaded models:", model.path);
+    lastLoadedModels.splice(modelInLastLoadedModelsIndex, 1);
+  }
+  lastLoadedModels.unshift(model.path);
+  logger.debug("Updating cliPref");
+  cliPref.setWithProducer(draft => {
+    // Keep only the last 20 loaded models
+    draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
+  });
+
+  await loadModel(logger, client, model, identifier, loadConfig, ttlSeconds);
 });
 
 async function selectModelToLoad(

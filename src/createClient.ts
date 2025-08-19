@@ -1,13 +1,13 @@
-import { apiServerPorts, type SimpleLogger, text } from "@lmstudio/lms-common";
+import { Option, type Command, type OptionValues } from "@commander-js/extra-typings";
+import { apiServerPorts, text, type SimpleLogger } from "@lmstudio/lms-common";
 import { LMStudioClient, type LMStudioClientConstructorOpts } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { spawn } from "child_process";
-import { option, optional, string } from "cmd-ts";
 import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
 import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
-import { refinedNumber } from "./types/refinedNumber.js";
+import { createRefinedNumberParser } from "./types/refinedNumber.js";
 /**
  * Checks if the HTTP server is running.
  */
@@ -44,26 +44,34 @@ interface AppInstallLocation {
   cwd: string;
 }
 
-export const createClientArgs = {
-  host: option({
-    type: optional(string),
-    long: "host",
-    description: text`
-      If you wish to connect to a remote LM Studio instance, specify the host here. Note that, in
-      this case, lms will connect using client identifier "lms-cli-remote-<random chars>", which
-      will not be a privileged client, and will restrict usage of functionalities such as
-      "lms push".
-    `,
-  }),
-  port: option({
-    type: optional(refinedNumber({ integer: true, min: 0, max: 65535 })),
-    long: "port",
-    description: text`
-      The port where LM Studio can be reached. If not provided and the host is set to "127.0.0.1"
-      (default), the last used port will be used; otherwise, 1234 will be used.
-    `,
-  }),
-};
+/**
+ * Adds create client options to a commander.js command
+ */
+export function addCreateClientOptions<
+  Args extends any[],
+  Opts extends OptionValues,
+  GlobalOpts extends OptionValues,
+>(command: Command<Args, Opts, GlobalOpts>) {
+  return command
+    .option(
+      "--host <host>",
+      text`
+        If you wish to connect to a remote LM Studio instance, specify the host here. Note that, in
+        this case, lms will connect using client identifier "lms-cli-remote-<random chars>", which
+        will not be a privileged client, and will restrict usage of functionalities such as
+        "lms push".
+      `,
+    )
+    .addOption(
+      new Option(
+        "--port <port>",
+        text`
+          The port where LM Studio can be reached. If not provided and the host is set to "127.0.0.1"
+          (default), the last used port will be used; otherwise, 1234 will be used.
+        `,
+      ).argParser(createRefinedNumberParser({ integer: true, min: 0, max: 65535 })),
+    );
+}
 
 interface CreateClientArgs {
   yes?: boolean;
