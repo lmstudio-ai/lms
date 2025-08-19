@@ -65,7 +65,7 @@ const scaffoldBasicsListSchema = z.object({
 });
 type ScaffoldBasicsList = z.infer<typeof scaffoldBasicsListSchema>;
 
-async function getScaffolds(logger: SimpleLogger) {
+async function getScaffolds(_logger: SimpleLogger) {
   const url = "https://scaffolds-manifest.lmstudio.ai";
   const response = await fetch(url);
   const json = await response.json();
@@ -200,7 +200,7 @@ class Replacer {
 async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
   let projectNameIndex = -1;
   for (const [index, arg] of scaffold.args.entries()) {
-    if (arg.isProjectName) {
+    if (arg.isProjectName === true) {
       projectNameIndex = index;
       break;
     }
@@ -223,7 +223,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
       default: defaultValue === "" ? undefined : defaultValue,
     });
 
-    if (arg.isProjectName) {
+    if (arg.isProjectName === true) {
       projectName = value;
     }
 

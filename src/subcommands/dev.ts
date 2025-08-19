@@ -49,7 +49,7 @@ class PluginProcess {
     if (this.firstTime) {
       const manifest = this.registerDevelopmentPluginOpts.manifest;
       const identifier = `${manifest.owner}/${manifest.name}`;
-      if (!this.opts.noNotify) {
+      if (this.opts.noNotify !== true) {
         await this.client.system.notify({
           title: `Plugin "${identifier}" started`,
           description: "This plugin is run by lms CLI development server.",

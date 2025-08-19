@@ -97,17 +97,11 @@ export const importCmd = addLogLevelOptions(
     ),
 ).action(async (path, options) => {
   const logger = createLogger(options);
-  const {
-    yes = false,
-    copy = false,
-    hardLink = false,
-    symbolicLink = false,
-    dryRun = false,
-  } = options;
+  const { yes = false, copy, hardLink, symbolicLink, dryRun } = options;
   let { userRepo } = options;
   logger.debug("Importing model file", path);
 
-  if (+copy + +hardLink + +symbolicLink > 1) {
+  if ((copy === true ? 1 : 0) + (hardLink === true ? 1 : 0) + (symbolicLink === true ? 1 : 0) > 1) {
     logger.error(
       makeTitledPrettyError(
         "Invalid Usage",
@@ -116,10 +110,7 @@ export const importCmd = addLogLevelOptions(
     );
     process.exit(1);
   }
-  let move = false;
-  if (!copy && !hardLink && !symbolicLink) {
-    move = true;
-  }
+  const move = copy !== true && hardLink !== true && symbolicLink !== true;
   const pm = inquirer.createPromptModule({
     output: process.stderr,
   });
@@ -266,6 +257,8 @@ async function validateModelNameOrWarn(
           default: false,
         },
       ]);
+      // cont is any as returned from 3p module
+      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
       if (!cont) {
         process.exit(1);
       }
@@ -296,11 +289,15 @@ async function maybeWarnAboutWindowsSymlink(logger: SimpleLogger) {
 function getUserAppDataPath() {
   switch (process.platform) {
     case "win32":
-      return process.env.APPDATA || join(homedir(), "AppData", "Roaming");
+      return process.env.APPDATA === undefined || process.env.APPDATA === ""
+        ? join(homedir(), "AppData", "Roaming")
+        : process.env.APPDATA;
     case "darwin":
       return join(homedir(), "Library", "Application Support");
     case "linux":
-      return process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
+      return process.env.XDG_CONFIG_HOME === undefined || process.env.XDG_CONFIG_HOME === ""
+        ? join(homedir(), ".config")
+        : process.env.XDG_CONFIG_HOME;
     default:
       throw new Error("Unsupported platform");
   }
@@ -378,7 +375,7 @@ async function warnAboutMove(
   modelsFolderPath: string,
 ) {
   const cliPref = await getCliPref(logger);
-  if (cliPref.get().importWillMoveWarned) {
+  if (cliPref.get().importWillMoveWarned === true) {
     return;
   }
   if (yes) {
@@ -413,6 +410,8 @@ async function warnAboutMove(
       default: true,
     },
   ]);
+  // cont is any as returned from 3p module
+  // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
   if (!cont) {
     process.exit(1);
   }
@@ -601,10 +600,14 @@ async function resolveByHuggingFaceInteractive(
     pageSize: terminalSize().rows - 3,
     emptyText: "No model matched the filter",
     source: async (_: any, input: string) => {
-      const options = fuzzy.filter(input ?? "", candidatesJoined, {
-        pre: "\x1b[91m",
-        post: "\x1b[39m",
-      });
+      const options = fuzzy.filter(
+        input === undefined || input === null ? "" : input,
+        candidatesJoined,
+        {
+          pre: "\x1b[91m",
+          post: "\x1b[39m",
+        },
+      );
       return [
         ...options.map(option => {
           return {

@@ -29,7 +29,7 @@ function loadedCheck(count: number) {
 }
 
 function architectureColored(architecture?: string) {
-  if (!architecture) {
+  if (architecture === undefined || architecture === "") {
     return "";
   }
   const architectureInfo = architectureInfoLookup.find(architecture);
@@ -37,7 +37,7 @@ function architectureColored(architecture?: string) {
 }
 
 function architecture(architecture?: string) {
-  if (!architecture) {
+  if (architecture === undefined || architecture === "") {
     return "";
   }
   return architectureInfoLookup.find(architecture).name;

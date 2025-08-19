@@ -165,7 +165,10 @@ export async function createClient(
     };
   } else {
     // Not remote. We need to check if this is a production build.
-    if (lmsKey.startsWith("<") && !process.env.LMS_FORCE_PROD) {
+    if (
+      lmsKey.startsWith("<") &&
+      (process.env.LMS_FORCE_PROD === null || process.env.LMS_FORCE_PROD === "")
+    ) {
       // lmsKey not injected and we did not force prod, this is not a production build.
       logger.warnText`
         You are using a development build of lms-cli. Privileged features such as "lms push" will

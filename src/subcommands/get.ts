@@ -422,7 +422,7 @@ async function askToChooseDownloadOption(
       pageSize: terminalSize().rows - 4 - additionalRowsToReserve,
       choices: downloadOptions.map(option => {
         let name = "";
-        if (option.quantization) {
+        if (option.quantization !== undefined && option.quantization !== "") {
           name += chalk.whiteBright(`${option.quantization} `.padEnd(9));
         }
         name += chalk.whiteBright(`${formatSizeBytes1000(option.sizeBytes)} `.padStart(11));
@@ -458,7 +458,7 @@ async function askToChooseDownloadOption(
 function formatOptionShortName(option: ModelSearchResultDownloadOption) {
   let name = "";
   name += option.name;
-  if (option.quantization) {
+  if (option.quantization !== undefined && option.quantization !== "") {
     name += ` [${option.quantization}]`;
   }
   name += ` (${formatSizeBytes1000(option.sizeBytes)})`;

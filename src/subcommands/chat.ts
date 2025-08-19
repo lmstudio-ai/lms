@@ -56,7 +56,7 @@ export const chat = addLogLevelOptions(
   const client = await createClient(logger, options);
 
   let initialPrompt = "";
-  if (options.prompt) {
+  if (options.prompt !== undefined && options.prompt !== "") {
     initialPrompt = options.prompt;
     if (!process.stdin.isTTY) {
       const stdinContent = await readStdin();
@@ -67,7 +67,7 @@ export const chat = addLogLevelOptions(
   }
 
   let llmModel: LLM;
-  if (model) {
+  if (model !== undefined && model !== "") {
     try {
       llmModel = await client.llm.model(model);
     } catch (e) {

@@ -116,14 +116,14 @@ export const load = addLogLevelOptions(
   logger.debug(`Last loaded map loaded with ${lastLoadedMap.size} models.`);
 
   const models = (await client.system.listDownloadedModels())
-    .filter(model => !model.architecture?.toLowerCase().includes("clip"))
+    .filter(model => model.architecture?.toLowerCase().includes("clip") !== true)
     .sort((a, b) => {
       const aIndex = lastLoadedMap.get(a.path) ?? lastLoadedMap.size + 1;
       const bIndex = lastLoadedMap.get(b.path) ?? lastLoadedMap.size + 1;
       return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
     });
 
-  if (exact) {
+  if (exact === true) {
     const model = models.find(model => model.path === path);
     if (path === undefined) {
       logger.errorWithoutPrefix(
@@ -174,7 +174,7 @@ export const load = addLogLevelOptions(
   logger.debug("Initial filtered models length:", initialFilteredModels.length);
 
   let model: ModelInfo;
-  if (yes) {
+  if (yes === true) {
     if (initialFilteredModels.length === 0) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(

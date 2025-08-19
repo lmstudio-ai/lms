@@ -37,10 +37,10 @@ export function getLogLevelMap({ logLevel, verbose, quiet }: LogLevelArgs): LogL
   if (logLevel !== undefined) {
     numSpecified++;
   }
-  if (verbose) {
+  if (verbose === true) {
     numSpecified++;
   }
-  if (quiet) {
+  if (quiet === true) {
     numSpecified++;
   }
   if (numSpecified > 1) {
@@ -51,10 +51,10 @@ export function getLogLevelMap({ logLevel, verbose, quiet }: LogLevelArgs): LogL
       `),
     );
   }
-  if (quiet) {
+  if (quiet === true) {
     logLevel = "none";
   }
-  if (verbose) {
+  if (verbose === true) {
     logLevel = "debug";
   }
   const level = levels.indexOf(logLevel ?? "info");
@@ -81,7 +81,7 @@ export function createLogger({ logLevel, verbose, quiet }: LogLevelArgs): Simple
   return new SimpleLogger("", consoleObj, {
     useLogLevelPrefixes: true,
     infoPrefix:
-      verbose || logLevel === "debug"
+      verbose === true || logLevel === "debug"
         ? undefined // If it is verbose, we use the default I
         : null, // Otherwise, no I
   });

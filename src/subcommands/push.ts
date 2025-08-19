@@ -125,7 +125,7 @@ function printFileList(fileList: LocalArtifactFileList, logger: SimpleLogger) {
     );
   }
   logger.info();
-  if (fileList.usedIgnoreFile) {
+  if (fileList.usedIgnoreFile !== undefined && fileList.usedIgnoreFile !== "") {
     logger.info(chalk.gray(`(Used ignore file ${fileList.usedIgnoreFile})`));
   } else {
     logger.info(
