@@ -123,7 +123,7 @@ export const load = addLogLevelOptions(
       return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
     });
 
-  if (exact) {
+  if (exact === true) {
     const model = models.find(model => model.path === path);
     if (path === undefined) {
       logger.errorWithoutPrefix(
@@ -174,7 +174,7 @@ export const load = addLogLevelOptions(
   logger.debug("Initial filtered models length:", initialFilteredModels.length);
 
   let model: ModelInfo;
-  if (yes) {
+  if (yes === true) {
     if (initialFilteredModels.length === 0) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(
