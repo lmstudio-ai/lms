@@ -139,8 +139,7 @@ export const dev = addLogLevelOptions(
         "-y, --yes",
         text`
           Suppress all confirmations and warnings. Useful for scripting.
-
-          - When used with --install, it will overwrite the plugin without asking.
+          When used with --install, it will overwrite the plugin without asking.
         `,
       )
       .option(
