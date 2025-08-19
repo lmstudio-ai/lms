@@ -1,7 +1,7 @@
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { command, flag, number, option, optional, subcommands } from "cmd-ts";
 import { readFile } from "fs/promises";
-import { checkHttpServer, createClient, createClientArgs } from "../createClient.js";
+import { checkHttpServer, createClient } from "../createClient.js";
 import { serverConfigPath } from "../lmstudioPaths.js";
 import { createLogger, logLevelArgs } from "../logLevel.js";
 
