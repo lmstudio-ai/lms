@@ -1,6 +1,5 @@
 import { Command } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
-import boxen from "boxen";
 import chalk from "chalk";
 import { addCreateClientOptions, checkHttpServer, createClient } from "../createClient.js";
 import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
@@ -64,12 +63,5 @@ export const status = addLogLevelOptions(
           ${chalk.yellow("lms server start ")}
     `;
   }
-  console.info(
-    boxen(content, {
-      margin: 1,
-      padding: 1,
-      borderColor: "greenBright",
-      title: "Status",
-    }),
-  );
+  console.info(content);
 });

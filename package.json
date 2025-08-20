@@ -25,7 +25,6 @@
     "@lmstudio/lms-isomorphic": "^0.4.6",
     "@lmstudio/lms-lmstudio": "^0.0.32",
     "@lmstudio/sdk": "^1.5.0",
-    "boxen": "^5.1.2",
     "chalk": "^4.1.2",
     "@commander-js/extra-typings": "^14.0.0",
     "columnify": "^1.6.0",
