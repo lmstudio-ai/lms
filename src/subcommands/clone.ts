@@ -32,7 +32,7 @@ export const clone = addLogLevelOptions(
       .name("clone")
       .description("Clone an artifact from LM Studio Hub to a local folder.")
       .argument(
-        "<artifact-id>",
+        "<artifact>",
         "The identifier for the artifact. Must be in the form of 'owner/name'.",
         artifactIdentifierParser,
       )
