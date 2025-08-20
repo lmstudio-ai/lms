@@ -1,12 +1,12 @@
+import { Command } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import { type ModelInfo } from "@lmstudio/sdk";
 import chalk from "chalk";
-import { command, flag } from "cmd-ts";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
-import { createClient, createClientArgs } from "../createClient.js";
+import { addCreateClientOptions, createClient } from "../createClient.js";
 import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
-import { createLogger, logLevelArgs } from "../logLevel.js";
+import { addLogLevelOptions, createLogger } from "../logLevel.js";
 
 function loadedCheckBoxed(count: number) {
   if (count === 0) {
@@ -29,7 +29,7 @@ function loadedCheck(count: number) {
 }
 
 function architectureColored(architecture?: string) {
-  if (!architecture) {
+  if (architecture === undefined) {
     return "";
   }
   const architectureInfo = architectureInfoLookup.find(architecture);
@@ -37,7 +37,7 @@ function architectureColored(architecture?: string) {
 }
 
 function architecture(architecture?: string) {
-  if (!architecture) {
+  if (architecture === undefined) {
     return "";
   }
   return architectureInfoLookup.find(architecture).name;
@@ -189,187 +189,168 @@ function printDownloadedModelsTable(
   }
 }
 
-export const ls = command({
-  name: "ls",
-  description: "List all downloaded models",
-  args: {
-    ...logLevelArgs,
-    ...createClientArgs,
-    llm: flag({
-      long: "llm",
-      description: "Show only LLM models",
-    }),
-    embedding: flag({
-      long: "embedding",
-      description: "Show only embedding models",
-    }),
-    json: flag({
-      long: "json",
-      description: "Outputs in JSON format to stdout",
-    }),
-    detailed: flag({
-      long: "detailed",
-      description: "Show detailed information",
-    }),
-  },
-  handler: async args => {
-    const logger = createLogger(args);
-    const client = await createClient(logger, args);
+export const ls = addCreateClientOptions(
+  addLogLevelOptions(
+    new Command()
+      .name("ls")
+      .description("List all downloaded models")
+      .option("--llm", "Show only LLM models")
+      .option("--embedding", "Show only embedding models")
+      .option("--json", "Outputs in JSON format to stdout")
+      .option("--detailed", "Show detailed information"),
+  ),
+).action(async options => {
+  const logger = createLogger(options);
+  const client = await createClient(logger, options);
 
-    const { llm, embedding, json, detailed } = args;
+  const { llm = false, embedding = false, json = false, detailed = false } = options;
 
-    let downloadedModels = await client.system.listDownloadedModels();
-    const loadedModels = await client.llm.listLoaded();
+  let downloadedModels = await client.system.listDownloadedModels();
+  const loadedModels = await client.llm.listLoaded();
 
-    const originalModelsCount = downloadedModels.length;
+  const originalModelsCount = downloadedModels.length;
 
-    if (llm || embedding) {
-      const allowedTypes = new Set<string>();
-      if (llm) {
-        allowedTypes.add("llm");
-      }
-      if (embedding) {
-        allowedTypes.add("embedding");
-      }
-      downloadedModels = downloadedModels.filter(model => allowedTypes.has(model.type));
+  if (llm || embedding) {
+    const allowedTypes = new Set<string>();
+    if (llm) {
+      allowedTypes.add("llm");
     }
-
-    const afterFilteringModelsCount = downloadedModels.length;
-
-    if (json) {
-      console.info(JSON.stringify(downloadedModels));
-      return;
+    if (embedding) {
+      allowedTypes.add("embedding");
     }
+    downloadedModels = downloadedModels.filter(model => allowedTypes.has(model.type));
+  }
 
-    if (afterFilteringModelsCount === 0) {
-      if (originalModelsCount === 0) {
-        console.info(chalk.redBright("You have not downloaded any models yet."));
-      } else {
-        console.info(
-          chalk.redBright(
-            `You have ${originalModelsCount} models, but none of them match the filter.`,
-          ),
-        );
-      }
-      return;
-    }
+  const afterFilteringModelsCount = downloadedModels.length;
 
-    let totalSizeBytes = 0;
-    for (const model of downloadedModels) {
-      totalSizeBytes += model.sizeBytes;
-    }
+  if (json) {
+    console.info(JSON.stringify(downloadedModels));
+    return;
+  }
 
-    console.info();
-    if (detailed) {
-      console.info();
-      console.info(text`
-        You have ${chalk.greenBright(downloadedModels.length)} models,
-        taking up ${chalk.greenBright(formatSizeBytes1000(totalSizeBytes))} of disk space.
-      `);
+  if (afterFilteringModelsCount === 0) {
+    if (originalModelsCount === 0) {
+      console.info(chalk.redBright("You have not downloaded any models yet."));
     } else {
-      console.info(text`
-        You have ${downloadedModels.length} models,
-        taking up ${formatSizeBytes1000(totalSizeBytes)} of disk space.
-      `);
+      console.info(
+        chalk.redBright(
+          `You have ${originalModelsCount} models, but none of them match the filter.`,
+        ),
+      );
     }
+    return;
+  }
+
+  let totalSizeBytes = 0;
+  for (const model of downloadedModels) {
+    totalSizeBytes += model.sizeBytes;
+  }
+
+  console.info();
+  if (detailed) {
     console.info();
+    console.info(text`
+      You have ${chalk.greenBright(downloadedModels.length)} models,
+      taking up ${chalk.greenBright(formatSizeBytes1000(totalSizeBytes))} of disk space.
+    `);
+  } else {
+    console.info(text`
+      You have ${downloadedModels.length} models,
+      taking up ${formatSizeBytes1000(totalSizeBytes)} of disk space.
+    `);
+  }
+  console.info();
 
-    const llms = downloadedModels.filter(model => model.type === "llm");
-    if (llms.length > 0) {
-      printDownloadedModelsTable(
-        detailed
-          ? chalk.bgGreenBright.black("   LLMs   ") + " " + chalk.green("(Large Language Models)")
-          : "LLMs (Large Language Models)",
-        llms,
-        loadedModels,
-        detailed,
-      );
-      console.info();
-    }
+  const llms = downloadedModels.filter(model => model.type === "llm");
+  if (llms.length > 0) {
+    printDownloadedModelsTable(
+      detailed
+        ? chalk.bgGreenBright.black("   LLMs   ") + " " + chalk.green("(Large Language Models)")
+        : "LLMs (Large Language Models)",
+      llms,
+      loadedModels,
+      detailed,
+    );
+    console.info();
+  }
 
-    const embeddings = downloadedModels.filter(model => model.type === "embedding");
-    if (embeddings.length > 0) {
-      printDownloadedModelsTable(
-        detailed ? chalk.bgGreenBright.black("   Embedding Models   ") : "Embedding Models",
-        embeddings,
-        loadedModels,
-        detailed,
-      );
-      console.info();
-    }
-  },
+  const embeddings = downloadedModels.filter(model => model.type === "embedding");
+  if (embeddings.length > 0) {
+    printDownloadedModelsTable(
+      detailed ? chalk.bgGreenBright.black("   Embedding Models   ") : "Embedding Models",
+      embeddings,
+      loadedModels,
+      detailed,
+    );
+    console.info();
+  }
 });
 
-export const ps = command({
-  name: "ps",
-  description: "List all loaded models",
-  args: {
-    ...logLevelArgs,
-    ...createClientArgs,
-    json: flag({
-      long: "json",
-      description: "Outputs in JSON format to stdout",
-    }),
-  },
-  handler: async args => {
-    const logger = createLogger(args);
-    const client = await createClient(logger, args);
+export const ps = addCreateClientOptions(
+  addLogLevelOptions(
+    new Command()
+      .name("ps")
+      .description("List all loaded models")
+      .option("--json", "Outputs in JSON format to stdout"),
+  ),
+).action(async options => {
+  const logger = createLogger(options);
+  const client = await createClient(logger, options);
 
-    const { json } = args;
+  const { json = false } = options;
 
-    const loadedModels = [
-      ...(await client.llm.listLoaded()),
-      ...(await client.embedding.listLoaded()),
-    ];
-    const downloadedModels = await client.system.listDownloadedModels();
+  const loadedModels = [
+    ...(await client.llm.listLoaded()),
+    ...(await client.embedding.listLoaded()),
+  ];
+  const downloadedModels = await client.system.listDownloadedModels();
 
-    if (json) {
+  if (json) {
+    console.info(
+      JSON.stringify(await Promise.all(loadedModels.map(model => model.getModelInfo()))),
+    );
+    return;
+  }
+
+  if (loadedModels.length === 0) {
+    logger.error(
+      text`
+        No models are currently loaded
+
+        To load a model, run:
+
+            ${chalk.yellow("lms load")}${"\n"}
+      `,
+    );
+    return;
+  }
+
+  console.info();
+  console.info(chalk.bgCyanBright.black("   LOADED MODELS   "));
+  console.info();
+
+  const dot = chalk.blackBright("  • ");
+
+  for (const { identifier, path } of loadedModels) {
+    const model = downloadedModels.find(model => model.path === path);
+    console.info(chalk.greenBright(`Identifier: ${chalk.green(identifier)}`));
+    if (model === undefined) {
+      console.info(chalk.gray("  Cannot find more information"));
+    } else {
       console.info(
-        JSON.stringify(await Promise.all(loadedModels.map(model => model.getModelInfo()))),
+        dot +
+          chalk.whiteBright(
+            `Type: ${chalk.bgGreenBright.black(model.type === "llm" ? " LLM " : " Embedding ")}`,
+          ),
       );
-      return;
-    }
-
-    if (loadedModels.length === 0) {
-      logger.error(
-        text`
-          No models are currently loaded
-
-          To load a model, run:
-
-              ${chalk.yellow("lms load")}${"\n"}
-        `,
+      console.info(dot + chalk.whiteBright(`Path: ${chalk.white(path)}`));
+      console.info(
+        dot + chalk.whiteBright(`Size: ${formatSizeBytesWithColor1000(model.sizeBytes)}`),
       );
-      return;
+      console.info(
+        dot + chalk.whiteBright(`Architecture: ${architectureColored(model.architecture)}`),
+      );
+      console.info();
     }
-
-    console.info();
-    console.info(chalk.bgCyanBright.black("   LOADED MODELS   "));
-    console.info();
-
-    const dot = chalk.blackBright("  • ");
-
-    for (const { identifier, path } of loadedModels) {
-      const model = downloadedModels.find(model => model.path === path);
-      console.info(chalk.greenBright(`Identifier: ${chalk.green(identifier)}`));
-      if (model === undefined) {
-        console.info(chalk.gray("  Cannot find more information"));
-      } else {
-        console.info(
-          dot +
-            chalk.whiteBright(
-              `Type: ${chalk.bgGreenBright.black(model.type === "llm" ? " LLM " : " Embedding ")}`,
-            ),
-        );
-        console.info(dot + chalk.whiteBright(`Path: ${chalk.white(path)}`));
-        console.info(
-          dot + chalk.whiteBright(`Size: ${formatSizeBytesWithColor1000(model.sizeBytes)}`),
-        );
-        console.info(
-          dot + chalk.whiteBright(`Architecture: ${architectureColored(model.architecture)}`),
-        );
-        console.info();
-      }
-    }
-  },
+  }
 });

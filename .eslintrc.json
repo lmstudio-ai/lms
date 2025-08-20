@@ -15,6 +15,9 @@
     "plugin:react-hooks/recommended"
   ],
   "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "project": "./tsconfig.json"
+  },
   "rules": {
     "@typescript-eslint/no-unused-vars": [
       "warn",
@@ -31,7 +34,9 @@
         "fixStyle": "inline-type-imports"
       }
     ],
-    "tsdoc/syntax": "warn"
+    "tsdoc/syntax": "warn",
+    "@typescript-eslint/strict-boolean-expressions": "error",
+    "eqeqeq": "error"
   },
   "overrides": [
     {

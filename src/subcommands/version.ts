@@ -1,5 +1,5 @@
+import { Command } from "@commander-js/extra-typings";
 import chalk from "chalk";
-import { command, flag } from "cmd-ts";
 
 function getVersion() {
   return "<LMS-CLI-CURRENT-VERSION>";
@@ -25,20 +25,15 @@ export function printVersion() {
   console.info(chalk.gray("GitHub: https://github.com/lmstudio-ai/lms"));
 }
 
-export const version = command({
-  name: "version",
-  description: "Prints the version of the CLI",
-  args: {
-    json: flag({
-      long: "json",
-      description: "Prints the version in JSON format",
-    }),
-  },
-  async handler({ json }) {
+export const version = new Command()
+  .name("version")
+  .description("Prints the version of the CLI")
+  .option("--json", "Prints the version in JSON format")
+  .action(async options => {
+    const { json = false } = options;
     if (json) {
       console.info(JSON.stringify({ version: getVersion() }));
     } else {
       printVersion();
     }
-  },
-});
+  });

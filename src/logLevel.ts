@@ -1,36 +1,28 @@
+import { Option, type Command, type OptionValues } from "@commander-js/extra-typings";
 import { makePrettyError, SimpleLogger, text } from "@lmstudio/lms-common";
 import chalk from "chalk";
-import { flag, oneOf, option, optional } from "cmd-ts";
 import { Console } from "console";
 
 const levels = ["debug", "info", "warn", "error", "none"] as const;
 
-export const logLevelArgs = {
-  logLevel: option({
-    type: optional(oneOf(levels)),
-    description: text`
-      The level of logging to use. If not provided, the default level is "info".
-    `,
-    long: "log-level",
-  }),
-  verbose: flag({
-    long: "verbose",
-    description: text`
-      Enable verbose logging.
-    `,
-  }),
-  quiet: flag({
-    long: "quiet",
-    description: text`
-      Suppress all logging.
-    `,
-  }),
-};
+/**
+ * Adds log level options to a commander.js command
+ */
+export function addLogLevelOptions<
+  Args extends any[],
+  Opts extends OptionValues,
+  GlobalOpts extends OptionValues,
+>(command: Command<Args, Opts, GlobalOpts>) {
+  return command
+    .addOption(new Option("--log-level <level>", "The level of logging to use").choices(levels))
+    .option("--verbose", "Enable verbose logging")
+    .option("--quiet", "Suppress all logging");
+}
 
 export interface LogLevelArgs {
-  logLevel: "debug" | "info" | "warn" | "error" | "none" | undefined;
-  verbose: boolean;
-  quiet: boolean;
+  logLevel?: "debug" | "info" | "warn" | "error" | "none";
+  verbose?: boolean;
+  quiet?: boolean;
 }
 
 export interface LogLevelMap {
@@ -40,7 +32,11 @@ export interface LogLevelMap {
   error: boolean;
 }
 
-export function getLogLevelMap({ logLevel, verbose, quiet }: LogLevelArgs): LogLevelMap {
+export function getLogLevelMap({
+  logLevel,
+  verbose = false,
+  quiet = false,
+}: LogLevelArgs): LogLevelMap {
   let numSpecified = 0;
   if (logLevel !== undefined) {
     numSpecified++;
@@ -89,7 +85,7 @@ export function createLogger({ logLevel, verbose, quiet }: LogLevelArgs): Simple
   return new SimpleLogger("", consoleObj, {
     useLogLevelPrefixes: true,
     infoPrefix:
-      verbose || logLevel === "debug"
+      verbose === true || logLevel === "debug"
         ? undefined // If it is verbose, we use the default I
         : null, // Otherwise, no I
   });

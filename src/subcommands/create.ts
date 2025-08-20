@@ -1,9 +1,9 @@
+import { Command } from "@commander-js/extra-typings";
 import { filteredArray, text, type SimpleLogger } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import boxen from "boxen";
 import chalk from "chalk";
 import { exec, spawn } from "child_process";
-import { command, optional, positional, string } from "cmd-ts";
 import fg from "fast-glob";
 import { existsSync } from "fs";
 import { mkdir, readFile, rename, rm, unlink, writeFile } from "fs/promises";
@@ -15,7 +15,7 @@ import { join } from "path";
 import * as tar from "tar";
 import util from "util";
 import { z } from "zod";
-import { createLogger, logLevelArgs } from "../logLevel.js";
+import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 
 const execAsync = util.promisify(exec);
@@ -65,7 +65,7 @@ const scaffoldBasicsListSchema = z.object({
 });
 type ScaffoldBasicsList = z.infer<typeof scaffoldBasicsListSchema>;
 
-async function getScaffolds(logger: SimpleLogger) {
+async function getScaffolds(_logger: SimpleLogger) {
   const url = "https://scaffolds-manifest.lmstudio.ai";
   const response = await fetch(url);
   const json = await response.json();
@@ -76,78 +76,70 @@ async function getScaffolds(logger: SimpleLogger) {
   return json as Array<unknown>;
 }
 
-export const create = command({
-  name: "create",
-  description: "Create a new project with scaffolding",
-  args: {
-    ...logLevelArgs,
-    scaffold: positional({
-      type: optional(string),
-      displayName: "scaffold",
-    }),
-  },
-  handler: async args => {
-    const logger = createLogger(args);
-    const { scaffold: scaffoldName } = args;
-    let allScaffolds: Array<unknown>;
-    logger.info("Fetching scaffolds list...");
-    try {
-      allScaffolds = await getScaffolds(logger);
-    } catch (error) {
-      logger.error("Failed to fetch scaffolds", error);
-      return;
-    }
-    logger.debug(`Found ${allScaffolds.length} scaffolds`);
-    const scaffoldBasicsList = filteredArray(scaffoldBasicsListSchema).parse(allScaffolds);
-    if (scaffoldBasicsList.length !== allScaffolds.length) {
-      logger.warn(
-        "Cannot parse some of the scaffolds. This is likely due to outdated LM Studio Version.",
-      );
-      logger.warn("Please update LM Studio from https://lmstudio.ai");
-    }
-
-    console.info(
-      boxen(
-        text`
-          ${chalk.greenBright.underline(" Welcome to LM Studio Interactive Project Creator ")}
-
-          ${chalk.white("Select a scaffold to use from the list below.")}
-        `,
-        { padding: 1, margin: 1, borderColor: "greenBright", textAlignment: "center" },
-      ),
+export const create = addLogLevelOptions(
+  new Command()
+    .name("create")
+    .description("Create a new project with scaffolding")
+    .argument("[scaffold]", "The scaffold to use"),
+).action(async (scaffoldName, options) => {
+  const logger = createLogger(options);
+  let allScaffolds: Array<unknown>;
+  logger.info("Fetching scaffolds list...");
+  try {
+    allScaffolds = await getScaffolds(logger);
+  } catch (error) {
+    logger.error("Failed to fetch scaffolds", error);
+    return;
+  }
+  logger.debug(`Found ${allScaffolds.length} scaffolds`);
+  const scaffoldBasicsList = filteredArray(scaffoldBasicsListSchema).parse(allScaffolds);
+  if (scaffoldBasicsList.length !== allScaffolds.length) {
+    logger.warn(
+      "Cannot parse some of the scaffolds. This is likely due to outdated LM Studio Version.",
     );
+    logger.warn("Please update LM Studio from https://lmstudio.ai");
+  }
 
-    // Try exact match first.
-    let selectedIndex = scaffoldBasicsList.findIndex(({ name }) => name === scaffoldName);
+  console.info(
+    boxen(
+      text`
+        ${chalk.greenBright.underline(" Welcome to LM Studio Interactive Project Creator ")}
 
-    const searchKeys = scaffoldBasicsList.map(({ name, displayName }) => {
-      return `${displayName} (${name})`;
-    });
-    if (selectedIndex === -1) {
-      if (scaffoldName === undefined) {
-        selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, "", 7);
-      } else {
-        // const initialFilteredResults = fuzzy.filter(scaffold, searchKeys);
-        selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, scaffoldName, 7);
-      }
+        ${chalk.white("Select a scaffold to use from the list below.")}
+      `,
+      { padding: 1, margin: 1, borderColor: "greenBright", textAlignment: "center" },
+    ),
+  );
+
+  // Try exact match first.
+  let selectedIndex = scaffoldBasicsList.findIndex(({ name }) => name === scaffoldName);
+
+  const searchKeys = scaffoldBasicsList.map(({ name, displayName }) => {
+    return `${displayName} (${name})`;
+  });
+  if (selectedIndex === -1) {
+    if (scaffoldName === undefined) {
+      selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, "", 7);
+    } else {
+      selectedIndex = await selectScaffold(scaffoldBasicsList, searchKeys, scaffoldName, 7);
     }
+  }
 
-    const scaffold = scaffoldSchema.safeParse(
-      (allScaffolds as Array<any>).find(
-        ({ name }) => name === scaffoldBasicsList[selectedIndex].name,
-      ),
+  const scaffold = scaffoldSchema.safeParse(
+    (allScaffolds as Array<any>).find(
+      ({ name }) => name === scaffoldBasicsList[selectedIndex].name,
+    ),
+  );
+  if (!scaffold.success) {
+    logger.error(
+      "Failed to parse scaffold data. This is likely due to outdated LM Studio Version.",
     );
-    if (!scaffold.success) {
-      logger.error(
-        "Failed to parse scaffold data. This is likely due to outdated LM Studio Version.",
-      );
-      logger.error("Please update LM Studio from https://lmstudio.ai");
-      logger.debug(scaffold.error);
-      process.exit(1);
-    }
+    logger.error("Please update LM Studio from https://lmstudio.ai");
+    logger.debug(scaffold.error);
+    process.exit(1);
+  }
 
-    await createWithScaffold(logger, scaffold.data);
-  },
+  await createWithScaffold(logger, scaffold.data);
 });
 
 async function selectScaffold(
@@ -208,7 +200,7 @@ class Replacer {
 async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
   let projectNameIndex = -1;
   for (const [index, arg] of scaffold.args.entries()) {
-    if (arg.isProjectName) {
+    if (arg.isProjectName === true) {
       projectNameIndex = index;
       break;
     }
@@ -231,7 +223,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
       default: defaultValue === "" ? undefined : defaultValue,
     });
 
-    if (arg.isProjectName) {
+    if (arg.isProjectName === true) {
       projectName = value;
     }
 
