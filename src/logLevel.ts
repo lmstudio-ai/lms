@@ -32,15 +32,19 @@ export interface LogLevelMap {
   error: boolean;
 }
 
-export function getLogLevelMap({ logLevel, verbose, quiet }: LogLevelArgs): LogLevelMap {
+export function getLogLevelMap({
+  logLevel,
+  verbose = false,
+  quiet = false,
+}: LogLevelArgs): LogLevelMap {
   let numSpecified = 0;
   if (logLevel !== undefined) {
     numSpecified++;
   }
-  if (verbose === true) {
+  if (verbose) {
     numSpecified++;
   }
-  if (quiet === true) {
+  if (quiet) {
     numSpecified++;
   }
   if (numSpecified > 1) {
@@ -51,10 +55,10 @@ export function getLogLevelMap({ logLevel, verbose, quiet }: LogLevelArgs): LogL
       `),
     );
   }
-  if (quiet === true) {
+  if (quiet) {
     logLevel = "none";
   }
-  if (verbose === true) {
+  if (verbose) {
     logLevel = "debug";
   }
   const level = levels.indexOf(logLevel ?? "info");
