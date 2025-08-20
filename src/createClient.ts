@@ -167,7 +167,7 @@ export async function createClient(
     // Not remote. We need to check if this is a production build.
     if (
       lmsKey.startsWith("<") &&
-      (process.env.LMS_FORCE_PROD === null || process.env.LMS_FORCE_PROD === "")
+      (process.env.LMS_FORCE_PROD === undefined || process.env.LMS_FORCE_PROD === "")
     ) {
       // lmsKey not injected and we did not force prod, this is not a production build.
       logger.warnText`
