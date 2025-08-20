@@ -22,6 +22,7 @@ import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSize
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
+import inquirerPrompt from "inquirer-autocomplete-prompt";
 
 export const get = addLogLevelOptions(
   addCreateClientOptions(
@@ -375,35 +376,60 @@ async function askToChooseModel(
   additionalRowsToReserve = 0,
 ): Promise<ModelSearchResultEntry> {
   const prompt = inquirer.createPromptModule({ output: process.stderr });
-  console.info(chalk.gray("! Use the arrow keys to navigate, and press enter to select."));
+  prompt.registerPrompt("autocomplete", inquirerPrompt);
+  console.info(
+    chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
+  );
   console.info();
   const answers = await prompt([
     {
-      type: "list",
+      type: "autocomplete",
       name: "model",
       message: chalk.greenBright("Select a model to download"),
       loop: false,
       pageSize: terminalSize().rows - 4 - additionalRowsToReserve,
-      choices: models.map(model => {
-        let name: string = "";
-        if (model.isStaffPick()) {
-          name += chalk.cyanBright("[Staff Pick] ");
+      emptyText: "No model matched the filter",
+      source: async (_: any, input: string) => {
+        if (!input) {
+          return models.map(model => {
+            let name: string = "";
+            if (model.isStaffPick()) {
+              name += chalk.cyanBright("[Staff Pick] ");
+            }
+            if (model.isExactMatch()) {
+              name += chalk.yellowBright("[Exact Match] ");
+            }
+            name += model.name;
+            return {
+              name,
+              value: model,
+              short: model.name,
+            };
+          });
         }
-        if (model.isExactMatch()) {
-          name += chalk.yellowBright("[Exact Match] ");
-        }
-        name += model.name;
-        return {
-          name,
-          value: model,
-          short: model.name,
-        };
-      }),
+        const lowerInput = input.toLowerCase();
+        return models
+          .filter(model => model.name.toLowerCase().includes(lowerInput))
+          .map(model => {
+            let name: string = "";
+            if (model.isStaffPick()) {
+              name += chalk.cyanBright("[Staff Pick] ");
+            }
+            if (model.isExactMatch()) {
+              name += chalk.yellowBright("[Exact Match] ");
+            }
+            name += model.name;
+            return {
+              name,
+              value: model,
+              short: model.name,
+            };
+          });
+      },
     },
   ]);
   return answers.model;
 }
-
 async function askToChooseDownloadOption(
   downloadOptions: Array<ModelSearchResultDownloadOption>,
   defaultIndex: number,
