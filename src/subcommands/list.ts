@@ -12,9 +12,9 @@ function loadedCheckBoxed(count: number) {
   if (count === 0) {
     return "";
   } else if (count === 1) {
-    return chalk.bgGreenBright.black(" ✓ LOADED ");
+    return chalk.greenBright(" ✓ LOADED ");
   } else {
-    return chalk.bgGreenBright.black(` ✓ LOADED (${count}) `);
+    return chalk.greenBright(` ✓ LOADED (${count}) `);
   }
 }
 
@@ -146,17 +146,19 @@ function printDownloadedModelsTable(
       }),
     );
   } else {
-    const downloadedModelsAndHeadlines = downloadedModels.map(model => {
-      return {
-        path: chalk.cyanBright(model.modelKey),
-        sizeBytes: chalk.cyanBright(formatSizeBytes1000(model.sizeBytes)),
-        params: chalk.cyanBright(model.paramsString ?? ""),
-        arch: chalk.cyanBright(architecture(model.architecture)),
-        loaded: loadedCheck(
-          loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
-        ),
-      };
-    });
+    const downloadedModelsAndHeadlines = downloadedModels
+      .map(model => {
+        return {
+          path: model.modelKey,
+          sizeBytes: formatSizeBytes1000(model.sizeBytes),
+          params: model.paramsString,
+          arch: architecture(model.architecture),
+          loaded: loadedCheck(
+            loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
+          ),
+        };
+      })
+      .sort((a, b) => a.path.localeCompare(b.path) && a.arch.localeCompare(b.arch));
 
     console.info(
       columnify(downloadedModelsAndHeadlines, {
@@ -167,19 +169,19 @@ function printDownloadedModelsTable(
             align: "left",
           },
           path: {
-            headingTransform: () => chalk(title),
+            headingTransform: () => chalk.grey(title),
           },
           params: {
-            headingTransform: () => chalk("PARAMS"),
-            align: "right",
+            headingTransform: () => chalk.grey("PARAMS"),
+            align: "left",
           },
           arch: {
-            headingTransform: () => chalk("ARCHITECTURE"),
-            align: "center",
+            headingTransform: () => chalk.grey("ARCHITECTURE"),
+            align: "left",
           },
           sizeBytes: {
-            headingTransform: () => chalk("SIZE"),
-            align: "right",
+            headingTransform: () => chalk.grey("SIZE"),
+            align: "left",
           },
         },
         preserveNewLines: true,
@@ -264,9 +266,7 @@ export const ls = addCreateClientOptions(
   const llms = downloadedModels.filter(model => model.type === "llm");
   if (llms.length > 0) {
     printDownloadedModelsTable(
-      detailed
-        ? chalk.bgGreenBright.black("   LLMs   ") + " " + chalk.green("(Large Language Models)")
-        : "LLMs (Large Language Models)",
+      detailed ? chalk.greenBright("   LLMs   ") : "LLMs",
       llms,
       loadedModels,
       detailed,
@@ -277,7 +277,7 @@ export const ls = addCreateClientOptions(
   const embeddings = downloadedModels.filter(model => model.type === "embedding");
   if (embeddings.length > 0) {
     printDownloadedModelsTable(
-      detailed ? chalk.bgGreenBright.black("   Embedding Models   ") : "Embedding Models",
+      detailed ? chalk.greenBright("   Embedding Models   ") : "Embedding Models",
       embeddings,
       loadedModels,
       detailed,
@@ -326,7 +326,7 @@ export const ps = addCreateClientOptions(
   }
 
   console.info();
-  console.info(chalk.bgCyanBright.black("   LOADED MODELS   "));
+  console.info(chalk.cyanBright("   LOADED MODELS   "));
   console.info();
 
   const dot = chalk.blackBright("  • ");
@@ -340,7 +340,7 @@ export const ps = addCreateClientOptions(
       console.info(
         dot +
           chalk.whiteBright(
-            `Type: ${chalk.bgGreenBright.black(model.type === "llm" ? " LLM " : " Embedding ")}`,
+            `Type: ${chalk.greenBright(model.type === "llm" ? " LLM " : " Embedding ")}`,
           ),
       );
       console.info(dot + chalk.whiteBright(`Path: ${chalk.white(path)}`));

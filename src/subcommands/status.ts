@@ -2,7 +2,7 @@ import { Command } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import chalk from "chalk";
 import { addCreateClientOptions, checkHttpServer, createClient } from "../createClient.js";
-import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { getServerConfig } from "./server.js";
 
@@ -32,7 +32,7 @@ export const status = addLogLevelOptions(
   let content = "";
   if (running) {
     content += text`
-      Server: ${chalk.bgGreenBright.black(" ON ")} (Port: ${chalk.yellowBright(port)})
+      Server: ${chalk.greenBright("ON")} (Port: ${port})
     `;
     content += "\n\n";
 
@@ -41,7 +41,7 @@ export const status = addLogLevelOptions(
       await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
     ).flat();
     const downloadedModels = await client.system.listDownloadedModels();
-    content += chalk.cyanBright("Loaded Models");
+    content += "Loaded Models";
     if (loadedModels.length === 0) {
       content += "\n" + chalk.gray("  · No Models Loaded");
     } else {
@@ -49,14 +49,14 @@ export const status = addLogLevelOptions(
         const sizeBytes = downloadedModels.find(m => m.path === model.path)?.sizeBytes;
         let sizeText = "";
         if (sizeBytes !== undefined) {
-          sizeText = `${chalk.gray(" - ")}${formatSizeBytesWithColor1000(sizeBytes)}`;
+          sizeText = `${chalk.gray(" - ")}${chalk.gray(formatSizeBytes1000(sizeBytes))}`;
         }
-        content += "\n" + chalk.greenBright(`  · ${model.identifier}${sizeText}`);
+        content += `\n  · ${model.identifier}${sizeText}`;
       }
     }
   } else {
     content += text`
-      Server: ${chalk.bgRedBright.black(" OFF ")}
+      Server: ${chalk.redBright(" OFF ")}
 
       ${chalk.gray("\n(i) To start the server, run the following command:")}
 

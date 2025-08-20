@@ -442,7 +442,7 @@ async function askToChooseDownloadOption(
             break;
         }
         if (option.isRecommended()) {
-          name += " " + chalk.bgGreenBright.white(" Recommended ");
+          name += " " + chalk.greenBright(" Recommended ");
         }
         return {
           name,

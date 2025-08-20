@@ -358,7 +358,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
       .replaceAll("</hl>", "\x1b[39m");
     switch (type) {
       case "title":
-        motdLines.push(chalk.bgGreenBright.black(`  ${message}  `));
+        motdLines.push(chalk.greenBright(`  ${message}  `));
         break;
       case "regular":
         motdLines.push(message);
