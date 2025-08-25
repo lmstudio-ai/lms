@@ -41,10 +41,10 @@ export function getLogLevelMap({
   if (logLevel !== undefined) {
     numSpecified++;
   }
-  if (verbose === true) {
+  if (verbose) {
     numSpecified++;
   }
-  if (quiet === true) {
+  if (quiet) {
     numSpecified++;
   }
   if (numSpecified > 1) {
@@ -55,10 +55,10 @@ export function getLogLevelMap({
       `),
     );
   }
-  if (quiet === true) {
+  if (quiet) {
     logLevel = "none";
   }
-  if (verbose === true) {
+  if (verbose) {
     logLevel = "debug";
   }
   const level = levels.indexOf(logLevel ?? "info");
