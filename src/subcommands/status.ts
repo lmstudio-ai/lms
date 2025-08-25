@@ -1,9 +1,8 @@
 import { Command } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
-import boxen from "boxen";
 import chalk from "chalk";
 import { addCreateClientOptions, checkHttpServer, createClient } from "../createClient.js";
-import { formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { getServerConfig } from "./server.js";
 
@@ -33,7 +32,7 @@ export const status = addLogLevelOptions(
   let content = "";
   if (running) {
     content += text`
-      Server: ${chalk.bgGreenBright.black(" ON ")} (Port: ${chalk.yellowBright(port)})
+      Server: ${chalk.greenBright("ON")} (port: ${port})
     `;
     content += "\n\n";
 
@@ -42,34 +41,27 @@ export const status = addLogLevelOptions(
       await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
     ).flat();
     const downloadedModels = await client.system.listDownloadedModels();
-    content += chalk.cyanBright("Loaded Models");
     if (loadedModels.length === 0) {
-      content += "\n" + chalk.gray("  · No Models Loaded");
+      content += "No Models Loaded";
     } else {
+      content += "Loaded Models";
       for (const model of loadedModels) {
         const sizeBytes = downloadedModels.find(m => m.path === model.path)?.sizeBytes;
         let sizeText = "";
         if (sizeBytes !== undefined) {
-          sizeText = `${chalk.gray(" - ")}${formatSizeBytesWithColor1000(sizeBytes)}`;
+          sizeText = `${chalk.gray(" - ")}${chalk.gray(formatSizeBytes1000(sizeBytes))}`;
         }
-        content += "\n" + chalk.greenBright(`  · ${model.identifier}${sizeText}`);
+        content += `\n  · ${model.identifier}${sizeText}`;
       }
     }
   } else {
     content += text`
-      Server: ${chalk.bgRedBright.black(" OFF ")}
+      Server: ${chalk.redBright(" OFF ")}
 
-      ${chalk.gray("\n(i) To start the server, run the following command:")}
+      ${chalk.gray("(i) To start the server, run the following command:")}
 
-          ${chalk.yellow("lms server start ")}
+          lms server start
     `;
   }
-  console.info(
-    boxen(content, {
-      margin: 1,
-      padding: 1,
-      borderColor: "greenBright",
-      title: "Status",
-    }),
-  );
+  console.info(content);
 });

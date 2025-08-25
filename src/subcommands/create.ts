@@ -1,7 +1,6 @@
 import { Command } from "@commander-js/extra-typings";
 import { filteredArray, text, type SimpleLogger } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
-import boxen from "boxen";
 import chalk from "chalk";
 import { exec, spawn } from "child_process";
 import fg from "fast-glob";
@@ -101,14 +100,11 @@ export const create = addLogLevelOptions(
   }
 
   console.info(
-    boxen(
-      text`
+    text`
         ${chalk.greenBright.underline(" Welcome to LM Studio Interactive Project Creator ")}
 
         ${chalk.white("Select a scaffold to use from the list below.")}
       `,
-      { padding: 1, margin: 1, borderColor: "greenBright", textAlignment: "center" },
-    ),
   );
 
   // Try exact match first.
@@ -362,7 +358,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
       .replaceAll("</hl>", "\x1b[39m");
     switch (type) {
       case "title":
-        motdLines.push(chalk.bgGreenBright.black(`  ${message}  `));
+        motdLines.push(chalk.greenBright(`  ${message}  `));
         break;
       case "regular":
         motdLines.push(message);
@@ -382,11 +378,5 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     }
   }
 
-  logger.infoWithoutPrefix(
-    boxen(motdLines.join("\n\n"), {
-      padding: 1,
-      margin: 1,
-      borderColor: "greenBright",
-    }),
-  );
+  logger.infoWithoutPrefix(motdLines);
 }
