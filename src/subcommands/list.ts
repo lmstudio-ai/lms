@@ -5,7 +5,7 @@ import chalk from "chalk";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
 import { addCreateClientOptions, createClient } from "../createClient.js";
-import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 
 function loadedCheckBoxed(count: number) {
@@ -47,148 +47,49 @@ function printDownloadedModelsTable(
   title: string,
   downloadedModels: Array<ModelInfo>,
   loadedModels: Array<{ path: string; identifier: string }>,
-  detailed: boolean,
 ) {
-  if (detailed) {
-    interface DownloadedModelWithExtraInfo {
-      model: ModelInfo;
-      loadedIdentifiers: Array<string>;
-      group: string;
-      remaining: string;
-    }
-    const downloadedModelsGroups = downloadedModels
-      // Attach 1) all the loadedIdentifiers 2) group name (user/repo) to each model
-      .map(model => {
-        const segments = model.path.split("/");
-        return {
-          model,
-          loadedIdentifiers: loadedModels
-            .filter(loadedModel => loadedModel.path === model.path)
-            .map(loadedModel => loadedModel.identifier),
-          group: segments.slice(0, 2).join("/"),
-          remaining: segments.slice(2).join("/"),
-        };
-      })
-      // Group by group name into a map
-      .reduce((acc, model) => {
-        let group = acc.get(model.group);
-        if (!group) {
-          group = [];
-          acc.set(model.group, group);
-        }
-        group.push(model);
-        return acc;
-      }, new Map<string, Array<DownloadedModelWithExtraInfo>>());
+  const downloadedModelsAndHeadlines = downloadedModels
+    .map(model => {
+      return {
+        path: model.modelKey,
+        sizeBytes: formatSizeBytes1000(model.sizeBytes),
+        params: model.paramsString,
+        arch: architecture(model.architecture),
+        loaded: loadedCheck(
+          loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
+        ),
+      };
+    })
+    .sort((a, b) => a.path.localeCompare(b.path));
 
-    console.info(title);
-    console.info();
-
-    const downloadedModelsAndHeadlines = [...downloadedModelsGroups.entries()].flatMap(
-      ([group, models]) => {
-        if (models.length === 1 && models[0].remaining === "") {
-          // Group is a model itself
-          const model = models[0];
-          return {
-            path: chalk.grey(" ") + chalk.cyanBright(group),
-            sizeBytes: formatSizeBytesWithColor1000(model.model.sizeBytes),
-            arch: architectureColored(model.model.architecture),
-            loaded: loadedCheckBoxed(model.loadedIdentifiers.length),
-          };
-        }
-        return [
-          // Empty line between groups
-          {},
-          // Group title
-          { path: chalk.grey(" ") + chalk.cyanBright(group) },
-          // Models within the group
-          ...models.map(model => ({
-            path: chalk.grey("   ") + chalk.white("/" + model.remaining),
-            key: model.model.modelKey,
-            sizeBytes: formatSizeBytesWithColor1000(model.model.sizeBytes),
-            params: model.model.paramsString ?? "",
-            arch: architectureColored(model.model.architecture),
-            loaded: loadedCheckBoxed(model.loadedIdentifiers.length),
-          })),
-        ];
+  console.info(
+    columnify(downloadedModelsAndHeadlines, {
+      columns: ["path", "params", "arch", "sizeBytes", "loaded"],
+      config: {
+        loaded: {
+          headingTransform: () => "",
+          align: "left",
+        },
+        path: {
+          headingTransform: () => chalk.grey(title),
+        },
+        params: {
+          headingTransform: () => chalk.grey("PARAMS"),
+          align: "left",
+        },
+        arch: {
+          headingTransform: () => chalk.grey("ARCH"),
+          align: "left",
+        },
+        sizeBytes: {
+          headingTransform: () => chalk.grey("SIZE"),
+          align: "left",
+        },
       },
-    );
-
-    console.info(
-      columnify(downloadedModelsAndHeadlines, {
-        columns: ["path", "key", "params", "arch", "sizeBytes", "loaded"],
-        config: {
-          path: {
-            headingTransform: () => chalk.gray(" ") + chalk.greenBright("PATH"),
-          },
-          key: {
-            headingTransform: () => chalk.greenBright("KEY"),
-            align: "left",
-          },
-          params: {
-            headingTransform: () => chalk.greenBright("PARAMS"),
-            align: "right",
-          },
-          arch: {
-            headingTransform: () => chalk.greenBright("ARCHITECTURE"),
-            align: "center",
-          },
-          sizeBytes: {
-            headingTransform: () => chalk.greenBright("SIZE"),
-            align: "right",
-          },
-          loaded: {
-            headingTransform: () => chalk.greenBright("LOADED"),
-            align: "left",
-          },
-        },
-        preserveNewLines: true,
-        columnSplitter: "  ",
-      }),
-    );
-  } else {
-    const downloadedModelsAndHeadlines = downloadedModels
-      .map(model => {
-        return {
-          path: model.modelKey,
-          sizeBytes: formatSizeBytes1000(model.sizeBytes),
-          params: model.paramsString,
-          arch: architecture(model.architecture),
-          loaded: loadedCheck(
-            loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
-          ),
-        };
-      })
-      .sort((a, b) => a.path.localeCompare(b.path) && a.arch.localeCompare(b.arch));
-
-    console.info(
-      columnify(downloadedModelsAndHeadlines, {
-        columns: ["path", "params", "arch", "sizeBytes", "loaded"],
-        config: {
-          loaded: {
-            headingTransform: () => "",
-            align: "left",
-          },
-          path: {
-            headingTransform: () => chalk.grey(title),
-          },
-          params: {
-            headingTransform: () => chalk.grey("PARAMS"),
-            align: "left",
-          },
-          arch: {
-            headingTransform: () => chalk.grey("ARCHITECTURE"),
-            align: "left",
-          },
-          sizeBytes: {
-            headingTransform: () => chalk.grey("SIZE"),
-            align: "left",
-          },
-        },
-        preserveNewLines: true,
-        columnSplitter: "      ",
-      }),
-    );
-  }
+      preserveNewLines: true,
+      columnSplitter: "      ",
+    }),
+  );
 }
 
 export const ls = addCreateClientOptions(
@@ -198,14 +99,13 @@ export const ls = addCreateClientOptions(
       .description("List all downloaded models")
       .option("--llm", "Show only LLM models")
       .option("--embedding", "Show only embedding models")
-      .option("--json", "Outputs in JSON format to stdout")
-      .option("--detailed", "Show detailed information"),
+      .option("--json", "Outputs in JSON format to stdout"),
   ),
 ).action(async options => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
 
-  const { llm = false, embedding = false, json = false, detailed = false } = options;
+  const { llm = false, embedding = false, json = false } = options;
 
   let downloadedModels = await client.system.listDownloadedModels();
   const loadedModels = await client.llm.listLoaded();
@@ -249,39 +149,21 @@ export const ls = addCreateClientOptions(
   }
 
   console.info();
-  if (detailed) {
-    console.info();
-    console.info(text`
-      You have ${chalk.greenBright(downloadedModels.length)} models,
-      taking up ${chalk.greenBright(formatSizeBytes1000(totalSizeBytes))} of disk space.
-    `);
-  } else {
-    console.info(text`
-      You have ${downloadedModels.length} models,
-      taking up ${formatSizeBytes1000(totalSizeBytes)} of disk space.
-    `);
-  }
+  console.info(text`
+    You have ${downloadedModels.length} models,
+    taking up ${formatSizeBytes1000(totalSizeBytes)} of disk space.
+  `);
   console.info();
 
   const llms = downloadedModels.filter(model => model.type === "llm");
   if (llms.length > 0) {
-    printDownloadedModelsTable(
-      detailed ? chalk.greenBright("   LLMs   ") : "LLMs",
-      llms,
-      loadedModels,
-      detailed,
-    );
+    printDownloadedModelsTable("LLM", llms, loadedModels);
     console.info();
   }
 
   const embeddings = downloadedModels.filter(model => model.type === "embedding");
   if (embeddings.length > 0) {
-    printDownloadedModelsTable(
-      detailed ? chalk.greenBright("   Embedding Models   ") : "Embedding Models",
-      embeddings,
-      loadedModels,
-      detailed,
-    );
+    printDownloadedModelsTable("EMBEDDING", embeddings, loadedModels);
     console.info();
   }
 });
@@ -325,32 +207,43 @@ export const ps = addCreateClientOptions(
     return;
   }
 
-  console.info();
-  console.info(chalk.cyanBright("   LOADED MODELS   "));
-  console.info();
+  const loadedModelsWithInfo = loadedModels
+    .map(({ identifier, path }) => {
+      const model = downloadedModels.find(model => model.path === path);
+      return {
+        identifier,
+        path: model?.modelKey ?? path,
+        sizeBytes: model ? formatSizeBytes1000(model.sizeBytes) : "",
+        format: model?.format === "safetensors" ? "MLX" : model?.format.toUpperCase() ?? "",
+      };
+    })
+    .sort((a, b) => a.identifier.localeCompare(b.identifier));
 
-  const dot = chalk.blackBright("  • ");
-
-  for (const { identifier, path } of loadedModels) {
-    const model = downloadedModels.find(model => model.path === path);
-    console.info(chalk.greenBright(`Identifier: ${chalk.green(identifier)}`));
-    if (model === undefined) {
-      console.info(chalk.gray("  Cannot find more information"));
-    } else {
-      console.info(
-        dot +
-          chalk.whiteBright(
-            `Type: ${chalk.greenBright(model.type === "llm" ? " LLM " : " Embedding ")}`,
-          ),
-      );
-      console.info(dot + chalk.whiteBright(`Path: ${chalk.white(path)}`));
-      console.info(
-        dot + chalk.whiteBright(`Size: ${formatSizeBytesWithColor1000(model.sizeBytes)}`),
-      );
-      console.info(
-        dot + chalk.whiteBright(`Architecture: ${architectureColored(model.architecture)}`),
-      );
-      console.info();
-    }
-  }
+  console.info();
+  console.info(
+    columnify(loadedModelsWithInfo, {
+      columns: ["identifier", "path", "sizeBytes", "format"],
+      config: {
+        identifier: {
+          headingTransform: () => chalk.grey("IDENTIFIER"),
+          align: "left",
+        },
+        path: {
+          headingTransform: () => chalk.grey("MODEL"),
+          align: "left",
+        },
+        format: {
+          headingTransform: () => chalk.grey("FORMAT"),
+          align: "left",
+        },
+        sizeBytes: {
+          headingTransform: () => chalk.grey("SIZE"),
+          align: "left",
+        },
+      },
+      preserveNewLines: true,
+      columnSplitter: "      ",
+    }),
+  );
+  console.info();
 });

@@ -60,9 +60,12 @@ export const clone = addLogLevelOptions(
     logger.debug(`Using provided path: ${resolvedPath}`);
   }
   if (await exists(resolvedPath)) {
-    logger.error(`Path already exists: ${resolvedPath}`);
     if (autoNamed) {
-      logger.error("You can provide a different path by providing it as a second argument.");
+      logger.error(
+        `Path already exists: ${resolvedPath}\n       You can provide a different path by providing it as a second argument.`,
+      );
+    } else {
+      logger.error(`Path already exists: ${resolvedPath}`);
     }
     process.exit(1);
   }

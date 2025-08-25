@@ -71,16 +71,14 @@ export const chat = addLogLevelOptions(
     try {
       llmModel = await client.llm.model(model);
     } catch (e) {
-      logger.error(`Model "${model}" not found, check available models with:`);
-      logger.error("  lms ls");
+      logger.error(`Model "${model}" not found, check available models with:\n       lms ls`);
       process.exit(1);
     }
   } else {
     try {
       llmModel = await client.llm.model();
     } catch (e) {
-      logger.error("No loaded default model found, load one first:");
-      logger.error("  lms load");
+      logger.error("No loaded model found, load with:\n       lms load");
       process.exit(1);
     }
   }

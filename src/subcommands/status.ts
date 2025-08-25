@@ -32,7 +32,7 @@ export const status = addLogLevelOptions(
   let content = "";
   if (running) {
     content += text`
-      Server: ${chalk.greenBright("ON")} (Port: ${port})
+      Server: ${chalk.greenBright("ON")} (port: ${port})
     `;
     content += "\n\n";
 
@@ -41,10 +41,10 @@ export const status = addLogLevelOptions(
       await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
     ).flat();
     const downloadedModels = await client.system.listDownloadedModels();
-    content += "Loaded Models";
     if (loadedModels.length === 0) {
-      content += "\n" + chalk.gray("  · No Models Loaded");
+      content += "No Models Loaded";
     } else {
+      content += "Loaded Models";
       for (const model of loadedModels) {
         const sizeBytes = downloadedModels.find(m => m.path === model.path)?.sizeBytes;
         let sizeText = "";
@@ -58,9 +58,9 @@ export const status = addLogLevelOptions(
     content += text`
       Server: ${chalk.redBright(" OFF ")}
 
-      ${chalk.gray("\n(i) To start the server, run the following command:")}
+      ${chalk.gray("(i) To start the server, run the following command:")}
 
-          ${chalk.yellow("lms server start ")}
+          lms server start
     `;
   }
   console.info(content);

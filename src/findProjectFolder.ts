@@ -42,12 +42,9 @@ export async function recursiveFindAncestorFolderWithFile(
 export async function findProjectFolderOrExit(logger: SimpleLogger, cwd: string) {
   const projectFolder = await recursiveFindAncestorFolderWithFile(logger, "manifest.json", cwd);
   if (projectFolder === null) {
-    logger.errorText`
-      Could not find the project folder. Please invoke this command in a folder with a
+    logger.errorText`Could not find the project folder. Please invoke this command in a folder with a
       manifest.json file.
-    `;
-    logger.errorText`
-      To create an empty plugin, use the \`lms create\` command, or create a new plugin in
+      \n       To create an empty plugin, use the \`lms create\` command, or create a new plugin in
       LM Studio.
     `;
     process.exit(1);

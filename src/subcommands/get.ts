@@ -23,6 +23,7 @@ import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
+import fuzzy from "fuzzy";
 
 export const get = addLogLevelOptions(
   addCreateClientOptions(
@@ -381,50 +382,36 @@ async function askToChooseModel(
     chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
   );
   console.info();
+  const modelNames = models.map(model => model.name);
   const answers = await prompt([
     {
       type: "autocomplete",
       name: "model",
-      message: chalk.greenBright("Select a model to download"),
+      message: "Select a model to download",
       loop: false,
       pageSize: terminalSize().rows - 4 - additionalRowsToReserve,
       emptyText: "No model matched the filter",
       source: async (_: any, input: string) => {
-        if (!input) {
-          return models.map(model => {
-            let name: string = "";
-            if (model.isStaffPick()) {
-              name += chalk.cyanBright("[Staff Pick] ");
-            }
-            if (model.isExactMatch()) {
-              name += chalk.yellowBright("[Exact Match] ");
-            }
-            name += model.name;
-            return {
-              name,
-              value: model,
-              short: model.name,
-            };
-          });
-        }
-        const lowerInput = input.toLowerCase();
-        return models
-          .filter(model => model.name.toLowerCase().includes(lowerInput))
-          .map(model => {
-            let name: string = "";
-            if (model.isStaffPick()) {
-              name += chalk.cyanBright("[Staff Pick] ");
-            }
-            if (model.isExactMatch()) {
-              name += chalk.yellowBright("[Exact Match] ");
-            }
-            name += model.name;
-            return {
-              name,
-              value: model,
-              short: model.name,
-            };
-          });
+        const options = fuzzy.filter(input ?? "", modelNames, {
+          pre: "\x1b[91m",
+          post: "\x1b[39m",
+        });
+        return options.map(option => {
+          const model = models[option.index];
+          let name: string = "";
+          if (model.isStaffPick()) {
+            name += "[Staff Pick] ";
+          }
+          if (model.isExactMatch()) {
+            name += chalk.yellowBright("[Exact Match] ");
+          }
+          name += option.string;
+          return {
+            name,
+            value: model,
+            short: option.original,
+          };
+        });
       },
     },
   ]);
@@ -654,9 +641,7 @@ async function downloadArtifact(
     lines.push("");
 
     if (isFinished) {
-      if (downloadPlan.downloadSizeBytes === 0) {
-        lines.push(chalk.greenBright("✓ You already have everything. Nothing to download."));
-      } else {
+      if (downloadPlan.downloadSizeBytes !== 0) {
         if (yes) {
           lines.push(
             chalk.yellowBright(
