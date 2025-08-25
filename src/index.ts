@@ -25,21 +25,28 @@ if (process.argv.length === 2) {
 
 program.name("lms").description("LM Studio CLI");
 
-program.addCommand(chat);
-program.addCommand(status);
-program.addCommand(server);
-program.addCommand(ls);
-program.addCommand(ps);
+program.commandsGroup("Manage Models:");
 program.addCommand(get);
+program.addCommand(importCmd);
+program.addCommand(ls);
+
+program.commandsGroup("Use Models:");
+program.addCommand(chat);
+program.addCommand(server);
 program.addCommand(load);
 program.addCommand(unload);
+program.addCommand(ps);
+
+program.commandsGroup("Develop & Publish Artifacts:");
 program.addCommand(create);
-program.addCommand(log);
 program.addCommand(dev);
-program.addCommand(push);
-program.addCommand(clone);
 program.addCommand(login);
-program.addCommand(importCmd);
+program.addCommand(clone);
+program.addCommand(push);
+
+program.commandsGroup("System Management:");
+program.addCommand(status);
+program.addCommand(log);
 program.addCommand(flags);
 program.addCommand(bootstrap);
 program.addCommand(version);
