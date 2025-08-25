@@ -8,16 +8,6 @@ import { addCreateClientOptions, createClient } from "../createClient.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 
-function loadedCheckBoxed(count: number) {
-  if (count === 0) {
-    return "";
-  } else if (count === 1) {
-    return chalk.greenBright(" ✓ LOADED ");
-  } else {
-    return chalk.greenBright(` ✓ LOADED (${count}) `);
-  }
-}
-
 function loadedCheck(count: number) {
   if (count === 0) {
     return "";
@@ -26,14 +16,6 @@ function loadedCheck(count: number) {
   } else {
     return chalk.greenBright(`✓ LOADED (${count})`);
   }
-}
-
-function architectureColored(architecture?: string) {
-  if (architecture === undefined) {
-    return "";
-  }
-  const architectureInfo = architectureInfoLookup.find(architecture);
-  return architectureInfo.colorer(architectureInfo.name);
 }
 
 function architecture(architecture?: string) {
@@ -189,7 +171,15 @@ export const ps = addCreateClientOptions(
 
   if (json) {
     console.info(
-      JSON.stringify(await Promise.all(loadedModels.map(model => model.getModelInfo()))),
+      JSON.stringify(
+        await Promise.all(
+          loadedModels.map(async model => {
+            const info = await model.getModelInfo();
+            const { instanceReference: _, ...filteredInfo } = info;
+            return filteredInfo;
+          }),
+        ),
+      ),
     );
     return;
   }
@@ -207,22 +197,39 @@ export const ps = addCreateClientOptions(
     return;
   }
 
-  const loadedModelsWithInfo = loadedModels
-    .map(({ identifier, path }) => {
+  const loadedModelsWithInfo = await Promise.all(
+    loadedModels.map(async loadedModel => {
+      const { identifier, path } = loadedModel;
       const model = downloadedModels.find(model => model.path === path);
+      const contextLength = await loadedModel.getContextLength();
+      const modelInfo = await loadedModel.getModelInfo();
+      const timeLeft =
+        modelInfo?.lastUsedTime !== undefined && modelInfo?.ttlMs !== undefined
+          ? modelInfo.lastUsedTime === null
+            ? modelInfo.ttlMs
+            : modelInfo.ttlMs - (Date.now() - modelInfo.lastUsedTime)
+          : undefined;
+
+      const processingState = await loadedModel.getInstanceProcessingState();
       return {
         identifier,
         path: model?.modelKey ?? path,
         sizeBytes: model ? formatSizeBytes1000(model.sizeBytes) : "",
         format: model?.format === "safetensors" ? "MLX" : model?.format.toUpperCase() ?? "",
+        contextLength: contextLength,
+        ttlMs:
+          timeLeft !== undefined && modelInfo?.ttlMs !== undefined
+            ? `${Math.round(timeLeft / 60000)} ${chalk.gray(`/ ${Math.round(modelInfo.ttlMs / 60000)}`)}`
+            : "",
+        status: processingState.status.toUpperCase(),
       };
-    })
-    .sort((a, b) => a.identifier.localeCompare(b.identifier));
+    }),
+  ).then(results => results.sort((a, b) => a.identifier.localeCompare(b.identifier)));
 
   console.info();
   console.info(
     columnify(loadedModelsWithInfo, {
-      columns: ["identifier", "path", "sizeBytes", "format"],
+      columns: ["identifier", "path", "status", "sizeBytes", "format", "contextLength", "ttlMs"],
       config: {
         identifier: {
           headingTransform: () => chalk.grey("IDENTIFIER"),
@@ -232,12 +239,24 @@ export const ps = addCreateClientOptions(
           headingTransform: () => chalk.grey("MODEL"),
           align: "left",
         },
+        status: {
+          headingTransform: () => chalk.grey("STATUS"),
+          align: "left",
+        },
         format: {
           headingTransform: () => chalk.grey("FORMAT"),
           align: "left",
         },
         sizeBytes: {
           headingTransform: () => chalk.grey("SIZE"),
+          align: "left",
+        },
+        contextLength: {
+          headingTransform: () => chalk.grey("CONTEXT"),
+          align: "left",
+        },
+        ttlMs: {
+          headingTransform: () => chalk.grey("TTL (min)"),
           align: "left",
         },
       },
