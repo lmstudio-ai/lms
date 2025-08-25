@@ -158,7 +158,7 @@ export const load = addLogLevelOptions(
 
             Note, you need to provide the full model path. For example:
 
-                ${chalk.yellowBright(`lms load --exact "${chalk.yellow(shortestName)}"`)}
+               lms load --exact ${shortestName}
           `,
         ).message,
       );
@@ -188,7 +188,7 @@ export const load = addLogLevelOptions(
 
             To select a model interactively, remove the ${chalk.yellowBright("--yes")} flag:
 
-                ${chalk.yellowBright("lms load")}
+                lms load
           `,
         ).message,
       );
