@@ -7,6 +7,7 @@ import { architectureInfoLookup } from "../architectureStylizations.js";
 import { addCreateClientOptions, createClient } from "../createClient.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { formatElapsedTime, formatTimeLean } from "../formatElapsedTime.js";
 
 function loadedCheck(count: number) {
   if (count === 0) {
@@ -219,7 +220,7 @@ export const ps = addCreateClientOptions(
         contextLength: contextLength,
         ttlMs:
           timeLeft !== undefined && modelInfo?.ttlMs !== undefined
-            ? `${Math.round(timeLeft / 60000)} ${chalk.gray(`/ ${Math.round(modelInfo.ttlMs / 60000)}`)}`
+            ? `${formatTimeLean(timeLeft)} ${chalk.gray(`/ ${formatTimeLean(modelInfo.ttlMs)}`)}`
             : "",
         status: processingState.status.toUpperCase(),
       };
@@ -256,7 +257,7 @@ export const ps = addCreateClientOptions(
           align: "left",
         },
         ttlMs: {
-          headingTransform: () => chalk.grey("TTL (min)"),
+          headingTransform: () => chalk.grey("TTL"),
           align: "left",
         },
       },
