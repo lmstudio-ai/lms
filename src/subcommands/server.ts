@@ -57,9 +57,9 @@ const start = addLogLevelOptions(
     `,
     ),
 ).action(async options => {
-  const { port, cors = false } = options;
-  const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  const { port, cors = false, ...logArgs } = options;
+  const logger = createLogger(logArgs);
+  const client = await createClient(logger, logArgs);
   if (cors) {
     logger.warnText`
       CORS is enabled. This means any website you visit can use the LM Studio server.
