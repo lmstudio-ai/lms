@@ -16,8 +16,9 @@ export const unload = addLogLevelOptions(
       .argument(
         "[identifier]",
         text`
-          The identifier of the model to unload. If not provided, you will be prompted to select a
-          model from a list interactively.
+          The identifier of the model to unload. If not provided and exactly one model is loaded, it
+          will be unloaded automatically. Otherwise, you will be prompted to select a model
+          interactively from a list.
         `,
       )
       .option("-a, --all", "Unload all models"),
@@ -92,6 +93,14 @@ export const unload = addLogLevelOptions(
     if (models.length === 0) {
       logger.error(`You don't have any models loaded. Use "lms load" to load a model.`);
       process.exit(1);
+    }
+    // If there is exactly one model loaded, unload it automatically without prompting.
+    if (models.length === 1) {
+      const model = models[0];
+      logger.debug(`Unloading "${model.identifier}"...`);
+      await client.llm.unload(model.identifier);
+      logger.info(`Model "${model.identifier}" unloaded.`);
+      return;
     }
     console.info();
     console.info(
