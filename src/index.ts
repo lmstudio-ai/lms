@@ -32,23 +32,23 @@ program.addCommand(ls);
 
 program.commandsGroup("Use Models:");
 program.addCommand(chat);
-program.addCommand(server);
 program.addCommand(load);
-program.addCommand(unload);
 program.addCommand(ps);
+program.addCommand(server);
+program.addCommand(unload);
 
 program.commandsGroup("Develop & Publish Artifacts:");
+program.addCommand(clone);
 program.addCommand(create);
 program.addCommand(dev);
 program.addCommand(login);
-program.addCommand(clone);
 program.addCommand(push);
 
 program.commandsGroup("System Management:");
-program.addCommand(status);
-program.addCommand(log);
-program.addCommand(flags);
 program.addCommand(bootstrap);
+program.addCommand(flags);
+program.addCommand(log);
+program.addCommand(status);
 program.addCommand(version);
 
 program.parseAsync(process.argv).catch((error: any) => {
