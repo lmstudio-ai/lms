@@ -7,7 +7,7 @@ import { architectureInfoLookup } from "../architectureStylizations.js";
 import { addCreateClientOptions, createClient } from "../createClient.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
-import { formatElapsedTime, formatTimeLean } from "../formatElapsedTime.js";
+import { formatTimeLean } from "../formatElapsedTime.js";
 
 function loadedCheck(count: number) {
   if (count === 0) {
@@ -70,7 +70,7 @@ function printDownloadedModelsTable(
         },
       },
       preserveNewLines: true,
-      columnSplitter: "      ",
+      columnSplitter: "    ",
     }),
   );
 }
@@ -216,7 +216,6 @@ export const ps = addCreateClientOptions(
         identifier,
         path: model?.modelKey ?? path,
         sizeBytes: model ? formatSizeBytes1000(model.sizeBytes) : "",
-        format: model?.format === "safetensors" ? "MLX" : model?.format.toUpperCase() ?? "",
         contextLength: contextLength,
         ttlMs:
           timeLeft !== undefined && modelInfo?.ttlMs !== null
@@ -230,7 +229,7 @@ export const ps = addCreateClientOptions(
   console.info();
   console.info(
     columnify(loadedModelsWithInfo, {
-      columns: ["identifier", "path", "status", "sizeBytes", "format", "contextLength", "ttlMs"],
+      columns: ["identifier", "path", "status", "sizeBytes", "contextLength", "ttlMs"],
       config: {
         identifier: {
           headingTransform: () => chalk.grey("IDENTIFIER"),
@@ -242,10 +241,6 @@ export const ps = addCreateClientOptions(
         },
         status: {
           headingTransform: () => chalk.grey("STATUS"),
-          align: "left",
-        },
-        format: {
-          headingTransform: () => chalk.grey("FORMAT"),
           align: "left",
         },
         sizeBytes: {
@@ -262,7 +257,7 @@ export const ps = addCreateClientOptions(
         },
       },
       preserveNewLines: true,
-      columnSplitter: "      ",
+      columnSplitter: "    ",
     }),
   );
   console.info();
