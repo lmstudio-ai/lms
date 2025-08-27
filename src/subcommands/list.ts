@@ -222,7 +222,9 @@ export const ps = addCreateClientOptions(
         status: processingState.status.toUpperCase(),
       };
     }),
-  ).then(results => results.sort((a, b) => a.identifier.localeCompare(b.identifier)));
+  );
+
+  loadedModelsWithInfo.sort((a, b) => a.identifier.localeCompare(b.identifier));
 
   console.info();
   console.info(
