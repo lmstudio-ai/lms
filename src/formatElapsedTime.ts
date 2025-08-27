@@ -26,3 +26,9 @@ export function formatElapsedTime(timeMs: number) {
   }
   return segments.join(" ");
 }
+
+export function formatTimeLean(ms: number) {
+  if (ms >= hour) return `${Math.round(ms / hour)}h`;
+  if (ms >= min) return `${Math.round(ms / min)}m`;
+  return `${Math.round(ms / 1000)}s`;
+}
