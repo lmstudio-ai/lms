@@ -46,6 +46,12 @@ interface AppInstallLocation {
 
 /**
  * Adds create client options to a commander.js command
+ *
+ * This creates an Options Group. If other options are added without defining their own group,
+ * then they will be (likely erroneously) added to the this group.
+ * To avoid this, developers should either:
+ *   1. Define an options group before adding subsequent options
+ *   2. Add all options _before_ adding this group
  */
 export function addCreateClientOptions<
   Args extends any[],
@@ -53,6 +59,7 @@ export function addCreateClientOptions<
   GlobalOpts extends OptionValues,
 >(command: Command<Args, Opts, GlobalOpts>) {
   return command
+    .optionsGroup("Instance Options:")
     .option(
       "--host <host>",
       text`
