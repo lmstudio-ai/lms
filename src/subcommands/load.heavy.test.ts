@@ -24,20 +24,26 @@ describe("load", () => {
         status: psStatus,
         stdout: psOutput,
         stderr: psStderr,
-      } = runCommandSync("node", [cliPath, "ps", "--host", "localhost", "--port", "1234"]);
+      } = runCommandSync("node", [
+        cliPath,
+        "ps",
+        "--host",
+        "localhost",
+        "--port",
+        "1234",
+        "--json",
+      ]);
       if (psStatus !== 0) console.error("PS stderr:", psStderr);
       expect(psStatus).toBe(0);
       expect(psOutput).toContain("gemma-3-1b");
 
-      // Extract the model identifier from ps output
-      const lines = psOutput.split("\n");
-      const modelLine = lines.find(line => line.includes("gemma-3-1b"));
-      expect(modelLine).toBeTruthy();
-
-      // Parse identifier from the model line (assuming format like "identifier (path)")
-      const identifierMatch = modelLine!.match(/Identifier:\s*([^\s(]+)/);
-      expect(identifierMatch).toBeTruthy();
-      const modelIdentifier = identifierMatch![1];
+      // Extract the model identifier from JSON output
+      const psData = JSON.parse(psOutput);
+      const gemmaModel = psData.find(
+        (model: any) => model.path !== undefined && model.path.includes("gemma-3-1b"),
+      );
+      expect(gemmaModel).toBeTruthy();
+      const modelIdentifier = gemmaModel.identifier;
 
       // Unload the model using the extracted identifier
       const { status: unloadStatus, stderr: unloadStderr } = runCommandSync("node", [

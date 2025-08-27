@@ -116,6 +116,6 @@ describe("import dry run", () => {
     ]);
 
     expect(status).not.toBe(0);
-    expect(stderr).toContain("Path doesn't exist");
+    expect(stderr).toContain("File does not exist");
   });
 });

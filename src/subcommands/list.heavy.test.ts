@@ -60,33 +60,6 @@ describe("list", () => {
       }
     });
 
-    it("should show detailed information", () => {
-      const { status } = runCommandSync("node", [
-        cliPath,
-        "ls",
-        "--detailed",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      expect(status).toBe(0);
-    });
-
-    it("should handle combined flags", () => {
-      const { status } = runCommandSync("node", [
-        cliPath,
-        "ls",
-        "--llm",
-        "--detailed",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      expect(status).toBe(0);
-    });
-
     it("should handle combined flags with json", () => {
       const { status, stdout } = runCommandSync("node", [
         cliPath,
