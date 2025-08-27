@@ -37,14 +37,12 @@ program.addCommand(load);
 program.addCommand(unload);
 program.addCommand(ps);
 
-program.commandsGroup("Develop & Publish Plugins:");
+program.commandsGroup("Develop & Publish Artifacts:");
 program.addCommand(create);
 program.addCommand(dev);
-program.addCommand(push);
-
-program.commandsGroup("Hub Login & Artifacts:");
-program.addCommand(clone);
 program.addCommand(login);
+program.addCommand(clone);
+program.addCommand(push);
 
 program.commandsGroup("System Management:");
 program.addCommand(status);
