@@ -218,7 +218,7 @@ export const ps = addCreateClientOptions(
         sizeBytes: model ? formatSizeBytes1000(model.sizeBytes) : "",
         contextLength: contextLength,
         ttlMs:
-          timeLeft !== undefined && modelInfo?.ttlMs !== null
+          timeLeft !== undefined && modelInfo.ttlMs !== null
             ? `${formatTimeLean(timeLeft)} ${chalk.gray(`/ ${formatTimeLean(modelInfo.ttlMs)}`)}`
             : "",
         status: processingState.status.toUpperCase(),
