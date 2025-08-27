@@ -205,7 +205,7 @@ export const ps = addCreateClientOptions(
       const contextLength = await loadedModel.getContextLength();
       const modelInfo = await loadedModel.getModelInfo();
       const timeLeft =
-        modelInfo?.ttlMs !== null
+        modelInfo.ttlMs !== null
           ? modelInfo.lastUsedTime === null
             ? modelInfo.ttlMs
             : modelInfo.ttlMs - (Date.now() - modelInfo.lastUsedTime)
