@@ -22,8 +22,8 @@ export function addLogLevelOptions<
   return command
     .optionsGroup("Logging Options:")
     .addOption(new Option("--log-level <level>", "The level of logging to use").choices(levels))
-    .option("--verbose", "Enable verbose logging")
-    .option("--quiet", "Suppress all logging");
+    .option("--quiet", "Suppress all logging")
+    .option("--verbose", "Enable verbose logging");
 }
 
 export interface LogLevelArgs {
