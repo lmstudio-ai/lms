@@ -205,7 +205,7 @@ export const ps = addCreateClientOptions(
       const contextLength = await loadedModel.getContextLength();
       const modelInfo = await loadedModel.getModelInfo();
       const timeLeft =
-        modelInfo?.lastUsedTime !== undefined && modelInfo?.ttlMs !== undefined
+        modelInfo?.ttlMs !== null
           ? modelInfo.lastUsedTime === null
             ? modelInfo.ttlMs
             : modelInfo.ttlMs - (Date.now() - modelInfo.lastUsedTime)
@@ -219,7 +219,7 @@ export const ps = addCreateClientOptions(
         format: model?.format === "safetensors" ? "MLX" : model?.format.toUpperCase() ?? "",
         contextLength: contextLength,
         ttlMs:
-          timeLeft !== undefined && modelInfo?.ttlMs !== undefined
+          timeLeft !== undefined && modelInfo?.ttlMs !== null
             ? `${formatTimeLean(timeLeft)} ${chalk.gray(`/ ${formatTimeLean(modelInfo.ttlMs)}`)}`
             : "",
         status: processingState.status.toUpperCase(),
