@@ -168,7 +168,6 @@ export const ps = addCreateClientOptions(
     ...(await client.llm.listLoaded()),
     ...(await client.embedding.listLoaded()),
   ];
-  const downloadedModels = await client.system.listDownloadedModels();
 
   if (json) {
     console.info(
@@ -200,26 +199,25 @@ export const ps = addCreateClientOptions(
 
   const loadedModelsWithInfo = await Promise.all(
     loadedModels.map(async loadedModel => {
-      const { identifier, path } = loadedModel;
-      const model = downloadedModels.find(model => model.path === path);
+      const { identifier } = loadedModel;
       const contextLength = await loadedModel.getContextLength();
-      const modelInfo = await loadedModel.getModelInfo();
+      const modelInstanceInfo = await loadedModel.getModelInfo();
       const timeLeft =
-        modelInfo.ttlMs !== null
-          ? modelInfo.lastUsedTime === null
-            ? modelInfo.ttlMs
-            : modelInfo.ttlMs - (Date.now() - modelInfo.lastUsedTime)
+        modelInstanceInfo.ttlMs !== null
+          ? modelInstanceInfo.lastUsedTime === null
+            ? modelInstanceInfo.ttlMs
+            : modelInstanceInfo.ttlMs - (Date.now() - modelInstanceInfo.lastUsedTime)
           : undefined;
 
       const processingState = await loadedModel.getInstanceProcessingState();
       return {
         identifier,
-        path: model?.modelKey ?? path,
-        sizeBytes: model ? formatSizeBytes1000(model.sizeBytes) : "",
+        path: modelInstanceInfo.modelKey,
+        sizeBytes: formatSizeBytes1000(modelInstanceInfo.sizeBytes),
         contextLength: contextLength,
         ttlMs:
-          timeLeft !== undefined && modelInfo.ttlMs !== null
-            ? `${formatTimeLean(timeLeft)} ${chalk.gray(`/ ${formatTimeLean(modelInfo.ttlMs)}`)}`
+          timeLeft !== undefined && modelInstanceInfo.ttlMs !== null
+            ? `${formatTimeLean(timeLeft)} ${chalk.gray(`/ ${formatTimeLean(modelInstanceInfo.ttlMs)}`)}`
             : "",
         status: processingState.status.toUpperCase(),
       };
