@@ -5,6 +5,7 @@ export interface ExecResult {
   stderr: string;
   status: number;
 }
+export const TEST_MODEL_EXPECTED = "gemma-3-1b";
 
 /**
  * Runs a command synchronously and returns the result.
