@@ -179,19 +179,20 @@ export async function createClient(
         clientIdentifier: "lms-cli-dev",
       };
     } else {
-      let lmsKey2: string;
       if (await exists(lmsKey2Path)) {
-        lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
+        const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
+        auth = {
+          clientIdentifier: "lms-cli",
+          clientPasskey: lmsKey + lmsKey2,
+        };
       } else {
         // This case will happen when the lms is the production build, yet the local LM Studio has
-        // not been run yet (so no lms-key-2 file). In this case, we will just use an empty string
-        // as we will soon try to wake up the service and refetch the key.
-        lmsKey2 = "";
+        // not been run yet (so no lms-key-2 file). In this case, we will just use a dummy client
+        // identifier as we will soon try to wake up the service and refetch the key.
+        auth = {
+          clientIdentifier: "lms-not-ready",
+        };
       }
-      auth = {
-        clientIdentifier: "lms-cli",
-        clientPasskey: lmsKey + lmsKey2,
-      };
     }
   }
   if (port === undefined && host === "127.0.0.1") {
