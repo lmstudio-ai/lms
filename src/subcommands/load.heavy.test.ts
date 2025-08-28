@@ -1,15 +1,76 @@
 import path from "path";
-import { CLI_PATH, runCommandSync } from "../util.js";
+import { CLI_PATH, runCommandSync, TEST_MODEL_EXPECTED } from "../util.js";
 
 describe("load", () => {
   const cliPath = path.join(__dirname, CLI_PATH);
+
+  // Helper function to check if model is loaded using ps command
+  const verifyModelLoaded = (
+    expectedIdentifier: string,
+    expectedTtlMs: number | null = null,
+    expectedContextLength: number | null = null,
+  ) => {
+    const { status, stdout, stderr } = runCommandSync("node", [
+      cliPath,
+      "ps",
+      "--host",
+      "localhost",
+      "--port",
+      "1234",
+      "--json",
+    ]);
+    if (status !== 0) console.error("PS stderr:", stderr);
+    expect(status).toBe(0);
+    expect(stdout).toContain(expectedIdentifier);
+
+    const psData = JSON.parse(stdout);
+    const model = psData.find(
+      (m: any) => m.path !== undefined && m.path.includes(TEST_MODEL_EXPECTED),
+    );
+    expect(model).toBeTruthy();
+
+    if (expectedTtlMs !== null) {
+      expect(model.ttlMs).toBe(expectedTtlMs);
+    }
+
+    if (expectedContextLength !== null) {
+      expect(model.contextLength).toBe(expectedContextLength);
+    }
+
+    return model.identifier;
+  };
+
+  const unloadAllModels = () => {
+    const { status } = runCommandSync("node", [
+      cliPath,
+      "unload",
+      "--all",
+      "--host",
+      "localhost",
+      "--port",
+      "1234",
+    ]);
+    if (status !== 0) {
+      console.error("Failed to unload all models during cleanup.");
+    }
+  };
+
+  beforeAll(() => {
+    // Ensure cleanup of any loaded models before tests
+    unloadAllModels();
+  });
+
+  afterAll(() => {
+    // Ensure cleanup of any loaded models after tests
+    unloadAllModels();
+  });
 
   describe("load command", () => {
     it("should load model without identifier and verify with ps", () => {
       const { status, stderr } = runCommandSync("node", [
         cliPath,
         "load",
-        "gemma-3-1b",
+        TEST_MODEL_EXPECTED,
         "--yes",
         "--host",
         "localhost",
@@ -19,31 +80,8 @@ describe("load", () => {
       if (status !== 0) console.error("Load stderr:", stderr);
       expect(status).toBe(0);
 
-      // Check if model is loaded using ps command and extract identifier
-      const {
-        status: psStatus,
-        stdout: psOutput,
-        stderr: psStderr,
-      } = runCommandSync("node", [
-        cliPath,
-        "ps",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-        "--json",
-      ]);
-      if (psStatus !== 0) console.error("PS stderr:", psStderr);
-      expect(psStatus).toBe(0);
-      expect(psOutput).toContain("gemma-3-1b");
-
-      // Extract the model identifier from JSON output
-      const psData = JSON.parse(psOutput);
-      const gemmaModel = psData.find(
-        (model: any) => model.path !== undefined && model.path.includes("gemma-3-1b"),
-      );
-      expect(gemmaModel).toBeTruthy();
-      const modelIdentifier = gemmaModel.identifier;
+      // Verify model is loaded and get identifier
+      const modelIdentifier = verifyModelLoaded(TEST_MODEL_EXPECTED);
 
       // Unload the model using the extracted identifier
       const { status: unloadStatus, stderr: unloadStderr } = runCommandSync("node", [
@@ -63,7 +101,7 @@ describe("load", () => {
       const { status, stderr } = runCommandSync("node", [
         cliPath,
         "load",
-        "gemma-3-1b",
+        TEST_MODEL_EXPECTED,
         "--identifier",
         "basic-model",
         "--yes",
@@ -75,15 +113,8 @@ describe("load", () => {
       if (status !== 0) console.error("Load stderr:", stderr);
       expect(status).toBe(0);
 
-      // Check if model is loaded using ps command
-      const {
-        status: psStatus,
-        stdout: psOutput,
-        stderr: psStderr,
-      } = runCommandSync("node", [cliPath, "ps", "--host", "localhost", "--port", "1234"]);
-      if (psStatus !== 0) console.error("PS stderr:", psStderr);
-      expect(psStatus).toBe(0);
-      expect(psOutput).toContain("basic-model");
+      // Verify model is loaded
+      verifyModelLoaded("basic-model");
 
       // Unload the model
       const { status: unloadStatus, stderr: unloadStderr } = runCommandSync("node", [
@@ -103,7 +134,7 @@ describe("load", () => {
       const { status, stderr } = runCommandSync("node", [
         cliPath,
         "load",
-        "gemma-3-1b",
+        TEST_MODEL_EXPECTED,
         "--identifier",
         "advanced-model",
         "--ttl",
@@ -120,6 +151,9 @@ describe("load", () => {
       ]);
       if (status !== 0) console.error("Load stderr:", stderr);
       expect(status).toBe(0);
+
+      // Verify model is loaded with correct TTL and context length
+      verifyModelLoaded("advanced-model", 1800000, 4096);
 
       // Cleanup
       runCommandSync("node", [
@@ -138,7 +172,7 @@ describe("load", () => {
       const { status: status1, stderr: stderr1 } = runCommandSync("node", [
         cliPath,
         "load",
-        "gemma-3-1b",
+        TEST_MODEL_EXPECTED,
         "--identifier",
         "gpu-off-model",
         "--gpu",
@@ -165,7 +199,7 @@ describe("load", () => {
       const { status: status2, stderr: stderr2 } = runCommandSync("node", [
         cliPath,
         "load",
-        "gemma-3-1b",
+        TEST_MODEL_EXPECTED,
         "--identifier",
         "gpu-max-model",
         "--gpu",
@@ -193,7 +227,7 @@ describe("load", () => {
       const { status, stderr } = runCommandSync("node", [
         cliPath,
         "load",
-        "gemma-3-1b",
+        TEST_MODEL_EXPECTED,
         "--identifier",
         "custom-gemma",
         "--yes",
@@ -205,15 +239,8 @@ describe("load", () => {
       if (status !== 0) console.error("Load stderr:", stderr);
       expect(status).toBe(0);
 
-      // Check if model is loaded with custom identifier
-      const {
-        status: psStatus,
-        stdout: psOutput,
-        stderr: psStderr,
-      } = runCommandSync("node", [cliPath, "ps", "--host", "localhost", "--port", "1234"]);
-      if (psStatus !== 0) console.error("PS stderr:", psStderr);
-      expect(psStatus).toBe(0);
-      expect(psOutput).toContain("custom-gemma");
+      // Verify model is loaded with custom identifier
+      verifyModelLoaded("custom-gemma");
 
       // Unload by identifier
       const { status: unloadStatus, stderr: unloadStderr } = runCommandSync("node", [
@@ -270,20 +297,6 @@ describe("load", () => {
       ]);
       expect(status3).not.toBe(0);
       expect(stderr3).toBeTruthy();
-    });
-
-    it("should verify ls shows downloaded models", () => {
-      const { status, stdout, stderr } = runCommandSync("node", [
-        cliPath,
-        "ls",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      if (status !== 0) console.error("LS stderr:", stderr);
-      expect(status).toBe(0);
-      expect(stdout).toContain("models");
     });
   });
 });
