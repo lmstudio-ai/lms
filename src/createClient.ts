@@ -190,7 +190,7 @@ export async function createClient(
         // not been run yet (so no lms-key-2 file). In this case, we will just use a dummy client
         // identifier as we will soon try to wake up the service and refetch the key.
         auth = {
-          clientIdentifier: "lms-not-ready",
+          clientIdentifier: "lms-cli",
         };
       }
     }
