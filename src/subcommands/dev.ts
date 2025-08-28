@@ -9,14 +9,12 @@ import {
   type RegisterDevelopmentPluginOpts,
 } from "@lmstudio/sdk";
 import { type ChildProcessWithoutNullStreams } from "child_process";
-import { cp, mkdir, readFile } from "fs/promises";
+import { readFile } from "fs/promises";
 import { join } from "path";
 import { cwd } from "process";
-import { askQuestion } from "../confirm.js";
 import { addCreateClientOptions, createClient } from "../createClient.js";
 import { exists } from "../exists.js";
 import { findProjectFolderOrExit } from "../findProjectFolder.js";
-import { pluginsFolderPath } from "../lmstudioPaths.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 
 type PluginProcessStatus = "stopped" | "starting" | "running" | "restarting";
@@ -166,7 +164,7 @@ export const dev = addLogLevelOptions(
   const manifest = manifestParseResult.data;
 
   if (install) {
-    process.exit(await handleInstall(projectPath, manifest, logger, client, { yes }));
+    process.exit(await handleInstall(projectPath, manifest, logger, client));
   } else {
     await handleDevServer(projectPath, manifest, logger, client, { noNotify: !notify });
   }
@@ -177,37 +175,10 @@ async function handleInstall(
   manifest: PluginManifest,
   logger: SimpleLogger,
   client: LMStudioClient,
-  { yes }: { yes: boolean },
 ): Promise<number> {
-  // Currently, we naively copy paste the entire plugin folder to LM Studio, and then trigger a
-  // plugin re-index.
   logger.info(`Installing the plugin ${manifest.owner}/${manifest.name}...`);
-  logger.debug("Copying from", projectPath);
-  const destinationPath = join(pluginsFolderPath, manifest.owner, manifest.name);
-  logger.debug("To", pluginsFolderPath);
-
-  if ((await exists(destinationPath)) && !yes) {
-    const result = await askQuestion(text`
-      Plugin ${manifest.owner}/${manifest.name} already exists. Do you want to overwrite it?
-    `);
-    if (!result) {
-      logger.info("Installation cancelled.");
-      return 1;
-    }
-  }
-
-  await mkdir(destinationPath, { recursive: true });
-  const startTime = Date.now();
-  await cp(projectPath, destinationPath, {
-    recursive: true,
-    dereference: true,
-  });
-  const endTime = Date.now();
-  logger.debug(`Copied in ${endTime - startTime}ms.`);
-
-  logger.debug("Reindexing plugins...");
-  await client.plugins.reindexPlugins();
-
+  await client.repository.installLocalPlugin({ path: projectPath });
+  logger.info(`Successfully installed ${manifest.owner}/${manifest.name}.`);
   return 0;
 }
 
