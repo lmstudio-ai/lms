@@ -5,6 +5,7 @@ import chalk from "chalk";
 import { spawn } from "child_process";
 import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
+import { exists } from "./exists.js";
 import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { createRefinedNumberParser } from "./types/refinedNumber.js";
@@ -178,7 +179,15 @@ export async function createClient(
         clientIdentifier: "lms-cli-dev",
       };
     } else {
-      const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
+      let lmsKey2: string;
+      if (await exists(lmsKey2Path)) {
+        lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
+      } else {
+        // This case will happen when the lms is the production build, yet the local LM Studio has
+        // not been run yet (so no lms-key-2 file). In this case, we will just use an empty string
+        // as we will soon try to wake up the service and refetch the key.
+        lmsKey2 = "";
+      }
       auth = {
         clientIdentifier: "lms-cli",
         clientPasskey: lmsKey + lmsKey2,
