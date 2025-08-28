@@ -5,6 +5,7 @@ import chalk from "chalk";
 import { spawn } from "child_process";
 import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
+import { exists } from "./exists.js";
 import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { createRefinedNumberParser } from "./types/refinedNumber.js";
@@ -178,11 +179,20 @@ export async function createClient(
         clientIdentifier: "lms-cli-dev",
       };
     } else {
-      const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
-      auth = {
-        clientIdentifier: "lms-cli",
-        clientPasskey: lmsKey + lmsKey2,
-      };
+      if (await exists(lmsKey2Path)) {
+        const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
+        auth = {
+          clientIdentifier: "lms-cli",
+          clientPasskey: lmsKey + lmsKey2,
+        };
+      } else {
+        // This case will happen when the CLI is the production build, yet the local LM Studio has
+        // not been run yet (so no lms-key-2 file). In this case, we will just use a dummy client
+        // identifier as we will soon try to wake up the service and refetch the key.
+        auth = {
+          clientIdentifier: "lms-cli",
+        };
+      }
     }
   }
   if (port === undefined && host === "127.0.0.1") {
