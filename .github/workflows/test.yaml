@@ -100,7 +100,7 @@ jobs:
 
       - name: Ensure the model needed for testing is available
         run: |
-          /app/.bundle/lms get gemma-3-1b --yes
+          /app/.bundle/lms get google/gemma-3-1b --yes
 
       - name: Run lms-cli tests
         run: |
