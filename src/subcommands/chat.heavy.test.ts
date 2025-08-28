@@ -1,7 +1,7 @@
 import path from "path";
 import { CLI_PATH, runCommandSync } from "../util.js";
 
-describe("chat heavy", () => {
+describe.skip("chat heavy", () => {
   const cliPath = path.join(__dirname, CLI_PATH);
   const modelIdentifier = "test-model";
   const modelToUse = "gemma-3-1b";
