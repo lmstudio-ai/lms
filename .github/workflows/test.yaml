@@ -103,7 +103,7 @@ jobs:
           mkdir -p /.lmstudio/hub/models/google
           cd /.lmstudio/hub/models/google
           lms clone google/gemma-3-1b
-          mkdir /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
+          mkdir -p /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
           cd /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
           if ! command -v wget &> /dev/null; then
             apt-get update
