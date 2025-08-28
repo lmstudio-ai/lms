@@ -100,7 +100,16 @@ jobs:
 
       - name: Ensure the model needed for testing is available
         run: |
-          /app/.bundle/lms get google/gemma-3-1b --yes
+          mkdir -p /.lmstudio/hub/models/google
+          cd /.lmstudio/hub/models/google
+          lms clone google/gemma-3-1b
+          mkdir /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
+          cd /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
+          if ! command -v wget &> /dev/null; then
+            apt-get update
+            apt-get install -y wget
+          fi
+          wget https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf
 
       - name: Run lms-cli tests
         run: |
