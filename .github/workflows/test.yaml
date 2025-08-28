@@ -14,6 +14,8 @@ jobs:
   build-and-test:
     name: Build and Test LMS CLI
     runs-on: ubuntu-latest
+    container:
+      image: lmstudio/llmster-preview:cpu
     timeout-minutes: 30
     steps:
       - name: Determine lmstudio.js branch
@@ -67,12 +69,30 @@ jobs:
           cd lmstudio.js
           npm run build
 
-      - name: Run the llmster docker image
+      - name: Run the daemon
         id: run
-        uses: ./lmstudio.js/packages/lms-cli/.github/actions/docker-daemon-run
-        with:
-          docker-image: lmstudio/llmster-preview
-          container-name: llmster-test
+        run: |
+          cd /app
+          echo "Starting up llmd..."
+          ./daemon-run.sh &
+          DAEMON_PID=$!
+          LM_HOME="${HOME}/.lmstudio"
+          MAX_WAIT=120
+          START_TIME=$(date +%s)
+          # Check for the ready files
+          while true; do
+            # Check for any .ready file
+            if ls "${LM_HOME}"/.ready* 1> /dev/null 2>&1; then
+              break
+            fi
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
+            if [ $ELAPSED -ge $MAX_WAIT ]; then
+              echo "Timed out waiting for llmster to start after ${MAX_WAIT} seconds."
+              break
+            fi
+            sleep 1
+          done
 
       - name: Ensure the model needed for testing is available
         run: |
@@ -82,10 +102,3 @@ jobs:
         run: |
           cd lmstudio.js
           npm run test-cli
-
-      - name: Cleanup container
-        if: always()
-        run: |
-          docker stop ${{ steps.run.outputs.container-name }} || true
-          docker rm ${{ steps.run.outputs.container-name }} || true
-          docker rmi ${{ steps.build.outputs.docker-image }} || true
