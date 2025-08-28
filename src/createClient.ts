@@ -186,7 +186,7 @@ export async function createClient(
           clientPasskey: lmsKey + lmsKey2,
         };
       } else {
-        // This case will happen when the lms is the production build, yet the local LM Studio has
+        // This case will happen when the CLI is the production build, yet the local LM Studio has
         // not been run yet (so no lms-key-2 file). In this case, we will just use a dummy client
         // identifier as we will soon try to wake up the service and refetch the key.
         auth = {
