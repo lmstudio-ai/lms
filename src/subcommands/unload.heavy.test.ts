@@ -1,146 +1,133 @@
 import path from "path";
-import { CLI_PATH, runCommandSync } from "../util.js";
+import { CLI_PATH, runCommandSync, TEST_MODEL_EXPECTED } from "../util.js";
 
 describe("unload", () => {
   const cliPath = path.join(__dirname, CLI_PATH);
 
+  // Helper function to load a model
+  const loadModel = (identifier: string) => {
+    const { status, stderr } = runCommandSync("node", [
+      cliPath,
+      "load",
+      TEST_MODEL_EXPECTED,
+      "--identifier",
+      identifier,
+      "--yes",
+      "--host",
+      "localhost",
+      "--port",
+      "1234",
+    ]);
+    if (status !== 0) console.error("Load stderr:", stderr);
+    expect(status).toBe(0);
+  };
+
+  // Helper function to verify model is loaded
+  const verifyModelLoaded = (identifier: string) => {
+    const { status, stdout } = runCommandSync("node", [
+      cliPath,
+      "ps",
+      "--host",
+      "localhost",
+      "--port",
+      "1234",
+    ]);
+    expect(status).toBe(0);
+    expect(stdout).toContain(identifier);
+  };
+
+  // Helper function to verify model is not loaded
+  const verifyModelNotLoaded = (identifier: string) => {
+    const { status, stdout } = runCommandSync("node", [
+      cliPath,
+      "ps",
+      "--host",
+      "localhost",
+      "--port",
+      "1234",
+    ]);
+    expect(status).toBe(0);
+    expect(stdout).not.toContain(identifier);
+  };
+
+  // Helper function to unload model by identifier
+  const unloadModel = (identifier: string) => {
+    const { status, stderr } = runCommandSync("node", [
+      cliPath,
+      "unload",
+      identifier,
+      "--host",
+      "localhost",
+      "--port",
+      "1234",
+    ]);
+    if (status !== 0) console.error("Unload stderr:", stderr);
+    expect(status).toBe(0);
+  };
+
+  // Helper function to unload all models
+  const unloadAllModels = () => {
+    const { status, stderr } = runCommandSync("node", [
+      cliPath,
+      "unload",
+      "--all",
+      "--host",
+      "localhost",
+      "--port",
+      "1234",
+    ]);
+    if (status !== 0) console.error("Unload --all stderr:", stderr);
+    expect(status).toBe(0);
+  };
+
+  beforeAll(() => {
+    // Have a clean state where all models are unloaded before tests
+    unloadAllModels();
+  });
+  afterAll(() => {
+    // Cleanup: Ensure all models are unloaded after tests
+    unloadAllModels();
+  });
   describe("unload command", () => {
     it("should handle unload with specific identifier", () => {
-      // First load a model with identifier
-      const { status: loadStatus, stderr: loadStderr } = runCommandSync("node", [
-        cliPath,
-        "load",
-        "gemma-3-1b",
-        "--identifier",
-        "test-unload-model",
-        "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      if (loadStatus !== 0) console.error("Load stderr:", loadStderr);
-      expect(loadStatus).toBe(0);
-
-      // Verify it's loaded
-      const { status: psStatus, stdout: psOutput } = runCommandSync("node", [
-        cliPath,
-        "ps",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      expect(psStatus).toBe(0);
-      expect(psOutput).toContain("test-unload-model");
+      // Load model and verify
+      loadModel("test-unload-model");
+      loadModel("last-model-to-unload");
+      verifyModelLoaded("test-unload-model");
+      verifyModelLoaded("last-model-to-unload");
 
       // Unload the specific model
-      const { status, stderr } = runCommandSync("node", [
-        cliPath,
-        "unload",
-        "test-unload-model",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      if (status !== 0) console.error("Unload stderr:", stderr);
-      expect(status).toBe(0);
+      unloadModel("test-unload-model");
 
       // Verify it's no longer loaded
-      const { status: psStatus2, stdout: psOutput2 } = runCommandSync("node", [
-        cliPath,
-        "ps",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      expect(psStatus2).toBe(0);
-      expect(psOutput2).not.toContain("test-unload-model");
+      verifyModelNotLoaded("test-unload-model");
+      verifyModelLoaded("last-model-to-unload");
+
+      // Cleanup
+      unloadModel("last-model-to-unload");
+      verifyModelNotLoaded("last-model-to-unload");
     });
 
     it("should handle unload --all flag", () => {
       // Load multiple models
-      runCommandSync("node", [
-        cliPath,
-        "load",
-        "gemma-3-1b",
-        "--identifier",
-        "model-1",
-        "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      runCommandSync("node", [
-        cliPath,
-        "load",
-        "gemma-3-1b",
-        "--identifier",
-        "model-2",
-        "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      loadModel("model-1");
+      loadModel("model-2");
 
       // Verify both are loaded
-      const { status: psStatus1, stdout: psOutput1 } = runCommandSync("node", [
-        cliPath,
-        "ps",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      expect(psStatus1).toBe(0);
-      expect(psOutput1).toContain("model-1");
-      expect(psOutput1).toContain("model-2");
+      verifyModelLoaded("model-1");
+      verifyModelLoaded("model-2");
 
       // Unload all models
-      const { status, stderr } = runCommandSync("node", [
-        cliPath,
-        "unload",
-        "--all",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      if (status !== 0) console.error("Unload --all stderr:", stderr);
-      expect(status).toBe(0);
+      unloadAllModels();
 
       // Verify no models are loaded
-      const { status: psStatus2, stdout: psOutput2 } = runCommandSync("node", [
-        cliPath,
-        "ps",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      expect(psStatus2).toBe(0);
-      expect(psOutput2).not.toContain("model-1");
-      expect(psOutput2).not.toContain("model-2");
+      verifyModelNotLoaded("model-1");
+      verifyModelNotLoaded("model-2");
     });
 
     it("should handle unload --all with short flag", () => {
       // Load a model
-      runCommandSync("node", [
-        cliPath,
-        "load",
-        "gemma-3-1b",
-        "--identifier",
-        "short-flag-test",
-        "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      loadModel("short-flag-test");
 
       // Unload all with short flag
       const { status, stderr } = runCommandSync("node", [
@@ -188,20 +175,10 @@ describe("unload", () => {
 
     it("should handle unload when no models are loaded", () => {
       // Make sure no models are loaded
-      runCommandSync("node", [cliPath, "unload", "--all", "--host", "localhost", "--port", "1234"]);
+      unloadAllModels();
 
       // Try to unload all when nothing is loaded
-      const { status, stderr } = runCommandSync("node", [
-        cliPath,
-        "unload",
-        "--all",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      if (status !== 0) console.error("Unload stderr:", stderr);
-      expect(status).toBe(0); // Should succeed but show "No models to unload"
+      unloadAllModels(); // Should succeed but show "No models to unload"
     });
   });
 });
