@@ -6,28 +6,13 @@ describe("list", () => {
 
   describe("ls command", () => {
     it("should show downloaded models", () => {
-      const { status, stdout } = testRunCommandSync("node", [
-        cliPath,
-        "ls",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      const { status, stdout } = testRunCommandSync("node", [cliPath, "ls"]);
       expect(status).toBe(0);
       expect(stdout).toContain("models");
     });
 
     it("should filter LLM models only", () => {
-      const { status, stdout } = testRunCommandSync("node", [
-        cliPath,
-        "ls",
-        "--llm",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      const { status, stdout } = testRunCommandSync("node", [cliPath, "ls", "--llm"]);
       expect(status).toBe(0);
       expect(stdout).toContain("LLM");
       expect(stdout).not.toContain("EMBEDDING");
@@ -36,15 +21,7 @@ describe("list", () => {
     });
 
     it("should filter embedding models only", () => {
-      const { status, stdout } = testRunCommandSync("node", [
-        cliPath,
-        "ls",
-        "--embedding",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      const { status, stdout } = testRunCommandSync("node", [cliPath, "ls", "--embedding"]);
       expect(status).toBe(0);
       expect(stdout).toContain("EMBEDDING");
       expect(stdout).not.toContain("LLM");
@@ -52,15 +29,7 @@ describe("list", () => {
     });
 
     it("should output JSON format", () => {
-      const { status, stdout } = testRunCommandSync("node", [
-        cliPath,
-        "ls",
-        "--json",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      const { status, stdout } = testRunCommandSync("node", [cliPath, "ls", "--json"]);
       expect(status).toBe(0);
       if (stdout.trim()) {
         expect(() => JSON.parse(stdout)).not.toThrow();
@@ -74,10 +43,6 @@ describe("list", () => {
         "ls",
         "--embedding",
         "--json",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       expect(status).toBe(0);
       if (stdout.trim()) {
@@ -96,10 +61,6 @@ describe("list", () => {
         "--identifier",
         TEST_MODEL_EXPECTED,
         "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       if (status !== 0) {
         console.error("Server stderr:", stderr);
@@ -113,10 +74,6 @@ describe("list", () => {
         cliPath,
         "unload",
         TEST_MODEL_EXPECTED,
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       if (status !== 0) {
         console.error("Unload stderr:", stderr);
@@ -125,28 +82,13 @@ describe("list", () => {
     });
 
     it("should show loaded models", () => {
-      const { status, stdout } = testRunCommandSync("node", [
-        cliPath,
-        "ps",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      const { status, stdout } = testRunCommandSync("node", [cliPath, "ps"]);
       expect(status).toBe(0);
       expect(stdout).toContain(TEST_MODEL_EXPECTED);
     });
 
     it("should output JSON format", () => {
-      const { status, stdout } = testRunCommandSync("node", [
-        cliPath,
-        "ps",
-        "--json",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      const { status, stdout } = testRunCommandSync("node", [cliPath, "ps", "--json"]);
       expect(status).toBe(0);
       if (stdout.trim()) {
         expect(() => JSON.parse(stdout)).not.toThrow();
@@ -157,14 +99,7 @@ describe("list", () => {
     });
 
     it("should handle no loaded models gracefully", () => {
-      const { status } = testRunCommandSync("node", [
-        cliPath,
-        "ps",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      const { status } = testRunCommandSync("node", [cliPath, "ps"]);
       // Command might show "No models are currently loaded" but should not fail
       expect(status).toBe(0);
     });

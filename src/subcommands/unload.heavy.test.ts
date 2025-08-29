@@ -13,10 +13,6 @@ describe("unload", () => {
       "--identifier",
       identifier,
       "--yes",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
     ]);
     if (status !== 0) console.error("Load stderr:", stderr);
     expect(status).toBe(0);
@@ -24,58 +20,28 @@ describe("unload", () => {
 
   // Helper function to verify model is loaded
   const verifyModelLoaded = (identifier: string) => {
-    const { status, stdout } = testRunCommandSync("node", [
-      cliPath,
-      "ps",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
-    ]);
+    const { status, stdout } = testRunCommandSync("node", [cliPath, "ps"]);
     expect(status).toBe(0);
     expect(stdout).toContain(identifier);
   };
 
   // Helper function to verify model is not loaded
   const verifyModelNotLoaded = (identifier: string) => {
-    const { status, stdout } = testRunCommandSync("node", [
-      cliPath,
-      "ps",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
-    ]);
+    const { status, stdout } = testRunCommandSync("node", [cliPath, "ps"]);
     expect(status).toBe(0);
     expect(stdout).not.toContain(identifier);
   };
 
   // Helper function to unload model by identifier
   const unloadModel = (identifier: string) => {
-    const { status, stderr } = testRunCommandSync("node", [
-      cliPath,
-      "unload",
-      identifier,
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
-    ]);
+    const { status, stderr } = testRunCommandSync("node", [cliPath, "unload", identifier]);
     if (status !== 0) console.error("Unload stderr:", stderr);
     expect(status).toBe(0);
   };
 
   // Helper function to unload all models
   const unloadAllModels = () => {
-    const { status, stderr } = testRunCommandSync("node", [
-      cliPath,
-      "unload",
-      "--all",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
-    ]);
+    const { status, stderr } = testRunCommandSync("node", [cliPath, "unload", "--all"]);
     if (status !== 0) console.error("Unload --all stderr:", stderr);
     expect(status).toBe(0);
   };
@@ -130,15 +96,7 @@ describe("unload", () => {
       loadModel("short-flag-test");
 
       // Unload all with short flag
-      const { status, stderr } = testRunCommandSync("node", [
-        cliPath,
-        "unload",
-        "-a",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      const { status, stderr } = testRunCommandSync("node", [cliPath, "unload", "-a"]);
       if (status !== 0) console.error("Unload -a stderr:", stderr);
       expect(status).toBe(0);
     });
@@ -148,10 +106,6 @@ describe("unload", () => {
         cliPath,
         "unload",
         "non-existent-model",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       expect(status).not.toBe(0);
       expect(stderr).toBeTruthy();
@@ -164,10 +118,6 @@ describe("unload", () => {
         "unload",
         "some-model",
         "--all",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       expect(status).not.toBe(0);
       expect(stderr).toBeTruthy();

@@ -1,4 +1,5 @@
 import path from "path";
+import { readFileSync } from "fs";
 import { TEST_CLI_PATH, testRunCommandSync } from "../util.test.js";
 
 describe("version", () => {
@@ -6,10 +7,16 @@ describe("version", () => {
 
   describe("version command", () => {
     it("should display version with ASCII art", () => {
+      const packageJson = JSON.parse(
+        readFileSync(path.join(__dirname, "../../package.json"), "utf8"),
+      );
+      const expectedVersion = packageJson.version;
+
       const { status, stdout } = testRunCommandSync("node", [cliPath, "version"]);
       expect(status).toBe(0);
       expect(stdout).toContain("lms - LM Studio CLI");
       expect(stdout).toContain("GitHub: https://github.com/lmstudio-ai/lms");
+      expect(stdout).toContain(expectedVersion);
     });
 
     it("should output JSON format when --json flag is used", () => {

@@ -22,27 +22,13 @@ describe("status", () => {
 
   describe("status command", () => {
     it("should show LM Studio status", () => {
-      const { status } = testRunCommandSync("node", [
-        cliPath,
-        "status",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      const { status } = testRunCommandSync("node", [cliPath, "status"]);
       expect(status).toBe(0);
     });
   });
 
   it("update status when server state is updated", () => {
-    const { status, stdout } = testRunCommandSync("node", [
-      cliPath,
-      "status",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
-    ]);
+    const { status, stdout } = testRunCommandSync("node", [cliPath, "status"]);
     expect(status).toBe(0);
     expect(stdout).toContain("ON");
 
@@ -52,10 +38,6 @@ describe("status", () => {
     const { status: statusAfterStop, stdout: stdoutAfterStop } = testRunCommandSync("node", [
       cliPath,
       "status",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
     ]);
     expect(statusAfterStop).toBe(0);
     expect(stdoutAfterStop).toContain("OFF");

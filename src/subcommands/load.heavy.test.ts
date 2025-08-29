@@ -10,15 +10,7 @@ describe("load", () => {
     expectedTtlMs: number | null = null,
     expectedContextLength: number | null = null,
   ) => {
-    const { status, stdout, stderr } = testRunCommandSync("node", [
-      cliPath,
-      "ps",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
-      "--json",
-    ]);
+    const { status, stdout, stderr } = testRunCommandSync("node", [cliPath, "ps", "--json"]);
     if (status !== 0) console.error("PS stderr:", stderr);
     expect(status).toBe(0);
     expect(stdout).toContain(expectedIdentifier);
@@ -41,15 +33,7 @@ describe("load", () => {
   };
 
   const unloadAllModels = () => {
-    const { status } = testRunCommandSync("node", [
-      cliPath,
-      "unload",
-      "--all",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
-    ]);
+    const { status } = testRunCommandSync("node", [cliPath, "unload", "--all"]);
     if (status !== 0) {
       console.error("Failed to unload all models during cleanup.");
     }
@@ -72,10 +56,6 @@ describe("load", () => {
         "load",
         TEST_MODEL_EXPECTED,
         "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       if (status !== 0) console.error("Load stderr:", stderr);
       expect(status).toBe(0);
@@ -88,10 +68,6 @@ describe("load", () => {
         cliPath,
         "unload",
         modelIdentifier,
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       if (unloadStatus !== 0) console.error("Unload stderr:", unloadStderr);
       expect(unloadStatus).toBe(0);
@@ -105,10 +81,6 @@ describe("load", () => {
         "--identifier",
         "basic-model",
         "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       if (status !== 0) console.error("Load stderr:", stderr);
       expect(status).toBe(0);
@@ -121,10 +93,6 @@ describe("load", () => {
         cliPath,
         "unload",
         "basic-model",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       if (unloadStatus !== 0) console.error("Unload stderr:", unloadStderr);
       expect(unloadStatus).toBe(0);
@@ -144,10 +112,6 @@ describe("load", () => {
         "--context-length",
         "4096",
         "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       if (status !== 0) console.error("Load stderr:", stderr);
       expect(status).toBe(0);
@@ -156,15 +120,7 @@ describe("load", () => {
       verifyModelLoaded("advanced-model", 1800000, 4096);
 
       // Cleanup
-      testRunCommandSync("node", [
-        cliPath,
-        "unload",
-        "advanced-model",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      testRunCommandSync("node", [cliPath, "unload", "advanced-model"]);
     });
 
     it("should handle GPU options (off, max, numeric)", () => {
@@ -178,22 +134,10 @@ describe("load", () => {
         "--gpu",
         "off",
         "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       if (status1 !== 0) console.error("Load stderr:", stderr1);
       expect(status1).toBe(0);
-      testRunCommandSync("node", [
-        cliPath,
-        "unload",
-        "gpu-off-model",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      testRunCommandSync("node", [cliPath, "unload", "gpu-off-model"]);
 
       // Test GPU max
       const { status: status2, stderr: stderr2 } = testRunCommandSync("node", [
@@ -205,22 +149,10 @@ describe("load", () => {
         "--gpu",
         "max",
         "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       if (status2 !== 0) console.error("Load stderr:", stderr2);
       expect(status2).toBe(0);
-      testRunCommandSync("node", [
-        cliPath,
-        "unload",
-        "gpu-max-model",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
+      testRunCommandSync("node", [cliPath, "unload", "gpu-max-model"]);
     });
 
     it("should handle error cases gracefully", () => {
@@ -230,10 +162,6 @@ describe("load", () => {
         "load",
         "non-existent-model",
         "--exact",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       expect(status1).not.toBe(0);
       expect(stderr1).toBeTruthy();
@@ -244,10 +172,6 @@ describe("load", () => {
         "load",
         "non-existent-model",
         "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       expect(status2).not.toBe(0);
       expect(stderr2).toBeTruthy();
@@ -257,10 +181,6 @@ describe("load", () => {
         cliPath,
         "load",
         "--exact",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
       ]);
       expect(status3).not.toBe(0);
       expect(stderr3).toBeTruthy();

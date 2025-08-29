@@ -16,10 +16,6 @@ describe("chat heavy", () => {
       "--identifier",
       modelIdentifier,
       "--yes",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
     ]);
     if (status !== 0) {
       throw new Error(`Failed to load test model: ${modelIdentifier}`);
@@ -28,15 +24,7 @@ describe("chat heavy", () => {
 
   afterAll(async () => {
     // Clean up by unloading the model
-    const { status } = testRunCommandSync("node", [
-      cliPath,
-      "unload",
-      modelIdentifier,
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
-    ]);
+    const { status } = testRunCommandSync("node", [cliPath, "unload", modelIdentifier]);
     if (status !== 0) {
       console.warn(`Failed to unload test model: ${modelIdentifier}`);
     }
@@ -49,10 +37,6 @@ describe("chat heavy", () => {
       modelIdentifier,
       "--prompt",
       '"What is 2+2? Answer briefly:"',
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
     ]);
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -69,10 +53,6 @@ describe("chat heavy", () => {
       '"What is your role?"',
       "--system-prompt",
       '"You are a helpful assistant."',
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
     ]);
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -88,10 +68,6 @@ describe("chat heavy", () => {
       "--prompt",
       '"Hi"',
       "--stats",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
     ]);
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -107,10 +83,6 @@ describe("chat heavy", () => {
       "chat",
       "--prompt",
       "\"Say hello. Respond with just 'hello'\"",
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
     ]);
 
     if (status !== 0) console.error("Chat stderr:", stderr);
@@ -125,10 +97,6 @@ describe("chat heavy", () => {
       "non-existent-model",
       "--prompt",
       '"test"',
-      "--host",
-      "localhost",
-      "--port",
-      "1234",
     ]);
 
     expect(status).not.toBe(0);
