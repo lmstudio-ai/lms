@@ -47,7 +47,12 @@ describe("import command", () => {
     beforeEach(() => {
       // Create unique test file for each test
       testId = `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      testFilePath = path.join(os.tmpdir(), `${testId}.gguf`);
+      testFilePath = path.join(lmstudioModelsPath, "test-files", `${testId}.gguf`);
+      // Ensure test directory exists
+      const testDir = path.dirname(testFilePath);
+      if (!fs.existsSync(testDir)) {
+        fs.mkdirSync(testDir, { recursive: true });
+      }
       createValidGGUFFile(testFilePath);
     });
 
@@ -173,7 +178,12 @@ describe("import command", () => {
     beforeEach(() => {
       // Create unique test file for each test
       testId = `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      testFilePath = path.join(os.tmpdir(), `${testId}.gguf`);
+      testFilePath = path.join(lmstudioModelsPath, "test-files", `${testId}.gguf`);
+      // Ensure test directory exists
+      const testDir = path.dirname(testFilePath);
+      if (!fs.existsSync(testDir)) {
+        fs.mkdirSync(testDir, { recursive: true });
+      }
       createValidGGUFFile(testFilePath);
 
       targetPath = path.join(lmstudioModelsPath, "test", "model", path.basename(testFilePath));
@@ -204,7 +214,7 @@ describe("import command", () => {
     });
 
     it("should actually move file when not in dry run mode", () => {
-      const { status, stderr } = testRunCommandSync("node", [
+      const { status, stderr, stdout } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -212,6 +222,11 @@ describe("import command", () => {
         "--user-repo",
         "test/model",
       ]);
+
+      if (status !== 0) {
+        console.log("STDOUT:", stdout);
+        console.log("STDERR:", stderr);
+      }
 
       expect(status).toBe(0);
       expect(stderr).toContain("File moved to");
@@ -244,7 +259,7 @@ describe("import command", () => {
     });
 
     it("should actually create hard link when using --hard-link flag", () => {
-      const { status, stderr } = testRunCommandSync("node", [
+      const { status, stderr, stdout } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -253,6 +268,11 @@ describe("import command", () => {
         "--user-repo",
         "test/model",
       ]);
+
+      if (status !== 0) {
+        console.log("STDOUT:", stdout);
+        console.log("STDERR:", stderr);
+      }
 
       expect(status).toBe(0);
       expect(stderr).toContain("Hard link created at");
@@ -303,7 +323,7 @@ describe("import command", () => {
         path.basename(testFilePath),
       );
 
-      const { status, stderr } = testRunCommandSync("node", [
+      const { status, stderr, stdout } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -311,6 +331,11 @@ describe("import command", () => {
         "--user-repo",
         "deep-user/nested-repo",
       ]);
+
+      if (status !== 0) {
+        console.log("STDOUT:", stdout);
+        console.log("STDERR:", stderr);
+      }
 
       expect(status).toBe(0);
 
@@ -368,7 +393,12 @@ describe("import command", () => {
 
     it("should fail when target file already exists", () => {
       const testId = `existing-test-${Date.now()}`;
-      const testFilePath = path.join(os.tmpdir(), `${testId}.gguf`);
+      const testFilePath = path.join(lmstudioModelsPath, "test-files", `${testId}.gguf`);
+      // Ensure test directory exists
+      const testDir = path.dirname(testFilePath);
+      if (!fs.existsSync(testDir)) {
+        fs.mkdirSync(testDir, { recursive: true });
+      }
       createValidGGUFFile(testFilePath);
 
       const targetDir = path.join(lmstudioModelsPath, "test", "existing");
