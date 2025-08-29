@@ -102,6 +102,7 @@ jobs:
         run: |
           mkdir -p /.lmstudio/hub/models/google
           cd /.lmstudio/hub/models/google
+          lms status
           lms clone google/gemma-3-1b
           mkdir -p /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
           cd /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
@@ -109,7 +110,9 @@ jobs:
             apt-get update
             apt-get install -y wget
           fi
-          wget -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf
+          lms status
+          wget -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf --quiet
+          lms status
           lms clone google/gemma-3-4b
 
       - name: Run lms-cli tests
