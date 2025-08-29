@@ -111,6 +111,9 @@ jobs:
           fi
           wget https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf
 
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+
       - name: Run lms-cli tests
         run: |
           cd lmstudio.js
