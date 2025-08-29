@@ -73,7 +73,7 @@ jobs:
           cd lmstudio.js
           npm run build
 
-      - name: Run the daemon
+      - name: Run daemon and tests
         id: run
         run: |
           cd /app
@@ -92,16 +92,13 @@ jobs:
             CURRENT_TIME=$(date +%s)
             ELAPSED=$((CURRENT_TIME - START_TIME))
             if [ $ELAPSED -ge $MAX_WAIT ]; then
-              echo "Timed out waiting for llmster to start after ${MAX_WAIT} seconds."
+            echo "Timed out waiting for llmster to start after ${MAX_WAIT} seconds."
               break
             fi
             sleep 1
           done
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
 
-      - name: Ensure the model needed for testing is available
-        run: |
+          # Setup model
           mkdir -p /.lmstudio/hub/models/google
           cd /.lmstudio/hub/models/google
           lms clone google/gemma-3-1b
@@ -114,8 +111,7 @@ jobs:
           fi
           wget -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf --quiet
 
-      - name: Run lms-cli tests
-        run: |
-          cd lmstudio.js
+          # Run tests
+          cd /github/workspace/lmstudio.js
           export LMS_FORCE_PROD=true
           npm run test-cli -- --verbose
