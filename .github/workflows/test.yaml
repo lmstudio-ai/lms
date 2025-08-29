@@ -99,17 +99,18 @@ jobs:
           done
 
           # Setup model
-          mkdir -p /.lmstudio/hub/models/google
-          cd /.lmstudio/hub/models/google
-          lms clone google/gemma-3-1b
-          mkdir -p /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
-          cd /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
-          if ! command -v wget &> /dev/null; then
-            apt-get update
-            lms status
-            apt-get install -y wget
-          fi
-          wget --quiet -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf
+          # mkdir -p /.lmstudio/hub/models/google
+          # cd /.lmstudio/hub/models/google
+          # lms clone google/gemma-3-1b
+          # mkdir -p /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
+          # cd /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
+          # if ! command -v wget &> /dev/null; then
+          #   apt-get update
+          #   apt-get install -y wget
+          # fi
+          # wget --quiet -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf
+
+          lms get google/gemma-3-1b -y
 
           # Run tests
           cd $GITHUB_WORKSPACE/lmstudio.js
