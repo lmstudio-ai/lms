@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { TEST_CLI_PATH, testRunCommandSync } from "../util.test.js";
+import { TEST_CLI_PATH, testRunCommandSync } from "../test-utils.js";
 
 describe("import command", () => {
   const cliPath = path.join(__dirname, TEST_CLI_PATH);

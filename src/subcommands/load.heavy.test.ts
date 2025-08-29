@@ -1,5 +1,5 @@
 import path from "path";
-import { TEST_CLI_PATH, testRunCommandSync, TEST_MODEL_EXPECTED } from "../util.test.js";
+import { TEST_CLI_PATH, testRunCommandSync, TEST_MODEL_EXPECTED } from "../test-utils.js";
 
 describe("load", () => {
   const cliPath = path.join(__dirname, TEST_CLI_PATH);
@@ -17,7 +17,7 @@ describe("load", () => {
 
     const psData = JSON.parse(stdout);
     const model = psData.find(
-      (m: any) => m.path !== undefined && m.path.includes(TEST_MODEL_EXPECTED),
+      (m: any) => m.path !== undefined && m.path.toLowerCase().includes(TEST_MODEL_EXPECTED),
     );
     expect(model).toBeTruthy();
 

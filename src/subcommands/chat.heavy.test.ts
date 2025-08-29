@@ -1,5 +1,5 @@
 import path from "path";
-import { TEST_CLI_PATH, testRunCommandSync } from "../util.test.js";
+import { TEST_CLI_PATH, testRunCommandSync } from "../test-utils.js";
 
 // We skip chat tests to because we don't have max_tokens here.
 describe.skip("chat heavy", () => {

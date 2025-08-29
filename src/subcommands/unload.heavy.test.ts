@@ -1,5 +1,5 @@
 import path from "path";
-import { TEST_CLI_PATH, testRunCommandSync, TEST_MODEL_EXPECTED } from "../util.test.js";
+import { TEST_CLI_PATH, testRunCommandSync, TEST_MODEL_EXPECTED } from "../test-utils.js";
 
 describe("unload", () => {
   const cliPath = path.join(__dirname, TEST_CLI_PATH);
