@@ -112,6 +112,6 @@ jobs:
           wget --quiet -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf
 
           # Run tests
-          cd /github/workspace/lmstudio.js
+          cd $GITHUB_WORKSPACE/lmstudio.js
           export LMS_FORCE_PROD=true
           npm run test-cli -- --verbose
