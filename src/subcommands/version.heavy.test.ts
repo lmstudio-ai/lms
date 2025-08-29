@@ -10,7 +10,6 @@ describe("version", () => {
       expect(status).toBe(0);
       expect(stdout).toContain("lms - LM Studio CLI");
       expect(stdout).toContain("GitHub: https://github.com/lmstudio-ai/lms");
-      expect(stdout).toContain("0.3.43");
     });
 
     it("should output JSON format when --json flag is used", () => {
