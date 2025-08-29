@@ -115,4 +115,4 @@ jobs:
         run: |
           cd lmstudio.js
           export LMS_FORCE_PROD=true
-          npm run test-cli
+          npm run test-cli -- --verbose
