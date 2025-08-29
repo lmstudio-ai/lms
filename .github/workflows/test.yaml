@@ -113,5 +113,4 @@ jobs:
 
           # Run tests
           cd $GITHUB_WORKSPACE/lmstudio.js
-          export LMS_FORCE_PROD=true
           npm run test-cli -- --verbose
