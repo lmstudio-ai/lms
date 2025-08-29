@@ -97,28 +97,22 @@ jobs:
             fi
             sleep 1
           done
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
 
       - name: Ensure the model needed for testing is available
         run: |
           mkdir -p /.lmstudio/hub/models/google
           cd /.lmstudio/hub/models/google
-          lms status
           lms clone google/gemma-3-1b
-          lms status
           mkdir -p /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
-          lms status
           cd /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
-          lms status
           if ! command -v wget &> /dev/null; then
             apt-get update
             lms status
             apt-get install -y wget
-            lms status
           fi
-          lms status
           wget -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf --quiet
-          lms status
-          lms clone google/gemma-3-4b
 
       - name: Run lms-cli tests
         run: |
