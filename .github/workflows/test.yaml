@@ -28,15 +28,16 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           echo "$PR_BODY" > pr_body.txt
-          LMS_JS_BRANCH=$(grep -oP 'lmstudio-js-branch:\s*\K\S+' pr_body.txt || true)
 
-          # Fallback to main if not found
+          # Always look below separators first
+          LMS_JS_BRANCH=$(awk '/^---/{flag=1; next} flag && /lmstudio-js-branch:/{gsub(/.*lmstudio-js-branch:\s*/, ""); gsub(/\s.*/, ""); print; exit}' pr_body.txt || true)
+
+          # If not found in separator sections, try anywhere in PR body
           if [ -z "$LMS_JS_BRANCH" ]; then
-            LMS_JS_BRANCH="main"
+            LMS_JS_BRANCH=$(grep -oP 'lmstudio-js-branch:\s*\K\S+' pr_body.txt || true)
           fi
 
-          echo "branch=$LMS_JS_BRANCH" >> $GITHUB_OUTPUT
-
+          # Fallback to main if not found
           if [ -z "$LMS_JS_BRANCH" ]; then
             LMS_JS_BRANCH="main"
           fi
