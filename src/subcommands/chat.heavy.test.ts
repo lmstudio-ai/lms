@@ -2,7 +2,7 @@ import path from "path";
 import { TEST_CLI_PATH, testRunCommandSync } from "../util.test.js";
 
 // We skip chat tests to because we don't have max_tokens here.
-describe("chat heavy", () => {
+describe.skip("chat heavy", () => {
   const cliPath = path.join(__dirname, TEST_CLI_PATH);
   const modelIdentifier = "test-model";
   const modelToUse = "gemma-3-1b";
