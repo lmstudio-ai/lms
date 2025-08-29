@@ -114,4 +114,5 @@ jobs:
       - name: Run lms-cli tests
         run: |
           cd lmstudio.js
+          export LMS_FORCE_PROD=true
           npm run test-cli
