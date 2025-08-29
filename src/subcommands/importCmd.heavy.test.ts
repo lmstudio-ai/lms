@@ -151,7 +151,7 @@ describe("import command", () => {
   });
 
   // Skip for now as tests do not run inside the container.
-  describe("actual import tests", () => {
+  describe.skip("actual import tests", () => {
     let testFilePath: string;
     let testId: string;
     let targetPath: string;
