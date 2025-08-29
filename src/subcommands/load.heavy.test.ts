@@ -1,8 +1,8 @@
 import path from "path";
-import { CLI_PATH, runCommandSync, TEST_MODEL_EXPECTED } from "../util.js";
+import { TEST_CLI_PATH, testRunCommandSync, TEST_MODEL_EXPECTED } from "../util.test.js";
 
 describe("load", () => {
-  const cliPath = path.join(__dirname, CLI_PATH);
+  const cliPath = path.join(__dirname, TEST_CLI_PATH);
 
   // Helper function to check if model is loaded using ps command
   const verifyModelLoaded = (
@@ -10,7 +10,7 @@ describe("load", () => {
     expectedTtlMs: number | null = null,
     expectedContextLength: number | null = null,
   ) => {
-    const { status, stdout, stderr } = runCommandSync("node", [
+    const { status, stdout, stderr } = testRunCommandSync("node", [
       cliPath,
       "ps",
       "--host",
@@ -41,7 +41,7 @@ describe("load", () => {
   };
 
   const unloadAllModels = () => {
-    const { status } = runCommandSync("node", [
+    const { status } = testRunCommandSync("node", [
       cliPath,
       "unload",
       "--all",
@@ -67,7 +67,7 @@ describe("load", () => {
 
   describe("load command", () => {
     it("should load model without identifier and verify with ps", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "load",
         TEST_MODEL_EXPECTED,
@@ -84,7 +84,7 @@ describe("load", () => {
       const modelIdentifier = verifyModelLoaded(TEST_MODEL_EXPECTED);
 
       // Unload the model using the extracted identifier
-      const { status: unloadStatus, stderr: unloadStderr } = runCommandSync("node", [
+      const { status: unloadStatus, stderr: unloadStderr } = testRunCommandSync("node", [
         cliPath,
         "unload",
         modelIdentifier,
@@ -98,7 +98,7 @@ describe("load", () => {
     });
 
     it("should load model with basic flags and verify with ps", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "load",
         TEST_MODEL_EXPECTED,
@@ -117,7 +117,7 @@ describe("load", () => {
       verifyModelLoaded("basic-model");
 
       // Unload the model
-      const { status: unloadStatus, stderr: unloadStderr } = runCommandSync("node", [
+      const { status: unloadStatus, stderr: unloadStderr } = testRunCommandSync("node", [
         cliPath,
         "unload",
         "basic-model",
@@ -131,7 +131,7 @@ describe("load", () => {
     });
 
     it("should handle advanced flags (GPU, TTL, context-length)", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "load",
         TEST_MODEL_EXPECTED,
@@ -156,7 +156,7 @@ describe("load", () => {
       verifyModelLoaded("advanced-model", 1800000, 4096);
 
       // Cleanup
-      runCommandSync("node", [
+      testRunCommandSync("node", [
         cliPath,
         "unload",
         "advanced-model",
@@ -169,7 +169,7 @@ describe("load", () => {
 
     it("should handle GPU options (off, max, numeric)", () => {
       // Test GPU off
-      const { status: status1, stderr: stderr1 } = runCommandSync("node", [
+      const { status: status1, stderr: stderr1 } = testRunCommandSync("node", [
         cliPath,
         "load",
         TEST_MODEL_EXPECTED,
@@ -185,7 +185,7 @@ describe("load", () => {
       ]);
       if (status1 !== 0) console.error("Load stderr:", stderr1);
       expect(status1).toBe(0);
-      runCommandSync("node", [
+      testRunCommandSync("node", [
         cliPath,
         "unload",
         "gpu-off-model",
@@ -196,7 +196,7 @@ describe("load", () => {
       ]);
 
       // Test GPU max
-      const { status: status2, stderr: stderr2 } = runCommandSync("node", [
+      const { status: status2, stderr: stderr2 } = testRunCommandSync("node", [
         cliPath,
         "load",
         TEST_MODEL_EXPECTED,
@@ -212,7 +212,7 @@ describe("load", () => {
       ]);
       if (status2 !== 0) console.error("Load stderr:", stderr2);
       expect(status2).toBe(0);
-      runCommandSync("node", [
+      testRunCommandSync("node", [
         cliPath,
         "unload",
         "gpu-max-model",
@@ -223,42 +223,9 @@ describe("load", () => {
       ]);
     });
 
-    it("should handle custom identifier and verify in ps", () => {
-      const { status, stderr } = runCommandSync("node", [
-        cliPath,
-        "load",
-        TEST_MODEL_EXPECTED,
-        "--identifier",
-        "custom-gemma",
-        "--yes",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      if (status !== 0) console.error("Load stderr:", stderr);
-      expect(status).toBe(0);
-
-      // Verify model is loaded with custom identifier
-      verifyModelLoaded("custom-gemma");
-
-      // Unload by identifier
-      const { status: unloadStatus, stderr: unloadStderr } = runCommandSync("node", [
-        cliPath,
-        "unload",
-        "custom-gemma",
-        "--host",
-        "localhost",
-        "--port",
-        "1234",
-      ]);
-      if (unloadStatus !== 0) console.error("Unload stderr:", unloadStderr);
-      expect(unloadStatus).toBe(0);
-    });
-
     it("should handle error cases gracefully", () => {
       // Non-existent model with exact flag
-      const { status: status1, stderr: stderr1 } = runCommandSync("node", [
+      const { status: status1, stderr: stderr1 } = testRunCommandSync("node", [
         cliPath,
         "load",
         "non-existent-model",
@@ -272,7 +239,7 @@ describe("load", () => {
       expect(stderr1).toBeTruthy();
 
       // Non-existent model with yes flag
-      const { status: status2, stderr: stderr2 } = runCommandSync("node", [
+      const { status: status2, stderr: stderr2 } = testRunCommandSync("node", [
         cliPath,
         "load",
         "non-existent-model",
@@ -286,7 +253,7 @@ describe("load", () => {
       expect(stderr2).toBeTruthy();
 
       // Exact flag without path
-      const { status: status3, stderr: stderr3 } = runCommandSync("node", [
+      const { status: status3, stderr: stderr3 } = testRunCommandSync("node", [
         cliPath,
         "load",
         "--exact",

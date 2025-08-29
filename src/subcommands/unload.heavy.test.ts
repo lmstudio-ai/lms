@@ -1,12 +1,12 @@
 import path from "path";
-import { CLI_PATH, runCommandSync, TEST_MODEL_EXPECTED } from "../util.js";
+import { TEST_CLI_PATH, testRunCommandSync, TEST_MODEL_EXPECTED } from "../util.test.js";
 
 describe("unload", () => {
-  const cliPath = path.join(__dirname, CLI_PATH);
+  const cliPath = path.join(__dirname, TEST_CLI_PATH);
 
   // Helper function to load a model
   const loadModel = (identifier: string) => {
-    const { status, stderr } = runCommandSync("node", [
+    const { status, stderr } = testRunCommandSync("node", [
       cliPath,
       "load",
       TEST_MODEL_EXPECTED,
@@ -24,7 +24,7 @@ describe("unload", () => {
 
   // Helper function to verify model is loaded
   const verifyModelLoaded = (identifier: string) => {
-    const { status, stdout } = runCommandSync("node", [
+    const { status, stdout } = testRunCommandSync("node", [
       cliPath,
       "ps",
       "--host",
@@ -38,7 +38,7 @@ describe("unload", () => {
 
   // Helper function to verify model is not loaded
   const verifyModelNotLoaded = (identifier: string) => {
-    const { status, stdout } = runCommandSync("node", [
+    const { status, stdout } = testRunCommandSync("node", [
       cliPath,
       "ps",
       "--host",
@@ -52,7 +52,7 @@ describe("unload", () => {
 
   // Helper function to unload model by identifier
   const unloadModel = (identifier: string) => {
-    const { status, stderr } = runCommandSync("node", [
+    const { status, stderr } = testRunCommandSync("node", [
       cliPath,
       "unload",
       identifier,
@@ -67,7 +67,7 @@ describe("unload", () => {
 
   // Helper function to unload all models
   const unloadAllModels = () => {
-    const { status, stderr } = runCommandSync("node", [
+    const { status, stderr } = testRunCommandSync("node", [
       cliPath,
       "unload",
       "--all",
@@ -130,7 +130,7 @@ describe("unload", () => {
       loadModel("short-flag-test");
 
       // Unload all with short flag
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "unload",
         "-a",
@@ -144,7 +144,7 @@ describe("unload", () => {
     });
 
     it("should fail gracefully with non-existent model identifier", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "unload",
         "non-existent-model",
@@ -159,7 +159,7 @@ describe("unload", () => {
     });
 
     it("should fail when both identifier and --all flag are provided", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "unload",
         "some-model",

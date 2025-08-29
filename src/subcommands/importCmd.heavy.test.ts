@@ -1,10 +1,10 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { CLI_PATH, runCommandSync } from "../util.js";
+import { TEST_CLI_PATH, testRunCommandSync } from "../util.test.js";
 
 describe("import command", () => {
-  const cliPath = path.join(__dirname, CLI_PATH);
+  const cliPath = path.join(__dirname, TEST_CLI_PATH);
   const testModelPath = path.join(__dirname, "../../../test-fixtures/test-model.gguf");
   const lmstudioModelsPath = path.join(os.homedir(), ".lmstudio", "models");
 
@@ -52,7 +52,7 @@ describe("import command", () => {
     });
 
     it("should perform dry run without actually moving file", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -72,7 +72,7 @@ describe("import command", () => {
     });
 
     it("should perform dry run without actually copying file", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -98,7 +98,7 @@ describe("import command", () => {
     });
 
     it("should perform dry run without actually creating hard link", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -124,7 +124,7 @@ describe("import command", () => {
     });
 
     it("should perform dry run without actually creating symbolic link", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -151,7 +151,7 @@ describe("import command", () => {
   });
 
   // Skip for now as tests do not run inside the container.
-  describe.skip("actual import tests", () => {
+  describe("actual import tests", () => {
     let testFilePath: string;
     let testId: string;
     let targetPath: string;
@@ -190,7 +190,7 @@ describe("import command", () => {
     });
 
     it("should actually move file when not in dry run mode", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -209,7 +209,7 @@ describe("import command", () => {
     });
 
     it("should actually copy file when using --copy flag", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -230,7 +230,7 @@ describe("import command", () => {
     });
 
     it("should actually create hard link when using --hard-link flag", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -256,7 +256,7 @@ describe("import command", () => {
     });
 
     it("should actually create symbolic link when using --symbolic-link flag", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -289,7 +289,7 @@ describe("import command", () => {
         path.basename(testFilePath),
       );
 
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,
@@ -323,7 +323,7 @@ describe("import command", () => {
 
   describe("error handling", () => {
     it("should fail when multiple operation flags are specified", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testModelPath,
@@ -338,7 +338,7 @@ describe("import command", () => {
     });
 
     it("should handle non-existent file gracefully", () => {
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         "/non/existent/file.gguf",
@@ -364,7 +364,7 @@ describe("import command", () => {
       fs.mkdirSync(targetDir, { recursive: true });
       fs.writeFileSync(targetPath, "existing content");
 
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "import",
         testFilePath,

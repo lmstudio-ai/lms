@@ -1,12 +1,12 @@
 import path from "path";
-import { CLI_PATH, runCommandSync, TEST_MODEL_EXPECTED } from "../util.js";
+import { TEST_CLI_PATH, testRunCommandSync, TEST_MODEL_EXPECTED } from "../util.test.js";
 
 describe("list", () => {
-  const cliPath = path.join(__dirname, CLI_PATH);
+  const cliPath = path.join(__dirname, TEST_CLI_PATH);
 
   describe("ls command", () => {
     it("should show downloaded models", () => {
-      const { status, stdout } = runCommandSync("node", [
+      const { status, stdout } = testRunCommandSync("node", [
         cliPath,
         "ls",
         "--host",
@@ -19,7 +19,7 @@ describe("list", () => {
     });
 
     it("should filter LLM models only", () => {
-      const { status, stdout } = runCommandSync("node", [
+      const { status, stdout } = testRunCommandSync("node", [
         cliPath,
         "ls",
         "--llm",
@@ -30,12 +30,13 @@ describe("list", () => {
       ]);
       expect(status).toBe(0);
       expect(stdout).toContain("LLM");
+      expect(stdout).not.toContain("EMBEDDING");
       expect(stdout).toContain("PARAMS");
       expect(stdout).toContain(TEST_MODEL_EXPECTED);
     });
 
     it("should filter embedding models only", () => {
-      const { status, stdout } = runCommandSync("node", [
+      const { status, stdout } = testRunCommandSync("node", [
         cliPath,
         "ls",
         "--embedding",
@@ -46,11 +47,12 @@ describe("list", () => {
       ]);
       expect(status).toBe(0);
       expect(stdout).toContain("EMBEDDING");
+      expect(stdout).not.toContain("LLM");
       expect(stdout).toContain("PARAMS");
     });
 
     it("should output JSON format", () => {
-      const { status, stdout } = runCommandSync("node", [
+      const { status, stdout } = testRunCommandSync("node", [
         cliPath,
         "ls",
         "--json",
@@ -67,7 +69,7 @@ describe("list", () => {
     });
 
     it("should handle combined flags with json", () => {
-      const { status, stdout } = runCommandSync("node", [
+      const { status, stdout } = testRunCommandSync("node", [
         cliPath,
         "ls",
         "--embedding",
@@ -87,7 +89,7 @@ describe("list", () => {
   describe("ps command", () => {
     beforeAll(() => {
       // Ensure the server is running before tests
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "load",
         TEST_MODEL_EXPECTED,
@@ -107,7 +109,7 @@ describe("list", () => {
 
     afterAll(() => {
       // Cleanup: Unload the model after tests
-      const { status, stderr } = runCommandSync("node", [
+      const { status, stderr } = testRunCommandSync("node", [
         cliPath,
         "unload",
         TEST_MODEL_EXPECTED,
@@ -123,7 +125,7 @@ describe("list", () => {
     });
 
     it("should show loaded models", () => {
-      const { status, stdout } = runCommandSync("node", [
+      const { status, stdout } = testRunCommandSync("node", [
         cliPath,
         "ps",
         "--host",
@@ -136,7 +138,7 @@ describe("list", () => {
     });
 
     it("should output JSON format", () => {
-      const { status, stdout } = runCommandSync("node", [
+      const { status, stdout } = testRunCommandSync("node", [
         cliPath,
         "ps",
         "--json",
@@ -155,7 +157,7 @@ describe("list", () => {
     });
 
     it("should handle no loaded models gracefully", () => {
-      const { status } = runCommandSync("node", [
+      const { status } = testRunCommandSync("node", [
         cliPath,
         "ps",
         "--host",

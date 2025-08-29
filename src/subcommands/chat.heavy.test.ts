@@ -1,15 +1,15 @@
 import path from "path";
-import { CLI_PATH, runCommandSync } from "../util.js";
+import { TEST_CLI_PATH, testRunCommandSync } from "../util.test.js";
 
 // We skip chat tests to because we don't have max_tokens here.
-describe.skip("chat heavy", () => {
-  const cliPath = path.join(__dirname, CLI_PATH);
+describe("chat heavy", () => {
+  const cliPath = path.join(__dirname, TEST_CLI_PATH);
   const modelIdentifier = "test-model";
   const modelToUse = "gemma-3-1b";
 
   beforeAll(async () => {
     // Ensure the test model is loaded
-    const { status } = runCommandSync("node", [
+    const { status } = testRunCommandSync("node", [
       cliPath,
       "load",
       modelToUse,
@@ -28,7 +28,7 @@ describe.skip("chat heavy", () => {
 
   afterAll(async () => {
     // Clean up by unloading the model
-    const { status } = runCommandSync("node", [
+    const { status } = testRunCommandSync("node", [
       cliPath,
       "unload",
       modelIdentifier,
@@ -43,7 +43,7 @@ describe.skip("chat heavy", () => {
   }, 10000);
 
   it("should respond to simple prompt with specific model", () => {
-    const { status, stdout, stderr } = runCommandSync("node", [
+    const { status, stdout, stderr } = testRunCommandSync("node", [
       cliPath,
       "chat",
       modelIdentifier,
@@ -61,7 +61,7 @@ describe.skip("chat heavy", () => {
   }, 15000);
 
   it("should use custom system prompt", () => {
-    const { status, stdout, stderr } = runCommandSync("node", [
+    const { status, stdout, stderr } = testRunCommandSync("node", [
       cliPath,
       "chat",
       modelIdentifier,
@@ -81,7 +81,7 @@ describe.skip("chat heavy", () => {
   }, 15000);
 
   it("should display stats when --stats flag is used", () => {
-    const { status, stderr } = runCommandSync("node", [
+    const { status, stderr } = testRunCommandSync("node", [
       cliPath,
       "chat",
       modelIdentifier,
@@ -102,7 +102,7 @@ describe.skip("chat heavy", () => {
   }, 15000);
 
   it("should work with default model when no model specified", () => {
-    const { status, stdout, stderr } = runCommandSync("node", [
+    const { status, stdout, stderr } = testRunCommandSync("node", [
       cliPath,
       "chat",
       "--prompt",
@@ -119,7 +119,7 @@ describe.skip("chat heavy", () => {
   }, 15000);
 
   it("should fail gracefully with non-existent model", () => {
-    const { status, stderr } = runCommandSync("node", [
+    const { status, stderr } = testRunCommandSync("node", [
       cliPath,
       "chat",
       "non-existent-model",
