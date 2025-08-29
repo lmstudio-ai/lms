@@ -109,11 +109,8 @@ jobs:
             apt-get update
             apt-get install -y wget
           fi
-          wget https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf
+          wget -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf
           lms clone google/gemma-3-4b
-
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
 
       - name: Run lms-cli tests
         run: |
