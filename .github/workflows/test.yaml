@@ -109,7 +109,7 @@ jobs:
             lms status
             apt-get install -y wget
           fi
-          wget -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf --quiet
+          wget --quiet -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf
 
           # Run tests
           cd /github/workspace/lmstudio.js
