@@ -5,7 +5,7 @@ import chalk from "chalk";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
 import { addCreateClientOptions, createClient } from "../createClient.js";
-import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { formatTimeLean } from "../formatElapsedTime.js";
 
@@ -26,53 +26,154 @@ function architecture(architecture?: string) {
   return architectureInfoLookup.find(architecture).name;
 }
 
+function architectureColored(architecture?: string) {
+  if (architecture === undefined) {
+    return "";
+  }
+  const architectureInfo = architectureInfoLookup.find(architecture);
+  return architectureInfo.colorer(architectureInfo.name);
+}
+
 function printDownloadedModelsTable(
   title: string,
   downloadedModels: Array<ModelInfo>,
   loadedModels: Array<{ path: string; identifier: string }>,
+  detailed: boolean,
 ) {
-  const downloadedModelsAndHeadlines = downloadedModels
-    .map(model => {
-      return {
-        path: model.modelKey,
-        sizeBytes: formatSizeBytes1000(model.sizeBytes),
-        params: model.paramsString,
-        arch: architecture(model.architecture),
-        loaded: loadedCheck(
-          loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
-        ),
-      };
-    })
-    .sort((a, b) => a.path.localeCompare(b.path));
+  if (detailed) {
+    interface DownloadedModelWithExtraInfo {
+      model: ModelInfo;
+      loadedIdentifiers: Array<string>;
+      group: string;
+      remaining: string;
+    }
+    const downloadedModelsGroups = downloadedModels
+      .map(model => {
+        const segments = model.path.split("/");
+        return {
+          model,
+          loadedIdentifiers: loadedModels
+            .filter(loadedModel => loadedModel.path === model.path)
+            .map(loadedModel => loadedModel.identifier),
+          group: segments.slice(0, 2).join("/"),
+          remaining: segments.slice(2).join("/"),
+        };
+      })
+      .reduce((acc, model) => {
+        let group = acc.get(model.group);
+        if (!group) {
+          group = [];
+          acc.set(model.group, group);
+        }
+        group.push(model);
+        return acc;
+      }, new Map<string, Array<DownloadedModelWithExtraInfo>>());
 
-  console.info(
-    columnify(downloadedModelsAndHeadlines, {
-      columns: ["path", "params", "arch", "sizeBytes", "loaded"],
-      config: {
-        loaded: {
-          headingTransform: () => "",
-          align: "left",
-        },
-        path: {
-          headingTransform: () => chalk.grey(title),
-        },
-        params: {
-          headingTransform: () => chalk.grey("PARAMS"),
-          align: "left",
-        },
-        arch: {
-          headingTransform: () => chalk.grey("ARCH"),
-          align: "left",
-        },
-        sizeBytes: {
-          headingTransform: () => chalk.grey("SIZE"),
-          align: "left",
-        },
+    console.info(title);
+    console.info();
+
+    const downloadedModelsAndHeadlines = [...downloadedModelsGroups.entries()].flatMap(
+      ([group, models]) => {
+        if (models.length === 1 && models[0].remaining === "") {
+          const model = models[0];
+          return {
+            path: chalk.grey(" ") + chalk.cyanBright(group),
+            sizeBytes: formatSizeBytesWithColor1000(model.model.sizeBytes),
+            arch: architectureColored(model.model.architecture),
+            loaded: loadedCheck(model.loadedIdentifiers.length),
+          };
+        }
+        return [
+          {},
+          { path: chalk.grey(" ") + chalk.cyanBright(group) },
+          ...models.map(model => ({
+            path: chalk.grey("   ") + chalk.white("/" + model.remaining),
+            key: model.model.modelKey,
+            sizeBytes: formatSizeBytesWithColor1000(model.model.sizeBytes),
+            params: model.model.paramsString ?? "",
+            arch: architectureColored(model.model.architecture),
+            loaded: loadedCheck(model.loadedIdentifiers.length),
+          })),
+        ];
       },
-      preserveNewLines: true,
-      columnSplitter: "    ",
-    }),
-  );
+    );
+
+    console.info(
+      columnify(downloadedModelsAndHeadlines, {
+        columns: ["path", "key", "params", "arch", "sizeBytes", "loaded"],
+        config: {
+          path: {
+            headingTransform: () => chalk.gray(" ") + chalk.greenBright("PATH"),
+          },
+          key: {
+            headingTransform: () => chalk.greenBright("KEY"),
+            align: "left",
+          },
+          params: {
+            headingTransform: () => chalk.greenBright("PARAMS"),
+            align: "right",
+          },
+          arch: {
+            headingTransform: () => chalk.greenBright("ARCHITECTURE"),
+            align: "center",
+          },
+          sizeBytes: {
+            headingTransform: () => chalk.greenBright("SIZE"),
+            align: "right",
+          },
+          loaded: {
+            headingTransform: () => chalk.greenBright("LOADED"),
+            align: "left",
+          },
+        },
+        preserveNewLines: true,
+        columnSplitter: "  ",
+      }),
+    );
+  } else {
+    const downloadedModelsAndHeadlines = downloadedModels
+      .map(model => {
+        return {
+          path: model.modelKey,
+          sizeBytes: formatSizeBytes1000(model.sizeBytes),
+          params: model.paramsString,
+          arch: architecture(model.architecture),
+          loaded: loadedCheck(
+            loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
+          ),
+        };
+      })
+      .sort((a, b) => a.path.localeCompare(b.path));
+
+    console.info(
+      columnify(downloadedModelsAndHeadlines, {
+        columns: ["path", "params", "arch", "sizeBytes", "loaded"],
+        config: {
+          loaded: {
+            headingTransform: () => "",
+            align: "left",
+          },
+          path: {
+            headingTransform: () => chalk.grey(title),
+          },
+          params: {
+            headingTransform: () => chalk.grey("PARAMS"),
+            align: "left",
+          },
+          arch: {
+            headingTransform: () => chalk.grey("ARCH"),
+            align: "left",
+          },
+          sizeBytes: {
+            headingTransform: () => chalk.grey("SIZE"),
+            align: "left",
+          },
+        },
+        preserveNewLines: true,
+        columnSplitter: "    ",
+      }),
+    );
+  }
 }
 
 export const ls = addCreateClientOptions(
@@ -82,13 +183,14 @@ export const ls = addCreateClientOptions(
       .description("List all downloaded models")
       .option("--llm", "Show only LLM models")
       .option("--embedding", "Show only embedding models")
-      .option("--json", "Outputs in JSON format to stdout"),
+      .option("--json", "Outputs in JSON format to stdout")
+      .option("--detailed", "Show detailed information"),
   ),
 ).action(async options => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
 
-  const { llm = false, embedding = false, json = false } = options;
+  const { llm = false, embedding = false, json = false, detailed = false } = options;
 
   let downloadedModels = await client.system.listDownloadedModels();
   const loadedModels = await client.llm.listLoaded();
@@ -140,13 +242,13 @@ export const ls = addCreateClientOptions(
 
   const llms = downloadedModels.filter(model => model.type === "llm");
   if (llms.length > 0) {
-    printDownloadedModelsTable("LLM", llms, loadedModels);
+    printDownloadedModelsTable("LLM", llms, loadedModels, detailed);
     console.info();
   }
 
   const embeddings = downloadedModels.filter(model => model.type === "embedding");
   if (embeddings.length > 0) {
-    printDownloadedModelsTable("EMBEDDING", embeddings, loadedModels);
+    printDownloadedModelsTable("EMBEDDING", embeddings, loadedModels, detailed);
     console.info();
   }
 });
