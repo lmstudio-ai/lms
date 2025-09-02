@@ -82,7 +82,7 @@ export const ls = addCreateClientOptions(
       .description("List all downloaded models")
       .option("--llm", "Show only LLM models")
       .option("--embedding", "Show only embedding models")
-      .option("--detailed", "Show detailed view with grouping")
+      .option("--detailed", "[Deprecated] Show detailed view with grouping")
       .option("--json", "Outputs in JSON format to stdout"),
   ),
 ).action(async options => {
