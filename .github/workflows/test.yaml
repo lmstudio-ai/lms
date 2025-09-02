@@ -30,7 +30,7 @@ jobs:
           echo "$PR_BODY" > pr_body.txt
 
           # Always look below separators first
-          LMS_JS_BRANCH=$(awk '/^---/{flag=1; next} flag && /lmstudio-js-branch:/{gsub(/.*lmstudio-js-branch:\s*/, ""); gsub(/\s.*/, ""); print; exit}' pr_body.txt || true)
+          LMS_JS_BRANCH=$(awk '/^-+$/{flag=1; next} flag && /lmstudio-js-branch:/{gsub(/.*lmstudio-js-branch:[ \t]*/, ""); gsub(/[ \t].*/, ""); print; exit}' pr_body.txt || true)
 
           # If not found in separator sections, try anywhere in PR body
           if [ -z "$LMS_JS_BRANCH" ]; then
