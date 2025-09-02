@@ -154,7 +154,7 @@ export const load = addLogLevelOptions(
 
             To see a list of all downloaded models, run:
 
-                ${chalk.yellowBright("lms ls --detailed")}
+                ${chalk.yellowBright("lms ls")}
 
             Note, you need to provide the full model path. For example:
 
@@ -184,7 +184,7 @@ export const load = addLogLevelOptions(
 
             To see a list of all downloaded models, run:
 
-                ${chalk.yellowBright("lms ls --detailed")}
+                ${chalk.yellowBright("lms ls")}
 
             To select a model interactively, remove the ${chalk.yellowBright("--yes")} flag:
 

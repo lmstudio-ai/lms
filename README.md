@@ -1,6 +1,6 @@
 <p align="center">
   <br/>
-  <picture> 
+  <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://files.lmstudio.ai/lms-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="https://files.lmstudio.ai/lms-light.png">
     <img alt="lmstudio cli logo" src="https://files.lmstudio.ai/lms-light.png" width="180">
@@ -36,7 +36,6 @@ Here are some frequently used commands:
 - `lms server start` - To start the local API server.
 - `lms server stop` - To stop the local API server.
 - `lms ls` - To list all downloaded models.
-  - `lms ls --detailed` - To list all downloaded models with detailed information.
   - `lms ls --json` - To list all downloaded models in machine-readable JSON format.
 - `lms ps` - To list all loaded models available for inferencing.
   - `lms ps --json` - To list all loaded models available for inferencing in machine-readable JSON format.
