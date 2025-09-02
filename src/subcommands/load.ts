@@ -290,7 +290,7 @@ async function selectModelToLoad(
   return selected;
 }
 
-async function loadModel(
+export async function loadModel(
   logger: SimpleLogger,
   client: LMStudioClient,
   model: ModelInfo,
@@ -338,4 +338,5 @@ async function loadModel(
       To set a custom identifier, use the ${chalk.yellowBright("--identifier <identifier>")} option.
     `);
   }
+  return llmModel;
 }

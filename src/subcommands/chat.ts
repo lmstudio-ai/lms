@@ -13,6 +13,8 @@ import fuzzy from "fuzzy";
 import chalk from "chalk";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { downloadArtifact } from "./get.js";
+import { ProgressBar } from "../ProgressBar.js";
+import columnify from "columnify";
 
 inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
 const { prompt } = inquirer;
@@ -66,12 +68,13 @@ export const chat = addLogLevelOptions(
         "Time (in seconds) to keep the model loaded after the chat ends",
         "3600",
       )
-      .option("--offline", "Do not fetch available models to download or updates", false),
+      .option("--offline", "Do not fetch available models to download or updates", false)
+      .option("-y, --yes", "Automatic yes to prompts, assume 'yes' as answer to all prompts"),
   ),
 ).action(async (model, options) => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
-  const { offline } = options;
+  const { offline, yes } = options;
 
   let initialPrompt = "";
   if (options.prompt !== undefined && options.prompt !== "") {
@@ -155,11 +158,28 @@ export const chat = addLogLevelOptions(
 
     // Pre-compute all display options to avoid recreation on each keystroke
     const displayOptions = modelsMap.map((model, index) => {
-      const status = model.isDownloaded === false ? chalk.gray("DOWNLOAD") : "";
-      const size = chalk.gray(`(${formatSizeBytes1000(model.size)})`);
+      const status = model.isDownloaded === false ? "DOWNLOAD" : "";
+      const size = formatSizeBytes1000(model.size);
+
       const displayName = offline
-        ? `${model.name} ${size}`
-        : `${model.name.padEnd(60)} ${size.padEnd(10)} ${status}`;
+        ? `${model.name} ${chalk.gray(`(${size})`)}`
+        : columnify(
+            [
+              {
+                name: model.name,
+                size: chalk.gray(`(min. ${size})`),
+                status: chalk.gray(status),
+              },
+            ],
+            {
+              showHeaders: false,
+              config: {
+                name: { minWidth: 50 },
+                size: { minWidth: 12 },
+                status: { minWidth: 10 },
+              },
+            },
+          ).trim();
 
       return {
         name: displayName,
@@ -195,7 +215,9 @@ export const chat = addLogLevelOptions(
       if (selectedModel.staffPicked) {
         // Download artifact from hub
         const [owner, name] = selectedModel.name.split("/");
-        await downloadArtifact(client, logger, owner, name, true);
+        await downloadArtifact(client, logger, owner, name, yes ?? false);
+        // Wait for model indexing to complete after download
+        await new Promise(resolve => setTimeout(resolve, 500));
       } else {
         // It is not a staff pick, so must be a direct model
         // which is not downloaded, unexpected path as
@@ -206,7 +228,26 @@ export const chat = addLogLevelOptions(
         process.exit(1);
       }
     }
-    llmModel = await client.llm.model(selectedModel.name);
+    const progressBar = new ProgressBar();
+    const abortController = new AbortController();
+    const sigintListener = () => {
+      progressBar.stop();
+      abortController.abort();
+      logger.warn("Load cancelled.");
+      process.exit(1);
+    };
+    process.addListener("SIGINT", sigintListener);
+
+    llmModel = await client.llm.model(selectedModel.name, {
+      verbose: false,
+      onProgress: progress => {
+        progressBar.setRatio(progress);
+      },
+      signal: abortController.signal,
+      ttl,
+    });
+    process.removeListener("SIGINT", sigintListener);
+    progressBar.stop();
   }
   if (!initialPrompt) {
     logger.info(`Chatting with ${llmModel.identifier}.  Type 'exit', 'quit' or Ctrl+C to quit`);
