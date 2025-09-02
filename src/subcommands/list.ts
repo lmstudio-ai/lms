@@ -82,16 +82,23 @@ export const ls = addCreateClientOptions(
       .description("List all downloaded models")
       .option("--llm", "Show only LLM models")
       .option("--embedding", "Show only embedding models")
+      .option("--detailed", "[Deprecated] Show detailed view with grouping")
       .option("--json", "Outputs in JSON format to stdout"),
   ),
 ).action(async options => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
 
-  const { llm = false, embedding = false, json = false } = options;
+  const { llm = false, embedding = false, detailed = false, json = false } = options;
 
   let downloadedModels = await client.system.listDownloadedModels();
   const loadedModels = await client.llm.listLoaded();
+
+  if (detailed) {
+    logger.warn(
+      chalk.yellow("The '--detailed' flag is deprecated. Output is the same as 'lms ls'"),
+    );
+  }
 
   const originalModelsCount = downloadedModels.length;
 
