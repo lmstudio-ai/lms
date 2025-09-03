@@ -1,12 +1,11 @@
 import { Command } from "@commander-js/extra-typings";
 import chalk from "chalk";
 import columnify from "columnify";
-import { addCreateClientOptions, createClient } from "../createClient.js";
-import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 
-const ls = addLogLevelOptions(
-  addCreateClientOptions(new Command().name("ls").description("List installed runtimes")),
-).action(async options => {
+// Helper function to fetch, sort and display engines
+async function listEngines(options: any, modelFormatFilter?: string) {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
 
@@ -19,7 +18,7 @@ const ls = addLogLevelOptions(
     }
 
     // Sort by name first, then by reverse version (latest first)
-    const sortedEngines = [...engines].sort((a, b) => {
+    let sortedEngines = [...engines].sort((a, b) => {
       const nameCompare = a.name.localeCompare(b.name);
       if (nameCompare !== 0) {
         return nameCompare;
@@ -27,6 +26,20 @@ const ls = addLogLevelOptions(
       // Reverse version sorting (latest first)
       return b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: "base" });
     });
+
+    // Apply model format filter if provided
+    if (modelFormatFilter) {
+      sortedEngines = sortedEngines.filter(engine =>
+        engine.supportedModelFormats.some(format =>
+          format.toUpperCase().includes(modelFormatFilter.toUpperCase()),
+        ),
+      );
+
+      if (sortedEngines.length === 0) {
+        logger.error(`No LLM Engines support the "${modelFormatFilter}" model format.`);
+        process.exit(1);
+      }
+    }
 
     // Format runtime data for display
     const rows = sortedEngines.map(engine => {
@@ -66,9 +79,25 @@ const ls = addLogLevelOptions(
     logger.error(`Failed to retrieve runtime index: ${error}`);
     process.exit(1);
   }
-});
+}
 
-export const runtime = new Command()
-  .name("runtime")
-  .description("Find and manage runtimes")
-  .addCommand(ls);
+const llmEngine = new Command()
+  .name("llm-engine")
+  .description("List LLM engines")
+  .option("--for <format>", "Filter by model format (case-insensitive)")
+  .action(async function (options) {
+    // Access parent options for logging and client creation
+    const parentOptions = this.parent?.opts() || {};
+    const combinedOptions = { ...parentOptions, ...options };
+
+    await listEngines(combinedOptions, options.for);
+  });
+
+export const ls = addLogLevelOptions(
+  addCreateClientOptions(new Command().name("ls").description("List installed runtimes")),
+)
+  .action(async options => {
+    // For now, we only have engines to list
+    await listEngines(options);
+  })
+  .addCommand(llmEngine);
