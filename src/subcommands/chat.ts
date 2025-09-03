@@ -183,7 +183,7 @@ export const chat = addLogLevelOptions(
                 showHeaders: false,
                 config: {
                   name: { minWidth: 50 },
-                  size: { minWidth: 12 },
+                  size: { minWidth: 16 },
                   status: { minWidth: 10 },
                 },
               },
