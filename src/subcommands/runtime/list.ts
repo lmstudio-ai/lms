@@ -5,12 +5,13 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 
 // Helper function to fetch, sort and display engines
-async function listEngines(options: any, modelFormatFilter?: string) {
+async function listEngines(options: any, modelFormatFilter?: string, useFull?: boolean) {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
 
   try {
-    const engines = await client.system.unstable.getRuntimeEngineSpecifiers();
+    const resp = await client.system.unstable.getRuntimeEngines();
+    const engines = resp.runtimeEngineCapabilities;
 
     if (engines.length === 0) {
       logger.info("No runtimes found.");
@@ -48,7 +49,7 @@ async function listEngines(options: any, modelFormatFilter?: string) {
       );
 
       return {
-        engine: `${engine.name}@${engine.version}`,
+        engine: useFull ? engine.fullAlias : engine.displayAlias,
         selected: isSelected ? "✓" : "",
         format: engine.supportedModelFormats.join(", "),
       };
@@ -90,14 +91,15 @@ const llmEngine = new Command()
     const parentOptions = this.parent?.opts() || {};
     const combinedOptions = { ...parentOptions, ...options };
 
-    await listEngines(combinedOptions, options.for);
+    await listEngines(combinedOptions, options.for, parentOptions["full"] === true);
   });
 
 export const ls = addLogLevelOptions(
   addCreateClientOptions(new Command().name("ls").description("List installed runtimes")),
 )
+  .option("--full", "Show full engine aliases instead of display aliases")
   .action(async options => {
     // For now, we only have engines to list
-    await listEngines(options);
+    await listEngines(options, undefined, options.full);
   })
   .addCommand(llmEngine);
