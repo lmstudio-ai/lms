@@ -11,15 +11,15 @@ const ls = addLogLevelOptions(
   const client = await createClient(logger, options);
 
   try {
-    const runtimes = await client.system.unstable.getRuntimeSpecifiers();
+    const engines = await client.system.unstable.getRuntimeEngineSpecifiers();
 
-    if (runtimes.length === 0) {
+    if (engines.length === 0) {
       logger.info("No runtimes found.");
       return;
     }
 
     // Sort by name first, then by reverse version (latest first)
-    const sortedRuntimes = [...runtimes].sort((a, b) => {
+    const sortedEngines = [...engines].sort((a, b) => {
       const nameCompare = a.name.localeCompare(b.name);
       if (nameCompare !== 0) {
         return nameCompare;
@@ -29,15 +29,15 @@ const ls = addLogLevelOptions(
     });
 
     // Format runtime data for display
-    const rows = sortedRuntimes.map(runtime => {
-      const isSelected = runtime.selectedForModelFormats.some(selectedFormat =>
-        runtime.supportedModelFormats.includes(selectedFormat),
+    const rows = sortedEngines.map(engine => {
+      const isSelected = engine.selectedForModelFormats.some(selectedFormat =>
+        engine.supportedModelFormats.includes(selectedFormat),
       );
 
       return {
-        engine: `${runtime.name}@${runtime.version}`,
+        engine: `${engine.name}@${engine.version}`,
         selected: isSelected ? "✓" : "",
-        format: runtime.supportedModelFormats.join(", "),
+        format: engine.supportedModelFormats.join(", "),
       };
     });
 
