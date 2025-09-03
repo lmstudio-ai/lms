@@ -103,151 +103,156 @@ export const chat = addLogLevelOptions(
       process.exit(1);
     }
   } else {
-    const cliPref = await getCliPref(logger);
+    try {
+      llmModel = await client.llm.model();
+    } catch (e) {
+      // No model loaded, offer to download a staff pick or use existing downloaded model
+      const cliPref = await getCliPref(logger);
 
-    let staffPicks: StaffPickedArtifact[] = [];
-    if (offline !== true) {
-      try {
-        staffPicks = await client.repository.fetchStaffPicks();
-      } catch (err) {
-        // If error says network connection failed,
-        // then we are offline, so just use empty staff picks
-        if (err instanceof Error && err.message.toLowerCase().includes("network") === true) {
-          logger.warn("Offline, unable to fetch staff picks");
-        } else {
-          logger.error("Error fetching staff picks:", err);
+      let staffPicks: StaffPickedArtifact[] = [];
+      if (offline !== true) {
+        try {
+          staffPicks = await client.repository.fetchStaffPicks();
+        } catch (err) {
+          // If error says network connection failed,
+          // then we are offline, so just use empty staff picks
+          if (err instanceof Error && err.message.toLowerCase().includes("network") === true) {
+            logger.warn("Offline, unable to fetch staff picks");
+          } else {
+            logger.error("Error fetching staff picks:", err);
+          }
+          staffPicks = [];
         }
-        staffPicks = [];
       }
-    }
-    const staffPickNames = staffPicks.map(m => m.owner + "/" + m.name);
+      const staffPickNames = staffPicks.map(m => m.owner + "/" + m.name);
 
-    const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];
-    const lastLoadedIndexToPathMap = [...lastLoadedModels.entries()];
-    const lastLoadedMap = new Map(lastLoadedIndexToPathMap.map(([index, path]) => [path, index]));
-    const models = (await client.system.listDownloadedModels())
-      .filter(model => model.architecture?.toLowerCase().includes("clip") !== true)
-      .sort((a, b) => {
-        const aIndex = lastLoadedMap.get(a.path) ?? lastLoadedMap.size + 1;
-        const bIndex = lastLoadedMap.get(b.path) ?? lastLoadedMap.size + 1;
-        return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
-      });
-    const filteredModels = models.filter(m => staffPickNames.includes(m.modelKey) !== true);
-    const modelKeys = models.map(model => model.modelKey);
+      const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];
+      const lastLoadedIndexToPathMap = [...lastLoadedModels.entries()];
+      const lastLoadedMap = new Map(lastLoadedIndexToPathMap.map(([index, path]) => [path, index]));
+      const models = (await client.system.listDownloadedModels())
+        .filter(model => model.architecture?.toLowerCase().includes("clip") !== true)
+        .sort((a, b) => {
+          const aIndex = lastLoadedMap.get(a.path) ?? lastLoadedMap.size + 1;
+          const bIndex = lastLoadedMap.get(b.path) ?? lastLoadedMap.size + 1;
+          return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
+        });
+      const filteredModels = models.filter(m => staffPickNames.includes(m.modelKey) !== true);
+      const modelKeys = models.map(model => model.modelKey);
 
-    const modelsMap = [
-      ...staffPicks
-        .map(m => {
+      const modelsMap = [
+        ...staffPicks
+          .map(m => {
+            return {
+              name: m.owner + "/" + m.name,
+              isDownloaded: modelKeys.includes(m.owner + "/" + m.name),
+              size: m.sizeBytes,
+              staffPicked: true,
+            };
+          })
+          .sort(m => (m.isDownloaded === true ? -1 : 1)),
+        ...filteredModels.map(m => {
           return {
-            name: m.owner + "/" + m.name,
-            isDownloaded: modelKeys.includes(m.owner + "/" + m.name),
+            name: m.path,
+            isDownloaded: true,
             size: m.sizeBytes,
-            staffPicked: true,
+            staffPicked: false,
           };
-        })
-        .sort(m => (m.isDownloaded === true ? -1 : 1)),
-      ...filteredModels.map(m => {
-        return {
-          name: m.path,
-          isDownloaded: true,
-          size: m.sizeBytes,
-          staffPicked: false,
-        };
-      }),
-    ];
+        }),
+      ];
 
-    // Pre-compute all display options to avoid recreation on each keystroke
-    const displayOptions = modelsMap.map((model, index) => {
-      const status = model.isDownloaded === false ? "DOWNLOAD" : "";
-      const size = formatSizeBytes1000(model.size);
+      // Pre-compute all display options to avoid recreation on each keystroke
+      const displayOptions = modelsMap.map((model, index) => {
+        const status = model.isDownloaded === false ? "DOWNLOAD" : "";
+        const size = formatSizeBytes1000(model.size);
 
-      const displayName = offline
-        ? `${model.name} ${chalk.gray(`(${size})`)}`
-        : columnify(
-            [
+        const displayName = offline
+          ? `${model.name} ${chalk.gray(`(${size})`)}`
+          : columnify(
+              [
+                {
+                  name: model.name,
+                  size: chalk.gray(`(min. ${size})`),
+                  status: chalk.gray(status),
+                },
+              ],
               {
-                name: model.name,
-                size: chalk.gray(`(min. ${size})`),
-                status: chalk.gray(status),
+                showHeaders: false,
+                config: {
+                  name: { minWidth: 50 },
+                  size: { minWidth: 12 },
+                  status: { minWidth: 10 },
+                },
               },
-            ],
-            {
-              showHeaders: false,
-              config: {
-                name: { minWidth: 50 },
-                size: { minWidth: 12 },
-                status: { minWidth: 10 },
-              },
-            },
-          ).trim();
+            ).trim();
 
-      return {
-        name: displayName,
-        value: model.name,
-        searchText: model.name,
-        originalIndex: index,
-      };
-    });
+        return {
+          name: displayName,
+          value: model.name,
+          searchText: model.name,
+          originalIndex: index,
+        };
+      });
 
-    const answers = await prompt([
-      {
-        type: "autocomplete",
-        name: "model",
-        message: "Select a model to chat with",
-        loop: false,
-        pageSize: terminalSize().rows - 4,
-        emptyText: "No model matched the filter",
-        source: async (_: any, input: string) => {
-          if (!input) return displayOptions;
-          const options = fuzzy.filter(input, displayOptions, { extract: el => el.searchText });
-          return options.map(option => option.original);
+      const answers = await prompt([
+        {
+          type: "autocomplete",
+          name: "model",
+          message: "Select a model to chat with",
+          loop: false,
+          pageSize: terminalSize().rows - 4,
+          emptyText: "No model matched the filter",
+          source: async (_: any, input: string) => {
+            if (!input) return displayOptions;
+            const options = fuzzy.filter(input, displayOptions, { extract: el => el.searchText });
+            return options.map(option => option.original);
+          },
         },
-      },
-    ]);
+      ]);
 
-    const selectedModel = modelsMap.find(m => m.name === answers.model);
+      const selectedModel = modelsMap.find(m => m.name === answers.model);
 
-    if (selectedModel === undefined) {
-      logger.error("No model selected, exiting.");
-      process.exit(1);
-    }
-    if (!selectedModel.isDownloaded) {
-      if (selectedModel.staffPicked) {
-        // Download artifact from hub
-        const [owner, name] = selectedModel.name.split("/");
-        await downloadArtifact(client, logger, owner, name, yes ?? false);
-        // Wait for model indexing to complete after download
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } else {
-        // It is not a staff pick, so must be a direct model
-        // which is not downloaded, unexpected path as
-        // only staff picks are offered to download
-        logger.error(
-          `Model ${selectedModel.name} is not downloaded. Please download the model first with 'lms get'.`,
-        );
+      if (selectedModel === undefined) {
+        logger.error("No model selected, exiting.");
         process.exit(1);
       }
-    }
-    const progressBar = new ProgressBar();
-    const abortController = new AbortController();
-    const sigintListener = () => {
-      progressBar.stop();
-      abortController.abort();
-      logger.warn("Load cancelled.");
-      process.exit(1);
-    };
-    process.addListener("SIGINT", sigintListener);
+      if (!selectedModel.isDownloaded) {
+        if (selectedModel.staffPicked) {
+          // Download artifact from hub
+          const [owner, name] = selectedModel.name.split("/");
+          await downloadArtifact(client, logger, owner, name, yes ?? false);
+          // Wait for model indexing to complete after download
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          // It is not a staff pick, so must be a direct model
+          // which is not downloaded, unexpected path as
+          // only staff picks are offered to download
+          logger.error(
+            `Model ${selectedModel.name} is not downloaded. Please download the model first with 'lms get'.`,
+          );
+          process.exit(1);
+        }
+      }
+      const progressBar = new ProgressBar();
+      const abortController = new AbortController();
+      const sigintListener = () => {
+        progressBar.stop();
+        abortController.abort();
+        logger.warn("Load cancelled.");
+        process.exit(1);
+      };
+      process.addListener("SIGINT", sigintListener);
 
-    llmModel = await client.llm.model(selectedModel.name, {
-      verbose: false,
-      onProgress: progress => {
-        progressBar.setRatio(progress);
-      },
-      signal: abortController.signal,
-      ttl,
-    });
-    process.removeListener("SIGINT", sigintListener);
-    progressBar.stop();
+      llmModel = await client.llm.model(selectedModel.name, {
+        verbose: false,
+        onProgress: progress => {
+          progressBar.setRatio(progress);
+        },
+        signal: abortController.signal,
+        ttl,
+      });
+      process.removeListener("SIGINT", sigintListener);
+      progressBar.stop();
+    }
   }
   if (!initialPrompt) {
     logger.info(`Chatting with ${llmModel.identifier}.  Type 'exit', 'quit' or Ctrl+C to quit`);
