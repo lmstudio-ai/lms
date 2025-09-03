@@ -106,6 +106,10 @@ export const chat = addLogLevelOptions(
     try {
       llmModel = await client.llm.model();
     } catch (e) {
+      if (!process.stdin.isTTY) {
+        logger.error("No loaded model found, load with:\n       lms load");
+        process.exit(1);
+      }
       // No model loaded, offer to download a staff pick or use existing downloaded model
       const cliPref = await getCliPref(logger);
 
