@@ -1,6 +1,6 @@
 import { Command } from "@commander-js/extra-typings";
 import type { SimpleLogger } from "@lmstudio/lms-common";
-import type { LLMPredictionStats, StaffPickedArtifact } from "@lmstudio/lms-shared-types";
+import type { LLMPredictionStats, StaffPickedModel } from "@lmstudio/lms-shared-types";
 import { Chat, type LLM } from "@lmstudio/sdk";
 import * as readline from "readline";
 import { addCreateClientOptions, createClient } from "../createClient.js";
@@ -113,7 +113,7 @@ export const chat = addLogLevelOptions(
       // No model loaded, offer to download a staff pick or use existing downloaded model
       const cliPref = await getCliPref(logger);
 
-      let staffPicks: StaffPickedArtifact[] = [];
+      let staffPicks: StaffPickedModel[] = [];
       if (offline !== true) {
         try {
           staffPicks = await client.repository.fetchStaffPicks();
