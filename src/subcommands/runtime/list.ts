@@ -5,7 +5,7 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 
 // Helper function to fetch, sort and display engines
-async function listEngines(options: any, modelFormatFilter?: string, useFull?: boolean) {
+async function listEngines(options: any, modelFormatFilters?: Set<string>, useFull?: boolean) {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
 
@@ -29,15 +29,15 @@ async function listEngines(options: any, modelFormatFilter?: string, useFull?: b
     });
 
     // Apply model format filter if provided
-    if (modelFormatFilter) {
+    if (modelFormatFilters) {
       sortedEngines = sortedEngines.filter(engine =>
-        engine.supportedModelFormats.some(format =>
-          format.toUpperCase().includes(modelFormatFilter.toUpperCase()),
-        ),
+        engine.supportedModelFormats.some(format => modelFormatFilters.has(format.toUpperCase())),
       );
 
       if (sortedEngines.length === 0) {
-        logger.error(`No LLM Engines support the "${modelFormatFilter}" model format.`);
+        logger.error(
+          `No LLM Engines support the "${[...modelFormatFilters].join(", ")}" model format(s).`,
+        );
         process.exit(1);
       }
     }
@@ -85,13 +85,19 @@ async function listEngines(options: any, modelFormatFilter?: string, useFull?: b
 const llmEngine = new Command()
   .name("llm-engine")
   .description("List LLM engines")
-  .option("--for <format>", "Filter by model format (case-insensitive)")
+  .option("--for <format>", "Comma-separated list of model format filters (case-insensitive)")
   .action(async function (options) {
     // Access parent options for logging and client creation
     const parentOptions = this.parent?.opts() || {};
     const combinedOptions = { ...parentOptions, ...options };
 
-    await listEngines(combinedOptions, options.for, parentOptions["full"] === true);
+    await listEngines(
+      combinedOptions,
+      options.for !== undefined
+        ? new Set(options.for.split(",").map(s => s.toUpperCase()))
+        : undefined,
+      parentOptions["full"] === true,
+    );
   });
 
 export const ls = addLogLevelOptions(
