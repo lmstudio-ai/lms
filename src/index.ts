@@ -12,6 +12,7 @@ import { load } from "./subcommands/load.js";
 import { log } from "./subcommands/log.js";
 import { login } from "./subcommands/login.js";
 import { push } from "./subcommands/push.js";
+import { runtime } from "./subcommands/runtime.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
@@ -50,6 +51,7 @@ program.addCommand(flags);
 program.addCommand(log);
 program.addCommand(status);
 program.addCommand(version);
+program.addCommand(runtime);
 
 program.parseAsync(process.argv).catch((error: any) => {
   console.error(error?.stack ?? error);
