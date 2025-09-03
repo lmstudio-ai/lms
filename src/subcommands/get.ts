@@ -700,7 +700,7 @@ async function downloadArtifact(
     );
     if (containsPlugin) {
       process.stdout.write(
-        "(i) Plugins can execute code. Only install plugins from authors you trust.\n\n",
+        "\n(i) Plugins can execute code. Only install plugins from authors you trust.\n\n",
       );
     }
     const confirmed = await askQuestion("Continue?");
