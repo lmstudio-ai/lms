@@ -9,6 +9,9 @@ import { exists } from "./exists.js";
 import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { createRefinedNumberParser } from "./types/refinedNumber.js";
+
+export const DEFAULT_SERVER_PORT: number = 1234;
+
 /**
  * Checks if the HTTP server is running.
  */
@@ -244,7 +247,7 @@ export async function createClient(
   }
 
   if (port === undefined) {
-    port = 1234;
+    port = DEFAULT_SERVER_PORT;
   }
 
   logger.debug(`Connecting to server at ${host}:${port}`);

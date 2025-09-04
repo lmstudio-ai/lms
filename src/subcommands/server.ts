@@ -1,7 +1,7 @@
 import { Command, Option } from "@commander-js/extra-typings";
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { readFile } from "fs/promises";
-import { checkHttpServer, createClient } from "../createClient.js";
+import { checkHttpServer, createClient, DEFAULT_SERVER_PORT } from "../createClient.js";
 import { exists } from "../exists.js";
 import { serverConfigPath } from "../lmstudioPaths.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
@@ -70,7 +70,7 @@ const start = addLogLevelOptions(
     `;
   }
 
-  const resolvedPort = port ?? (await getServerConfig(logger))?.port ?? 1234;
+  const resolvedPort = port ?? (await getServerConfig(logger))?.port ?? DEFAULT_SERVER_PORT;
   logger.debug(`Attempting to start the server on port ${resolvedPort}...`);
 
   await client.system.startHttpServer({
