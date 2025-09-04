@@ -78,7 +78,7 @@ export function addCreateClientOptions<
         "--port <port>",
         text`
           The port where LM Studio can be reached. If not provided and the host is set to "127.0.0.1"
-          (default), the last used port will be used; otherwise, 1234 will be used.
+          (default), the last used port will be used; otherwise, ${DEFAULT_SERVER_PORT} will be used.
         `,
       ).argParser(createRefinedNumberParser({ integer: true, min: 0, max: 65535 })),
     );
