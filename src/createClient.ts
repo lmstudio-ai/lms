@@ -9,6 +9,9 @@ import { exists } from "./exists.js";
 import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { createRefinedNumberParser } from "./types/refinedNumber.js";
+
+export const DEFAULT_SERVER_PORT: number = 1234;
+
 /**
  * Checks if the HTTP server is running.
  */
@@ -75,7 +78,7 @@ export function addCreateClientOptions<
         "--port <port>",
         text`
           The port where LM Studio can be reached. If not provided and the host is set to "127.0.0.1"
-          (default), the last used port will be used; otherwise, 1234 will be used.
+          (default), the last used port will be used; otherwise, ${DEFAULT_SERVER_PORT} will be used.
         `,
       ).argParser(createRefinedNumberParser({ integer: true, min: 0, max: 65535 })),
     );
@@ -244,7 +247,7 @@ export async function createClient(
   }
 
   if (port === undefined) {
-    port = 1234;
+    port = DEFAULT_SERVER_PORT;
   }
 
   logger.debug(`Connecting to server at ${host}:${port}`);
