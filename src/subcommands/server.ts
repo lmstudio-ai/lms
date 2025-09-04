@@ -2,6 +2,7 @@ import { Command, Option } from "@commander-js/extra-typings";
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { readFile } from "fs/promises";
 import { checkHttpServer, createClient } from "../createClient.js";
+import { exists } from "../exists.js";
 import { serverConfigPath } from "../lmstudioPaths.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
@@ -27,10 +28,13 @@ async function checkHttpServerWithRetries(logger: SimpleLogger, port: number, ma
 }
 
 /**
- * Gets the last status of the server.
+ * Gets the last status of the server, or undefined if the server has never been started
  */
-export async function getServerConfig(logger: SimpleLogger) {
+export async function getServerConfig(logger: SimpleLogger): Promise<HttpServerConfig | undefined> {
   const lastStatusPath = serverConfigPath;
+  if (!await exists(lastStatusPath)) {
+    return undefined;
+  }
   logger.debug(`Reading last status from ${lastStatusPath}`);
   const lastStatus = JSON.parse(await readFile(lastStatusPath, "utf-8")) as HttpServerConfig;
   return lastStatus;
@@ -66,7 +70,7 @@ const start = addLogLevelOptions(
     `;
   }
 
-  const resolvedPort = port ?? (await getServerConfig(logger)).port ?? 1234;
+  const resolvedPort = port ?? (await getServerConfig(logger))?.port ?? 1234;
   logger.debug(`Attempting to start the server on port ${resolvedPort}...`);
 
   await client.system.startHttpServer({
@@ -89,7 +93,7 @@ const stop = addLogLevelOptions(
   const logger = createLogger(options);
   let port: number;
   try {
-    port = (await getServerConfig(logger)).port;
+    port = (await getServerConfig(logger))!.port;
   } catch (e) {
     logger.error(`The server is not running.`);
     process.exit(1);
@@ -118,14 +122,14 @@ const status = addLogLevelOptions(
 ).action(async options => {
   const logger = createLogger(options);
   const { json = false } = options;
-  let port: null | number = null;
+  let port: undefined | number = undefined;
   try {
-    port = (await getServerConfig(logger)).port;
+    port = (await getServerConfig(logger))?.port;
   } catch (e) {
     logger.debug(`Failed to read last status`, e);
   }
   let running = false;
-  if (port !== null) {
+  if (port !== undefined) {
     running = await checkHttpServer(logger, port);
   }
   if (running) {

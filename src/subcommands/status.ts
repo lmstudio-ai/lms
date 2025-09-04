@@ -19,7 +19,7 @@ export const status = addLogLevelOptions(
   if (port === undefined) {
     if (host === "127.0.0.1") {
       try {
-        port = (await getServerConfig(logger)).port;
+        port = (await getServerConfig(logger))?.port ?? 1234;
       } catch (e) {
         logger.debug(`Failed to read last status`, e);
         port = 1234;
