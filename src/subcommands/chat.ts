@@ -116,7 +116,7 @@ export const chat = addLogLevelOptions(
       let staffPicks: StaffPickedModel[] = [];
       if (offline !== true) {
         try {
-          staffPicks = await client.repository.fetchStaffPicks();
+          staffPicks = await client.system.unstable.getStaffPicks();
         } catch (err) {
           // If error says network connection failed,
           // then we are offline, so just use empty staff picks
