@@ -9,6 +9,7 @@ import { appInstallLocationFilePath, lmsKey2Path } from "./lmstudioPaths.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { createRefinedNumberParser } from "./types/refinedNumber.js";
 import { DEFAULT_LOCAL_ENVIRONMENT_NAME, EnvironmentManager } from "./EnvironmentManager.js";
+import chalk from "chalk";
 /**
  * Checks if the HTTP server is running.
  */
