@@ -192,7 +192,7 @@ export const ps = addCreateClientOptions(
   }
 
   if (loadedModels.length === 0) {
-    logger.error(
+    logger.info(
       text`
         No models are currently loaded
 
