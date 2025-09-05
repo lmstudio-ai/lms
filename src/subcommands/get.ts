@@ -608,7 +608,7 @@ async function artifactDownloadPlanToString(
   }
 }
 
-async function downloadArtifact(
+export async function downloadArtifact(
   client: LMStudioClient,
   logger: SimpleLogger,
   owner: string,
