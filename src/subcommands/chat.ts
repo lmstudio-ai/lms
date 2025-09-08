@@ -1,6 +1,6 @@
 import { Command } from "@commander-js/extra-typings";
 import type { SimpleLogger } from "@lmstudio/lms-common";
-import type { LLMPredictionStats, StaffPickedModel } from "@lmstudio/lms-shared-types";
+import type { LLMPredictionStats, HubModel } from "@lmstudio/lms-shared-types";
 import { Chat, type LLM } from "@lmstudio/sdk";
 import * as readline from "readline";
 import { addCreateClientOptions, createClient } from "../createClient.js";
@@ -113,10 +113,10 @@ export const chat = addLogLevelOptions(
       // No model loaded, offer to download a staff pick or use existing downloaded model
       const cliPref = await getCliPref(logger);
 
-      let staffPicks: StaffPickedModel[] = [];
+      let staffPicks: HubModel[] = [];
       if (offline !== true) {
         try {
-          staffPicks = await client.system.unstable.getStaffPicks();
+          staffPicks = await client.repository.unstable.getModelCatalog();
         } catch (err) {
           // If error says network connection failed,
           // then we are offline, so just use empty staff picks
@@ -149,7 +149,7 @@ export const chat = addLogLevelOptions(
             return {
               name: m.owner + "/" + m.name,
               isDownloaded: modelKeys.includes(m.owner + "/" + m.name),
-              size: m.sizeBytes,
+              size: m.metadata.minMemoryUsageBytes,
               staffPicked: true,
             };
           })
