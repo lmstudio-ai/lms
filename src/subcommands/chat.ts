@@ -10,13 +10,17 @@ import { terminalSize } from "@lmstudio/lms-isomorphic";
 import fuzzy from "fuzzy";
 import { downloadArtifact } from "./get.js";
 import {
-  createModelDisplayOptions,
-  handleModelCatalogPreference,
   loadModelWithProgress,
   readStdin,
   handlePromptResponse,
   startInteractiveChat,
 } from "../chatUtil.js";
+import { type CliPref } from "../cliPref.js";
+import chalk from "chalk";
+import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
+import columnify from "columnify";
+import { type SimpleFileData } from "../SimpleFileData.js";
+import { type SimpleLogger } from "@lmstudio/lms-common";
 
 inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
 const { prompt } = inquirer;
@@ -26,6 +30,79 @@ const DEFAULT_SYSTEM_PROMPT =
 
 const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
 const MODEL_FILTER_EMPTY_TEXT = "No model matched the filter";
+const FETCH_MODEL_CATALOG_MESSAGE =
+  "Always fetch the model catalog ? (requires internet connection)";
+
+export async function handleModelCatalogPreference(
+  offline: boolean,
+  cliPref: SimpleFileData<CliPref>,
+  logger: SimpleLogger,
+): Promise<boolean> {
+  const fetchModelCatalogPreference = cliPref.get().fetchModelCatalog;
+  let shouldFetchModelCatalog = false;
+
+  if (offline !== true && fetchModelCatalogPreference !== false) {
+    if (fetchModelCatalogPreference === undefined) {
+      // We do not consider options.yes here because we want user to explicitly
+      // allow fetching model catalog. This is a one-time question.
+      const fetchAnswer = await prompt([
+        {
+          type: "confirm",
+          name: "fetch",
+          message: FETCH_MODEL_CATALOG_MESSAGE,
+        },
+      ]);
+      cliPref.setWithProducer(draft => {
+        draft.fetchModelCatalog = fetchAnswer.fetch;
+      });
+      if (fetchAnswer.fetch === true) {
+        logger.info("Setting the preference to always fetch the model catalog.");
+        shouldFetchModelCatalog = true;
+      }
+    } else if (fetchModelCatalogPreference === true) {
+      shouldFetchModelCatalog = true;
+    }
+  }
+
+  return shouldFetchModelCatalog;
+}
+
+export function createModelDisplayOptions(
+  modelsMap: Array<{ name: string; isDownloaded: boolean; size: number; inModelCatalog: boolean }>,
+  offline: boolean,
+) {
+  return modelsMap.map((model, index) => {
+    const status = model.isDownloaded === false ? "DOWNLOAD" : "";
+    const size = formatSizeBytes1000(model.size);
+
+    const displayName = offline
+      ? `${model.name} ${chalk.gray(`(${size})`)}`
+      : columnify(
+          [
+            {
+              name: model.name,
+              size: chalk.gray(`(min. ${size})`),
+              status: chalk.gray(status),
+            },
+          ],
+          {
+            showHeaders: false,
+            config: {
+              name: { minWidth: 50 },
+              size: { minWidth: 16 },
+              status: { minWidth: 10 },
+            },
+          },
+        ).trim();
+
+    return {
+      name: displayName,
+      value: model.name,
+      searchText: model.name,
+      originalIndex: index,
+    };
+  });
+}
 
 export const chat = addLogLevelOptions(
   addCreateClientOptions(
