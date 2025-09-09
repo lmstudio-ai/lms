@@ -1,13 +1,13 @@
 import { Command } from "@commander-js/extra-typings";
 import type { SimpleLogger } from "@lmstudio/lms-common";
 import type { LLMPredictionStats, HubModel } from "@lmstudio/lms-shared-types";
-import { Chat, type LLM } from "@lmstudio/sdk";
+import { Chat, type LMStudioClient, type LLM } from "@lmstudio/sdk";
 import * as readline from "readline";
 import { addCreateClientOptions, createClient } from "../createClient.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import inquirer from "inquirer";
 import inquirerAutocompletePrompt from "inquirer-autocomplete-prompt";
-import { getCliPref } from "../cliPref.js";
+import { type CliPref, getCliPref } from "../cliPref.js";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import fuzzy from "fuzzy";
 import chalk from "chalk";
@@ -15,9 +15,209 @@ import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { downloadArtifact } from "./get.js";
 import { ProgressBar } from "../ProgressBar.js";
 import columnify from "columnify";
+import { type SimpleFileData } from "../SimpleFileData.js";
 
 inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
 const { prompt } = inquirer;
+
+const DEFAULT_SYSTEM_PROMPT =
+  "You are a technical AI assistant. Answer questions clearly, concisely and to-the-point.";
+
+const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
+const MODEL_FILTER_EMPTY_TEXT = "No model matched the filter";
+
+async function handleModelCatalogPreference(
+  offline: boolean,
+  cliPref: SimpleFileData<CliPref>,
+  logger: SimpleLogger,
+): Promise<boolean> {
+  const fetchModelCatalogPreference = cliPref.get().fetchModelCatalog;
+  let shouldFetchModelCatalog = false;
+
+  if (offline !== true && fetchModelCatalogPreference !== false) {
+    if (fetchModelCatalogPreference === undefined) {
+      // We do not consider options.yes here because we want user to explicitly
+      // allow fetching model catalog. This is a one-time question.
+      const fetchAnswer = await prompt([
+        {
+          type: "confirm",
+          name: "fetch",
+          message: "Always fetch the model catalog ? (requires internet connection)",
+        },
+      ]);
+      cliPref.setWithProducer(draft => {
+        draft.fetchModelCatalog = fetchAnswer.fetch;
+      });
+      if (fetchAnswer.fetch === true) {
+        logger.info("Setting the preference to always fetch the model catalog.");
+        shouldFetchModelCatalog = true;
+      }
+    } else if (fetchModelCatalogPreference === true) {
+      shouldFetchModelCatalog = true;
+    }
+  }
+
+  return shouldFetchModelCatalog;
+}
+
+function createModelDisplayOptions(
+  modelsMap: Array<{ name: string; isDownloaded: boolean; size: number; inModelCatalog: boolean }>,
+  offline: boolean,
+) {
+  return modelsMap.map((model, index) => {
+    const status = model.isDownloaded === false ? "DOWNLOAD" : "";
+    const size = formatSizeBytes1000(model.size);
+
+    const displayName = offline
+      ? `${model.name} ${chalk.gray(`(${size})`)}`
+      : columnify(
+          [
+            {
+              name: model.name,
+              size: chalk.gray(`(min. ${size})`),
+              status: chalk.gray(status),
+            },
+          ],
+          {
+            showHeaders: false,
+            config: {
+              name: { minWidth: 50 },
+              size: { minWidth: 16 },
+              status: { minWidth: 10 },
+            },
+          },
+        ).trim();
+
+    return {
+      name: displayName,
+      value: model.name,
+      searchText: model.name,
+      originalIndex: index,
+    };
+  });
+}
+
+async function loadModelWithProgress(
+  client: LMStudioClient,
+  modelName: string,
+  ttl: number,
+  logger: SimpleLogger,
+): Promise<LLM> {
+  const progressBar = new ProgressBar();
+  const abortController = new AbortController();
+  const sigintListener = () => {
+    progressBar.stop();
+    abortController.abort();
+    logger.warn("Load cancelled.");
+    process.exit(1);
+  };
+  process.addListener("SIGINT", sigintListener);
+  const llmModel = await client.llm.model(modelName, {
+    verbose: false,
+    onProgress: progress => {
+      progressBar.setRatio(progress);
+    },
+    signal: abortController.signal,
+    ttl,
+  });
+  process.removeListener("SIGINT", sigintListener);
+  progressBar.stop();
+  return llmModel;
+}
+
+async function handlePromptResponse(
+  llmModel: LLM,
+  chat: Chat,
+  prompt: string,
+  options: { stats?: boolean },
+  logger: SimpleLogger,
+): Promise<void> {
+  chat.append("user", prompt);
+  try {
+    const prediction = llmModel.respond(chat);
+    let lastFragment = "";
+    for await (const fragment of prediction) {
+      process.stdout.write(fragment.content);
+      lastFragment = fragment.content;
+    }
+    const result = await prediction.result();
+    chat.append("assistant", result.content);
+
+    if (options.stats !== undefined) {
+      displayVerboseStats(result.stats, logger);
+    }
+
+    if (!lastFragment.endsWith("\n")) {
+      // Newline before new shell prompt if not already there
+      process.stdout.write("\n");
+    }
+    process.exit(0);
+  } catch (err) {
+    logger.error("Error during chat:", err);
+    process.exit(1);
+  }
+}
+
+async function startInteractiveChat(
+  llmModel: LLM,
+  chat: Chat,
+  options: { stats?: boolean },
+  logger: SimpleLogger,
+): Promise<void> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: "› ",
+  });
+
+  process.stdout.write("\n");
+  rl.prompt();
+
+  rl.on("line", async (line: string) => {
+    const input = line.trim();
+    if (input === "exit" || input === "quit") {
+      rl.close();
+      return;
+    }
+
+    // Skip empty input
+    if (!input) {
+      rl.prompt();
+      return;
+    }
+
+    try {
+      chat.append("user", input);
+      process.stdout.write("\n● ");
+      const prediction = llmModel.respond(chat);
+
+      // Temporarily pause the readline interface
+      rl.pause();
+
+      for await (const fragment of prediction) {
+        process.stdout.write(fragment.content);
+      }
+      const result = await prediction.result();
+      chat.append("assistant", result.content);
+
+      if (options.stats !== undefined) {
+        displayVerboseStats(result.stats, logger);
+      }
+
+      // Resume readline and write a new prompt
+      process.stdout.write("\n\n");
+      rl.resume();
+      rl.prompt();
+    } catch (err) {
+      logger.error("Error during chat:", err);
+      rl.prompt();
+    }
+  });
+
+  rl.on("close", () => {
+    process.exit(0);
+  });
+}
 
 async function readStdin(): Promise<string> {
   return new Promise(resolve => {
@@ -76,15 +276,15 @@ export const chat = addLogLevelOptions(
   const client = await createClient(logger, options);
   const { offline, yes } = options;
 
-  let initialPrompt = "";
+  let providedPrompt = "";
   if (options.prompt !== undefined && options.prompt !== "") {
-    initialPrompt = options.prompt;
+    providedPrompt = options.prompt;
     if (!process.stdin.isTTY) {
       const stdinContent = await readStdin();
-      initialPrompt = `${initialPrompt}\n\n${stdinContent}`;
+      providedPrompt = `${providedPrompt}\n\n${stdinContent}`;
     }
   } else if (!process.stdin.isTTY) {
-    initialPrompt = await readStdin();
+    providedPrompt = await readStdin();
   }
 
   const ttl = parseInt(options.ttl, 10);
@@ -110,52 +310,27 @@ export const chat = addLogLevelOptions(
         logger.error("No loaded model found, load with:\n       lms load");
         process.exit(1);
       }
-      // No model loaded, offer to download a staff pick or use existing downloaded model
+      // No model loaded, offer to download a model from the catalog or use existing downloaded model
       const cliPref = await getCliPref(logger);
 
-      const fetchModelCatalogPreference = cliPref.get().fetchModelCatalog;
-      let staffPicks: HubModel[] = [];
-      let shouldFetchStaffPicks = false;
+      let modelCatalogModels: HubModel[] = [];
+      const shouldFetchModelCatalog = await handleModelCatalogPreference(offline, cliPref, logger);
 
-      if (offline !== true && fetchModelCatalogPreference !== false) {
-        if (fetchModelCatalogPreference === undefined) {
-          // We do not consider options.yes here because we want user to explicitly
-          // allow fetching staff picks. This is a one-time question.
-          const fetchAnswer = await prompt([
-            {
-              type: "confirm",
-              name: "fetch",
-              message:
-                "Always fetch available models to download from the Hub? (requires internet connection)",
-            },
-          ]);
-          cliPref.setWithProducer(draft => {
-            draft.fetchModelCatalog = fetchAnswer.fetch;
-          });
-          if (fetchAnswer.fetch === true) {
-            logger.info("Setting the prefrence to always fetch models from the Hub.");
-            shouldFetchStaffPicks = true;
+      if (shouldFetchModelCatalog) {
+        try {
+          modelCatalogModels = await client.repository.unstable.getModelCatalog();
+        } catch (err) {
+          // If error says network connection failed,
+          // then we are offline, so just use empty the empty model catalog
+          if (err instanceof Error && err.message.toLowerCase().includes("network") === true) {
+            logger.warn("Offline, unable to fetch model catalog");
+          } else {
+            logger.error("Error fetching model catalog:", err);
           }
-        } else if (fetchModelCatalogPreference === true) {
-          shouldFetchStaffPicks = true;
-        }
-
-        if (shouldFetchStaffPicks) {
-          try {
-            staffPicks = await client.repository.unstable.getModelCatalog();
-          } catch (err) {
-            // If error says network connection failed,
-            // then we are offline, so just use empty staff picks
-            if (err instanceof Error && err.message.toLowerCase().includes("network") === true) {
-              logger.warn("Offline, unable to fetch staff picks");
-            } else {
-              logger.error("Error fetching staff picks:", err);
-            }
-            staffPicks = [];
-          }
+          modelCatalogModels = [];
         }
       }
-      const staffPickNames = staffPicks.map(m => m.owner + "/" + m.name);
+      const modelCatalogModelNames = modelCatalogModels.map(m => m.owner + "/" + m.name);
 
       const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];
       const lastLoadedIndexToPathMap = [...lastLoadedModels.entries()];
@@ -167,17 +342,19 @@ export const chat = addLogLevelOptions(
           const bIndex = lastLoadedMap.get(b.path) ?? lastLoadedMap.size + 1;
           return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
         });
-      const filteredModels = models.filter(m => staffPickNames.includes(m.modelKey) !== true);
+      const filteredModels = models.filter(
+        m => modelCatalogModelNames.includes(m.modelKey) !== true,
+      );
       const modelKeys = models.map(model => model.modelKey);
 
       const modelsMap = [
-        ...staffPicks
+        ...modelCatalogModels
           .map(m => {
             return {
               name: m.owner + "/" + m.name,
               isDownloaded: modelKeys.includes(m.owner + "/" + m.name),
               size: m.metadata.minMemoryUsageBytes,
-              staffPicked: true,
+              inModelCatalog: true,
             };
           })
           .sort(m => (m.isDownloaded === true ? -1 : 1)),
@@ -186,52 +363,22 @@ export const chat = addLogLevelOptions(
             name: m.path,
             isDownloaded: true,
             size: m.sizeBytes,
-            staffPicked: false,
+            inModelCatalog: false,
           };
         }),
       ];
 
       // Pre-compute all display options to avoid recreation on each keystroke
-      const displayOptions = modelsMap.map((model, index) => {
-        const status = model.isDownloaded === false ? "DOWNLOAD" : "";
-        const size = formatSizeBytes1000(model.size);
-
-        const displayName = offline
-          ? `${model.name} ${chalk.gray(`(${size})`)}`
-          : columnify(
-              [
-                {
-                  name: model.name,
-                  size: chalk.gray(`(min. ${size})`),
-                  status: chalk.gray(status),
-                },
-              ],
-              {
-                showHeaders: false,
-                config: {
-                  name: { minWidth: 50 },
-                  size: { minWidth: 16 },
-                  status: { minWidth: 10 },
-                },
-              },
-            ).trim();
-
-        return {
-          name: displayName,
-          value: model.name,
-          searchText: model.name,
-          originalIndex: index,
-        };
-      });
+      const displayOptions = createModelDisplayOptions(modelsMap, offline);
 
       const answers = await prompt([
         {
           type: "autocomplete",
           name: "model",
-          message: "Select a model to chat with",
+          message: MODEL_SELECTION_MESSAGE,
           loop: false,
           pageSize: terminalSize().rows - 4,
-          emptyText: "No model matched the filter",
+          emptyText: MODEL_FILTER_EMPTY_TEXT,
           source: async (_: any, input: string) => {
             if (!input) return displayOptions;
             const options = fuzzy.filter(input, displayOptions, { extract: el => el.searchText });
@@ -247,135 +394,38 @@ export const chat = addLogLevelOptions(
         process.exit(1);
       }
       if (!selectedModel.isDownloaded) {
-        if (selectedModel.staffPicked) {
+        if (selectedModel.inModelCatalog) {
           // Download artifact from hub
           const [owner, name] = selectedModel.name.split("/");
           await downloadArtifact(client, logger, owner, name, yes ?? false);
           // Wait for model indexing to complete after download
           await new Promise(resolve => setTimeout(resolve, 500));
         } else {
-          // It is not a staff pick, so must be a direct model
-          // which is not downloaded, unexpected path as
-          // only staff picks are offered to download
+          // It is not a model from the catalog, so must be a direct model
+          // which is not downloaded, unexpected path as only
+          // cataloged models are offered to download
           logger.error(
             `Model ${selectedModel.name} is not downloaded. Please download the model first with 'lms get'.`,
           );
           process.exit(1);
         }
       }
-      const progressBar = new ProgressBar();
-      const abortController = new AbortController();
-      const sigintListener = () => {
-        progressBar.stop();
-        abortController.abort();
-        logger.warn("Load cancelled.");
-        process.exit(1);
-      };
-      process.addListener("SIGINT", sigintListener);
-      llmModel = await client.llm.model(selectedModel.name, {
-        verbose: false,
-        onProgress: progress => {
-          progressBar.setRatio(progress);
-        },
-        signal: abortController.signal,
-        ttl,
-      });
-      process.removeListener("SIGINT", sigintListener);
-      progressBar.stop();
+      llmModel = await loadModelWithProgress(client, selectedModel.name, ttl, logger);
     }
   }
-  if (!initialPrompt) {
+  if (!providedPrompt) {
     logger.info(`Chatting with ${llmModel.identifier}.  Type 'exit', 'quit' or Ctrl+C to quit`);
   }
 
   const chat = Chat.empty();
-  chat.append(
-    "system",
-    options.systemPrompt ??
-      "You are a technical AI assistant. Answer questions clearly, concisely and to-the-point.",
-  );
+  chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
 
-  if (initialPrompt) {
-    chat.append("user", initialPrompt);
-    try {
-      const prediction = llmModel.respond(chat);
-      let lastFragment = "";
-      for await (const fragment of prediction) {
-        process.stdout.write(fragment.content);
-        lastFragment = fragment.content;
-      }
-      const result = await prediction.result();
-      chat.append("assistant", result.content);
-
-      if (options.stats) {
-        displayVerboseStats(result.stats, logger);
-      }
-
-      if (!lastFragment.endsWith("\n")) {
-        // Newline before new shell prompt if not already there
-        process.stdout.write("\n");
-      }
-      process.exit(0);
-    } catch (err) {
-      logger.error("Error during chat:", err);
-      process.exit(1);
-    }
+  if (providedPrompt) {
+    await handlePromptResponse(llmModel, chat, providedPrompt, options, logger);
   }
 
   if (process.stdin.isTTY) {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      prompt: "› ",
-    });
-
-    process.stdout.write("\n");
-    rl.prompt();
-
-    rl.on("line", async (line: string) => {
-      const input = line.trim();
-      if (input === "exit" || input === "quit") {
-        rl.close();
-        return;
-      }
-
-      // Skip empty input
-      if (!input) {
-        rl.prompt();
-        return;
-      }
-
-      try {
-        chat.append("user", input);
-        process.stdout.write("\n● ");
-        const prediction = llmModel.respond(chat);
-
-        // Temporarily pause the readline interface
-        rl.pause();
-
-        for await (const fragment of prediction) {
-          process.stdout.write(fragment.content);
-        }
-        const result = await prediction.result();
-        chat.append("assistant", result.content);
-
-        if (options.stats) {
-          displayVerboseStats(result.stats, logger);
-        }
-
-        // Resume readline and write a new prompt
-        process.stdout.write("\n\n");
-        rl.resume();
-        rl.prompt();
-      } catch (err) {
-        logger.error("Error during chat:", err);
-        rl.prompt();
-      }
-    });
-
-    rl.on("close", () => {
-      process.exit(0);
-    });
+    await startInteractiveChat(llmModel, chat, options, logger);
   } else {
     process.exit(0);
   }
