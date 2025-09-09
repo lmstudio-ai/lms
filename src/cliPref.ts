@@ -9,6 +9,7 @@ export async function getCliPref(logger?: SimpleLogger) {
     importWillMoveWarned: z.boolean().optional(),
     lastLoadedModels: z.array(z.string()).optional(),
     autoStartServer: z.boolean().optional(),
+    fetchModelCatalog: z.boolean().optional(),
   });
   type CliPref = z.infer<typeof cliPrefSchema>;
   const defaultCliPref: CliPref = {
@@ -16,6 +17,7 @@ export async function getCliPref(logger?: SimpleLogger) {
     importWillMoveWarned: false,
     lastLoadedModels: [],
     autoStartServer: undefined,
+    fetchModelCatalog: undefined,
   };
   const cliPref = new SimpleFileData(
     cliPrefPath,

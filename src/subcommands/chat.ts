@@ -113,19 +113,44 @@ export const chat = addLogLevelOptions(
       // No model loaded, offer to download a staff pick or use existing downloaded model
       const cliPref = await getCliPref(logger);
 
+      const fetchModelCatalogPreference = cliPref.get().fetchModelCatalog;
       let staffPicks: HubModel[] = [];
-      if (offline !== true) {
-        try {
-          staffPicks = await client.repository.unstable.getModelCatalog();
-        } catch (err) {
-          // If error says network connection failed,
-          // then we are offline, so just use empty staff picks
-          if (err instanceof Error && err.message.toLowerCase().includes("network") === true) {
-            logger.warn("Offline, unable to fetch staff picks");
-          } else {
-            logger.error("Error fetching staff picks:", err);
+      let shouldFetchStaffPicks = false;
+
+      if (offline !== true && fetchModelCatalogPreference !== false) {
+        if (fetchModelCatalogPreference === undefined) {
+          const fetchAnswer = await prompt([
+            {
+              type: "confirm",
+              name: "fetch",
+              message:
+                "Always fetch available models to download from the Hub? (requires internet connection)",
+            },
+          ]);
+          cliPref.setWithProducer(draft => {
+            draft.fetchModelCatalog = fetchAnswer.fetch;
+          });
+          if (fetchAnswer.fetch === true) {
+            logger.info("Setting the prefrence to always fetch models from the Hub.");
+            shouldFetchStaffPicks = true;
           }
-          staffPicks = [];
+        } else if (fetchModelCatalogPreference === true) {
+          shouldFetchStaffPicks = true;
+        }
+
+        if (shouldFetchStaffPicks) {
+          try {
+            staffPicks = await client.repository.unstable.getModelCatalog();
+          } catch (err) {
+            // If error says network connection failed,
+            // then we are offline, so just use empty staff picks
+            if (err instanceof Error && err.message.toLowerCase().includes("network") === true) {
+              logger.warn("Offline, unable to fetch staff picks");
+            } else {
+              logger.error("Error fetching staff picks:", err);
+            }
+            staffPicks = [];
+          }
         }
       }
       const staffPickNames = staffPicks.map(m => m.owner + "/" + m.name);
@@ -245,7 +270,6 @@ export const chat = addLogLevelOptions(
         process.exit(1);
       };
       process.addListener("SIGINT", sigintListener);
-
       llmModel = await client.llm.model(selectedModel.name, {
         verbose: false,
         onProgress: progress => {

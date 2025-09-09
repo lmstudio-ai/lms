@@ -195,7 +195,6 @@ export async function createClient(
           clientIdentifier: "lms-cli",
           clientPasskey: lmsKey + lmsKey2,
         };
-        logger.info("You have the lmskey2 with passkey being", lmsKey2, lmsKey + lmsKey2);
       } else {
         // This case will happen when the CLI is the production build, yet the local LM Studio has
         // not been run yet (so no lms-key-2 file). In this case, we will just use a dummy client
@@ -203,12 +202,10 @@ export async function createClient(
         auth = {
           clientIdentifier: "lms-cli",
         };
-        logger.info("You do not have the lmskey2");
       }
     }
   }
   if (port === undefined && host === "127.0.0.1") {
-    logger.info("Here");
     // We will now attempt to connect to the local API server.
     const localPort = await tryFindLocalAPIServer();
 
