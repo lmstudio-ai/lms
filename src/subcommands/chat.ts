@@ -69,7 +69,7 @@ export const chat = addLogLevelOptions(
         "3600",
       )
       .option("--offline", "Do not fetch available models to download or updates", false)
-      .option("-y, --yes", "Automatic yes to prompts, assume 'yes' as answer to all prompts"),
+      .option("-y, --yes", "Assume 'yes' as answer to all CLI prompts"),
   ),
 ).action(async (model, options) => {
   const logger = createLogger(options);
@@ -119,6 +119,8 @@ export const chat = addLogLevelOptions(
 
       if (offline !== true && fetchModelCatalogPreference !== false) {
         if (fetchModelCatalogPreference === undefined) {
+          // We do not consider options.yes here because we want user to explicitly
+          // allow fetching staff picks. This is a one-time question.
           const fetchAnswer = await prompt([
             {
               type: "confirm",
