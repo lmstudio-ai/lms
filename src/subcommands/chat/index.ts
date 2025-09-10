@@ -37,33 +37,17 @@ const MODEL_FILTER_EMPTY_TEXT = "No model matched the filter";
 const FETCH_MODEL_CATALOG_MESSAGE =
   "Always fetch the model catalog ? (requires internet connection)";
 
-interface GetOrAskShouldFetchModelCatalogOpts {
-  yes?: true;
-}
-
 export async function getOrAskShouldFetchModelCatalog(
   offline: boolean,
   cliPref: SimpleFileData<CliPref>,
   logger: SimpleLogger,
-  opts: GetOrAskShouldFetchModelCatalogOpts = {},
 ): Promise<boolean> {
   const fetchModelCatalogPreference = cliPref.get().fetchModelCatalog;
   let shouldFetchModelCatalog = false;
-  const { yes } = opts;
   inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
   const { prompt } = inquirer;
   if (offline !== true && fetchModelCatalogPreference !== false) {
     if (fetchModelCatalogPreference === undefined) {
-      if (yes === true) {
-        cliPref.setWithProducer(draft => {
-          draft.fetchModelCatalog = true;
-        });
-        shouldFetchModelCatalog = true;
-        logger.info(
-          "Setting the preference to always fetch the model catalog as --yes was provided",
-        );
-        return shouldFetchModelCatalog;
-      }
       const fetchAnswer = await prompt([
         {
           type: "confirm",
@@ -303,6 +287,13 @@ export const chat = addLogLevelOptions(
         logger.error("No loaded model found, load with:\n       lms load");
         process.exit(1);
       }
+      if (yes === true) {
+        // This means no model has been loaded and user has passed -y/--yes so
+        // we cannot ask them to select a model Instead, we exit with an error
+        // and tell them to load a model
+        logger.error("No loaded model found, load with:\n       lms load");
+        process.exit(1);
+      }
       // No model loaded, offer to download a model from the catalog or use
       // existing downloaded model
       const cliPref = await getCliPref(logger);
@@ -312,9 +303,6 @@ export const chat = addLogLevelOptions(
         offline,
         cliPref,
         logger,
-        {
-          yes,
-        },
       );
 
       if (shouldFetchModelCatalog) {
