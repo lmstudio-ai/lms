@@ -99,11 +99,44 @@ export async function handlePromptResponse(
   }
 }
 
-export async function startInteractiveChat(
+async function runPrediction(
   llmModel: LLM,
   chat: Chat,
-  options: { stats?: boolean },
+  input: string,
   logger: SimpleLogger,
+  rl: readline.Interface,
+  ttl: number,
+  stats: true | undefined,
+): Promise<void> {
+  chat.append("user", input);
+  process.stdout.write("\n● ");
+
+  const prediction = llmModel.respond(chat);
+  rl.pause();
+
+  for await (const fragment of prediction) {
+    process.stdout.write(fragment.content);
+  }
+  const result = await prediction.result();
+  chat.append("assistant", result.content);
+
+  if (stats !== undefined) {
+    displayVerboseStats(result.stats, logger);
+  }
+
+  process.stdout.write("\n\n");
+  rl.resume();
+  rl.prompt();
+}
+
+export async function startInteractiveChat(
+  client: LMStudioClient,
+  llmModel: LLM,
+  chat: Chat,
+  logger: SimpleLogger,
+  modelName: string,
+  ttl: number,
+  stats: true | undefined,
 ): Promise<void> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -128,30 +161,36 @@ export async function startInteractiveChat(
     }
 
     try {
-      chat.append("user", input);
-      process.stdout.write("\n● ");
-      const prediction = llmModel.respond(chat);
-
-      // Temporarily pause the readline interface
-      rl.pause();
-
-      for await (const fragment of prediction) {
-        process.stdout.write(fragment.content);
-      }
-      const result = await prediction.result();
-      chat.append("assistant", result.content);
-
-      if (options.stats !== undefined) {
-        displayVerboseStats(result.stats, logger);
-      }
-
-      // Resume readline and write a new prompt
-      process.stdout.write("\n\n");
-      rl.resume();
-      rl.prompt();
+      await runPrediction(llmModel, chat, input, logger, rl, ttl, stats);
     } catch (err) {
-      logger.error("Error during chat:", err);
-      rl.prompt();
+      if (err instanceof Error && err.message.toLowerCase().includes("unloaded") === true) {
+        const answer = await new Promise<string>(resolve => {
+          rl.question("Looks like the model unloaded. Reload? [Y/n] ", (input: string) => {
+            resolve(input);
+          });
+        });
+        const shouldReload =
+          answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes";
+        if (shouldReload) {
+          try {
+            llmModel = await loadModelWithProgress(client, modelName, ttl, logger);
+            process.stdout.write("\n");
+            await runPrediction(llmModel, chat, input, logger, rl, ttl, stats);
+            return;
+          } catch (reloadErr) {
+            logger.error("Error reloading model:", reloadErr);
+            rl.resume();
+            rl.prompt();
+          }
+        } else {
+          // User chose not to reload, exit
+          process.exit(0);
+        }
+      } else {
+        logger.error("Error during chat:", err);
+        rl.resume();
+        rl.prompt();
+      }
     }
   });
 

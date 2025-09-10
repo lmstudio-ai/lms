@@ -275,7 +275,15 @@ export const chat = addLogLevelOptions(
   }
 
   if (process.stdin.isTTY) {
-    await startInteractiveChat(llmModel, chat, options, logger);
+    await startInteractiveChat(
+      client,
+      llmModel,
+      chat,
+      logger,
+      (await llmModel.getModelInfo()).modelKey,
+      ttl,
+      options.stats,
+    );
   } else {
     process.exit(0);
   }
