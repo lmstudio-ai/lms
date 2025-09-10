@@ -1,26 +1,33 @@
 import { Command } from "@commander-js/extra-typings";
 import type { HubModel } from "@lmstudio/lms-shared-types";
-import { Chat, type LLM } from "@lmstudio/sdk";
-import { addCreateClientOptions, createClient } from "../createClient.js";
-import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { Chat, type LMStudioClient, type LLM } from "@lmstudio/sdk";
+import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import inquirer from "inquirer";
 import inquirerAutocompletePrompt from "inquirer-autocomplete-prompt";
-import { getCliPref } from "../cliPref.js";
+import { getCliPref } from "../../cliPref.js";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import fuzzy from "fuzzy";
-import { downloadArtifact } from "./get.js";
+import { downloadArtifact } from "../get.js";
 import {
+  displayVerboseStats,
+  executePrediction,
   loadModelWithProgress,
   readStdin,
-  handlePromptResponse,
-  startInteractiveChat,
-} from "../chatUtil.js";
-import { type CliPref } from "../cliPref.js";
+} from "./util.js";
+import { type CliPref } from "../../cliPref.js";
 import chalk from "chalk";
-import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
+
+interface StartPredictionOpts {
+  stats?: true;
+  ttl: number;
+}
 import columnify from "columnify";
-import { type SimpleFileData } from "../SimpleFileData.js";
+import { type SimpleFileData } from "../../SimpleFileData.js";
 import { type SimpleLogger } from "@lmstudio/lms-common";
+import * as readline from "readline/promises";
+import { askQuestion } from "../../confirm.js";
 
 inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
 const { prompt } = inquirer;
@@ -33,7 +40,7 @@ const MODEL_FILTER_EMPTY_TEXT = "No model matched the filter";
 const FETCH_MODEL_CATALOG_MESSAGE =
   "Always fetch the model catalog ? (requires internet connection)";
 
-export async function handleModelCatalogPreference(
+export async function getOrAskShouldFetchModelCatalog(
   offline: boolean,
   cliPref: SimpleFileData<CliPref>,
   logger: SimpleLogger,
@@ -77,7 +84,8 @@ export function createModelDisplayOptions(
 
     const displayName = offline
       ? `${model.name} ${chalk.gray(`(${size})`)}`
-      : columnify(
+      : // Uses columnify to align text in columns
+        columnify(
           [
             {
               name: model.name,
@@ -101,6 +109,129 @@ export function createModelDisplayOptions(
       searchText: model.name,
       originalIndex: index,
     };
+  });
+}
+
+/**
+ * Handles a single non-interactive chat prompt and exits the process.
+ * Streams the response to stdout and optionally displays prediction statistics.
+ */
+export async function handleNonInteractiveChat(
+  llm: LLM,
+  chat: Chat,
+  prompt: string,
+  logger: SimpleLogger,
+  opts: StartPredictionOpts,
+): Promise<void> {
+  try {
+    const { result, lastFragment } = await executePrediction(llm, chat, prompt);
+
+    if (opts.stats !== undefined) {
+      displayVerboseStats(result.stats, logger);
+    }
+
+    if (lastFragment.endsWith("\n") !== true) {
+      // Newline before new shell prompt if not already there
+      process.stdout.write("\n");
+    }
+    process.exit(0);
+  } catch (err) {
+    logger.error("Error during chat:", err);
+    process.exit(1);
+  }
+}
+
+/**
+ * Runs a single prediction in an interactive chat session.
+ * Pauses readline during prediction and resumes for next input.
+ */
+async function runInteractivePrediction(
+  llm: LLM,
+  chat: Chat,
+  input: string,
+  logger: SimpleLogger,
+  rl: readline.Interface,
+  opts: StartPredictionOpts,
+): Promise<void> {
+  process.stdout.write("\n● ");
+  rl.pause();
+
+  const { result } = await executePrediction(llm, chat, input);
+
+  if (opts.stats !== undefined) {
+    displayVerboseStats(result.stats, logger);
+  }
+
+  process.stdout.write("\n\n");
+  rl.resume();
+  rl.prompt();
+}
+
+/**
+ * Starts an interactive chat session in the terminal.
+ */
+export async function startInteractiveChat(
+  client: LMStudioClient,
+  llm: LLM,
+  chat: Chat,
+  logger: SimpleLogger,
+  modelName: string,
+  opts: StartPredictionOpts,
+): Promise<void> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: "› ",
+  });
+
+  process.stdout.write("\n");
+  rl.prompt();
+
+  rl.on("line", async (line: string) => {
+    const input = line.trim();
+    if (input === "exit" || input === "quit") {
+      rl.close();
+      return;
+    }
+
+    // Skip empty input
+    if (input.length === 0) {
+      rl.prompt();
+      return;
+    }
+
+    try {
+      await runInteractivePrediction(llm, chat, input, logger, rl, opts);
+    } catch (err) {
+      if (err instanceof Error && err.message.toLowerCase().includes("unloaded") === true) {
+        const shouldReload = await askQuestion("Looks like the model unloaded. Reload?", {
+          rl,
+        });
+        if (shouldReload) {
+          try {
+            llm = await loadModelWithProgress(client, modelName, opts.ttl, logger);
+            process.stdout.write("\n");
+            await runInteractivePrediction(llm, chat, input, logger, rl, opts);
+            return;
+          } catch (reloadErr) {
+            logger.error("Error reloading model:", reloadErr);
+            rl.resume();
+            rl.prompt();
+          }
+        } else {
+          // User chose not to reload, exit
+          process.exit(0);
+        }
+      } else {
+        logger.error("Error during chat:", err);
+        rl.resume();
+        rl.prompt();
+      }
+    }
+  });
+
+  rl.on("close", () => {
+    process.exit(0);
   });
 }
 
@@ -136,16 +267,15 @@ export const chat = addLogLevelOptions(
   } else if (!process.stdin.isTTY) {
     providedPrompt = await readStdin();
   }
-
-  const ttl = parseInt(options.ttl, 10);
-  if (isNaN(ttl) || ttl < 0) {
+  const ttl = +options.ttl;
+  if (Number.isSafeInteger(ttl) !== true || ttl < 0) {
     logger.error("Invalid TTL value, must be a non-negative integer.");
     process.exit(1);
   }
-  let llmModel: LLM;
+  let llm: LLM;
   if (model !== undefined && model !== "") {
     try {
-      llmModel = await client.llm.model(model, {
+      llm = await client.llm.model(model, {
         ttl,
       });
     } catch (e) {
@@ -154,7 +284,7 @@ export const chat = addLogLevelOptions(
     }
   } else {
     try {
-      llmModel = await client.llm.model();
+      llm = await client.llm.model();
     } catch (e) {
       if (!process.stdin.isTTY) {
         logger.error("No loaded model found, load with:\n       lms load");
@@ -164,7 +294,11 @@ export const chat = addLogLevelOptions(
       const cliPref = await getCliPref(logger);
 
       let modelCatalogModels: HubModel[] = [];
-      const shouldFetchModelCatalog = await handleModelCatalogPreference(offline, cliPref, logger);
+      const shouldFetchModelCatalog = await getOrAskShouldFetchModelCatalog(
+        offline,
+        cliPref,
+        logger,
+      );
 
       if (shouldFetchModelCatalog) {
         try {
@@ -180,6 +314,7 @@ export const chat = addLogLevelOptions(
           modelCatalogModels = [];
         }
       }
+
       const modelCatalogModelNames = modelCatalogModels.map(m => m.owner + "/" + m.name);
 
       const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];
@@ -229,8 +364,8 @@ export const chat = addLogLevelOptions(
           loop: false,
           pageSize: terminalSize().rows - 4,
           emptyText: MODEL_FILTER_EMPTY_TEXT,
-          source: async (_: any, input: string) => {
-            if (!input) return displayOptions;
+          source: async (_: any, input: string | undefined) => {
+            if (input === undefined || input.length !== 0) return displayOptions;
             const options = fuzzy.filter(input, displayOptions, { extract: el => el.searchText });
             return options.map(option => option.original);
           },
@@ -260,31 +395,29 @@ export const chat = addLogLevelOptions(
           process.exit(1);
         }
       }
-      llmModel = await loadModelWithProgress(client, selectedModel.name, ttl, logger);
+      llm = await loadModelWithProgress(client, selectedModel.name, ttl, logger);
     }
   }
   if (!providedPrompt) {
-    logger.info(`Chatting with ${llmModel.identifier}.  Type 'exit', 'quit' or Ctrl+C to quit`);
+    logger.info(`Chatting with ${llm.identifier}.  Type 'exit', 'quit' or Ctrl+C to quit`);
   }
 
   const chat = Chat.empty();
   chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
 
   if (providedPrompt) {
-    await handlePromptResponse(llmModel, chat, providedPrompt, options, logger);
-  }
-
-  if (process.stdin.isTTY) {
-    await startInteractiveChat(
-      client,
-      llmModel,
-      chat,
-      logger,
-      (await llmModel.getModelInfo()).modelKey,
+    await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
+      stats: options.stats,
       ttl,
-      options.stats,
-    );
+    });
+  }
+  if (process.stdin.isTTY) {
+    await startInteractiveChat(client, llm, chat, logger, (await llm.getModelInfo()).modelKey, {
+      stats: options.stats,
+      ttl,
+    });
   } else {
+    logger.error("No prompt provided for non-interactive chat.");
     process.exit(0);
   }
 });
