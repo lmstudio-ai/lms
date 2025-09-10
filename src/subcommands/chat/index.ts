@@ -312,6 +312,9 @@ export const chat = addLogLevelOptions(
         offline,
         cliPref,
         logger,
+        {
+          yes,
+        },
       );
 
       if (shouldFetchModelCatalog) {
