@@ -365,8 +365,8 @@ export const chat = addLogLevelOptions(
           loop: false,
           pageSize: terminalSize().rows - 4,
           emptyText: MODEL_FILTER_EMPTY_TEXT,
-          source: async (_: any, input: string | undefined) => {
-            if (input === undefined || input.length !== 0) return displayOptions;
+          source: async (_answersSoFar: any, input: string | undefined) => {
+            if (input === undefined || input.length === 0) return displayOptions;
             const options = fuzzy.filter(input, displayOptions, { extract: el => el.searchText });
             return options.map(option => option.original);
           },
