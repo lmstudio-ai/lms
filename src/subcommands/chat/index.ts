@@ -37,20 +37,33 @@ const MODEL_FILTER_EMPTY_TEXT = "No model matched the filter";
 const FETCH_MODEL_CATALOG_MESSAGE =
   "Always fetch the model catalog ? (requires internet connection)";
 
+interface GetOrAskShouldFetchModelCatalogOpts {
+  yes?: true;
+}
+
 export async function getOrAskShouldFetchModelCatalog(
   offline: boolean,
   cliPref: SimpleFileData<CliPref>,
   logger: SimpleLogger,
+  opts: GetOrAskShouldFetchModelCatalogOpts = {},
 ): Promise<boolean> {
   const fetchModelCatalogPreference = cliPref.get().fetchModelCatalog;
   let shouldFetchModelCatalog = false;
-
+  const { yes } = opts;
   inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
   const { prompt } = inquirer;
   if (offline !== true && fetchModelCatalogPreference !== false) {
     if (fetchModelCatalogPreference === undefined) {
-      // We do not consider options.yes here because we want user to explicitly
-      // allow fetching model catalog. This is a one-time question.
+      if (yes === true) {
+        cliPref.setWithProducer(draft => {
+          draft.fetchModelCatalog = true;
+        });
+        shouldFetchModelCatalog = true;
+        logger.info(
+          "Setting the preference to always fetch the model catalog as --yes was provided",
+        );
+        return shouldFetchModelCatalog;
+      }
       const fetchAnswer = await prompt([
         {
           type: "confirm",
