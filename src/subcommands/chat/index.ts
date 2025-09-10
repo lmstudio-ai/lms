@@ -84,7 +84,8 @@ export function createModelDisplayOptions(
 
     const displayName = offline
       ? `${model.name} ${chalk.gray(`(${size})`)}`
-      : // Uses columnify to align text in columns
+      : // uses columnify to align text in columns because
+        // we have both downloaded and local models here
         columnify(
           [
             {
@@ -410,8 +411,7 @@ export const chat = addLogLevelOptions(
       stats: options.stats,
       ttl,
     });
-  }
-  if (process.stdin.isTTY) {
+  } else if (process.stdin.isTTY) {
     await startInteractiveChat(client, llm, chat, logger, (await llm.getModelInfo()).modelKey, {
       stats: options.stats,
       ttl,
