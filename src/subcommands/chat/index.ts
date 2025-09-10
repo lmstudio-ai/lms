@@ -1,13 +1,21 @@
-import { Command } from "@commander-js/extra-typings";
+import { Command, Option } from "@commander-js/extra-typings";
+import { type SimpleLogger } from "@lmstudio/lms-common";
+import { terminalSize } from "@lmstudio/lms-isomorphic";
 import type { HubModel } from "@lmstudio/lms-shared-types";
-import { Chat, type LMStudioClient, type LLM } from "@lmstudio/sdk";
-import { addCreateClientOptions, createClient } from "../../createClient.js";
-import { addLogLevelOptions, createLogger } from "../../logLevel.js";
+import { Chat, type LLM, type LMStudioClient } from "@lmstudio/sdk";
+import chalk from "chalk";
+import columnify from "columnify";
+import fuzzy from "fuzzy";
 import inquirer from "inquirer";
 import inquirerAutocompletePrompt from "inquirer-autocomplete-prompt";
-import { getCliPref } from "../../cliPref.js";
-import { terminalSize } from "@lmstudio/lms-isomorphic";
-import fuzzy from "fuzzy";
+import * as readline from "readline/promises";
+import { getCliPref, type CliPref } from "../../cliPref.js";
+import { askQuestion } from "../../confirm.js";
+import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
+import { addLogLevelOptions, createLogger } from "../../logLevel.js";
+import { type SimpleFileData } from "../../SimpleFileData.js";
+import { createRefinedNumberParser } from "../../types/refinedNumber.js";
 import { downloadArtifact } from "../get.js";
 import {
   displayVerboseStats,
@@ -15,22 +23,11 @@ import {
   loadModelWithProgress,
   readStdin,
 } from "./util.js";
-import { type CliPref } from "../../cliPref.js";
-import chalk from "chalk";
-import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
 
 interface StartPredictionOpts {
   stats?: true;
   ttl: number;
 }
-import columnify from "columnify";
-import { type SimpleFileData } from "../../SimpleFileData.js";
-import { type SimpleLogger } from "@lmstudio/lms-common";
-import * as readline from "readline/promises";
-import { askQuestion } from "../../confirm.js";
-
-inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
-const { prompt } = inquirer;
 
 const DEFAULT_SYSTEM_PROMPT =
   "You are a technical AI assistant. Answer questions clearly, concisely and to-the-point.";
@@ -48,6 +45,8 @@ export async function getOrAskShouldFetchModelCatalog(
   const fetchModelCatalogPreference = cliPref.get().fetchModelCatalog;
   let shouldFetchModelCatalog = false;
 
+  inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
+  const { prompt } = inquirer;
   if (offline !== true && fetchModelCatalogPreference !== false) {
     if (fetchModelCatalogPreference === undefined) {
       // We do not consider options.yes here because we want user to explicitly
@@ -245,10 +244,10 @@ export const chat = addLogLevelOptions(
       .option("-p, --prompt <prompt>", "Print response to stdout and quit")
       .option("-s, --system-prompt <systemPrompt>", "Custom system prompt to use for the chat")
       .option("--stats", "Display detailed prediction statistics after each response")
-      .option(
-        "--ttl <ttl>",
-        "Time (in seconds) to keep the model loaded after the chat ends",
-        "3600",
+      .addOption(
+        new Option("--ttl <ttl>", "Time (in seconds) to keep the model loaded after the chat ends")
+          .argParser(createRefinedNumberParser({ integer: true, min: 1 }))
+          .default(3600),
       )
       .option("--offline", "Do not fetch available models to download or updates", false)
       .option("-y, --yes", "Assume 'yes' as answer to all CLI prompts"),
@@ -291,7 +290,8 @@ export const chat = addLogLevelOptions(
         logger.error("No loaded model found, load with:\n       lms load");
         process.exit(1);
       }
-      // No model loaded, offer to download a model from the catalog or use existing downloaded model
+      // No model loaded, offer to download a model from the catalog or use
+      // existing downloaded model
       const cliPref = await getCliPref(logger);
 
       let modelCatalogModels: HubModel[] = [];
@@ -357,6 +357,8 @@ export const chat = addLogLevelOptions(
       // Pre-compute all display options to avoid recreation on each keystroke
       const displayOptions = createModelDisplayOptions(modelsMap, offline);
 
+      inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
+      const { prompt } = inquirer;
       const answers = await prompt([
         {
           type: "autocomplete",

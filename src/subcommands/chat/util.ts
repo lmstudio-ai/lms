@@ -1,5 +1,5 @@
 import type { SimpleLogger } from "@lmstudio/lms-common";
-import { type Chat, type LMStudioClient, type LLM, type LLMPredictionStats } from "@lmstudio/sdk";
+import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { ProgressBar } from "../../ProgressBar.js";
 
 export async function loadModelWithProgress(
