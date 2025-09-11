@@ -117,7 +117,7 @@ function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolea
           console.log(`${key}: ${chalk.greenBright(value)}`);
         });
       } else {
-        console.log("  No stats available");
+        console.log("No stats available");
       }
     }
   }
