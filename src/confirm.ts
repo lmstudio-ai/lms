@@ -1,15 +1,23 @@
 import { Cleaner, makePromise } from "@lmstudio/lms-common";
-import { createInterface } from "readline/promises";
+import { createInterface, type Interface } from "readline/promises";
 
 const interrupted = Symbol("interrupted");
 
-export async function askQuestion(prompt: string): Promise<boolean> {
+interface AskQuestionOpts {
+  rl?: Interface;
+}
+
+export async function askQuestion(prompt: string, opts: AskQuestionOpts = {}): Promise<boolean> {
   using cleaner = new Cleaner();
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  cleaner.register(() => rl.close());
+  let rl = opts.rl;
+  if (rl === undefined) {
+    const createdReadLine = createInterface({
+      input: process.stdin,
+      output: process.stderr,
+    });
+    cleaner.register(() => createdReadLine.close());
+    rl = createdReadLine;
+  }
   const { promise: sigintPromise, resolve: sigintResolve } = makePromise<typeof interrupted>();
   const sigintListener = () => {
     sigintResolve(interrupted);

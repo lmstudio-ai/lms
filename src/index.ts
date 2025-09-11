@@ -1,6 +1,6 @@
 import { program } from "@commander-js/extra-typings";
 import { bootstrap } from "./subcommands/bootstrap.js";
-import { chat } from "./subcommands/chat.js";
+import { chat } from "./subcommands/chat/index.js";
 import { clone } from "./subcommands/clone.js";
 import { create } from "./subcommands/create.js";
 import { dev } from "./subcommands/dev.js";
