@@ -80,8 +80,8 @@ export function createModelDisplayOptions(
 
     const displayName = offline
       ? `${model.name} ${chalk.gray(`(${size})`)}`
-      : // uses columnify to align text in columns because
-        // we have both downloaded and local models here
+      : // uses columnify to align text in columns because we have both downloaded and local models
+        // here.
         columnify(
           [
             {
@@ -110,8 +110,8 @@ export function createModelDisplayOptions(
 }
 
 /**
- * Handles a single non-interactive chat prompt and exits the process.
- * Streams the response to stdout and optionally displays prediction statistics.
+ * Handles a single non-interactive chat prompt and exits the process. Streams the response to
+ * stdout and optionally displays prediction statistics.
  */
 export async function handleNonInteractiveChat(
   llm: LLM,
@@ -139,8 +139,8 @@ export async function handleNonInteractiveChat(
 }
 
 /**
- * Runs a single prediction in an interactive chat session.
- * Pauses readline during prediction and resumes for next input.
+ * Runs a single prediction in an interactive chat session. Pauses readline during prediction and
+ * resumes for next input.
  */
 async function runInteractivePrediction(
   llm: LLM,
@@ -288,14 +288,13 @@ export const chat = addLogLevelOptions(
         process.exit(1);
       }
       if (yes === true) {
-        // This means no model has been loaded and user has passed -y/--yes so
-        // we cannot ask them to select a model Instead, we exit with an error
-        // and tell them to load a model
+        // This means no model has been loaded and user has passed -y/--yes so we cannot ask them to
+        // select a model Instead, we exit with an error and tell them to load a model
         logger.error("No loaded model found, load with:\n       lms load");
         process.exit(1);
       }
-      // No model loaded, offer to download a model from the catalog or use
-      // existing downloaded model
+      // No model loaded, offer to download a model from the catalog or use existing downloaded
+      // model
       const cliPref = await getCliPref(logger);
 
       let modelCatalogModels: HubModel[] = [];
@@ -309,8 +308,8 @@ export const chat = addLogLevelOptions(
         try {
           modelCatalogModels = await client.repository.unstable.getModelCatalog();
         } catch (err) {
-          // If error says network connection failed,
-          // then we are offline, so just use empty the empty model catalog
+          // If error says network connection failed, then we are offline, so just use empty the
+          // empty model catalog
           if (err instanceof Error && err.message.toLowerCase().includes("network") === true) {
             logger.warn("Offline, unable to fetch model catalog");
           } else {
@@ -393,12 +392,12 @@ export const chat = addLogLevelOptions(
           // Wait for model indexing to complete after download
           await new Promise(resolve => setTimeout(resolve, 500));
         } else {
-          // It is not a model from the catalog, so must be a direct model
-          // which is not downloaded, unexpected path as only
-          // cataloged models are offered to download
-          logger.error(
-            `Model ${selectedModel.name} is not downloaded. Please download the model first with 'lms get'.`,
-          );
+          // It is not a model from the catalog, so must be a direct model which is not downloaded,
+          // unexpected path as only cataloged models are offered to download
+          logger.errorText`
+            Model ${selectedModel.name} is not downloaded. Please download the model first with
+            'lms get'.
+          `;
           process.exit(1);
         }
       }
