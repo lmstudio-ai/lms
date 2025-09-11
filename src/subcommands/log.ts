@@ -1,4 +1,5 @@
 import { Command } from "@commander-js/extra-typings";
+import { text } from "@lmstudio/lms-common";
 import { type DiagnosticsLogEventData } from "@lmstudio/lms-shared-types";
 import chalk from "chalk";
 import { addCreateClientOptions, createClient } from "../createClient.js";
@@ -9,38 +10,117 @@ const stream = addLogLevelOptions(
     new Command()
       .name("stream")
       .description("Stream logs from LM Studio")
-      .option("--json", "Outputs in JSON format, separated by newline"),
+      .option("--json", "Outputs in JSON format, separated by newline")
+      .option("--stats", "Print prediction stats if available")
+      .option("-s, --source <source>", "Source type: 'model' or 'server'", "model")
+      .option("--filter <filter>", "Filter for model source: 'input', 'output', or 'input,output'"),
   ),
 ).action(async options => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
-  const { json = false } = options;
+  const { json = false, stats = false, source = "model", filter } = options;
+
+  // Validate source
+  if (source !== "model" && source !== "server") {
+    logger.error("--source must be either 'model' or 'server'");
+    process.exit(1);
+  }
+
+  // Validate filter usage
+  if (filter !== undefined && source === "server") {
+    logger.error("--filter can only be used with --source model");
+    process.exit(1);
+  }
+
+  // Handle default behavior and warnings
+  let filterTypes: string[] = [];
+  if (source === "model") {
+    if (filter === undefined) {
+      // Default behavior with warning
+      filterTypes = ["input"];
+      logger.warn(
+        text`
+        WARNING: 'lms log stream' will show both user and assistant messages in future versions. To continue seeing only user messages, please use 'lms log stream --source model --filter input'
+        `,
+      );
+    } else {
+      // Check for empty string
+      if (filter.trim() === "") {
+        logger.error("--filter cannot be empty");
+        process.exit(1);
+      }
+      // Parse filter
+      filterTypes = filter
+        .split(",")
+        .map((f: string) => f.trim())
+        .filter(f => f.length > 0);
+      for (const type of filterTypes) {
+        if (type !== "input" && type !== "output") {
+          logger.error("--filter values must be 'input', 'output', or 'input,output'");
+          process.exit(1);
+        }
+      }
+    }
+  }
 
   logger.info("Streaming logs from LM Studio\n");
 
   client.diagnostics.unstable_streamLogs(log => {
+    // Apply filtering for model source
+    if (source === "model") {
+      if (filterTypes.length > 0) {
+        const shouldShow = filterTypes.some(type => log.data.type === `llm.prediction.${type}`);
+        if (!shouldShow) {
+          return;
+        }
+      } else {
+        if (log.data.type.startsWith("llm.prediction.") === false) {
+          return;
+        }
+      }
+    } else if (source === "server") {
+      if (log.data.type !== "server.log") {
+        return;
+      }
+    }
+
     if (json) {
       console.log(JSON.stringify(log));
     } else {
+      if (log.data.type === "server.log") {
+        console.log(log.data.content);
+        return;
+      }
       console.log("timestamp: " + chalk.greenBright(new Date(log.timestamp).toLocaleString()));
       console.log("type: " + chalk.greenBright(log.data.type));
-      switch (log.data.type) {
-        case "llm.prediction.input": {
-          printLlmPredictionLogEvent(log.data);
-        }
-      }
+      printLlmPredictionLogEvent(log.data, stats);
       console.log();
       console.log();
     }
   });
 });
 
-function printLlmPredictionLogEvent(
-  data: DiagnosticsLogEventData & { type: "llm.prediction.input" },
-) {
+function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolean) {
+  if (data.type === "server.log") return;
   console.log("modelIdentifier: " + chalk.greenBright(data.modelIdentifier));
   console.log("modelPath: " + chalk.greenBright(data.modelPath));
-  console.log(`input: "${chalk.green(data.input)}"`);
+  if (data.type === "llm.prediction.input") {
+    console.log("input:");
+    console.log(chalk.greenBright(data.input));
+  }
+  if (data.type === "llm.prediction.output") {
+    console.log("output:");
+    console.log(chalk.greenBright(data.output));
+    if (stats === true) {
+      if (data.stats !== undefined) {
+        Object.entries(data.stats).forEach(([key, value]) => {
+          console.log(`${key}: ${chalk.greenBright(value)}`);
+        });
+      } else {
+        console.log("  No stats available");
+      }
+    }
+  }
 }
 
 export const log = new Command()
