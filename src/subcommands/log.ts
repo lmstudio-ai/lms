@@ -122,8 +122,6 @@ function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolea
   console.log("modelIdentifier: " + chalk.greenBright(data.modelIdentifier));
   if (data.type === "llm.prediction.input") {
     console.log("modelPath: " + chalk.greenBright(data.modelPath));
-  }
-  if (data.type === "llm.prediction.input") {
     console.log("input:");
     console.log(chalk.greenBright(data.input));
   }
