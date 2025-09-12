@@ -129,9 +129,10 @@ async function listEngines(
   }
 
   const rows = sortedEngines.map(engine => {
-    const isSelected = modelFormatFilters
-      ? engine.selectedModelFormats.some(format => modelFormatFilters.has(format))
-      : engine.selectedModelFormats.length > 0;
+    const isSelected =
+      modelFormatFilters !== undefined
+        ? engine.selectedModelFormats.some(format => modelFormatFilters.has(format))
+        : engine.selectedModelFormats.length > 0;
 
     return {
       engine: useFull ? engine.fullAlias : engine.minimalAlias,
