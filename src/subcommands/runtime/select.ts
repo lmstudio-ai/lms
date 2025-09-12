@@ -29,14 +29,14 @@ async function selectRuntimeEngine(
   });
 
   const fullAlias = choice.name + "-" + choice.version;
-  formatStatus.forEach(({ modelFormat, shouldSelect }) => {
+  for (const { modelFormat, shouldSelect } of formatStatus) {
     if (shouldSelect) {
-      client.runtime.engine.select(choice, modelFormat);
+      await client.runtime.engine.select(choice, modelFormat);
       logger.info("Selected " + fullAlias + " for " + modelFormat);
     } else {
       logger.info("Already selected " + fullAlias + " for " + modelFormat);
     }
-  });
+  }
 }
 
 async function selectLatestVersionOfSelectedEngines(
@@ -71,15 +71,15 @@ async function selectLatestVersionOfSelectedEngines(
     };
   });
 
-  latestSelections.forEach(selection => {
+  for (const selection of latestSelections) {
     const fullAlias = selection.name + "-" + selection.version;
     if (selection.version !== selection.previousVersion) {
-      client.runtime.engine.select(selection, selection.modelFormat);
+      await client.runtime.engine.select(selection, selection.modelFormat);
       logger.info("Selected " + fullAlias + " for " + selection.modelFormat);
     } else {
       logger.info("Already selected " + fullAlias + " for " + selection.modelFormat);
     }
-  });
+  }
 }
 
 const llmEngine = new Command()
@@ -102,10 +102,10 @@ const llmEngine = new Command()
       throw Error("Must specify at least one of [alias] or --latest");
     } else if (alias === undefined) {
       // latest must be true
-      selectLatestVersionOfSelectedEngines(logger, client, modelFormats);
+      await selectLatestVersionOfSelectedEngines(logger, client, modelFormats);
     } else {
       // alias must be defined, latest may be true or false
-      selectRuntimeEngine(logger, client, alias, latest, modelFormats);
+      await selectRuntimeEngine(logger, client, alias, latest, modelFormats);
     }
   });
 

@@ -32,9 +32,10 @@ async function removeRuntimeEngine(
       return;
     }
   }
-  choices.forEach(choice =>
-    client.runtime.engine.remove({ name: choice.name, version: choice.version }),
-  );
+  for (const { name, version } of choices) {
+    await client.runtime.engine.remove({ name, version });
+    logger.info("Removed " + name + "-" + version);
+  }
 }
 
 export const remove = addLogLevelOptions(
@@ -50,6 +51,6 @@ export const remove = addLogLevelOptions(
       const client = await createClient(logger, parentOptions);
 
       const { yes = false, dryRun = false } = options;
-      removeRuntimeEngine(logger, client, alias, yes, dryRun);
+      await removeRuntimeEngine(logger, client, alias, yes, dryRun);
     }),
 );
