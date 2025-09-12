@@ -1,9 +1,8 @@
 const NUM_VERSION_COMPONENTS = 3;
+const VERSION_REGEX = /^\d+(\.\d+){2}$/;
 
 function parseVersion(version: string): number[] {
-  const versionRegex = new RegExp(`^\\d+(\\.\\d+){${NUM_VERSION_COMPONENTS - 1}}$`);
-
-  if (!versionRegex.test(version)) {
+  if (!VERSION_REGEX.test(version)) {
     throw new Error(
       `Invalid version format: "${version}". Expected MAJOR.MINOR.PATCH with numbers only.`,
     );
