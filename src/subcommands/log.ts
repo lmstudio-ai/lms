@@ -1,4 +1,4 @@
-import { Command } from "@commander-js/extra-typings";
+import { Command, Option } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import { type DiagnosticsLogEvent, type DiagnosticsLogEventData } from "@lmstudio/lms-shared-types";
 import chalk from "chalk";
@@ -12,19 +12,17 @@ const stream = addLogLevelOptions(
       .description("Stream logs from LM Studio")
       .option("--json", "Outputs in JSON format, separated by newline")
       .option("--stats", "Print prediction stats if available")
-      .option("-s, --source <source>", "Source type: 'model' or 'server'", "model")
+      .addOption(
+        new Option("--source <source>", "Source of logs: 'model' or 'server'")
+          .default("model")
+          .choices(["model", "server"]),
+      )
       .option("--filter <filter>", "Filter for model source: 'input', 'output'"),
   ),
 ).action(async options => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
   const { json = false, stats = false, source = "model", filter } = options;
-
-  // Validate source
-  if (source !== "model" && source !== "server") {
-    logger.error("--source must be either 'model' or 'server'");
-    process.exit(1);
-  }
 
   // Don't allow stats with server source
   if (stats === true && source === "server") {
@@ -46,7 +44,9 @@ const stream = addLogLevelOptions(
       filterTypes = ["input"];
       logger.warn(
         text`
-        WARNING: 'lms log stream' will show both user and assistant messages in future versions. To continue seeing only user messages, please use 'lms log stream --source model --filter input'
+          WARNING: 'lms log stream' will show both user and assistant messages in future versions.
+          To continue seeing only user messages, please use 'lms log stream --source model --filter
+          input'
         `,
       );
     } else {
@@ -73,7 +73,7 @@ const stream = addLogLevelOptions(
 
   client.diagnostics.unstable_streamLogs(log => {
     // Here we consume the same stream for both model and server logs and filter based on user input
-    if (!shouldShowLog(log, source, filterTypes)) {
+    if (!shouldShowLogEvent(log, source, filterTypes)) {
       return;
     }
 
@@ -85,7 +85,11 @@ const stream = addLogLevelOptions(
   });
 });
 
-function shouldShowLog(log: DiagnosticsLogEvent, source: string, filterTypes: string[]): boolean {
+function shouldShowLogEvent(
+  log: DiagnosticsLogEvent,
+  source: string,
+  filterTypes: string[],
+): boolean {
   if (source === "model") {
     if (filterTypes.length > 0) {
       return filterTypes.some(type => log.data.type === `llm.prediction.${type}`);
