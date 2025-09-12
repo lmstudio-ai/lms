@@ -116,7 +116,7 @@ async function listEngines(
   });
 
   // Apply model format filter if provided
-  if (modelFormatFilters) {
+  if (modelFormatFilters !== undefined) {
     sortedEngines = sortedEngines.filter(engine =>
       engine.supportedModelFormats.some(format => modelFormatFilters.has(format.toUpperCase())),
     );

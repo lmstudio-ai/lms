@@ -30,7 +30,7 @@ async function selectRuntimeEngine(
     ? resolveLatestAlias(engineInfos, alias, modelFormats)
     : resolveUniqueAlias(engineInfos, alias, modelFormats);
 
-  if (latest) {
+  if (latest === true) {
     if (fields.has("version")) {
       // This is to avoid user confusion where, for example, they have
       //  1. llama.cpp-metal@1.0.0
@@ -42,9 +42,10 @@ async function selectRuntimeEngine(
     }
   }
 
-  const selectForModelFormats = modelFormats
-    ? new Set([...modelFormats].filter(format => choice.supportedModelFormats.includes(format)))
-    : new Set(choice.supportedModelFormats);
+  const selectForModelFormats =
+    modelFormats !== undefined
+      ? new Set([...modelFormats].filter(format => choice.supportedModelFormats.includes(format)))
+      : new Set(choice.supportedModelFormats);
 
   const alreadySelectedFor = existingSelections
     .filter(existing => existing.name === choice.name && existing.version === choice.version)
@@ -59,7 +60,7 @@ async function selectRuntimeEngine(
 
   const full = generateFullAlias(choice).alias;
   for (const { modelFormat, shouldSelect } of formatStatus) {
-    if (shouldSelect) {
+    if (shouldSelect === true) {
       await client.runtime.engine.select(choice, modelFormat);
       logger.info("Selected " + full + " for " + modelFormat);
     } else {
@@ -133,7 +134,7 @@ const llmEngine = new Command()
       ? new Set(modelFormatJoined.split(",").map(s => s.toUpperCase()))
       : undefined;
 
-    if (alias === undefined && !latest) {
+    if (alias === undefined && latest === false) {
       throw new UserInputError("Must specify at least one of [alias] or --latest");
     } else if (alias === undefined) {
       // latest must be true

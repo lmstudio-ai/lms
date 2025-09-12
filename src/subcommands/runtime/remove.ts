@@ -26,16 +26,16 @@ async function removeRuntimeEngine(
   const { engines: choices } = resolveAlias(engineInfos, alias);
   const fullAliases = choices.map(choice => generateFullAlias(choice).alias);
   let prefix = "Will remove ";
-  if (dryRun) {
+  if (dryRun === true) {
     prefix = "Would remove ";
   }
   fullAliases.forEach(fullAlias => logger.info(prefix + fullAlias));
-  if (dryRun) {
+  if (dryRun === true) {
     return;
   }
-  if (!yes) {
+  if (yes === false) {
     const confirmed = await askQuestion(`Permanently remove?`);
-    if (!confirmed) {
+    if (confirmed === false) {
       logger.info("Removal cancelled.");
       return;
     }

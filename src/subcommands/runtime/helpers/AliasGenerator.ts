@@ -141,7 +141,10 @@ export class AliasGenerator {
       aliasParts.push(engine.gpu?.framework || "cpu");
     }
     if (fields.has("cpuInstructionSetExtensions")) {
-      if (engine.cpu.instructionSetExtensions?.length) {
+      if (
+        engine.cpu.instructionSetExtensions !== undefined &&
+        engine.cpu.instructionSetExtensions.length > 0
+      ) {
         aliasParts.push(engine.cpu.instructionSetExtensions.join("_"));
       } else {
         throw new MissingAliasComponentError(
