@@ -26,6 +26,12 @@ const stream = addLogLevelOptions(
     process.exit(1);
   }
 
+  // Don't allow stats with server source
+  if (stats === true && source === "server") {
+    logger.error("--stats can only be used with --source model");
+    process.exit(1);
+  }
+
   // Validate filter usage
   if (filter !== undefined && source === "server") {
     logger.error("--filter can only be used with --source model");
