@@ -1,4 +1,4 @@
-import { RuntimeEngineInfo } from "../../../../lms-shared-types/dist/types/RuntimeEngine.js";
+import { RuntimeEngineInfo } from "../../../../../lms-shared-types/dist/types/RuntimeEngine.js";
 import {
   AliasField,
   AliasGenerator,

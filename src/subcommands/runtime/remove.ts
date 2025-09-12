@@ -4,8 +4,8 @@ import { LMStudioClient } from "@lmstudio/sdk";
 import { askQuestion } from "../../confirm.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
-import { fallbackAlias } from "./aliasGeneration.js";
-import { resolveAlias } from "./aliasResolution.js";
+import { fallbackAlias } from "./helpers/aliasGeneration.js";
+import { resolveAlias } from "./helpers/aliasResolution.js";
 
 async function removeRuntimeEngine(
   logger: SimpleLogger,

@@ -12,8 +12,8 @@ import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
-import { fallbackAlias } from "./aliasGeneration.js";
-import { AliasGroup } from "./aliasGrouping.js";
+import { fallbackAlias } from "./helpers/aliasGeneration.js";
+import { AliasGroup } from "./helpers/aliasGrouping.js";
 
 export interface RuntimeEngineDisplayInfo {
   specifier: RuntimeEngineSpecifier;

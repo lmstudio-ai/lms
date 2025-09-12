@@ -1,6 +1,6 @@
-import { RuntimeEngineInfo } from "../../../../lms-shared-types/dist/types/RuntimeEngine.js";
-import { compareVersions } from "../../compareVersions.js";
-import { UserInputError } from "../../types/UserInputError.js";
+import { RuntimeEngineInfo } from "../../../../../lms-shared-types/dist/types/RuntimeEngine.js";
+import { compareVersions } from "../../../compareVersions.js";
+import { UserInputError } from "../../../types/UserInputError.js";
 import { AliasField, BuiltAlias, fallbackAlias } from "./aliasGeneration.js";
 import { AliasGroup } from "./aliasGrouping.js";
 

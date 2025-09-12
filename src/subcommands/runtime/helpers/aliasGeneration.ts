@@ -1,7 +1,7 @@
 import {
   RuntimeEngineInfo,
   RuntimeEngineSpecifier,
-} from "../../../../lms-shared-types/dist/types/RuntimeEngine.js";
+} from "../../../../../lms-shared-types/dist/types/RuntimeEngine.js";
 
 export const ALL_ALIAS_FIELDS = [
   "engine",
