@@ -1,8 +1,8 @@
 import { RuntimeEngineInfo } from "../../../../../lms-shared-types/dist/types/RuntimeEngine.js";
 import { compareVersions } from "../../../compareVersions.js";
 import { UserInputError } from "../../../types/UserInputError.js";
-import { AliasField, BuiltAlias, fallbackAlias } from "./aliasGeneration.js";
-import { AliasGroup } from "./aliasGrouping.js";
+import { AliasField, BuiltAlias, generateFullAlias } from "./AliasGenerator.js";
+import { AliasGroup } from "./AliasGroup.js";
 
 // Returns list of all matching engines
 export function resolveAlias(
@@ -99,7 +99,7 @@ export function resolveUniqueAlias(
       "Alias '" +
         alias +
         "' is ambiguous. Options are [" +
-        engines.map(e => fallbackAlias(e).alias) +
+        engines.map(e => generateFullAlias(e).alias) +
         "].",
     );
   }

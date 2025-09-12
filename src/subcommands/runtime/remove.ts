@@ -4,7 +4,7 @@ import { LMStudioClient } from "@lmstudio/sdk";
 import { askQuestion } from "../../confirm.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
-import { fallbackAlias } from "./helpers/aliasGeneration.js";
+import { generateFullAlias } from "./helpers/AliasGenerator.js";
 import { resolveAlias } from "./helpers/aliasResolution.js";
 
 async function removeRuntimeEngine(
@@ -16,7 +16,7 @@ async function removeRuntimeEngine(
 ) {
   const engineInfos = await client.runtime.engine.list();
   const { engines: choices } = resolveAlias(engineInfos, alias);
-  const fullAliases = choices.map(choice => fallbackAlias(choice).alias);
+  const fullAliases = choices.map(choice => generateFullAlias(choice).alias);
   let prefix = "Will remove ";
   if (dryRun) {
     prefix = "Would remove ";

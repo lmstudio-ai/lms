@@ -38,14 +38,14 @@ export class MissingAliasComponentError extends Error {
 }
 
 /**
- * Generates a fallback alias using the engine name and version.
+ * Generates a full alias using the engine name and version.
  * Assumed to be a unique identifier that matches the directory name on disk.
  * @param engine - The runtime engine specifier
- * @returns A fallback alias
+ * @returns A full alias
  */
-export function fallbackAlias(engine: RuntimeEngineSpecifier): BuiltAlias {
+export function generateFullAlias(engine: RuntimeEngineSpecifier): BuiltAlias {
   // Note: this uses "-" instead of "@" before the version to ensure differentiation
-  // from the generated aliases.
+  // from the shorter aliases.
   return {
     alias: engine.name + "-" + engine.version,
     fields: new Set(["version"]),
@@ -62,7 +62,7 @@ export class AliasGenerator {
    * Returns the standard component sets for alias generation.
    * Can be overridden by subclasses for engine-specific requirements.
    */
-  getAliasComponentSets(engine: RuntimeEngineInfo): Set<AliasField>[] {
+  protected getAliasComponentSets(engine: RuntimeEngineInfo): Set<AliasField>[] {
     return [
       new Set<AliasField>(["engine"]),
       new Set<AliasField>(["engine", "gpuFramework"]),
@@ -82,7 +82,7 @@ export class AliasGenerator {
    * Generates a single alias for the given engine and fields.
    * Can be overridden for engine-specific logic.
    */
-  generateAlias(engine: RuntimeEngineInfo, fields: Set<AliasField>): BuiltAlias | null {
+  protected generateAlias(engine: RuntimeEngineInfo, fields: Set<AliasField>): BuiltAlias | null {
     try {
       return {
         fields,
@@ -175,10 +175,11 @@ export class AliasGenerator {
  * Llama.cpp specific generator that requires GPU framework to be included.
  */
 export class LlamaCppAliasGenerator extends AliasGenerator {
-  override getAliasComponentSets(engine: RuntimeEngineInfo): Set<AliasField>[] {
+  protected override getAliasComponentSets(engine: RuntimeEngineInfo): Set<AliasField>[] {
     // Force llama.cpp engines to include the GPU framework for improved comprehension
     return [
-      new Set<AliasField>(["engine", "gpuFramework"]), // No engine-only alias
+      // No engine-only alias
+      new Set<AliasField>(["engine", "gpuFramework"]),
       new Set<AliasField>(["engine", "gpuFramework", "platform"]),
       new Set<AliasField>(["engine", "gpuFramework", "platform", "cpuArchitecture"]),
       new Set<AliasField>([

@@ -12,8 +12,8 @@ import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
-import { fallbackAlias } from "./helpers/aliasGeneration.js";
-import { AliasGroup } from "./helpers/aliasGrouping.js";
+import { generateFullAlias } from "./helpers/AliasGenerator.js";
+import { AliasGroup } from "./helpers/AliasGroup.js";
 
 export interface RuntimeEngineDisplayInfo {
   specifier: RuntimeEngineSpecifier;
@@ -34,7 +34,7 @@ function resolveDuplicateMinimalAliases(capabilities: RuntimeEngineDisplayInfo[]
     aliasCounts.set(displayInfo.minimalAlias, current + 1);
   }
 
-  // Replace duplicates with fallback aliases
+  // Replace duplicates with full aliases
   for (const displayInfo of capabilities) {
     const occurrences = aliasCounts.get(displayInfo.minimalAlias) || 0;
     if (occurrences <= 0) {
@@ -42,16 +42,15 @@ function resolveDuplicateMinimalAliases(capabilities: RuntimeEngineDisplayInfo[]
         `Expected alias '${displayInfo.minimalAlias}' to occur at least once, but found ${occurrences} occurrences.`,
       );
     } else if (occurrences >= 2) {
-      const fallback = fallbackAlias(displayInfo.specifier).alias;
       console.warn(
         "Found " +
           occurrences +
           " display aliases set to " +
           displayInfo.minimalAlias +
           ". Falling back to " +
-          fallback,
+          displayInfo.fullAlias,
       );
-      displayInfo.minimalAlias = fallback;
+      displayInfo.minimalAlias = displayInfo.fullAlias;
     }
   }
 }
@@ -79,7 +78,7 @@ export function constructDisplayInfo(
 
     const aliases = group.generateAliasesForEngine(engine);
     const minimalAlias = group.selectMinimalAlias(aliases);
-    const fullAlias = fallbackAlias(engine).alias;
+    const fullAlias = generateFullAlias(engine).alias;
 
     return {
       specifier: engine,
@@ -93,7 +92,7 @@ export function constructDisplayInfo(
   });
 
   // For safety, do a final sweep of all the minimal aliases and replace any duplicates
-  // with the fallback alias
+  // with the full alias
   resolveDuplicateMinimalAliases(engineDisplayInfo);
   return engineDisplayInfo;
 }

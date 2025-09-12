@@ -4,10 +4,10 @@ import {
   AliasGenerator,
   ALL_ALIAS_FIELDS,
   BuiltAlias,
-  fallbackAlias,
+  generateFullAlias,
   LlamaCppAliasGenerator,
   MlxAliasGenerator,
-} from "./aliasGeneration.js";
+} from "./AliasGenerator.js";
 
 /**
  * Groups engines by type and manages minimum component analysis for display purposes.
@@ -24,7 +24,26 @@ export class AliasGroup {
   }
 
   private computeMinimumComponents(): Set<AliasField> {
-    const nonUniform = getNonUniformFields(this.engines);
+    if (this.engines.length === 0) return new Set(["version"]);
+
+    const fieldExtractors: Record<
+      AliasField,
+      (e: RuntimeEngineInfo) => string | string[] | undefined
+    > = {
+      engine: e => e.engine,
+      platform: e => e.platform,
+      gpuFramework: e => e.gpu?.framework,
+      cpuArchitecture: e => e.cpu.architecture,
+      cpuInstructionSetExtensions: e => e.cpu.instructionSetExtensions ?? [],
+      version: e => e.version,
+    };
+
+    const nonUniform = new Set(
+      ALL_ALIAS_FIELDS.filter(field =>
+        hasVariation(this.engines.map(e => fieldExtractors[field](e))),
+      ),
+    );
+
     // Always include a VERSION in the displayed name
     nonUniform.add("version");
     return nonUniform;
@@ -35,7 +54,19 @@ export class AliasGroup {
   }
 
   selectMinimalAlias(aliases: BuiltAlias[]): BuiltAlias | null {
-    return selectMinimalAlias(aliases, this.minimumComponents) ?? null;
+    const sortedAliases = [...aliases];
+    sortedAliases.sort((a, b) => a.fields.size - b.fields.size);
+
+    const minimalAlias = sortedAliases.find(alias => {
+      for (const field of this.minimumComponents) {
+        if (!alias.fields.has(field)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    return minimalAlias ?? null;
   }
 
   resolve(targetAlias: string): Array<{
@@ -46,8 +77,8 @@ export class AliasGroup {
 
     for (const engine of this.engines) {
       const aliases = this.generateAliasesForEngine(engine);
-      // Include fallback alias for CLI compatibility
-      aliases.push(fallbackAlias(engine));
+      // Include full alias compatibility with --full output
+      aliases.push(generateFullAlias(engine));
 
       for (const alias of aliases) {
         if (alias.alias === targetAlias) {
@@ -97,58 +128,11 @@ function groupBy<T, K>(array: T[], keyFn: (item: T) => K): Map<K, T[]> {
 }
 
 /**
- * Identifies which display name fields have varying values across engine manifests.
- * @param manifests - Array of engine manifests to analyze
- * @returns Set of fields that vary across the manifests
+ * Checks if a collection of values has variation (different values).
  */
-function getNonUniformFields(manifests: RuntimeEngineInfo[]): Set<AliasField> {
-  if (manifests.length === 0) return new Set();
-
-  const hasVariation = (values: (string | string[] | undefined)[]): boolean => {
-    const normalized = values.map(v =>
-      (Array.isArray(v) ? [...v].sort().join(",") : v ?? "").toLowerCase(),
-    );
-    return new Set(normalized).size > 1;
-  };
-
-  const fieldExtractors: Record<
-    AliasField,
-    (m: RuntimeEngineInfo) => string | string[] | undefined
-  > = {
-    engine: m => m.engine,
-    platform: m => m.platform,
-    gpuFramework: m => m.gpu?.framework,
-    cpuArchitecture: m => m.cpu.architecture,
-    cpuInstructionSetExtensions: m => m.cpu.instructionSetExtensions ?? [],
-    version: m => m.version,
-  };
-
-  return new Set(
-    ALL_ALIAS_FIELDS.filter(field => hasVariation(manifests.map(m => fieldExtractors[field](m)))),
+function hasVariation(values: (string | string[] | undefined)[]): boolean {
+  const normalized = values.map(v =>
+    (Array.isArray(v) ? [...v].sort().join(",") : v ?? "").toLowerCase(),
   );
-}
-
-/**
- * Selects the alias with the fewest components that includes all required fields.
- * @param aliases - Array of available aliases
- * @param minimumFields - Required fields that must be present in the selected alias
- * @returns The minimal alias that satisfies requirements, or undefined if none found
- */
-function selectMinimalAlias(
-  aliases: BuiltAlias[],
-  minimumFields: Set<AliasField>,
-): BuiltAlias | undefined {
-  const sortedAliases = [...aliases];
-  sortedAliases.sort((a, b) => a.fields.size - b.fields.size);
-
-  const minimalAlias = sortedAliases.find(alias => {
-    for (const field of minimumFields) {
-      if (!alias.fields.has(field)) {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  return minimalAlias;
+  return new Set(normalized).size > 1;
 }

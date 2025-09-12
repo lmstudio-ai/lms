@@ -5,7 +5,7 @@ import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
-import { fallbackAlias } from "./helpers/aliasGeneration.js";
+import { generateFullAlias } from "./helpers/AliasGenerator.js";
 import { resolveLatestAlias, resolveUniqueAlias } from "./helpers/aliasResolution.js";
 
 async function selectRuntimeEngine(
@@ -49,13 +49,13 @@ async function selectRuntimeEngine(
     };
   });
 
-  const fullAlias = fallbackAlias(choice).alias;
+  const full = generateFullAlias(choice).alias;
   for (const { modelFormat, shouldSelect } of formatStatus) {
     if (shouldSelect) {
       await client.runtime.engine.select(choice, modelFormat);
-      logger.info("Selected " + fullAlias + " for " + modelFormat);
+      logger.info("Selected " + full + " for " + modelFormat);
     } else {
-      logger.info("Already selected " + fullAlias + " for " + modelFormat);
+      logger.info("Already selected " + full + " for " + modelFormat);
     }
   }
 }
@@ -93,12 +93,12 @@ async function selectLatestVersionOfSelectedEngines(
   });
 
   for (const selection of latestSelections) {
-    const fullAlias = fallbackAlias(selection).alias;
+    const full = generateFullAlias(selection).alias;
     if (selection.version !== selection.previousVersion) {
       await client.runtime.engine.select(selection, selection.modelFormat);
-      logger.info("Selected " + fullAlias + " for " + selection.modelFormat);
+      logger.info("Selected " + full + " for " + selection.modelFormat);
     } else {
-      logger.info("Already selected " + fullAlias + " for " + selection.modelFormat);
+      logger.info("Already selected " + full + " for " + selection.modelFormat);
     }
   }
 }
