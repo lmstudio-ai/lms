@@ -13,6 +13,7 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { fallbackAlias } from "./aliasGeneration.js";
 import { AliasGroup } from "./aliasGrouping.js";
+import { UserInputError } from "./UserInputError.js";
 
 export interface RuntimeEngineDisplayInfo {
   specifier: RuntimeEngineSpecifier;
@@ -129,10 +130,9 @@ async function listEngines(
     );
 
     if (sortedEngines.length === 0) {
-      logger.error(
+      throw new UserInputError(
         `No LLM Engines support the "${[...modelFormatFilters].join(", ")}" model format(s).`,
       );
-      process.exit(1);
     }
   }
 

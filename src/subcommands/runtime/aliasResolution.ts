@@ -2,6 +2,7 @@ import { RuntimeEngineInfo } from "../../../../lms-shared-types/dist/types/Runti
 import { compareVersions } from "../../compareVersions.js";
 import { AliasField, BuiltAlias, fallbackAlias } from "./aliasGeneration.js";
 import { AliasGroup } from "./aliasGrouping.js";
+import { UserInputError } from "./UserInputError.js";
 
 // Returns list of all matching engines
 export function resolveAlias(
@@ -20,7 +21,7 @@ export function resolveAlias(
   }
 
   if (allMatches.length === 0) {
-    throw Error("Alias not found: " + alias);
+    throw new UserInputError("Alias not found: " + alias);
   }
 
   // Check for field consistency across matches
@@ -63,7 +64,7 @@ export function resolveAliasForModelFormats(
   });
 
   if (filteredEngines.length === 0) {
-    throw Error(
+    throw new UserInputError(
       "Alias '" +
         alias +
         "' does not match any engines that are compatible with model format(s) [" +
@@ -94,7 +95,7 @@ export function resolveUniqueAlias(
   if (engines.length === 1) {
     return { engine: engines[0], fields };
   } else {
-    throw Error(
+    throw new UserInputError(
       "Alias '" +
         alias +
         "' is ambiguous. Options are [" +
@@ -119,7 +120,7 @@ export function resolveLatestAlias(
 
   const engineNames = new Set([...engines].map(e => e.name));
   if (engineNames.size > 1) {
-    throw Error(
+    throw new UserInputError(
       "Latest alias '" +
         alias +
         "' cannot disambiguate between engine names [" +

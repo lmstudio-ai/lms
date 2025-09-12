@@ -6,6 +6,7 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { fallbackAlias } from "./aliasGeneration.js";
 import { resolveLatestAlias, resolveUniqueAlias } from "./aliasResolution.js";
+import { UserInputError } from "./UserInputError.js";
 
 async function selectRuntimeEngine(
   logger: SimpleLogger,
@@ -29,7 +30,7 @@ async function selectRuntimeEngine(
       // Then run `lms runtime select llm-engine llama.cpp-metal@1.0.0 --latest`
       // Without this Error, the command would select @1.0.0, but that may or may not
       // be what the user intends.
-      throw Error("Cannot specify a version alias with --latest.");
+      throw new UserInputError("Cannot specify a version alias with --latest.");
     }
   }
 
@@ -119,7 +120,7 @@ const llmEngine = new Command()
       : undefined;
 
     if (alias === undefined && !latest) {
-      throw Error("Must specify at least one of [alias] or --latest");
+      throw new UserInputError("Must specify at least one of [alias] or --latest");
     } else if (alias === undefined) {
       // latest must be true
       await selectLatestVersionOfSelectedEngines(logger, client, modelFormats);

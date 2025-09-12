@@ -13,6 +13,7 @@ import { log } from "./subcommands/log.js";
 import { login } from "./subcommands/login.js";
 import { push } from "./subcommands/push.js";
 import { runtime } from "./subcommands/runtime/main.js";
+import { UserInputError } from "./subcommands/runtime/UserInputError.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
@@ -54,6 +55,11 @@ program.addCommand(status);
 program.addCommand(version);
 
 program.parseAsync(process.argv).catch((error: any) => {
-  console.error(error?.stack ?? error);
+  if (error instanceof UserInputError) {
+    // Omit stack trace for UserInputErrors
+    console.error(error.message);
+  } else {
+    console.error(error?.stack ?? error);
+  }
   process.exit(1);
 });
