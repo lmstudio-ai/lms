@@ -4,6 +4,7 @@ import { LMStudioClient } from "@lmstudio/sdk";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
+import { fallbackAlias } from "./aliasGeneration.js";
 import { resolveLatestAlias, resolveUniqueAlias } from "./aliasResolution.js";
 
 async function selectRuntimeEngine(
@@ -31,18 +32,23 @@ async function selectRuntimeEngine(
       throw Error("Cannot specify a version alias with --latest.");
     }
   }
+
+  const selectForModelFormats = modelFormats
+    ? new Set([...modelFormats].filter(format => choice.supportedModelFormats.includes(format)))
+    : new Set(choice.supportedModelFormats);
+
   const alreadySelectedFor = existingSelections
     .filter(existing => existing.name === choice.name && existing.version === choice.version)
     .flatMap(existing => existing.modelFormats);
 
-  const formatStatus = [...choice.selectForModelFormats].map(modelFormat => {
+  const formatStatus = [...selectForModelFormats].map(modelFormat => {
     return {
       modelFormat: modelFormat,
       shouldSelect: !alreadySelectedFor.includes(modelFormat),
     };
   });
 
-  const fullAlias = choice.name + "-" + choice.version;
+  const fullAlias = fallbackAlias(choice).alias;
   for (const { modelFormat, shouldSelect } of formatStatus) {
     if (shouldSelect) {
       await client.runtime.engine.select(choice, modelFormat);
@@ -86,7 +92,7 @@ async function selectLatestVersionOfSelectedEngines(
   });
 
   for (const selection of latestSelections) {
-    const fullAlias = selection.name + "-" + selection.version;
+    const fullAlias = fallbackAlias(selection).alias;
     if (selection.version !== selection.previousVersion) {
       await client.runtime.engine.select(selection, selection.modelFormat);
       logger.info("Selected " + fullAlias + " for " + selection.modelFormat);

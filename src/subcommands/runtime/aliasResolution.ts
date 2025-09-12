@@ -1,127 +1,81 @@
 import { RuntimeEngineInfo } from "../../../../lms-shared-types/dist/types/RuntimeEngine.js";
 import { compareVersions } from "../../compareVersions.js";
-import { AliasField, fallbackAlias, generateAliases } from "./common.js";
-
-function generateAliasMap(engines: RuntimeEngineInfo[]): Map<
-  string,
-  {
-    engines: {
-      name: string;
-      version: string;
-      supportedModelFormats: Set<string>;
-    }[];
-    fields: Set<AliasField>;
-  }
-> {
-  const enginesAndAliases = engines.map(engine => {
-    return {
-      engine: {
-        name: engine.name,
-        version: engine.version,
-        engine,
-      },
-      builtAliases: generateAliases(engine),
-    };
-  });
-  // generateAliases does not include fallback aliases in its map, but we want to enable
-  // CLI users to select via a fallback alias as well.
-  enginesAndAliases.forEach(engineAndAliases =>
-    engineAndAliases.builtAliases.push(fallbackAlias(engineAndAliases.engine)),
-  );
-
-  const aliasMap = new Map<
-    string,
-    {
-      engines: {
-        name: string;
-        version: string;
-        supportedModelFormats: Set<string>;
-      }[];
-      fields: Set<AliasField>;
-    }
-  >();
-
-  const setsEqual = (set1: Set<AliasField>, set2: Set<AliasField>): boolean => {
-    return set1.size === set2.size && [...set1].every(item => set2.has(item));
-  };
-
-  for (const { engine, builtAliases } of enginesAndAliases) {
-    const supportedModelFormats = new Set(engine.engine.supportedModelFormats);
-    for (const builtAlias of builtAliases) {
-      const { alias, fields } = builtAlias;
-
-      if (aliasMap.has(alias)) {
-        const existingEntry = aliasMap.get(alias)!;
-
-        if (!setsEqual(existingEntry.fields, fields)) {
-          throw Error(
-            `Component conflict for alias "${alias}": ` +
-              `existing components [${Array.from(existingEntry.fields).join(", ")}] ` +
-              `differ from new components [${Array.from(fields).join(", ")}]`,
-          );
-        }
-
-        existingEntry.engines.push({ ...engine, supportedModelFormats });
-      } else {
-        aliasMap.set(alias, {
-          engines: [{ ...engine, supportedModelFormats }],
-          fields: new Set(fields),
-        });
-      }
-    }
-  }
-
-  return aliasMap;
-}
+import { AliasField, BuiltAlias, fallbackAlias } from "./aliasGeneration.js";
+import { AliasGroup } from "./aliasGrouping.js";
 
 // Returns list of all matching engines
 export function resolveAlias(
   engineInfos: RuntimeEngineInfo[],
   alias: string,
-  modelFormats?: Set<string>,
 ): {
-  engines: {
-    name: string;
-    version: string;
-    selectForModelFormats: Set<string>;
-  }[];
+  engines: RuntimeEngineInfo[];
   fields: Set<AliasField>;
 } {
-  const map = generateAliasMap(engineInfos);
-  const elem = map.get(alias);
-  if (elem === undefined) {
+  const groups = AliasGroup.createGroups(engineInfos);
+  const allMatches: Array<{ engine: RuntimeEngineInfo; matchedAlias: BuiltAlias }> = [];
+
+  // Collect matches from all groups
+  for (const group of groups) {
+    allMatches.push(...group.resolve(alias));
+  }
+
+  if (allMatches.length === 0) {
     throw Error("Alias not found: " + alias);
   }
 
-  const { engines: prelimEngines, fields } = elem;
+  // Check for field consistency across matches
+  // Is a sanity check b/c it should always be true, unless we change alias generation logic.
+  const firstMatchFields = allMatches[0].matchedAlias.fields;
+  for (const match of allMatches.slice(1)) {
+    const setsEqual = (set1: Set<AliasField>, set2: Set<AliasField>): boolean => {
+      return set1.size === set2.size && [...set1].every(item => set2.has(item));
+    };
 
-  // Apply passed in model formats. An engine must be compatible with _all_ requested formats
-  // to be a selection candidate. We track selectForModelFormats to ensure we only select
-  // for requested formats
-  if (modelFormats !== undefined) {
-    const engines = prelimEngines
-      .filter(e => {
-        return [...modelFormats].every(format => e.supportedModelFormats.has(format));
-      })
-      .map(e => {
-        return { name: e.name, version: e.version, selectForModelFormats: modelFormats };
-      });
-    if (engines.length === 0) {
+    if (!setsEqual(firstMatchFields, match.matchedAlias.fields)) {
       throw Error(
-        "Alias '" +
-          alias +
-          "' does not match any engines that are compatible with model format(s) [" +
-          [...modelFormats].join(",") +
-          "].",
+        `Component conflict for alias "${alias}": ` +
+          `existing components [${Array.from(firstMatchFields).join(", ")}] ` +
+          `differ from new components [${Array.from(match.matchedAlias.fields).join(", ")}]`,
       );
     }
-    return { engines, fields };
-  } else {
-    const engines = prelimEngines.map(e => {
-      return { name: e.name, version: e.version, selectForModelFormats: e.supportedModelFormats };
-    });
-    return { engines, fields };
   }
+
+  return {
+    engines: allMatches.map(match => match.engine),
+    fields: firstMatchFields,
+  };
+}
+
+// Returns list of matching engines filtered by model formats
+export function resolveAliasForModelFormats(
+  engineInfos: RuntimeEngineInfo[],
+  alias: string,
+  modelFormats: Set<string>,
+): {
+  engines: RuntimeEngineInfo[];
+  fields: Set<AliasField>;
+} {
+  const { engines, fields } = resolveAlias(engineInfos, alias);
+
+  const filteredEngines = engines.filter(engine => {
+    // Check if engine supports ALL requested formats
+    return [...modelFormats].every(format => engine.supportedModelFormats.includes(format));
+  });
+
+  if (filteredEngines.length === 0) {
+    throw Error(
+      "Alias '" +
+        alias +
+        "' does not match any engines that are compatible with model format(s) [" +
+        [...modelFormats].join(",") +
+        "].",
+    );
+  }
+
+  return {
+    engines: filteredEngines,
+    fields,
+  };
 }
 
 // Returns single engine (must be unambiguous)
@@ -130,14 +84,12 @@ export function resolveUniqueAlias(
   alias: string,
   modelFormats?: Set<string>,
 ): {
-  engine: {
-    name: string;
-    version: string;
-    selectForModelFormats: Set<string>;
-  };
+  engine: RuntimeEngineInfo;
   fields: Set<AliasField>;
 } {
-  const { engines, fields } = resolveAlias(engineInfos, alias, modelFormats);
+  const { engines, fields } = modelFormats
+    ? resolveAliasForModelFormats(engineInfos, alias, modelFormats)
+    : resolveAlias(engineInfos, alias);
 
   if (engines.length === 1) {
     return { engine: engines[0], fields };
@@ -158,14 +110,12 @@ export function resolveLatestAlias(
   alias: string,
   modelFormats?: Set<string>,
 ): {
-  engine: {
-    name: string;
-    version: string;
-    selectForModelFormats: Set<string>;
-  };
+  engine: RuntimeEngineInfo;
   fields: Set<AliasField>;
 } {
-  const { engines, fields } = resolveAlias(engineInfos, alias, modelFormats);
+  const { engines, fields } = modelFormats
+    ? resolveAliasForModelFormats(engineInfos, alias, modelFormats)
+    : resolveAlias(engineInfos, alias);
 
   const engineNames = new Set([...engines].map(e => e.name));
   if (engineNames.size > 1) {

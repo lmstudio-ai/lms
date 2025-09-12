@@ -3,10 +3,99 @@ import { SimpleLogger } from "@lmstudio/lms-common";
 import { LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import columnify from "columnify";
+import {
+  RuntimeEngineInfo,
+  RuntimeEngineSelectionInfo,
+  RuntimeEngineSpecifier,
+} from "../../../../lms-shared-types/dist/types/RuntimeEngine.js";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
-import { constructDisplayInfo } from "./common.js";
+import { fallbackAlias } from "./aliasGeneration.js";
+import { AliasGroup } from "./aliasGrouping.js";
+
+export interface RuntimeEngineDisplayInfo {
+  specifier: RuntimeEngineSpecifier;
+  minimalAlias: string;
+  fullAlias: string;
+  supportedModelFormats: string[];
+  selectedModelFormats: string[];
+}
+
+/**
+ * Resolves display alias conflicts by falling back to full aliases when duplicates exist.
+ * @param capabilities - Array of runtime engine capabilities to process
+ */
+function resolveDuplicateMinimalAliases(capabilities: RuntimeEngineDisplayInfo[]): void {
+  const aliasCounts = new Map<string, number>();
+  for (const displayInfo of capabilities) {
+    const current = aliasCounts.get(displayInfo.minimalAlias) || 0;
+    aliasCounts.set(displayInfo.minimalAlias, current + 1);
+  }
+
+  // Replace duplicates with fallback aliases
+  for (const displayInfo of capabilities) {
+    const occurrences = aliasCounts.get(displayInfo.minimalAlias) || 0;
+    if (occurrences <= 0) {
+      throw new Error(
+        `Expected alias '${displayInfo.minimalAlias}' to occur at least once, but found ${occurrences} occurrences.`,
+      );
+    } else if (occurrences >= 2) {
+      const fallback = fallbackAlias(displayInfo.specifier).alias;
+      console.warn(
+        "Found " +
+          occurrences +
+          " display aliases set to " +
+          displayInfo.minimalAlias +
+          ". Falling back to " +
+          fallback,
+      );
+      displayInfo.minimalAlias = fallback;
+    }
+  }
+}
+
+/**
+ * Constructs display information for runtime engines using the new AliasGroup architecture.
+ * @param engines - Array of runtime engine info
+ * @param selections - Array of runtime engine selection info
+ * @returns Array of runtime engine display info
+ */
+export function constructDisplayInfo(
+  engines: RuntimeEngineInfo[],
+  selections: RuntimeEngineSelectionInfo[],
+): RuntimeEngineDisplayInfo[] {
+  const groups = AliasGroup.createGroups(engines);
+
+  const engineDisplayInfo: RuntimeEngineDisplayInfo[] = engines.map(engine => {
+    const group = groups.find(g => g.engineType === engine.engine);
+
+    if (!group) {
+      throw new Error(
+        `Engine type '${engine.engine}' not found in engine groups. This should not happen.`,
+      );
+    }
+
+    const aliases = group.generateAliasesForEngine(engine);
+    const minimalAlias = group.selectMinimalAlias(aliases);
+    const fullAlias = fallbackAlias(engine).alias;
+
+    return {
+      specifier: engine,
+      minimalAlias: minimalAlias?.alias ?? fullAlias,
+      fullAlias,
+      supportedModelFormats: engine.supportedModelFormats,
+      selectedModelFormats: selections
+        .filter(selection => selection.name === engine.name && selection.version === engine.version)
+        .flatMap(selection => selection.modelFormats),
+    };
+  });
+
+  // For safety, do a final sweep of all the minimal aliases and replace any duplicates
+  // with the fallback alias
+  resolveDuplicateMinimalAliases(engineDisplayInfo);
+  return engineDisplayInfo;
+}
 
 async function listEngines(
   logger: SimpleLogger,
