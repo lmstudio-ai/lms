@@ -31,7 +31,7 @@ async function selectRuntimeEngine(
   const fullAlias = choice.name + "-" + choice.version;
   formatStatus.forEach(({ modelFormat, shouldSelect }) => {
     if (shouldSelect) {
-      client.runtime.engine.select({ engine: choice, modelFormat });
+      client.runtime.engine.select(choice, modelFormat);
       logger.info("Selected " + fullAlias + " for " + modelFormat);
     } else {
       logger.info("Already selected " + fullAlias + " for " + modelFormat);
@@ -74,10 +74,7 @@ async function selectLatestVersionOfSelectedEngines(
   latestSelections.forEach(selection => {
     const fullAlias = selection.name + "-" + selection.version;
     if (selection.version !== selection.previousVersion) {
-      client.runtime.engine.select({
-        engine: { name: selection.name, version: selection.version },
-        modelFormat: selection.modelFormat,
-      });
+      client.runtime.engine.select(selection, selection.modelFormat);
       logger.info("Selected " + fullAlias + " for " + selection.modelFormat);
     } else {
       logger.info("Already selected " + fullAlias + " for " + selection.modelFormat);
