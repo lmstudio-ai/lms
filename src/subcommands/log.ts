@@ -13,7 +13,7 @@ const stream = addLogLevelOptions(
       .option("--json", "Outputs in JSON format, separated by newline")
       .option("--stats", "Print prediction stats if available")
       .option("-s, --source <source>", "Source type: 'model' or 'server'", "model")
-      .option("--filter <filter>", "Filter for model source: 'input', 'output', or 'input,output'"),
+      .option("--filter <filter>", "Filter for model source: 'input', 'output'"),
   ),
 ).action(async options => {
   const logger = createLogger(options);
