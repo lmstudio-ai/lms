@@ -9,6 +9,6 @@ export const ls = addCreateClientOptions(
   const client = await createClient(logger, options);
 
   logger.info("LS WAS CALLED");
-  const result = await client.runtime.list();
+  const result = await client.runtime.engine.list();
   logger.info("Found " + result.length + " runtime engines.");
 });
