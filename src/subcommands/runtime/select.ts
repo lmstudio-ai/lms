@@ -4,9 +4,9 @@ import { LMStudioClient } from "@lmstudio/sdk";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
+import { UserInputError } from "../../types/UserInputError.js";
 import { fallbackAlias } from "./aliasGeneration.js";
 import { resolveLatestAlias, resolveUniqueAlias } from "./aliasResolution.js";
-import { UserInputError } from "./UserInputError.js";
 
 async function selectRuntimeEngine(
   logger: SimpleLogger,

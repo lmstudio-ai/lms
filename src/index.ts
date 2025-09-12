@@ -13,11 +13,11 @@ import { log } from "./subcommands/log.js";
 import { login } from "./subcommands/login.js";
 import { push } from "./subcommands/push.js";
 import { runtime } from "./subcommands/runtime/main.js";
-import { UserInputError } from "./subcommands/runtime/UserInputError.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
 import { printVersion, version } from "./subcommands/version.js";
+import { UserInputError } from "./types/UserInputError.js";
 
 if (process.argv.length === 2) {
   printVersion();
