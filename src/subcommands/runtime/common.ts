@@ -325,5 +325,6 @@ export function constructDisplayInfo(
         .flatMap(selection => selection.modelFormats),
     };
   });
+  resolveDuplicateMinimalAliases(engineDisplayInfo);
   return engineDisplayInfo;
 }
