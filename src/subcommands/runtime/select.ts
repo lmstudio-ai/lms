@@ -1,7 +1,8 @@
 import { Command } from "@commander-js/extra-typings";
-import { SimpleLogger, compareVersion } from "@lmstudio/lms-common";
+import { SimpleLogger } from "@lmstudio/lms-common";
 import { LMStudioClient } from "@lmstudio/sdk";
 import { RuntimeEngineInfo } from "../../../../lms-shared-types/dist/types/RuntimeEngine.js";
+import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { AliasField, fallbackAlias, generateAliases } from "./common.js";
@@ -153,9 +154,7 @@ function resolveAlias(
       );
     }
     if (latest) {
-      const sortedEngines = [...engines].sort((a, b) =>
-        compareVersion(logger, a.version, b.version),
-      );
+      const sortedEngines = [...engines].sort((a, b) => compareVersions(a.version, b.version));
       return sortedEngines[sortedEngines.length - 1];
     } else if (engines.length === 1) {
       return engines[0];
@@ -228,7 +227,7 @@ async function selectLatestVersionOfSelectedEngines(
     const engineVersions = engineInfos
       .filter(engine => engine.name === existingSelection.name)
       .map(engine => engine.version)
-      .sort((a, b) => compareVersion(logger, a, b));
+      .sort((a, b) => compareVersions(a, b));
     return {
       ...existingSelection,
       version: engineVersions[engineVersions.length - 1],

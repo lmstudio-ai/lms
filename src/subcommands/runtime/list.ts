@@ -3,6 +3,7 @@ import { SimpleLogger } from "@lmstudio/lms-common";
 import { LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import columnify from "columnify";
+import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { constructDisplayInfo } from "./common.js";
@@ -29,10 +30,7 @@ async function listEngines(
       return nameCompare;
     }
     // Reverse version sorting (latest first)
-    return b.specifier.version.localeCompare(a.specifier.version, undefined, {
-      numeric: true,
-      sensitivity: "base",
-    });
+    return compareVersions(b.specifier.version, a.specifier.version);
   });
 
   // Apply model format filter if provided
