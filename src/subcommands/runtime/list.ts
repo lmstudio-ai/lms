@@ -97,6 +97,13 @@ export function constructDisplayInfo(
   return engineDisplayInfo;
 }
 
+/**
+ * Displays a list of runtime engines.
+ * @param logger - Logger instance for output
+ * @param client - LMStudio client for API calls
+ * @param modelFormatFilters - Optional set of model format filters
+ * @param useFull - Optional flag to use full aliases instead of minimal ones
+ */
 async function listEngines(
   logger: SimpleLogger,
   client: LMStudioClient,

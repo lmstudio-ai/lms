@@ -59,10 +59,10 @@ export class AliasGenerator {
   constructor(protected config: AliasConfig = { delimiter: "-", versionDelimiter: "@" }) {}
 
   /**
-   * Returns the standard component sets for alias generation.
-   * Can be overridden by subclasses for engine-specific requirements.
+   * Returns the base component sets for alias generation (without versioned variants)
+   * @returns Array of field sets
    */
-  protected getAliasComponentSets(engine: RuntimeEngineInfo): Set<AliasField>[] {
+  protected getBaseAliasComponentSets(): Set<AliasField>[] {
     return [
       new Set<AliasField>(["engine"]),
       new Set<AliasField>(["engine", "gpuFramework"]),
@@ -79,8 +79,32 @@ export class AliasGenerator {
   }
 
   /**
+   * Returns all component sets for alias generation including versioned variants
+   * @returns Array of field sets with both versioned and unversioned variants
+   */
+  protected getAliasComponentSets(): Set<AliasField>[] {
+    const baseSets = this.getBaseAliasComponentSets();
+    const allSets: Set<AliasField>[] = [];
+
+    baseSets.forEach(baseSet => {
+      // Add unversioned variant
+      allSets.push(baseSet);
+      // Add versioned variant (if not already versioned)
+      if (!baseSet.has("version")) {
+        const versionedSet = new Set(baseSet);
+        versionedSet.add("version");
+        allSets.push(versionedSet);
+      }
+    });
+
+    return allSets;
+  }
+
+  /**
    * Generates a single alias for the given engine and fields.
-   * Can be overridden for engine-specific logic.
+   * @param engine - The runtime engine info to generate the alias for
+   * @param fields - The set of fields to include in the alias
+   * @returns The built alias or null if missing required components
    */
   protected generateAlias(engine: RuntimeEngineInfo, fields: Set<AliasField>): BuiltAlias | null {
     try {
@@ -98,7 +122,9 @@ export class AliasGenerator {
 
   /**
    * Builds the alias string from engine info and fields.
-   * Can be overridden for custom alias construction.
+   * @param engine - The runtime engine info
+   * @param fields - The set of fields to include in the alias string
+   * @returns The constructed alias string in lowercase
    */
   protected buildAliasString(engine: RuntimeEngineInfo, fields: Set<AliasField>): string {
     const aliasParts: string[] = [];
@@ -137,7 +163,8 @@ export class AliasGenerator {
 
   /**
    * Maps engine names for display purposes.
-   * Can be overridden for engine-specific name mappings.
+   * @param engineName - The original engine name
+   * @returns The mapped engine name for display
    */
   protected mapEngineName(engineName: string): string {
     return engineName;
@@ -145,29 +172,14 @@ export class AliasGenerator {
 
   /**
    * Generates all aliases for an engine with increasing specificity.
-   * Creates both versioned and unversioned variants at each specificity level.
+   * @param engine - The runtime engine info
+   * @returns Array of built aliases with versioned and unversioned variants
    */
   generateAllAliases(engine: RuntimeEngineInfo): BuiltAlias[] {
-    const componentSets = this.getAliasComponentSets(engine);
-    return componentSets.flatMap(components => {
-      const aliases: BuiltAlias[] = [];
-
-      const baseAlias = this.generateAlias(engine, components);
-      if (baseAlias) {
-        aliases.push(baseAlias);
-      }
-
-      if (baseAlias && !components.has("version")) {
-        const versionedComponents = new Set(components);
-        versionedComponents.add("version");
-        const versionedAlias = this.generateAlias(engine, versionedComponents);
-        if (versionedAlias) {
-          aliases.push(versionedAlias);
-        }
-      }
-
-      return aliases;
-    });
+    const componentSets = this.getAliasComponentSets();
+    return componentSets
+      .map(components => this.generateAlias(engine, components))
+      .filter((alias): alias is BuiltAlias => alias !== null);
   }
 }
 
@@ -175,7 +187,11 @@ export class AliasGenerator {
  * Llama.cpp specific generator that requires GPU framework to be included.
  */
 export class LlamaCppAliasGenerator extends AliasGenerator {
-  protected override getAliasComponentSets(engine: RuntimeEngineInfo): Set<AliasField>[] {
+  /**
+   * Returns base component sets for Llama.cpp engines
+   * @returns Array of field sets
+   */
+  protected override getBaseAliasComponentSets(): Set<AliasField>[] {
     // Force llama.cpp engines to include the GPU framework for improved comprehension
     return [
       // No engine-only alias
@@ -197,6 +213,11 @@ export class LlamaCppAliasGenerator extends AliasGenerator {
  * MLX specific generator that maps mlx-llm to mlx-engine.
  */
 export class MlxAliasGenerator extends AliasGenerator {
+  /**
+   * Maps MLX engine names for display purposes.
+   * @param engineName - The original engine name
+   * @returns The mapped engine name
+   */
   protected override mapEngineName(engineName: string): string {
     // Rename mlx-llm -> mlx-engine for improved comprehension
     return engineName === "mlx-llm" ? "mlx-engine" : engineName;
