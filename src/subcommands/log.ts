@@ -1,6 +1,6 @@
 import { Command } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
-import { type DiagnosticsLogEventData } from "@lmstudio/lms-shared-types";
+import { type DiagnosticsLogEvent, type DiagnosticsLogEventData } from "@lmstudio/lms-shared-types";
 import chalk from "chalk";
 import { addCreateClientOptions, createClient } from "../createClient.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
@@ -72,39 +72,46 @@ const stream = addLogLevelOptions(
   logger.info("Streaming logs from LM Studio\n");
 
   client.diagnostics.unstable_streamLogs(log => {
-    // Apply filtering for model source
-    if (source === "model") {
-      if (filterTypes.length > 0) {
-        const shouldShow = filterTypes.some(type => log.data.type === `llm.prediction.${type}`);
-        if (!shouldShow) {
-          return;
-        }
-      } else {
-        if (log.data.type.startsWith("llm.prediction.") === false) {
-          return;
-        }
-      }
-    } else if (source === "server") {
-      if (log.data.type !== "server.log") {
-        return;
-      }
+    // Here we consume the same stream for both model and server logs and filter based on user input
+    if (!shouldShowLog(log, source, filterTypes)) {
+      return;
     }
 
     if (json) {
       console.log(JSON.stringify(log));
     } else {
-      if (log.data.type === "server.log") {
-        console.log(log.data.content);
-        return;
-      }
-      console.log("timestamp: " + chalk.greenBright(new Date(log.timestamp).toLocaleString()));
-      console.log("type: " + chalk.greenBright(log.data.type));
-      printLlmPredictionLogEvent(log.data, stats);
-      console.log();
-      console.log();
+      printFormattedLog(log, stats);
     }
   });
 });
+
+function shouldShowLog(log: DiagnosticsLogEvent, source: string, filterTypes: string[]): boolean {
+  if (source === "model") {
+    if (filterTypes.length > 0) {
+      return filterTypes.some(type => log.data.type === `llm.prediction.${type}`);
+    }
+    return log.data.type.startsWith("llm.prediction.");
+  }
+
+  if (source === "server") {
+    return log.data.type === "server.log";
+  }
+
+  return true;
+}
+
+function printFormattedLog(log: DiagnosticsLogEvent, stats: boolean): void {
+  if (log.data.type === "server.log") {
+    console.log(log.data.content);
+    return;
+  }
+
+  console.log("timestamp: " + chalk.greenBright(new Date(log.timestamp).toLocaleString()));
+  console.log("type: " + chalk.greenBright(log.data.type));
+  printLlmPredictionLogEvent(log.data, stats);
+  console.log();
+  console.log();
+}
 
 function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolean) {
   if (data.type === "server.log") return;
