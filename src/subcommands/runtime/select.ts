@@ -1,5 +1,6 @@
 import { Command } from "@commander-js/extra-typings";
 import { SimpleLogger } from "@lmstudio/lms-common";
+import { ModelFormatName } from "@lmstudio/lms-shared-types";
 import { LMStudioClient } from "@lmstudio/sdk";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
@@ -7,6 +8,7 @@ import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { generateFullAlias } from "./helpers/AliasGenerator.js";
 import { resolveLatestAlias, resolveUniqueAlias } from "./helpers/aliasResolution.js";
+import { parseModelFormatNames } from "./helpers/modelFormatParsing.js";
 
 /**
  * Selects a runtime engine by alias
@@ -21,7 +23,7 @@ async function selectRuntimeEngine(
   client: LMStudioClient,
   alias: string,
   latest: boolean,
-  modelFormats?: Set<string>,
+  modelFormats?: Set<ModelFormatName>,
 ) {
   const engineInfos = await client.runtime.engine.list();
   const existingSelections = await client.runtime.engine.getSelections();
@@ -44,12 +46,16 @@ async function selectRuntimeEngine(
 
   const selectForModelFormats =
     modelFormats !== undefined
-      ? new Set([...modelFormats].filter(format => choice.supportedModelFormats.includes(format)))
-      : new Set(choice.supportedModelFormats);
+      ? new Set(
+          // Filter is for safety, but choice return from alias resolutions _should_ support all
+          // the supplied modelFormats.
+          [...modelFormats].filter(format => choice.supportedModelFormatNames.includes(format)),
+        )
+      : new Set(choice.supportedModelFormatNames);
 
   const alreadySelectedFor = existingSelections
     .filter(existing => existing.name === choice.name && existing.version === choice.version)
-    .flatMap(existing => existing.modelFormats);
+    .flatMap(existing => existing.modelFormatNames);
 
   const formatStatus = [...selectForModelFormats].map(modelFormat => {
     return {
@@ -78,18 +84,18 @@ async function selectRuntimeEngine(
 async function selectLatestVersionOfSelectedEngines(
   logger: SimpleLogger,
   client: LMStudioClient,
-  modelFormats?: Set<string>,
+  modelFormats?: Set<ModelFormatName>,
 ) {
   const engineInfos = await client.runtime.engine.list();
   const existingSelections = (await client.runtime.engine.getSelections())
-    .flatMap(({ name, version, modelFormats }) => {
-      return modelFormats.map(modelFormat => {
-        return { name, version, modelFormat };
+    .flatMap(({ name, version, modelFormatNames }) => {
+      return modelFormatNames.map(modelFormatName => {
+        return { name, version, modelFormatName };
       });
     })
     .filter(selection => {
       if (modelFormats !== undefined) {
-        return modelFormats.has(selection.modelFormat);
+        return modelFormats.has(selection.modelFormatName);
       }
       return true;
     });
@@ -110,10 +116,10 @@ async function selectLatestVersionOfSelectedEngines(
   for (const selection of latestSelections) {
     const full = generateFullAlias(selection).alias;
     if (selection.version !== selection.previousVersion) {
-      await client.runtime.engine.select(selection, selection.modelFormat);
-      logger.info("Selected " + full + " for " + selection.modelFormat);
+      await client.runtime.engine.select(selection, selection.modelFormatName);
+      logger.info("Selected " + full + " for " + selection.modelFormatName);
     } else {
-      logger.info("Already selected " + full + " for " + selection.modelFormat);
+      logger.info("Already selected " + full + " for " + selection.modelFormatName);
     }
   }
 }
@@ -129,10 +135,9 @@ const llmEngine = new Command()
     const logger = createLogger(parentOptions);
     const client = await createClient(logger, parentOptions);
 
-    const { latest = false, for: modelFormatJoined } = options;
-    const modelFormats = modelFormatJoined
-      ? new Set(modelFormatJoined.split(",").map(s => s.toUpperCase()))
-      : undefined;
+    const { latest = false, for: modelFormatsJoined } = options;
+    const modelFormats =
+      modelFormatsJoined !== undefined ? parseModelFormatNames(modelFormatsJoined) : undefined;
 
     if (alias === undefined && latest === false) {
       throw new UserInputError("Must specify at least one of [alias] or --latest");

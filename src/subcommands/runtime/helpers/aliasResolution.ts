@@ -1,4 +1,4 @@
-import { RuntimeEngineInfo } from "../../../../../lms-shared-types/dist/types/RuntimeEngine.js";
+import { ModelFormatName, RuntimeEngineInfo } from "@lmstudio/lms-shared-types";
 import { compareVersions } from "../../../compareVersions.js";
 import { UserInputError } from "../../../types/UserInputError.js";
 import { AliasField, BuiltAlias, generateFullAlias } from "./AliasGenerator.js";
@@ -62,7 +62,7 @@ export function resolveAlias(
 export function resolveAliasForModelFormats(
   engineInfos: RuntimeEngineInfo[],
   alias: string,
-  modelFormats: Set<string>,
+  modelFormats: Set<ModelFormatName>,
 ): {
   engines: RuntimeEngineInfo[];
   fields: Set<AliasField>;
@@ -70,7 +70,7 @@ export function resolveAliasForModelFormats(
   const { engines, fields } = resolveAlias(engineInfos, alias);
 
   const filteredEngines = engines.filter(engine => {
-    return [...modelFormats].every(format => engine.supportedModelFormats.includes(format));
+    return [...modelFormats].every(format => engine.supportedModelFormatNames.includes(format));
   });
 
   if (filteredEngines.length === 0) {
@@ -99,7 +99,7 @@ export function resolveAliasForModelFormats(
 export function resolveUniqueAlias(
   engineInfos: RuntimeEngineInfo[],
   alias: string,
-  modelFormats?: Set<string>,
+  modelFormats?: Set<ModelFormatName>,
 ): {
   engine: RuntimeEngineInfo;
   fields: Set<AliasField>;
@@ -131,7 +131,7 @@ export function resolveUniqueAlias(
 export function resolveLatestAlias(
   engineInfos: RuntimeEngineInfo[],
   alias: string,
-  modelFormats?: Set<string>,
+  modelFormats?: Set<ModelFormatName>,
 ): {
   engine: RuntimeEngineInfo;
   fields: Set<AliasField>;

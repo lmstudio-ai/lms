@@ -1,25 +1,27 @@
 import { Command } from "@commander-js/extra-typings";
 import { SimpleLogger } from "@lmstudio/lms-common";
-import { LMStudioClient } from "@lmstudio/sdk";
-import chalk from "chalk";
-import columnify from "columnify";
 import {
+  ModelFormatName,
   RuntimeEngineInfo,
   RuntimeEngineSelectionInfo,
   RuntimeEngineSpecifier,
-} from "../../../../lms-shared-types/dist/types/RuntimeEngine.js";
+} from "@lmstudio/lms-shared-types";
+import { LMStudioClient } from "@lmstudio/sdk";
+import chalk from "chalk";
+import columnify from "columnify";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { AliasGroup } from "./helpers/AliasGroup.js";
+import { parseModelFormatNames } from "./helpers/modelFormatParsing.js";
 
 export interface RuntimeEngineDisplayInfo {
   specifier: RuntimeEngineSpecifier;
   minimalAlias: string;
   fullAlias: string;
-  supportedModelFormats: string[];
-  selectedModelFormats: string[];
+  supportedModelFormatNames: ModelFormatName[];
+  selectedModelFormatNames: ModelFormatName[];
 }
 
 /**
@@ -72,10 +74,10 @@ export function constructDisplayInfo(
       specifier: engine,
       minimalAlias,
       fullAlias,
-      supportedModelFormats: engine.supportedModelFormats,
-      selectedModelFormats: selections
+      supportedModelFormatNames: engine.supportedModelFormatNames,
+      selectedModelFormatNames: selections
         .filter(selection => selection.name === engine.name && selection.version === engine.version)
-        .flatMap(selection => selection.modelFormats),
+        .flatMap(selection => selection.modelFormatNames),
     }));
 
   // For safety, do a final sweep of all the minimal aliases and replace any duplicates
@@ -94,7 +96,7 @@ export function constructDisplayInfo(
 async function listEngines(
   logger: SimpleLogger,
   client: LMStudioClient,
-  modelFormatFilters?: Set<string>,
+  modelFormatFilters?: Set<ModelFormatName>,
   useFull?: boolean,
 ) {
   const enginesResp = await client.runtime.engine.list();
@@ -118,7 +120,7 @@ async function listEngines(
   // Apply model format filter if provided
   if (modelFormatFilters !== undefined) {
     sortedEngines = sortedEngines.filter(engine =>
-      engine.supportedModelFormats.some(format => modelFormatFilters.has(format.toUpperCase())),
+      engine.supportedModelFormatNames.some(format => modelFormatFilters.has(format)),
     );
 
     if (sortedEngines.length === 0) {
@@ -131,13 +133,13 @@ async function listEngines(
   const rows = sortedEngines.map(engine => {
     const isSelected =
       modelFormatFilters !== undefined
-        ? engine.selectedModelFormats.some(format => modelFormatFilters.has(format))
-        : engine.selectedModelFormats.length > 0;
+        ? engine.selectedModelFormatNames.some(format => modelFormatFilters.has(format))
+        : engine.selectedModelFormatNames.length > 0;
 
     return {
       engine: useFull ? engine.fullAlias : engine.minimalAlias,
       selected: isSelected ? "✓" : "",
-      format: engine.supportedModelFormats.join(", "),
+      format: engine.supportedModelFormatNames.join(", "),
     };
   });
 
@@ -171,16 +173,15 @@ const llmEngine = new Command()
   .action(async function (options) {
     // Access parent options for logging and client creation
     const parentOptions = this.parent?.opts() || {};
-    const combinedOptions = { ...parentOptions, ...options };
 
     const logger = createLogger(parentOptions);
     const client = await createClient(logger, parentOptions);
     const { for: modelFormatsJoined } = options;
     const full = parentOptions["full"] === true;
 
-    const modelFormats = modelFormatsJoined?.split(",").map(s => s.toUpperCase());
-
-    await listEngines(logger, client, modelFormats ? new Set(modelFormats) : undefined, full);
+    const modelFormats =
+      modelFormatsJoined !== undefined ? parseModelFormatNames(modelFormatsJoined) : undefined;
+    await listEngines(logger, client, modelFormats, full);
   });
 
 export const ls = addLogLevelOptions(

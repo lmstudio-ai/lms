@@ -1,7 +1,4 @@
-import {
-  RuntimeEngineInfo,
-  RuntimeEngineSpecifier,
-} from "../../../../../lms-shared-types/dist/types/RuntimeEngine.js";
+import { RuntimeEngineInfo, RuntimeEngineSpecifier } from "@lmstudio/lms-shared-types";
 
 export const ALL_ALIAS_FIELDS = [
   "engine",
