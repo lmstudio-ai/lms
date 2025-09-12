@@ -1,4 +1,3 @@
-import { SimpleLogger } from "@lmstudio/lms-common";
 import { RuntimeEngineInfo } from "../../../../lms-shared-types/dist/types/RuntimeEngine.js";
 import { compareVersions } from "../../compareVersions.js";
 import { AliasField, fallbackAlias, generateAliases } from "./common.js";
@@ -75,34 +74,32 @@ function generateAliasMap(engines: RuntimeEngineInfo[]): Map<
   return aliasMap;
 }
 
+// Returns list of all matching engines
 export function resolveAlias(
-  logger: SimpleLogger,
   engineInfos: RuntimeEngineInfo[],
   alias: string,
-  latest: boolean,
-  modelFormats: Set<string> | undefined,
+  modelFormats?: Set<string>,
 ): {
-  name: string;
-  version: string;
-  selectForModelFormats: Set<string>;
+  engines: {
+    name: string;
+    version: string;
+    selectForModelFormats: Set<string>;
+  }[];
+  fields: Set<AliasField>;
 } {
   const map = generateAliasMap(engineInfos);
   const elem = map.get(alias);
   if (elem === undefined) {
     throw Error("Alias not found: " + alias);
   }
-  let engines: {
-    name: string;
-    version: string;
-    selectForModelFormats: Set<string>;
-  }[];
+
   const { engines: prelimEngines, fields } = elem;
 
   // Apply passed in model formats. An engine must be compatible with _all_ requested formats
   // to be a selection candidate. We track selectForModelFormats to ensure we only select
   // for requested formats
   if (modelFormats !== undefined) {
-    engines = prelimEngines
+    const engines = prelimEngines
       .filter(e => {
         return [...modelFormats].every(format => e.supportedModelFormats.has(format));
       })
@@ -118,50 +115,69 @@ export function resolveAlias(
           "].",
       );
     }
+    return { engines, fields };
   } else {
-    engines = prelimEngines.map(e => {
+    const engines = prelimEngines.map(e => {
       return { name: e.name, version: e.version, selectForModelFormats: e.supportedModelFormats };
     });
+    return { engines, fields };
+  }
+}
+
+// Returns single engine (must be unambiguous)
+export function resolveUniqueAlias(
+  engineInfos: RuntimeEngineInfo[],
+  alias: string,
+  modelFormats?: Set<string>,
+): {
+  engine: {
+    name: string;
+    version: string;
+    selectForModelFormats: Set<string>;
+  };
+  fields: Set<AliasField>;
+} {
+  const { engines, fields } = resolveAlias(engineInfos, alias, modelFormats);
+
+  if (engines.length === 1) {
+    return { engine: engines[0], fields };
+  } else {
+    throw Error(
+      "Alias '" +
+        alias +
+        "' is ambiguous. Options are [" +
+        engines.map(e => fallbackAlias(e).alias) +
+        "].",
+    );
+  }
+}
+
+// Returns latest version engine
+export function resolveLatestAlias(
+  engineInfos: RuntimeEngineInfo[],
+  alias: string,
+  modelFormats?: Set<string>,
+): {
+  engine: {
+    name: string;
+    version: string;
+    selectForModelFormats: Set<string>;
+  };
+  fields: Set<AliasField>;
+} {
+  const { engines, fields } = resolveAlias(engineInfos, alias, modelFormats);
+
+  const engineNames = new Set([...engines].map(e => e.name));
+  if (engineNames.size > 1) {
+    throw Error(
+      "Latest alias '" +
+        alias +
+        "' cannot disambiguate between engine names [" +
+        [...engineNames].join(",") +
+        "].",
+    );
   }
 
-  if (fields.has("version")) {
-    if (latest) {
-      throw Error("Versioned alias and latest are mutually exclusive.");
-    }
-    if (engines.length > 1) {
-      throw Error(
-        "Alias '" +
-          alias +
-          "' is ambiguous. Options are [" +
-          engines.map(e => fallbackAlias(e).alias) +
-          "].",
-      );
-    }
-    return engines[0];
-  } else {
-    const engineNames = new Set([...engines].map(e => e.name));
-    if (engineNames.size > 1) {
-      throw Error(
-        "Latest alias '" +
-          alias +
-          "' cannot disambiguate between engine names [" +
-          [...engineNames].join(",") +
-          "].",
-      );
-    }
-    if (latest) {
-      const sortedEngines = [...engines].sort((a, b) => compareVersions(a.version, b.version));
-      return sortedEngines[sortedEngines.length - 1];
-    } else if (engines.length === 1) {
-      return engines[0];
-    } else {
-      throw Error(
-        "Alias '" +
-          alias +
-          "' is ambiguous. Options are [" +
-          engines.map(e => fallbackAlias(e).alias) +
-          "].",
-      );
-    }
-  }
+  const sortedEngines = [...engines].sort((a, b) => compareVersions(a.version, b.version));
+  return { engine: sortedEngines[sortedEngines.length - 1], fields };
 }

@@ -14,8 +14,7 @@ async function removeRuntimeEngine(
   dryRun: boolean,
 ) {
   const engineInfos = await client.runtime.engine.list();
-  // TODO(will): Match multiple aliases
-  const choices = [resolveAlias(logger, engineInfos, alias, false, undefined)];
+  const { engines: choices } = resolveAlias(engineInfos, alias, undefined);
   const fullAliases = choices.map(choice => choice.name + "-" + choice.version);
   let prefix = "Will remove ";
   if (dryRun) {

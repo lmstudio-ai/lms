@@ -4,7 +4,7 @@ import { LMStudioClient } from "@lmstudio/sdk";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
-import { resolveAlias } from "./aliasResolution.js";
+import { resolveLatestAlias, resolveUniqueAlias } from "./aliasResolution.js";
 
 async function selectRuntimeEngine(
   logger: SimpleLogger,
@@ -16,7 +16,21 @@ async function selectRuntimeEngine(
   const engineInfos = await client.runtime.engine.list();
   const existingSelections = await client.runtime.engine.getSelections();
 
-  const choice = resolveAlias(logger, engineInfos, alias, latest, modelFormats);
+  const { engine: choice, fields } = latest
+    ? resolveLatestAlias(engineInfos, alias, modelFormats)
+    : resolveUniqueAlias(engineInfos, alias, modelFormats);
+
+  if (latest) {
+    if (fields.has("version")) {
+      // This is to avoid user confusion where, for example, they have
+      //  1. llama.cpp-metal@1.0.0
+      //  2. llama.cpp-metal@1.1.0
+      // Then run `lms runtime select llm-engine llama.cpp-metal@1.0.0 --latest`
+      // Without this Error, the command would select @1.0.0, but that may or may not
+      // be what the user intends.
+      throw Error("Cannot specify a version alias with --latest.");
+    }
+  }
   const alreadySelectedFor = existingSelections
     .filter(existing => existing.name === choice.name && existing.version === choice.version)
     .flatMap(existing => existing.modelFormats);
