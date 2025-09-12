@@ -120,8 +120,8 @@ function printFormattedLog(log: DiagnosticsLogEvent, stats: boolean): void {
 function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolean) {
   if (data.type === "server.log") return;
   console.log("modelIdentifier: " + chalk.greenBright(data.modelIdentifier));
-  console.log("modelPath: " + chalk.greenBright(data.modelPath));
   if (data.type === "llm.prediction.input") {
+    console.log("modelPath: " + chalk.greenBright(data.modelPath));
     console.log("input:");
     console.log(chalk.greenBright(data.input));
   }
