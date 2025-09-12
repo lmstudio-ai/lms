@@ -12,7 +12,7 @@ import { load } from "./subcommands/load.js";
 import { log } from "./subcommands/log.js";
 import { login } from "./subcommands/login.js";
 import { push } from "./subcommands/push.js";
-import { runtime } from "./subcommands/runtime/main.js";
+import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
