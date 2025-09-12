@@ -87,8 +87,8 @@ async function selectLatestVersionOfSelectedEngines(
 
 const llmEngine = new Command()
   .name("llm-engine")
-  .description("List LLM engines")
-  .argument("[alias]", "Alias of a runtime")
+  .description("Select installed LLM engines")
+  .argument("[alias]", "Alias of an LLM engine")
   .option("--latest", "Select the latest version")
   .option("--for <format>", "Comma-separated list of model format filters (case-insensitive)")
   .action(async function (alias, options) {
@@ -113,5 +113,7 @@ const llmEngine = new Command()
   });
 
 export const select = addLogLevelOptions(
-  addCreateClientOptions(new Command().name("select").description("List installed runtimes")),
+  addCreateClientOptions(
+    new Command().name("select").description("Select installed runtime extension pack"),
+  ),
 ).addCommand(llmEngine);

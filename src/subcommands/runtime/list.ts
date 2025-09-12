@@ -85,7 +85,7 @@ async function listEngines(
 
 const llmEngine = new Command()
   .name("llm-engine")
-  .description("List LLM engines")
+  .description("List installed LLM engines")
   .option("--for <format>", "Comma-separated list of model format filters (case-insensitive)")
   .action(async function (options) {
     // Access parent options for logging and client creation
@@ -103,9 +103,11 @@ const llmEngine = new Command()
   });
 
 export const ls = addLogLevelOptions(
-  addCreateClientOptions(new Command().name("ls").description("List installed runtimes")),
+  addCreateClientOptions(
+    new Command().name("ls").description("List installed runtime extension pack"),
+  ),
 )
-  .option("--full", "Show full engine aliases instead of display aliases")
+  .option("--full", "Show full aliases")
   .action(async options => {
     const logger = createLogger(options);
     const client = await createClient(logger, options);
