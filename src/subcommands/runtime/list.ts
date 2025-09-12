@@ -12,7 +12,6 @@ import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
-import { generateFullAlias } from "./helpers/AliasGenerator.js";
 import { AliasGroup } from "./helpers/AliasGroup.js";
 
 export interface RuntimeEngineDisplayInfo {
@@ -56,7 +55,7 @@ function resolveDuplicateMinimalAliases(capabilities: RuntimeEngineDisplayInfo[]
 }
 
 /**
- * Constructs display information for runtime engines using the new AliasGroup architecture.
+ * Constructs display information for runtime engines.
  * @param engines - Array of runtime engine info
  * @param selections - Array of runtime engine selection info
  * @returns Array of runtime engine display info
@@ -67,29 +66,17 @@ export function constructDisplayInfo(
 ): RuntimeEngineDisplayInfo[] {
   const groups = AliasGroup.createGroups(engines);
 
-  const engineDisplayInfo: RuntimeEngineDisplayInfo[] = engines.map(engine => {
-    const group = groups.find(g => g.engineType === engine.engine);
-
-    if (!group) {
-      throw new Error(
-        `Engine type '${engine.engine}' not found in engine groups. This should not happen.`,
-      );
-    }
-
-    const aliases = group.generateAliasesForEngine(engine);
-    const minimalAlias = group.selectMinimalAlias(aliases);
-    const fullAlias = generateFullAlias(engine).alias;
-
-    return {
+  const engineDisplayInfo: RuntimeEngineDisplayInfo[] = groups
+    .flatMap(group => group.getEnginesWithMinimalAliases())
+    .map(({ engine, minimalAlias, fullAlias }) => ({
       specifier: engine,
-      minimalAlias: minimalAlias?.alias ?? fullAlias,
+      minimalAlias,
       fullAlias,
       supportedModelFormats: engine.supportedModelFormats,
       selectedModelFormats: selections
         .filter(selection => selection.name === engine.name && selection.version === engine.version)
         .flatMap(selection => selection.modelFormats),
-    };
-  });
+    }));
 
   // For safety, do a final sweep of all the minimal aliases and replace any duplicates
   // with the full alias
@@ -125,7 +112,6 @@ async function listEngines(
     if (nameCompare !== 0) {
       return nameCompare;
     }
-    // Reverse version sorting (latest first)
     return compareVersions(b.specifier.version, a.specifier.version);
   });
 
@@ -142,7 +128,6 @@ async function listEngines(
     }
   }
 
-  // Format runtime data for display
   const rows = sortedEngines.map(engine => {
     const isSelected = modelFormatFilters
       ? engine.selectedModelFormats.some(format => modelFormatFilters.has(format))

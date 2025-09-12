@@ -87,7 +87,6 @@ export class AliasGenerator {
     const allSets: Set<AliasField>[] = [];
 
     baseSets.forEach(baseSet => {
-      // Add unversioned variant
       allSets.push(baseSet);
       // Add versioned variant (if not already versioned)
       if (!baseSet.has("version")) {
@@ -143,7 +142,6 @@ export class AliasGenerator {
     }
     if (fields.has("cpuInstructionSetExtensions")) {
       if (engine.cpu.instructionSetExtensions?.length) {
-        // Use _ to match the manifest_builder.py logic
         aliasParts.push(engine.cpu.instructionSetExtensions.join("_"));
       } else {
         throw new MissingAliasComponentError(
@@ -221,5 +219,26 @@ export class MlxAliasGenerator extends AliasGenerator {
   protected override mapEngineName(engineName: string): string {
     // Rename mlx-llm -> mlx-engine for improved comprehension
     return engineName === "mlx-llm" ? "mlx-engine" : engineName;
+  }
+}
+
+/**
+ * Factory for creating appropriate alias generators based on engine type
+ */
+export class AliasGeneratorFactory {
+  /**
+   * Creates the appropriate alias generator for the specified engine type.
+   * @param engineType - The engine type to create a generator for
+   * @returns Specialized alias generator for the engine type
+   */
+  static createGenerator(engineType: string): AliasGenerator {
+    switch (engineType) {
+      case "llama.cpp":
+        return new LlamaCppAliasGenerator();
+      case "mlx-llm":
+        return new MlxAliasGenerator();
+      default:
+        return new AliasGenerator();
+    }
   }
 }

@@ -2,27 +2,30 @@ import { RuntimeEngineInfo } from "../../../../../lms-shared-types/dist/types/Ru
 import {
   AliasField,
   AliasGenerator,
+  AliasGeneratorFactory,
   ALL_ALIAS_FIELDS,
   BuiltAlias,
   generateFullAlias,
-  LlamaCppAliasGenerator,
-  MlxAliasGenerator,
 } from "./AliasGenerator.js";
 
 /**
  * Groups engines by type and manages minimum component analysis for display purposes.
  */
 export class AliasGroup {
-  public readonly minimumComponents: Set<AliasField>;
+  private readonly minimumComponents: Set<AliasField>;
 
   constructor(
-    public readonly engineType: string,
-    public readonly engines: RuntimeEngineInfo[],
-    public readonly generator: AliasGenerator,
+    private readonly engineType: string,
+    private readonly engines: RuntimeEngineInfo[],
+    private readonly generator: AliasGenerator,
   ) {
     this.minimumComponents = this.computeMinimumComponents();
   }
 
+  /**
+   * Computes the minimum set of alias fields required to uniquely identify engines in this group.
+   * @returns Set of alias fields that vary across engines in the group
+   */
   private computeMinimumComponents(): Set<AliasField> {
     if (this.engines.length === 0) return new Set(["version"]);
 
@@ -49,11 +52,21 @@ export class AliasGroup {
     return nonUniform;
   }
 
-  generateAliasesForEngine(engine: RuntimeEngineInfo): BuiltAlias[] {
+  /**
+   * Generates all possible aliases for the specified runtime engine.
+   * @param engine - The runtime engine to generate aliases for
+   * @returns Array of built aliases for the engine
+   */
+  private generateAliasesForEngine(engine: RuntimeEngineInfo): BuiltAlias[] {
     return this.generator.generateAllAliases(engine);
   }
 
-  selectMinimalAlias(aliases: BuiltAlias[]): BuiltAlias | null {
+  /**
+   * Selects the shortest alias that contains all required minimum components.
+   * @param aliases - Array of available aliases to choose from
+   * @returns The minimal alias or null if none contains all required components
+   */
+  private selectMinimalAlias(aliases: BuiltAlias[]): BuiltAlias | null {
     const sortedAliases = [...aliases];
     sortedAliases.sort((a, b) => a.fields.size - b.fields.size);
 
@@ -69,6 +82,11 @@ export class AliasGroup {
     return minimalAlias ?? null;
   }
 
+  /**
+   * Finds all engines in this group that match the specified target alias.
+   * @param targetAlias - The alias string to search for
+   * @returns Array of engines with their matching aliases
+   */
   resolve(targetAlias: string): Array<{
     engine: RuntimeEngineInfo;
     matchedAlias: BuiltAlias;
@@ -90,24 +108,40 @@ export class AliasGroup {
     return matches;
   }
 
+  /**
+   * Gets all engines in this group with their minimal aliases.
+   * @returns Array of engines paired with their minimal alias strings
+   */
+  getEnginesWithMinimalAliases(): Array<{
+    engine: RuntimeEngineInfo;
+    minimalAlias: string;
+    fullAlias: string;
+  }> {
+    return this.engines.map(engine => {
+      const aliases = this.generateAliasesForEngine(engine);
+      const minimalAlias = this.selectMinimalAlias(aliases);
+      const fullAlias = generateFullAlias(engine).alias;
+
+      return {
+        engine,
+        minimalAlias: minimalAlias?.alias ?? fullAlias,
+        fullAlias,
+      };
+    });
+  }
+
+  /**
+   * Creates alias groups organized by engine type from the provided engines.
+   * @param engines - Array of runtime engines to group
+   * @returns Array of alias groups organized by engine type
+   */
   static createGroups(engines: RuntimeEngineInfo[]): AliasGroup[] {
     const enginesByType = groupBy(engines, e => e.engine);
 
     return Array.from(enginesByType.entries()).map(([engineType, typeEngines]) => {
-      const generator = AliasGroup.createGenerator(engineType);
+      const generator = AliasGeneratorFactory.createGenerator(engineType);
       return new AliasGroup(engineType, typeEngines, generator);
     });
-  }
-
-  private static createGenerator(engineType: string): AliasGenerator {
-    switch (engineType) {
-      case "llama.cpp":
-        return new LlamaCppAliasGenerator();
-      case "mlx-llm":
-        return new MlxAliasGenerator();
-      default:
-        return new AliasGenerator();
-    }
   }
 }
 

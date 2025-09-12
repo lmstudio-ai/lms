@@ -7,6 +7,14 @@ import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { generateFullAlias } from "./helpers/AliasGenerator.js";
 import { resolveAlias } from "./helpers/aliasResolution.js";
 
+/**
+ * Removes runtime engines matching the specified alias
+ * @param logger - Logger instance for output
+ * @param client - LMStudio client for API calls
+ * @param alias - Alias of the runtime engine(s) to remove
+ * @param yes - Skip confirmation prompts if true
+ * @param dryRun - Show what would be removed without executing if true
+ */
 async function removeRuntimeEngine(
   logger: SimpleLogger,
   client: LMStudioClient,

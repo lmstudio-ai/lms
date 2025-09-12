@@ -8,6 +8,14 @@ import { UserInputError } from "../../types/UserInputError.js";
 import { generateFullAlias } from "./helpers/AliasGenerator.js";
 import { resolveLatestAlias, resolveUniqueAlias } from "./helpers/aliasResolution.js";
 
+/**
+ * Selects a runtime engine by alias
+ * @param logger - Logger instance for output
+ * @param client - LMStudio client for API calls
+ * @param alias - Engine alias to select
+ * @param latest - Whether to select the latest version
+ * @param modelFormats - Optional set of model format filters
+ */
 async function selectRuntimeEngine(
   logger: SimpleLogger,
   client: LMStudioClient,
@@ -60,6 +68,12 @@ async function selectRuntimeEngine(
   }
 }
 
+/**
+ * Selects the latest versions of all currently selected runtime engines.
+ * @param logger - Logger instance for output
+ * @param client - LMStudio client for API calls
+ * @param modelFormats - Optional set of model format filters
+ */
 async function selectLatestVersionOfSelectedEngines(
   logger: SimpleLogger,
   client: LMStudioClient,

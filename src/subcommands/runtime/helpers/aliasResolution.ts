@@ -4,7 +4,12 @@ import { UserInputError } from "../../../types/UserInputError.js";
 import { AliasField, BuiltAlias, generateFullAlias } from "./AliasGenerator.js";
 import { AliasGroup } from "./AliasGroup.js";
 
-// Returns list of all matching engines
+/**
+ * Resolves an alias to all matching runtime engines.
+ * @param engineInfos - Array of runtime engine info to search through
+ * @param alias - The alias string to resolve
+ * @returns Object containing matching engines and the fields used in the alias
+ */
 export function resolveAlias(
   engineInfos: RuntimeEngineInfo[],
   alias: string,
@@ -47,7 +52,13 @@ export function resolveAlias(
   };
 }
 
-// Returns list of matching engines filtered by model formats
+/**
+ * Resolves an alias to matching runtime engines filtered by supported model formats.
+ * @param engineInfos - Array of runtime engine info to search through
+ * @param alias - The alias string to resolve
+ * @param modelFormats - Set of model formats that engines must support all of
+ * @returns Object containing matching filtered engines and the fields used in the alias
+ */
 export function resolveAliasForModelFormats(
   engineInfos: RuntimeEngineInfo[],
   alias: string,
@@ -59,7 +70,6 @@ export function resolveAliasForModelFormats(
   const { engines, fields } = resolveAlias(engineInfos, alias);
 
   const filteredEngines = engines.filter(engine => {
-    // Check if engine supports ALL requested formats
     return [...modelFormats].every(format => engine.supportedModelFormats.includes(format));
   });
 
@@ -79,7 +89,13 @@ export function resolveAliasForModelFormats(
   };
 }
 
-// Returns single engine (must be unambiguous)
+/**
+ * Resolves an alias to a single unique runtime engine, throwing an error if ambiguous.
+ * @param engineInfos - Array of runtime engine info to search through
+ * @param alias - The alias string to resolve
+ * @param modelFormats - Optional set of model formats that engines must support all of
+ * @returns Object containing the unique engine and the fields used in the alias
+ */
 export function resolveUniqueAlias(
   engineInfos: RuntimeEngineInfo[],
   alias: string,
@@ -105,7 +121,13 @@ export function resolveUniqueAlias(
   }
 }
 
-// Returns latest version engine
+/**
+ * Resolves an alias to the latest version of a runtime engine.
+ * @param engineInfos - Array of runtime engine info to search through
+ * @param alias - The alias string to resolve
+ * @param modelFormats - Optional set of model formats that engines must support all of
+ * @returns Object containing the latest version engine and the fields used in the alias
+ */
 export function resolveLatestAlias(
   engineInfos: RuntimeEngineInfo[],
   alias: string,
