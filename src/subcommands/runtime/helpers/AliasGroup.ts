@@ -2,11 +2,11 @@ import { RuntimeEngineInfo } from "@lmstudio/lms-shared-types";
 import {
   AliasField,
   AliasGenerator,
-  AliasGeneratorFactory,
   ALL_ALIAS_FIELDS,
   BuiltAlias,
   generateFullAlias,
 } from "./AliasGenerator.js";
+import { AliasGeneratorFactory } from "./AliasGeneratorFactory.js";
 
 /**
  * Groups engines by type and manages minimum component analysis for display purposes.
