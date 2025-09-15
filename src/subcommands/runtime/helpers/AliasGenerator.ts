@@ -60,6 +60,9 @@ export class AliasGenerator {
    * @returns Array of field sets
    */
   protected getBaseAliasComponentSets(): Set<AliasField>[] {
+    // Each set defines the fields that will be be used to generate one alias for an Engine.
+    // These specific alias field sets were chosen to show just engine and gpuFramework to most
+    // users (unless they have incompatible runtimes installed on their system).
     return [
       new Set<AliasField>(["engine"]),
       new Set<AliasField>(["engine", "gpuFramework"]),
