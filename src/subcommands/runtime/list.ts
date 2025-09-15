@@ -2,8 +2,8 @@ import { Command } from "@commander-js/extra-typings";
 import { SimpleLogger } from "@lmstudio/lms-common";
 import {
   ModelFormatName,
+  ModelFormatNameToRuntimeEngineSpecifier,
   RuntimeEngineInfo,
-  RuntimeEngineSelectionInfo,
   RuntimeEngineSpecifier,
 } from "@lmstudio/lms-shared-types";
 import { LMStudioClient } from "@lmstudio/sdk";
@@ -14,6 +14,7 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { AliasGroup } from "./helpers/AliasGroup.js";
+import { createEngineKey, invertSelections } from "./helpers/invertSelections.js";
 import { parseModelFormatNames } from "./helpers/modelFormatParsing.js";
 
 export interface RuntimeEngineDisplayInfo {
@@ -59,14 +60,16 @@ function resolveDuplicateMinimalAliases(capabilities: RuntimeEngineDisplayInfo[]
 /**
  * Constructs display information for runtime engines.
  * @param engines - Array of runtime engine info
- * @param selections - Array of runtime engine selection info
+ * @param selections - Mapping of model format names to runtime engine specifiers
  * @returns Array of runtime engine display info
  */
 export function constructDisplayInfo(
   engines: RuntimeEngineInfo[],
-  selections: RuntimeEngineSelectionInfo[],
+  selections: ModelFormatNameToRuntimeEngineSpecifier,
 ): RuntimeEngineDisplayInfo[] {
   const groups = AliasGroup.createGroups(engines);
+
+  const engineKey2Selections = invertSelections(selections);
 
   const engineDisplayInfo: RuntimeEngineDisplayInfo[] = groups
     .flatMap(group => group.getEnginesWithMinimalAliases())
@@ -75,9 +78,7 @@ export function constructDisplayInfo(
       minimalAlias,
       fullAlias,
       supportedModelFormatNames: engine.supportedModelFormatNames,
-      selectedModelFormatNames: selections
-        .filter(selection => selection.name === engine.name && selection.version === engine.version)
-        .flatMap(selection => selection.modelFormatNames),
+      selectedModelFormatNames: engineKey2Selections.get(createEngineKey(engine)) || [],
     }));
 
   // For safety, do a final sweep of all the minimal aliases and replace any duplicates

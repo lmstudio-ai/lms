@@ -8,6 +8,7 @@ import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { generateFullAlias } from "./helpers/AliasGenerator.js";
 import { resolveLatestAlias, resolveUniqueAlias } from "./helpers/aliasResolution.js";
+import { createEngineKey, invertSelections } from "./helpers/invertSelections.js";
 import { parseModelFormatNames } from "./helpers/modelFormatParsing.js";
 
 /**
@@ -26,7 +27,9 @@ async function selectRuntimeEngine(
   modelFormats?: Set<ModelFormatName>,
 ) {
   const engineInfos = await client.runtime.engine.list();
-  const existingSelections = await client.runtime.engine.getSelections();
+  const existingEngineKey2Selections = invertSelections(
+    await client.runtime.engine.getSelections(),
+  );
 
   const { engine: choice, fields } = latest
     ? resolveLatestAlias(engineInfos, alias, modelFormats)
@@ -53,9 +56,7 @@ async function selectRuntimeEngine(
         )
       : new Set(choice.supportedModelFormatNames);
 
-  const alreadySelectedFor = existingSelections
-    .filter(existing => existing.name === choice.name && existing.version === choice.version)
-    .flatMap(existing => existing.modelFormatNames);
+  const alreadySelectedFor = existingEngineKey2Selections.get(createEngineKey(choice)) || [];
 
   const formatStatus = [...selectForModelFormats].map(modelFormat => {
     return {
@@ -87,11 +88,9 @@ async function selectLatestVersionOfSelectedEngines(
   modelFormats?: Set<ModelFormatName>,
 ) {
   const engineInfos = await client.runtime.engine.list();
-  const existingSelections = (await client.runtime.engine.getSelections())
-    .flatMap(({ name, version, modelFormatNames }) => {
-      return modelFormatNames.map(modelFormatName => {
-        return { name, version, modelFormatName };
-      });
+  const existingSelections = [...(await client.runtime.engine.getSelections())]
+    .map(([key, value]) => {
+      return { modelFormatName: key, ...value };
     })
     .filter(selection => {
       if (modelFormats !== undefined) {
