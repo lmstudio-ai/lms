@@ -2,9 +2,9 @@ import { Command } from "@commander-js/extra-typings";
 import { SimpleLogger } from "@lmstudio/lms-common";
 import {
   ModelFormatName,
-  ModelFormatNameToRuntimeEngineSpecifier,
   RuntimeEngineInfo,
   RuntimeEngineSpecifier,
+  SelectedRuntimeEngineMap,
 } from "@lmstudio/lms-shared-types";
 import { LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
@@ -65,7 +65,7 @@ function resolveDuplicateMinimalAliases(capabilities: RuntimeEngineDisplayInfo[]
  */
 export function constructDisplayInfo(
   engines: RuntimeEngineInfo[],
-  selections: ModelFormatNameToRuntimeEngineSpecifier,
+  selections: SelectedRuntimeEngineMap,
 ): RuntimeEngineDisplayInfo[] {
   const groups = AliasGroup.createGroups(engines);
 

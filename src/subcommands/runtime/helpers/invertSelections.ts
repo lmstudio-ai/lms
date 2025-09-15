@@ -1,8 +1,4 @@
-import {
-  ModelFormatName,
-  ModelFormatNameToRuntimeEngineSpecifier,
-  RuntimeEngineSpecifier,
-} from "@lmstudio/sdk";
+import { ModelFormatName, RuntimeEngineSpecifier, SelectedRuntimeEngineMap } from "@lmstudio/sdk";
 
 /**
  * Creates a unique string key from a runtime engine specifier.
@@ -19,7 +15,7 @@ export function createEngineKey(engine: RuntimeEngineSpecifier): string {
  * @returns Map of engine keys to arrays of model format names
  */
 export function invertSelections(
-  selections: ModelFormatNameToRuntimeEngineSpecifier,
+  selections: SelectedRuntimeEngineMap,
 ): Map<string, ModelFormatName[]> {
   const result = new Map<string, ModelFormatName[]>();
 
