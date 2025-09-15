@@ -36,7 +36,7 @@ export class MissingAliasComponentError extends Error {
 
 /**
  * Generates a full alias using the engine name and version.
- * Assumed to be a unique identifier that matches the directory name on disk.
+ * Assumed to be a unique identifier.
  * @param engine - The runtime engine specifier
  * @returns A full alias
  */
