@@ -5,6 +5,7 @@ import {
   RuntimeEngineInfo,
   RuntimeEngineSpecifier,
   SelectedRuntimeEngineMap,
+  modelFormatNameSchema,
 } from "@lmstudio/lms-shared-types";
 import { LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
@@ -14,8 +15,8 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { AliasGroup } from "./helpers/AliasGroup.js";
+import { createModelFormatNameParser } from "./helpers/createModelFormatNameParser.js";
 import { createEngineKey, invertSelections } from "./helpers/invertSelections.js";
-import { parseModelFormatNames } from "./helpers/modelFormatParsing.js";
 
 export interface RuntimeEngineDisplayInfo {
   specifier: RuntimeEngineSpecifier;
@@ -170,18 +171,22 @@ async function listEngines(
 const llmEngine = new Command()
   .name("llm-engine")
   .description("List installed LLM engines")
-  .option("--for <format>", "Comma-separated list of model format filters (case-insensitive)")
+  .addOption(
+    new Command()
+      .createOption("--for <formats>", "Model format filters (comma-separated)")
+      .choices(modelFormatNameSchema.options)
+      .argParser(createModelFormatNameParser()),
+  )
   .action(async function (options) {
     // Access parent options for logging and client creation
     const parentOptions = this.parent?.opts() || {};
 
     const logger = createLogger(parentOptions);
     const client = await createClient(logger, parentOptions);
-    const { for: modelFormatsJoined } = options;
+    const { for: modelFormatsArray } = options;
     const full = parentOptions["full"] === true;
 
-    const modelFormats =
-      modelFormatsJoined !== undefined ? parseModelFormatNames(modelFormatsJoined) : undefined;
+    const modelFormats = modelFormatsArray !== undefined ? new Set(modelFormatsArray) : undefined;
     await listEngines(logger, client, modelFormats, full);
   });
 

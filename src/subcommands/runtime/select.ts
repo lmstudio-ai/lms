@@ -1,6 +1,6 @@
 import { Command } from "@commander-js/extra-typings";
 import { SimpleLogger } from "@lmstudio/lms-common";
-import { ModelFormatName } from "@lmstudio/lms-shared-types";
+import { ModelFormatName, modelFormatNameSchema } from "@lmstudio/lms-shared-types";
 import { LMStudioClient } from "@lmstudio/sdk";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
@@ -8,8 +8,8 @@ import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { generateFullAlias } from "./helpers/AliasGenerator.js";
 import { resolveLatestAlias, resolveUniqueAlias } from "./helpers/aliasResolution.js";
+import { createModelFormatNameParser } from "./helpers/createModelFormatNameParser.js";
 import { createEngineKey, invertSelections } from "./helpers/invertSelections.js";
-import { parseModelFormatNames } from "./helpers/modelFormatParsing.js";
 
 /**
  * Selects a runtime engine by alias
@@ -128,15 +128,19 @@ const llmEngine = new Command()
   .description("Select installed LLM engines")
   .argument("[alias]", "Alias of an LLM engine")
   .option("--latest", "Select the latest version")
-  .option("--for <format>", "Comma-separated list of model format filters (case-insensitive)")
+  .addOption(
+    new Command()
+      .createOption("--for <formats>", "Model format filters (comma-separated)")
+      .choices(modelFormatNameSchema.options)
+      .argParser(createModelFormatNameParser()),
+  )
   .action(async function (alias, options) {
     const parentOptions = this.parent?.opts() || {};
     const logger = createLogger(parentOptions);
     const client = await createClient(logger, parentOptions);
 
-    const { latest = false, for: modelFormatsJoined } = options;
-    const modelFormats =
-      modelFormatsJoined !== undefined ? parseModelFormatNames(modelFormatsJoined) : undefined;
+    const { latest = false, for: modelFormatsArray } = options;
+    const modelFormats = modelFormatsArray !== undefined ? new Set(modelFormatsArray) : undefined;
 
     if (alias === undefined && latest === false) {
       throw new UserInputError("Must specify at least one of [alias] or --latest");
