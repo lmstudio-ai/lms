@@ -8,7 +8,6 @@ import {
   modelFormatNameSchema,
 } from "@lmstudio/lms-shared-types";
 import { LMStudioClient } from "@lmstudio/sdk";
-import chalk from "chalk";
 import columnify from "columnify";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
@@ -150,15 +149,15 @@ async function listEngines(
       columns: ["engine", "selected", "format"],
       config: {
         engine: {
-          headingTransform: () => chalk.grey("LLM ENGINE"),
+          headingTransform: () => "LLM ENGINE",
           align: "left",
         },
         selected: {
-          headingTransform: () => chalk.grey("SELECTED"),
+          headingTransform: () => "SELECTED",
           align: "center",
         },
         format: {
-          headingTransform: () => chalk.grey("MODEL FORMAT"),
+          headingTransform: () => "MODEL FORMAT",
           align: "center",
         },
       },
