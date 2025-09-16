@@ -9,7 +9,8 @@ export class LlamaCppAliasGenerator extends AliasGenerator {
    * @returns Array of field sets
    */
   protected override getBaseAliasComponentSets(): Set<AliasField>[] {
-    // Force llama.cpp engines to include the GPU framework for improved comprehension
+    // Force llama.cpp engines to include the GPU framework, for "cpu" if no GPU,
+    // for improved comprehension
     return [
       // No engine-only alias
       new Set<AliasField>(["engine", "gpuFramework"]),
