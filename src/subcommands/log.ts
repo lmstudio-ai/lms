@@ -13,7 +13,7 @@ const stream = addLogLevelOptions(
       .option("--json", "Outputs in JSON format, separated by newline")
       .option("--stats", "Print prediction stats if available")
       .addOption(
-        new Option("--source <source>", "Source of logs: 'model' or 'server'")
+        new Option("-s, --source <source>", "Source of logs: 'model' or 'server'")
           .default("model")
           .choices(["model", "server"]),
       )
