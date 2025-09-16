@@ -152,7 +152,7 @@ function groupBy<T, K>(array: T[], keyFn: (item: T) => K): Map<K, T[]> {
   const groups = new Map<K, T[]>();
   for (const item of array) {
     const key = keyFn(item);
-    const group = groups.get(key) || [];
+    const group = groups.get(key) ?? [];
     group.push(item);
     groups.set(key, group);
   }

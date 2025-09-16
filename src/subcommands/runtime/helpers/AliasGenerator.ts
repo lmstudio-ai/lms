@@ -138,7 +138,7 @@ export class AliasGenerator {
       aliasParts.push(engine.cpu.architecture);
     }
     if (fields.has("gpuFramework")) {
-      aliasParts.push(engine.gpu?.framework || "cpu");
+      aliasParts.push(engine.gpu?.framework ?? "cpu");
     }
     if (fields.has("cpuInstructionSetExtensions")) {
       if (

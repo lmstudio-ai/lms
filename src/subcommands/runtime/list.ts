@@ -32,13 +32,13 @@ export interface RuntimeEngineDisplayInfo {
 function resolveDuplicateMinimalAliases(capabilities: RuntimeEngineDisplayInfo[]): void {
   const aliasCounts = new Map<string, number>();
   for (const displayInfo of capabilities) {
-    const current = aliasCounts.get(displayInfo.minimalAlias) || 0;
+    const current = aliasCounts.get(displayInfo.minimalAlias) ?? 0;
     aliasCounts.set(displayInfo.minimalAlias, current + 1);
   }
 
   // Replace duplicates with full aliases
   for (const displayInfo of capabilities) {
-    const occurrences = aliasCounts.get(displayInfo.minimalAlias) || 0;
+    const occurrences = aliasCounts.get(displayInfo.minimalAlias) ?? 0;
     if (occurrences <= 0) {
       throw new Error(
         `Expected alias '${displayInfo.minimalAlias}' to occur at least once, but found ${occurrences} occurrences.`,
@@ -78,7 +78,7 @@ export function constructDisplayInfo(
       minimalAlias,
       fullAlias,
       supportedModelFormatNames: engine.supportedModelFormatNames,
-      selectedModelFormatNames: engineKey2Selections.get(createEngineKey(engine)) || [],
+      selectedModelFormatNames: engineKey2Selections.get(createEngineKey(engine)) ?? [],
     }));
 
   // For safety, do a final sweep of all the minimal aliases and replace any duplicates
@@ -178,7 +178,7 @@ const llmEngine = new Command()
   )
   .action(async function (options) {
     // Access parent options for logging and client creation
-    const parentOptions = this.parent?.opts() || {};
+    const parentOptions = this.parent?.opts() ?? {};
 
     const logger = createLogger(parentOptions);
     const client = await createClient(logger, parentOptions);

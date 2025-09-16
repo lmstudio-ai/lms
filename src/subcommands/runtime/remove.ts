@@ -54,7 +54,7 @@ export const remove = addLogLevelOptions(
     .option("-y, --yes", "Answer yes to all confirmations")
     .option("--dry-run", "Do not execute the operation")
     .action(async function (alias, options) {
-      const parentOptions = this.parent?.opts() || {};
+      const parentOptions = this.parent?.opts() ?? {};
       const logger = createLogger(parentOptions);
       const client = await createClient(logger, parentOptions);
 

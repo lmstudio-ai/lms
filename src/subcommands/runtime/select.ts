@@ -56,7 +56,7 @@ async function selectRuntimeEngine(
         )
       : new Set(choice.supportedModelFormatNames);
 
-  const alreadySelectedFor = existingEngineKey2Selections.get(createEngineKey(choice)) || [];
+  const alreadySelectedFor = existingEngineKey2Selections.get(createEngineKey(choice)) ?? [];
 
   const formatStatus = [...selectForModelFormats].map(modelFormat => {
     return {
@@ -135,7 +135,7 @@ const llmEngine = new Command()
       .argParser(createModelFormatNameParser()),
   )
   .action(async function (alias, options) {
-    const parentOptions = this.parent?.opts() || {};
+    const parentOptions = this.parent?.opts() ?? {};
     const logger = createLogger(parentOptions);
     const client = await createClient(logger, parentOptions);
 
