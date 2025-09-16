@@ -27,8 +27,6 @@ export class AliasGroup {
    * @returns Set of alias fields that vary across engines in the group
    */
   private computeMinimumComponents(): Set<AliasField> {
-    if (this.engines.length === 0) return new Set(["version"]);
-
     const fieldExtractors: Record<
       AliasField,
       (e: RuntimeEngineInfo) => string | string[] | undefined

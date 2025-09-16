@@ -105,7 +105,7 @@ export class AliasGenerator {
    * @param fields - The set of fields to include in the alias
    * @returns The built alias or null if missing required components
    */
-  protected generateAlias(engine: RuntimeEngineInfo, fields: Set<AliasField>): BuiltAlias | null {
+  generateAlias(engine: RuntimeEngineInfo, fields: Set<AliasField>): BuiltAlias | null {
     try {
       return {
         fields,
