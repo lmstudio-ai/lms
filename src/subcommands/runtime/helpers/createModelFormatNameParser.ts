@@ -1,4 +1,5 @@
 import { ModelFormatName, modelFormatNameSchema } from "@lmstudio/lms-shared-types";
+import { UserInputError } from "../../../types/UserInputError.js";
 
 /**
  * Creates a case-insensitive argument parser for comma-separated model format choices
@@ -26,7 +27,7 @@ export function createModelFormatNameParser() {
     if (invalidFormats.length > 0) {
       const invalidList = invalidFormats.join(", ");
       const validList = modelFormatNameSchema.options.join(", ");
-      throw new Error(
+      throw new UserInputError(
         `Invalid choice${invalidFormats.length > 1 ? "s" : ""}: ${invalidList}. Valid choices are: ${validList}`,
       );
     }
