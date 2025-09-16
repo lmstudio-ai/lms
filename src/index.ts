@@ -12,10 +12,12 @@ import { load } from "./subcommands/load.js";
 import { log } from "./subcommands/log.js";
 import { login } from "./subcommands/login.js";
 import { push } from "./subcommands/push.js";
+import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
 import { printVersion, version } from "./subcommands/version.js";
+import { UserInputError } from "./types/UserInputError.js";
 
 if (process.argv.length === 2) {
   printVersion();
@@ -48,10 +50,16 @@ program.commandsGroup("System Management:");
 program.addCommand(bootstrap);
 program.addCommand(flags);
 program.addCommand(log);
+program.addCommand(runtime);
 program.addCommand(status);
 program.addCommand(version);
 
 program.parseAsync(process.argv).catch((error: any) => {
-  console.error(error?.stack ?? error);
+  if (error instanceof UserInputError) {
+    // Omit stack trace for UserInputErrors
+    console.error(error.message);
+  } else {
+    console.error(error?.stack ?? error);
+  }
   process.exit(1);
 });
