@@ -378,5 +378,5 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     }
   }
 
-  logger.infoWithoutPrefix(motdLines);
+  logger.infoWithoutPrefix(motdLines.join("\n"));
 }
