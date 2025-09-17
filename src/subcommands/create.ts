@@ -347,7 +347,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     }
   }
 
-  logger.info("Project initialized.");
+  logger.info("\nProject initialized.");
 
   const motdLines = [];
 
