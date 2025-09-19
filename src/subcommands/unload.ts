@@ -38,6 +38,7 @@ export const unload = addLogLevelOptions(
         `,
       ).message,
     );
+    process.exit(1);
   }
   const models = (
     await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
@@ -84,7 +85,7 @@ export const unload = addLogLevelOptions(
           `,
         ).message,
       );
-      return;
+      process.exit(1);
     }
     logger.debug(`Unloading "${identifier}"...`);
     await client.llm.unload(identifier);
