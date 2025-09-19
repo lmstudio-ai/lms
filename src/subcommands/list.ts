@@ -181,9 +181,11 @@ export const ps = addCreateClientOptions(
       loadedModels.map(async model => {
         const info = await model.getModelInfo();
         const { instanceReference: _, ...filteredInfo } = info;
+        const instanceProcessingState = await model.getInstanceProcessingState();
         return {
           ...filteredInfo,
-          status: (await model.getInstanceProcessingState()).status,
+          status: instanceProcessingState.status,
+          queued: instanceProcessingState.queued,
         };
       }),
     );
