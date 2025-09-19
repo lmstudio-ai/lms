@@ -177,17 +177,17 @@ export const ps = addCreateClientOptions(
   ];
 
   if (json) {
-    console.info(
-      JSON.stringify(
-        await Promise.all(
-          loadedModels.map(async model => {
-            const info = await model.getModelInfo();
-            const { instanceReference: _, ...filteredInfo } = info;
-            return filteredInfo;
-          }),
-        ),
-      ),
+    const modelInfos = await Promise.all(
+      loadedModels.map(async model => {
+        const info = await model.getModelInfo();
+        const { instanceReference: _, ...filteredInfo } = info;
+        return {
+          ...filteredInfo,
+          status: (await model.getInstanceProcessingState()).status,
+        };
+      }),
     );
+    console.info(JSON.stringify(modelInfos));
     return;
   }
 
