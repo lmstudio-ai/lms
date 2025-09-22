@@ -1,20 +1,18 @@
 import { Command } from "@commander-js/extra-typings";
-import { SimpleLogger } from "@lmstudio/lms-common";
+import { type SimpleLogger } from "@lmstudio/lms-common";
 import {
-  ModelFormatName,
-  RuntimeEngineInfo,
-  RuntimeEngineSpecifier,
-  SelectedRuntimeEngineMap,
-  modelFormatNameSchema,
+  type ModelFormatName,
+  type RuntimeEngineInfo,
+  type RuntimeEngineSpecifier,
+  type SelectedRuntimeEngineMap,
 } from "@lmstudio/lms-shared-types";
-import { LMStudioClient } from "@lmstudio/sdk";
+import { type LMStudioClient } from "@lmstudio/sdk";
 import columnify from "columnify";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { AliasGroup } from "./helpers/AliasGroup.js";
-import { createModelFormatNameParser } from "./helpers/createModelFormatNameParser.js";
 import { createEngineKey, invertSelections } from "./helpers/invertSelections.js";
 
 export interface RuntimeEngineDisplayInfo {
@@ -97,8 +95,13 @@ export function constructDisplayInfo(
 async function listEngines(
   logger: SimpleLogger,
   client: LMStudioClient,
-  modelFormatFilters?: Set<ModelFormatName>,
-  useFull?: boolean,
+  {
+    modelFormatFilters,
+    useFull = false,
+  }: {
+    modelFormatFilters?: Set<ModelFormatName>;
+    useFull?: boolean;
+  },
 ) {
   const enginesResp = await client.runtime.engine.list();
   const selectionsResp = await client.runtime.engine.getSelections();
@@ -167,40 +170,23 @@ async function listEngines(
   );
 }
 
-const llmEngine = new Command()
-  .name("llm-engine")
-  .description("List installed LLM engines")
-  .addOption(
-    new Command()
-      .createOption("--for <formats>", "Model format filters (comma-separated)")
-      .choices(modelFormatNameSchema.options)
-      .argParser(createModelFormatNameParser()),
-  )
-  .action(async function (options) {
-    // Access parent options for logging and client creation
-    const parentOptions = this.parent?.opts() ?? {};
-
-    const logger = createLogger(parentOptions);
-    const client = await createClient(logger, parentOptions);
-    const { for: modelFormatsArray } = options;
-    const full = parentOptions["full"] === true;
-
-    const modelFormats = modelFormatsArray !== undefined ? new Set(modelFormatsArray) : undefined;
-    await listEngines(logger, client, modelFormats, full);
-  });
-
 export const ls = addLogLevelOptions(
   addCreateClientOptions(
-    new Command().name("ls").description("List installed runtime extension pack"),
-  ),
-)
-  .option("--full", "Show full aliases")
-  .action(async options => {
-    const logger = createLogger(options);
-    const client = await createClient(logger, options);
-    const { full = false } = options;
+    new Command()
+      .name("ls")
+      .description("List installed LLM engines")
+      .option("--full", "Show full aliases")
+      .action(async function () {
+        // Access parent options for logging and client creation
+        const parentOptions = this.parent?.opts() ?? {};
 
-    // For now, we only have engines to list
-    listEngines(logger, client, undefined, full);
-  })
-  .addCommand(llmEngine);
+        const logger = createLogger(parentOptions);
+        const client = await createClient(logger, parentOptions);
+        const full = parentOptions["full"] === true;
+
+        await listEngines(logger, client, {
+          useFull: full,
+        });
+      }),
+  ),
+);
