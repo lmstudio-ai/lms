@@ -76,9 +76,12 @@ export async function executePrediction(
   llmModel: LLM,
   chat: Chat,
   input: string,
+  signal?: AbortSignal,
 ): Promise<{ result: any; lastFragment: string }> {
   chat.append("user", input);
-  const prediction = llmModel.respond(chat);
+  const prediction = llmModel.respond(chat, {
+    signal: signal,
+  });
 
   let lastFragment = "";
   for await (const fragment of prediction) {
