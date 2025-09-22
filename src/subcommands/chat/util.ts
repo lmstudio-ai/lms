@@ -1,6 +1,7 @@
 import type { SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { ProgressBar } from "../../ProgressBar.js";
+import chalk from "chalk";
 
 export async function loadModelWithProgress(
   client: LMStudioClient,
@@ -87,6 +88,10 @@ export async function executePrediction(
   for await (const fragment of prediction) {
     process.stdout.write(fragment.content);
     lastFragment = fragment.content;
+  }
+
+  if (signal?.aborted === true) {
+    process.stdout.write(chalk.gray("\nGeneration interrupted by user with ctrl^c\n"));
   }
 
   const result = await prediction.result();
