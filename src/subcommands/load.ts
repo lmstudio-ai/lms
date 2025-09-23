@@ -19,7 +19,7 @@ import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
-const gpuOptionParser = (str: string): LLMLlamaAccelerationOffloadRatio => {
+const gpuOptionParser = (str: string): number => {
   str = str.trim().toLowerCase();
   if (str === "off") {
     return 0;
@@ -187,13 +187,7 @@ export const load = addLogLevelOptions(
       const estimate = await (
         model.type === "llm" ? client.llm : client.embedding
       ).estimateResourcesUsage(model.path, loadConfig);
-      printEstimatedResourceUsage(
-        model,
-        loadConfig.contextLength,
-        loadConfig.gpu?.ratio,
-        estimate,
-        logger,
-      );
+      printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
       return;
     }
 
@@ -268,13 +262,7 @@ export const load = addLogLevelOptions(
     const estimate = await (
       model.type === "llm" ? client.llm : client.embedding
     ).estimateResourcesUsage(model.path, loadConfig);
-    printEstimatedResourceUsage(
-      model,
-      loadConfig.contextLength,
-      loadConfig.gpu?.ratio,
-      estimate,
-      logger,
-    );
+    printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
     return;
   }
 
@@ -390,7 +378,7 @@ async function loadModel(
 function printEstimatedResourceUsage(
   model: ModelInfo,
   contextLength: number | undefined,
-  gpuOffloadRatio: LLMLlamaAccelerationOffloadRatio | undefined,
+  gpuOffloadRatio: number | undefined,
   estimate: EstimatedResourcesUsage,
   logger: SimpleLogger,
 ) {
@@ -400,9 +388,7 @@ function printEstimatedResourceUsage(
     logger.info(`Context Length: ${contextLength.toLocaleString()}`);
   }
   if (gpuOffloadRatio !== undefined) {
-    logger.info(
-      `GPU Offload Ratio: ${gpuOffloadRatio === 0 ? "off" : gpuOffloadRatio === 1 ? "max" : gpuOffloadRatio}`,
-    );
+    logger.info(`GPU Offload: ${gpuOffloadRatio * 100}%`);
   }
   logger.info(
     `Estimated GPU Memory:   ${colorFunc(formatSizeBytes1000(estimate.memory.totalVramBytes))}`,
