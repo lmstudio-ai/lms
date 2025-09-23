@@ -27,6 +27,7 @@ import {
 interface StartPredictionOpts {
   stats?: true;
   ttl: number;
+  signal?: AbortSignal;
 }
 
 const DEFAULT_SYSTEM_PROMPT =
@@ -151,16 +152,14 @@ async function runInteractivePrediction(
   opts: StartPredictionOpts,
 ): Promise<void> {
   process.stdout.write("\n● ");
-  rl.pause();
 
-  const { result } = await executePrediction(llm, chat, input);
+  const { result } = await executePrediction(llm, chat, input, opts.signal);
 
   if (opts.stats !== undefined) {
     displayVerboseStats(result.stats, logger);
   }
 
   process.stdout.write("\n\n");
-  rl.resume();
   rl.prompt();
 }
 
@@ -183,8 +182,19 @@ export async function startInteractiveChat(
 
   process.stdout.write("\n");
   rl.prompt();
-
+  let isPredicting = false;
+  let abortController: AbortController;
+  rl.addListener("SIGINT", () => {
+    if (isPredicting) {
+      abortController.abort();
+      isPredicting = false;
+    } else {
+      process.exit(0);
+    }
+  });
   rl.on("line", async (line: string) => {
+    abortController = new AbortController();
+    opts.signal = abortController.signal;
     const input = line.trim();
     if (input === "exit" || input === "quit") {
       rl.close();
@@ -198,8 +208,10 @@ export async function startInteractiveChat(
     }
 
     try {
+      isPredicting = true;
       await runInteractivePrediction(llm, chat, input, logger, rl, opts);
     } catch (err) {
+      isPredicting = false;
       if (err instanceof Error && err.message.toLowerCase().includes("unloaded") === true) {
         const shouldReload = await askQuestion("Looks like the model unloaded. Reload?", {
           rl,
@@ -208,12 +220,14 @@ export async function startInteractiveChat(
           try {
             llm = await loadModelWithProgress(client, modelName, opts.ttl, logger);
             process.stdout.write("\n");
+            isPredicting = true;
             await runInteractivePrediction(llm, chat, input, logger, rl, opts);
             return;
           } catch (reloadErr) {
             logger.error("Error reloading model:", reloadErr);
-            rl.resume();
             rl.prompt();
+          } finally {
+            isPredicting = false;
           }
         } else {
           // User chose not to reload, exit
@@ -221,9 +235,10 @@ export async function startInteractiveChat(
         }
       } else {
         logger.error("Error during chat:", err);
-        rl.resume();
         rl.prompt();
       }
+    } finally {
+      isPredicting = false;
     }
   });
 
