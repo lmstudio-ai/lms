@@ -1,14 +1,13 @@
 import { Command } from "@commander-js/extra-typings";
-import { SimpleLogger } from "@lmstudio/lms-common";
-import { ModelFormatName, modelFormatNameSchema } from "@lmstudio/lms-shared-types";
-import { LMStudioClient } from "@lmstudio/sdk";
+import { type SimpleLogger } from "@lmstudio/lms-common";
+import { type ModelFormatName } from "@lmstudio/lms-shared-types";
+import { type LMStudioClient } from "@lmstudio/sdk";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { generateFullAlias } from "./helpers/AliasGenerator.js";
 import { resolveLatestAlias, resolveUniqueAlias } from "./helpers/aliasResolution.js";
-import { createModelFormatNameParser } from "./helpers/createModelFormatNameParser.js";
 import { createEngineKey, invertSelections } from "./helpers/invertSelections.js";
 
 /**
@@ -123,38 +122,29 @@ async function selectLatestVersionOfSelectedEngines(
   }
 }
 
-const llmEngine = new Command()
-  .name("llm-engine")
-  .description("Select installed LLM engines")
-  .argument("[alias]", "Alias of an LLM engine")
-  .option("--latest", "Select the latest version")
-  .addOption(
-    new Command()
-      .createOption("--for <formats>", "Model format filters (comma-separated)")
-      .choices(modelFormatNameSchema.options)
-      .argParser(createModelFormatNameParser()),
-  )
-  .action(async function (alias, options) {
-    const parentOptions = this.parent?.opts() ?? {};
-    const logger = createLogger(parentOptions);
-    const client = await createClient(logger, parentOptions);
-
-    const { latest = false, for: modelFormatsArray } = options;
-    const modelFormats = modelFormatsArray !== undefined ? new Set(modelFormatsArray) : undefined;
-
-    if (alias === undefined && latest === false) {
-      throw new UserInputError("Must specify at least one of [alias] or --latest");
-    } else if (alias === undefined) {
-      // latest must be true
-      await selectLatestVersionOfSelectedEngines(logger, client, modelFormats);
-    } else {
-      // alias must be defined, latest may be true or false
-      await selectRuntimeEngine(logger, client, alias, latest, modelFormats);
-    }
-  });
-
 export const select = addLogLevelOptions(
   addCreateClientOptions(
-    new Command().name("select").description("Select installed runtime extension pack"),
+    new Command()
+      .name("select")
+      .description("Select installed LLM engines")
+      .argument("[alias]", "Alias of an LLM engine")
+      .option("--latest", "Select the latest version")
+      .action(async function (alias, options) {
+        const parentOptions = this.parent?.opts() ?? {};
+        const logger = createLogger(parentOptions);
+        const client = await createClient(logger, parentOptions);
+
+        const { latest = false } = options;
+
+        if (alias === undefined && latest === false) {
+          throw new UserInputError("Must specify at least one of [alias] or --latest");
+        } else if (alias === undefined) {
+          // latest must be true
+          await selectLatestVersionOfSelectedEngines(logger, client);
+        } else {
+          // alias must be defined, latest may be true or false
+          await selectRuntimeEngine(logger, client, alias, latest);
+        }
+      }),
   ),
-).addCommand(llmEngine);
+);
