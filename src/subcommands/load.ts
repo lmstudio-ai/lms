@@ -400,7 +400,9 @@ function printEstimatedResourceUsage(
     logger.info(`Context Length: ${contextLength.toLocaleString()}`);
   }
   if (gpuOffloadRatio !== undefined) {
-    logger.info(`GPU Offload Ratio: ${gpuOffloadRatio}`);
+    logger.info(
+      `GPU Offload Ratio: ${gpuOffloadRatio === 0 ? "off" : gpuOffloadRatio === 1 ? "max" : gpuOffloadRatio}`,
+    );
   }
   logger.info(
     `Estimated GPU Memory:   ${colorFunc(formatSizeBytes1000(estimate.memory.totalVramBytes))}`,
