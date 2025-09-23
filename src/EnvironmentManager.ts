@@ -4,13 +4,13 @@ import { lmsConfigFolder } from "./lmstudioPaths.js";
 import { z } from "zod";
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type CreateClientArgs } from "./createClient.js";
+
 const environmentConfigSchema = z.object({
   name: z.string(),
   host: z.string(),
   port: z.number().int().min(0).max(65535),
   description: z.string().optional(),
 });
-
 export type EnvironmentConfig = z.infer<typeof environmentConfigSchema>;
 
 export const DEFAULT_LOCAL_ENVIRONMENT_NAME = "local";
@@ -18,6 +18,8 @@ export const DEFAULT_LOCAL_ENVIRONMENT_NAME = "local";
 const DEFAULT_ENVIRONMENT_CONFIG: EnvironmentConfig = {
   name: DEFAULT_LOCAL_ENVIRONMENT_NAME,
   host: "localhost",
+  // TODO: This will have to change based on which port the current user is running their local
+  // server on and consider multiple users on the same machine using different ports
   port: 1234,
   description: "Default local environment",
 };
@@ -39,6 +41,9 @@ export class EnvironmentManager {
     await mkdir(this.environmentsDir, { recursive: true });
   }
 
+  /**
+   * Adds a new environment configuration.
+   */
   public async addEnvironment(config: EnvironmentConfig): Promise<void> {
     await this.ensureDirExists();
     const envPath = join(this.environmentsDir, `${config.name}.json`);
@@ -50,6 +55,9 @@ export class EnvironmentManager {
     }
   }
 
+  /**
+   * Removes an existing environment configuration.
+   */
   public async removeEnvironment(name: string): Promise<void> {
     const envPath = join(this.environmentsDir, `${name}.json`);
     try {
@@ -77,6 +85,9 @@ export class EnvironmentManager {
     }
   }
 
+  /**
+   * Sets the current environment by name.
+   */
   public async setCurrentEnvironment(name: string): Promise<void> {
     if (name === "local") {
       // Special case for local environment
@@ -93,6 +104,9 @@ export class EnvironmentManager {
     }
   }
 
+  /**
+   * Gets the current environment configuration.
+   */
   public async getCurrentEnvironment(): Promise<EnvironmentConfig> {
     if (this.createClientArgs !== undefined) {
       if (this.createClientArgs.host !== undefined || this.createClientArgs.port !== undefined) {
@@ -138,6 +152,9 @@ export class EnvironmentManager {
     return env;
   }
 
+  /**
+   * Lists all available environment configurations.
+   */
   public async getAllEnvironments(): Promise<EnvironmentConfig[]> {
     await this.ensureDirExists();
     const files = await readdir(this.environmentsDir);
@@ -156,6 +173,9 @@ export class EnvironmentManager {
     return environments;
   }
 
+  /**
+   * Tries to get an environment configuration by name. Returns undefined if not found.
+   */
   public async tryGetEnvironment(name: string): Promise<EnvironmentConfig | undefined> {
     if (name === DEFAULT_LOCAL_ENVIRONMENT_NAME) {
       return DEFAULT_ENVIRONMENT_CONFIG; // Return default local environment
