@@ -79,7 +79,7 @@ export const login = addLogLevelOptions(
       }
 
       logger.info();
-      logger.info(chalk.greenBright(`    ${url}`));
+      logger.info(chalk.green(`    ${url}`));
       logger.info();
     },
   });

@@ -163,9 +163,7 @@ export async function createClient(
     logger.error("Host should not include the protocol.");
     process.exit(1);
   } else if (host.includes(":")) {
-    logger.error(
-      `Host should not include the port number. Use ${chalk.yellowBright("--port")} instead.`,
-    );
+    logger.error(`Host should not include the port number. Use ${chalk.yellow("--port")} instead.`);
     process.exit(1);
   }
   let auth: LMStudioClientConstructorOpts;

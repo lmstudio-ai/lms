@@ -47,9 +47,9 @@ export class InfoLookup<TInnerKey, TLookupKey, TValue> {
   }
 }
 
-const llmColorer = chalk.cyanBright;
-const visionColorer = chalk.yellowBright;
-const embeddingColorer = chalk.blueBright;
+const llmColorer = chalk.cyan;
+const visionColorer = chalk.yellow;
+const embeddingColorer = chalk.blue;
 
 export const architectureInfoLookup = InfoLookup.createWithKeyMapper({
   fallback: (arch: string) => ({

@@ -241,7 +241,7 @@ async function validateModelNameOrWarn(
       logger.warn(`Model files usually have extensions: ${modelExtensions.join(", ")}`);
     } else {
       process.stderr.write(text`
-        ${"\n"}${chalk.yellowBright.underline(" File does not look like a model file ")}
+        ${"\n"}${chalk.yellow.underline(" File does not look like a model file ")}
 
         This file does not look like a model file:
 
@@ -253,7 +253,7 @@ async function validateModelNameOrWarn(
         {
           type: "confirm",
           name: "cont",
-          message: chalk.greenBright("Do you wish to continue? (Not recommended)"),
+          message: chalk.green("Do you wish to continue? (Not recommended)"),
           default: false,
         },
       ]);
@@ -383,20 +383,20 @@ async function warnAboutMove(
   }
   logger.debug("Asking user to confirm moving the file");
   process.stderr.write(text`
-    ${"\n"}${chalk.greenBright.underline(" Importing model file into LM Studio ")}
+    ${"\n"}${chalk.green.underline(" Importing model file into LM Studio ")}
 
-    By default, ${chalk.yellow("lms import")} will ${chalk.cyanBright("move")} the file to LM
+    By default, ${chalk.yellow("lms import")} will ${chalk.cyan("move")} the file to LM
     Studio's models folder:
 
         ${chalk.gray(modelsFolderPath)}
 
-    If you want to ${chalk.cyanBright("copy")} the file instead, use the ${chalk.yellow("--copy")}
+    If you want to ${chalk.cyan("copy")} the file instead, use the ${chalk.yellow("--copy")}
     flag.
 
-    If you want to create a ${chalk.cyanBright("symbolic link")} instead, use the
+    If you want to create a ${chalk.cyan("symbolic link")} instead, use the
     ${chalk.yellow("--symbolic-link")} flag.
 
-    If you want to create a ${chalk.cyanBright("hard link")} instead, use the
+    If you want to create a ${chalk.cyan("hard link")} instead, use the
     ${chalk.yellow("--hard-link")} flag.
 
     This message will only show up once. You can always look up the usage via the
@@ -406,7 +406,7 @@ async function warnAboutMove(
     {
       type: "confirm",
       name: "cont",
-      message: chalk.greenBright("Do you wish to continue?"),
+      message: chalk.green("Do you wish to continue?"),
       default: true,
     },
   ]);
@@ -500,7 +500,7 @@ async function resolveUserRepo(
     await pm({
       type: "list",
       name: "value",
-      message: chalk.greenBright("Choose categorization option"),
+      message: chalk.green("Choose categorization option"),
       choices: [
         {
           name: text`
@@ -551,14 +551,14 @@ async function resolveByAskUserRepo(
     {
       type: "input",
       name: "user",
-      message: chalk.greenBright("Who is the creator of the model?"),
+      message: chalk.green("Who is the creator of the model?"),
       default: getDefaultUserName(),
       validate: input => isValidFolderName("User", input),
     },
     {
       type: "input",
       name: "repo",
-      message: chalk.greenBright("What is the model name?"),
+      message: chalk.green("What is the model name?"),
       default: autoNameRepo(basename(path)),
       validate: input => isValidFolderName("Repository", input),
     },
@@ -595,7 +595,7 @@ async function resolveByHuggingFaceInteractive(
   const { selected } = await pm({
     type: "autocomplete",
     name: "selected",
-    message: chalk.greenBright("Please select the correct one") + chalk.gray(" |"),
+    message: chalk.green("Please select the correct one") + chalk.gray(" |"),
     loop: false,
     pageSize: terminalSize().rows - 3,
     emptyText: "No model matched the filter",

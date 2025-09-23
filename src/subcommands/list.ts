@@ -13,9 +13,9 @@ function loadedCheck(count: number) {
   if (count === 0) {
     return "";
   } else if (count === 1) {
-    return chalk.greenBright("✓ LOADED");
+    return chalk.green("✓ LOADED");
   } else {
-    return chalk.greenBright(`✓ LOADED (${count})`);
+    return chalk.green(`✓ LOADED (${count})`);
   }
 }
 
@@ -122,12 +122,10 @@ export const ls = addCreateClientOptions(
 
   if (afterFilteringModelsCount === 0) {
     if (originalModelsCount === 0) {
-      console.info(chalk.redBright("You have not downloaded any models yet."));
+      console.info(chalk.red("You have not downloaded any models yet."));
     } else {
       console.info(
-        chalk.redBright(
-          `You have ${originalModelsCount} models, but none of them match the filter.`,
-        ),
+        chalk.red(`You have ${originalModelsCount} models, but none of them match the filter.`),
       );
     }
     return;

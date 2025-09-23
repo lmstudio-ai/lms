@@ -30,6 +30,6 @@ export function formatSizeBytesWithColor1000(sizeBytes: number) {
   } else if (sizeBytes < yellowThreshold) {
     return chalk.yellow(formatSizeBytes1000(sizeBytes));
   } else {
-    return chalk.redBright(formatSizeBytes1000(sizeBytes));
+    return chalk.red(formatSizeBytes1000(sizeBytes));
   }
 }

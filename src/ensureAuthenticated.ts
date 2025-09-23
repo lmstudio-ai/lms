@@ -17,7 +17,7 @@ export async function ensureAuthenticated(
               "Authentication required",
               text`
                 This operation requires you to be authenticated. Inline authentication disabled due
-                to ${chalk.yellowBright("--yes")} flag. Please use ${chalk.yellowBright("lms auth")}
+                to ${chalk.yellow("--yes")} flag. Please use ${chalk.yellow("lms auth")}
                 to authenticate before running this command again.
               `,
               url,
@@ -26,7 +26,7 @@ export async function ensureAuthenticated(
         } else {
           logger.info("Authentication required. Please visit the following URL to authenticate:");
           logger.info();
-          logger.info(chalk.greenBright(`    ${url}`));
+          logger.info(chalk.green(`    ${url}`));
           logger.info();
         }
       },
