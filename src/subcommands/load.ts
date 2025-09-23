@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError, Option } from "@commander-js/extra-typings";
 import { makeTitledPrettyError, type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
-import { type LLMLlamaAccelerationOffloadRatio, type ModelInfo } from "@lmstudio/lms-shared-types";
+import { type ModelInfo } from "@lmstudio/lms-shared-types";
 import {
   type EstimatedResourcesUsage,
   type LLMLoadModelConfig,
@@ -101,7 +101,7 @@ export const load = addLogLevelOptions(
       .option(
         "--estimate-only",
         text`
-         Estimate the resources required to load the model, without loading it.
+          Calculate an estimate of the resources required to load the model. Does not load the model.
         `,
       ),
   ),
