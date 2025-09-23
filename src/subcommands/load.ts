@@ -1,8 +1,12 @@
 import { Command, InvalidArgumentError, Option } from "@commander-js/extra-typings";
 import { makeTitledPrettyError, type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
-import { type LLMLlamaAccelerationOffloadRatio, type ModelInfo } from "@lmstudio/lms-shared-types";
-import { type LLMLoadModelConfig, type LMStudioClient } from "@lmstudio/sdk";
+import { type ModelInfo } from "@lmstudio/lms-shared-types";
+import {
+  type EstimatedResourcesUsage,
+  type LLMLoadModelConfig,
+  type LMStudioClient,
+} from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
 import inquirer from "inquirer";
@@ -15,7 +19,7 @@ import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
-const gpuOptionParser = (str: string): LLMLlamaAccelerationOffloadRatio => {
+const gpuOptionParser = (str: string): number => {
   str = str.trim().toLowerCase();
   if (str === "off") {
     return 0;
@@ -93,10 +97,24 @@ export const load = addLogLevelOptions(
           models matching the path, the first one will be loaded. Fails if the path provided does not
           match any model.
         `,
+      )
+      .option(
+        "--estimate-only",
+        text`
+          Calculate an estimate of the resources required to load the model. Does not load the model.
+        `,
       ),
   ),
 ).action(async (pathArg, options) => {
-  const { ttl: ttlSeconds, gpu, contextLength, yes = false, exact = false, identifier } = options;
+  const {
+    ttl: ttlSeconds,
+    gpu,
+    contextLength,
+    yes = false,
+    exact = false,
+    identifier,
+    estimateOnly,
+  } = options;
   const loadConfig: LLMLoadModelConfig = {
     contextLength,
   };
@@ -164,6 +182,15 @@ export const load = addLogLevelOptions(
       );
       process.exit(1);
     }
+
+    if (estimateOnly === true) {
+      const estimate = await (
+        model.type === "llm" ? client.llm : client.embedding
+      ).estimateResourcesUsage(model.path, loadConfig);
+      printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
+      return;
+    }
+
     await loadModel(logger, client, model, identifier, loadConfig, ttlSeconds);
     return;
   }
@@ -229,6 +256,14 @@ export const load = addLogLevelOptions(
       );
       model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
     }
+  }
+
+  if (estimateOnly === true) {
+    const estimate = await (
+      model.type === "llm" ? client.llm : client.embedding
+    ).estimateResourcesUsage(model.path, loadConfig);
+    printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
+    return;
   }
 
   const modelInLastLoadedModelsIndex = lastLoadedModels.indexOf(model.path);
@@ -338,4 +373,37 @@ async function loadModel(
       To set a custom identifier, use the ${chalk.yellowBright("--identifier <identifier>")} option.
     `);
   }
+}
+
+function printEstimatedResourceUsage(
+  model: ModelInfo,
+  contextLength: number | undefined,
+  gpuOffloadRatio: number | undefined,
+  estimate: EstimatedResourcesUsage,
+  logger: SimpleLogger,
+) {
+  const colorFunc = estimate.passesGuardrails === true ? chalk.greenBright : chalk.yellow;
+  logger.info(`Model: ${model.path}`);
+  if (contextLength !== undefined) {
+    logger.info(`Context Length: ${contextLength.toLocaleString()}`);
+  }
+  if (gpuOffloadRatio !== undefined) {
+    logger.info(`GPU Offload: ${gpuOffloadRatio * 100}%`);
+  }
+  logger.info(
+    `Estimated GPU Memory:   ${colorFunc(formatSizeBytes1000(estimate.memory.totalVramBytes))}`,
+  );
+  logger.info(
+    `Estimated Total Memory: ${colorFunc(formatSizeBytes1000(estimate.memory.totalBytes))}`,
+  );
+
+  if (estimate.memory.confidence === "low") {
+    logger.info(`Confidence: ${chalk.yellow(estimate.memory.confidence.toUpperCase())}`);
+  }
+  const message =
+    estimate.passesGuardrails === true
+      ? "This model may be loaded based on your resource guardrails settings."
+      : "This model will fail to load based on your resource guardrails settings.";
+
+  logger.info("\nEstimate: " + colorFunc(message));
 }
