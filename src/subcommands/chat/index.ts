@@ -287,9 +287,7 @@ export const chat = addLogLevelOptions(
   let llm: LLM;
   if (model !== undefined && model !== "") {
     try {
-      llm = await client.llm.model(model, {
-        ttl,
-      });
+      llm = await loadModelWithProgress(client, model, ttl, logger);
     } catch (e) {
       logger.error(`Model "${model}" not found, check available models with:\n       lms ls`);
       process.exit(1);
