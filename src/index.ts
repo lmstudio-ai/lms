@@ -25,7 +25,48 @@ if (process.argv.length === 2) {
   console.info("Usage");
 }
 
+const HELP_MESSAGE_PADDING_LEFT = 4; // Configure help formatting with max width and left padding
+const helpConfig = {
+  // Set help width at 100 columns for readability
+  helpWidth: 100,
+  subcommandTerm: (cmd: { name(): string }) =>
+    `${cmd.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + cmd.name().length, " "),
+  subcommandDescription: (cmd: { description(): string }) => cmd.description(),
+  optionTerm: (option: { flags: string }) =>
+    `${option.flags}`.padStart(HELP_MESSAGE_PADDING_LEFT + option.flags.length, " "),
+  optionDescription: (option: { description?: string }) => option.description ?? "",
+  argumentTerm: (arg: { name(): string }) =>
+    `${arg.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + arg.name().length, " "),
+  argumentDescription: (arg: { description?: string }) => arg.description ?? "",
+};
+
 program.name("lms").description("LM Studio CLI");
+program.configureHelp(helpConfig);
+
+// Configure help for all subcommands
+[
+  get,
+  importCmd,
+  ls,
+  chat,
+  load,
+  ps,
+  server,
+  unload,
+  clone,
+  create,
+  dev,
+  login,
+  push,
+  bootstrap,
+  flags,
+  log,
+  runtime,
+  status,
+  version,
+].forEach(cmd => {
+  cmd.configureHelp(helpConfig);
+});
 
 program.commandsGroup("Manage Models:");
 program.addCommand(get);
