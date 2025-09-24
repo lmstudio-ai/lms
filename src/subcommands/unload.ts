@@ -33,8 +33,8 @@ export const unload = addLogLevelOptions(
       makeTitledPrettyError(
         "Invalid Usage",
         text`
-          You cannot provide ${chalk.cyanBright("[path]")} when the flag
-          ${chalk.yellowBright("--all")} is set.
+          You cannot provide ${chalk.cyan("[path]")} when the flag
+          ${chalk.yellow("--all")} is set.
         `,
       ).message,
     );
@@ -76,11 +76,11 @@ export const unload = addLogLevelOptions(
         makeTitledPrettyError(
           "Model Not Found",
           text`
-            Cannot find a model with the identifier "${chalk.yellowBright(identifier)}".
+            Cannot find a model with the identifier "${chalk.yellow(identifier)}".
 
             To see a list of loaded models, run:
 
-                ${chalk.yellowBright("lms ps")}
+                ${chalk.yellow("lms ps")}
           `,
         ).message,
       );
@@ -113,7 +113,7 @@ export const unload = addLogLevelOptions(
     const { selected } = await prompt({
       type: "autocomplete",
       name: "selected",
-      message: chalk.greenBright("Select a model to unload") + chalk.gray(" |"),
+      message: chalk.green("Select a model to unload") + chalk.gray(" |"),
       initialSearch: "",
       loop: false,
       pageSize: terminalSize().rows - 5,

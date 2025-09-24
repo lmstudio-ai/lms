@@ -110,8 +110,8 @@ function printFormattedLog(log: DiagnosticsLogEvent, stats: boolean): void {
     return;
   }
 
-  console.log("timestamp: " + chalk.greenBright(new Date(log.timestamp).toLocaleString()));
-  console.log("type: " + chalk.greenBright(log.data.type));
+  console.log("timestamp: " + chalk.green(new Date(log.timestamp).toLocaleString()));
+  console.log("type: " + chalk.green(log.data.type));
   printLlmPredictionLogEvent(log.data, stats);
   console.log();
   console.log();
@@ -119,19 +119,19 @@ function printFormattedLog(log: DiagnosticsLogEvent, stats: boolean): void {
 
 function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolean) {
   if (data.type === "server.log") return;
-  console.log("modelIdentifier: " + chalk.greenBright(data.modelIdentifier));
+  console.log("modelIdentifier: " + chalk.green(data.modelIdentifier));
   if (data.type === "llm.prediction.input") {
-    console.log("modelPath: " + chalk.greenBright(data.modelPath));
+    console.log("modelPath: " + chalk.green(data.modelPath));
     console.log("input:");
-    console.log(chalk.greenBright(data.input));
+    console.log(chalk.green(data.input));
   }
   if (data.type === "llm.prediction.output") {
     console.log("output:");
-    console.log(chalk.greenBright(data.output));
+    console.log(chalk.green(data.output));
     if (stats === true) {
       if (data.stats !== undefined) {
         Object.entries(data.stats).forEach(([key, value]) => {
-          console.log(`${key}: ${chalk.greenBright(value)}`);
+          console.log(`${key}: ${chalk.green(value)}`);
         });
       } else {
         console.log("No stats available");

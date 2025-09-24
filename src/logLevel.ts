@@ -56,9 +56,9 @@ export function getLogLevelMap({
   }
   if (numSpecified > 1) {
     throw makePrettyError(
-      chalk.redBright(text`
-        Only one of ${chalk.yellowBright("--logLevel")}, ${chalk.yellowBright("--verbose")}, or
-        ${chalk.yellowBright("--quiet")} can be specified.
+      chalk.red(text`
+        Only one of ${chalk.yellow("--logLevel")}, ${chalk.yellow("--verbose")}, or
+        ${chalk.yellow("--quiet")} can be specified.
       `),
     );
   }

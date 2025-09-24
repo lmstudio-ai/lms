@@ -148,8 +148,8 @@ export const load = addLogLevelOptions(
         makeTitledPrettyError(
           "Path not provided",
           text`
-            The parameter ${chalk.cyanBright("[path]")} is required when using the
-            ${chalk.yellowBright("--exact")} flag.
+            The parameter ${chalk.cyan("[path]")} is required when using the
+            ${chalk.yellow("--exact")} flag.
           `,
         ).message,
       );
@@ -166,13 +166,13 @@ export const load = addLogLevelOptions(
         makeTitledPrettyError(
           "Model not found",
           text`
-            No model found with path being exactly "${chalk.yellowBright(path)}".
+            No model found with path being exactly "${chalk.yellow(path)}".
 
-            To disable exact matching, remove the ${chalk.yellowBright("--exact")} flag.
+            To disable exact matching, remove the ${chalk.yellow("--exact")} flag.
 
             To see a list of all downloaded models, run:
 
-                ${chalk.yellowBright("lms ls")}
+                ${chalk.yellow("lms ls")}
 
             Note, you need to provide the full model path. For example:
 
@@ -207,13 +207,13 @@ export const load = addLogLevelOptions(
         makeTitledPrettyError(
           "Model not found",
           text`
-            No model found that matches path "${chalk.yellowBright(path)}".
+            No model found that matches path "${chalk.yellow(path)}".
 
             To see a list of all downloaded models, run:
 
-                ${chalk.yellowBright("lms ls")}
+                ${chalk.yellow("lms ls")}
 
-            To select a model interactively, remove the ${chalk.yellowBright("--yes")} flag:
+            To select a model interactively, remove the ${chalk.yellow("--yes")} flag:
 
                 lms load
           `,
@@ -233,8 +233,8 @@ export const load = addLogLevelOptions(
       model = await selectModelToLoad(models, modelPaths, "", 4, lastLoadedMap);
     } else if (initialFilteredModels.length === 0) {
       console.info(
-        chalk.redBright(text`
-          ! Cannot find a model matching the provided path (${chalk.yellowBright(path)}). Please
+        chalk.red(text`
+          ! Cannot find a model matching the provided path (${chalk.yellow(path)}). Please
           select one from the list below.
         `),
       );
@@ -297,7 +297,7 @@ async function selectModelToLoad(
   const { selected } = await prompt({
     type: "autocomplete",
     name: "selected",
-    message: chalk.greenBright("Select a model to load") + chalk.gray(" |"),
+    message: chalk.green("Select a model to load") + chalk.gray(" |"),
     initialSearch,
     loop: false,
     pageSize: terminalSize().rows - leaveEmptyLines,
@@ -312,7 +312,7 @@ async function selectModelToLoad(
         const displayName =
           option.string + " " + chalk.gray(`(${formatSizeBytes1000(model.sizeBytes)})`);
         // if (lastLoadedMap.has(model.path)) {
-        //   displayName = chalk.yellowBright("[Recent] ") + displayName;
+        //   displayName = chalk.yellow("[Recent] ") + displayName;
         // }
         return {
           value: model,
@@ -366,11 +366,11 @@ async function loadModel(
   `);
   const info = await llmModel.getModelInfo();
   logger.info(text`
-    To use the model in the API/SDK, use the identifier "${chalk.greenBright(info!.identifier)}".
+    To use the model in the API/SDK, use the identifier "${chalk.green(info!.identifier)}".
   `);
   if (identifier === undefined) {
     logger.info(text`
-      To set a custom identifier, use the ${chalk.yellowBright("--identifier <identifier>")} option.
+      To set a custom identifier, use the ${chalk.yellow("--identifier <identifier>")} option.
     `);
   }
 }
@@ -382,7 +382,7 @@ function printEstimatedResourceUsage(
   estimate: EstimatedResourcesUsage,
   logger: SimpleLogger,
 ) {
-  const colorFunc = estimate.passesGuardrails === true ? chalk.greenBright : chalk.yellow;
+  const colorFunc = estimate.passesGuardrails === true ? chalk.green : chalk.yellow;
   logger.info(`Model: ${model.path}`);
   if (contextLength !== undefined) {
     logger.info(`Context Length: ${contextLength.toLocaleString()}`);

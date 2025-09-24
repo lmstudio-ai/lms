@@ -181,7 +181,7 @@ export const get = addLogLevelOptions(
   }
 
   if (searchTerm !== undefined) {
-    logger.info("Searching for models with the term", chalk.yellowBright(searchTerm));
+    logger.info("Searching for models with the term", chalk.yellow(searchTerm));
   }
 
   const opts = {
@@ -354,12 +354,12 @@ export const get = addLogLevelOptions(
     if (alreadyExisted) {
       logger.infoText`
         You already have this model. You can load it with:
-        ${chalk.yellowBright("\n\n    lms load " + defaultIdentifier)}
+        ${chalk.yellow("\n\n    lms load " + defaultIdentifier)}
       `;
     } else {
       logger.infoText`
         Download completed. You can load the model with:
-        ${chalk.yellowBright("\n\n    lms load " + defaultIdentifier)}
+        ${chalk.yellow("\n\n    lms load " + defaultIdentifier)}
       `;
     }
     logger.info();
@@ -403,7 +403,7 @@ async function askToChooseModel(
             name += "[Staff Pick] ";
           }
           if (model.isExactMatch()) {
-            name += chalk.yellowBright("[Exact Match] ");
+            name += chalk.yellow("[Exact Match] ");
           }
           name += option.string;
           return {
@@ -430,32 +430,32 @@ async function askToChooseDownloadOption(
       type: "list",
       name: "option",
       default: defaultIndex,
-      message: chalk.greenBright("Select an option to download"),
+      message: chalk.green("Select an option to download"),
       loop: false,
       pageSize: terminalSize().rows - 4 - additionalRowsToReserve,
       choices: downloadOptions.map(option => {
         let name = "";
         if (option.quantization !== undefined && option.quantization !== "") {
-          name += chalk.whiteBright(`${option.quantization} `.padEnd(9));
+          name += `${option.quantization} `.padEnd(9);
         }
-        name += chalk.whiteBright(`${formatSizeBytes1000(option.sizeBytes)} `.padStart(11));
+        name += `${formatSizeBytes1000(option.sizeBytes)} `.padStart(11);
         name += chalk.gray(option.name) + " ";
         switch (option.fitEstimation) {
           case "willNotFit":
-            name += chalk.redBright("[Likely too large for this machine]");
+            name += chalk.red("[Likely too large for this machine]");
             break;
           case "fitWithoutGPU":
-            name += chalk.greenBright("[Likely fit]");
+            name += chalk.green("[Likely fit]");
             break;
           case "partialGPUOffload":
-            name += chalk.yellowBright("[Partial GPU offload possible]");
+            name += chalk.yellow("[Partial GPU offload possible]");
             break;
           case "fullGPUOffload":
-            name += chalk.greenBright("[Full GPU offload possible]");
+            name += chalk.green("[Full GPU offload possible]");
             break;
         }
         if (option.isRecommended()) {
-          name += " " + chalk.greenBright(" Recommended ");
+          name += " " + chalk.green(" Recommended ");
         }
         return {
           name,
@@ -497,7 +497,7 @@ function modelToString(model: ArtifactDownloadPlanModelInfo) {
   return result;
 }
 
-const toDownloadText = chalk.yellowBright("🡇 To download:");
+const toDownloadText = chalk.yellow("↓ To download:");
 
 async function artifactDownloadPlanToString(
   plan: ArtifactDownloadPlan,
@@ -509,7 +509,7 @@ async function artifactDownloadPlanToString(
 ) {
   const node = plan.nodes[currentNodeIndex];
   if (node === undefined) {
-    lines.push(chalk.redBright("<Invalid: node not found>"));
+    lines.push(chalk.red("<Invalid: node not found>"));
     return;
   }
   const nodeType = node.type;
@@ -521,21 +521,21 @@ async function artifactDownloadPlanToString(
       const artifactName = `${node.owner}/${node.name}`;
       switch (nodeState) {
         case "pending": {
-          message = `⧗ ${chalk.white(artifactName)} ${chalk.white("- Pending...")}`;
+          message = `⧗ ${artifactName} - Pending...`;
           break;
         }
         case "fetching": {
-          message = `${spinnerFrames[(spinnerFrame + currentNodeIndex) % spinnerFrames.length]} ${chalk.whiteBright(artifactName)} ${chalk.gray("- Resolving...")}`;
+          message = `${spinnerFrames[(spinnerFrame + currentNodeIndex) % spinnerFrames.length]} ${artifactName} ${chalk.gray("- Resolving...")}`;
           break;
         }
         case "satisfied": {
-          message = `${chalk.greenBright("✓ Satisfied")} ${chalk.whiteBright(artifactName)}`;
+          message = `${chalk.green("✓ Satisfied")} ${artifactName}`;
           break;
         }
         case "completed": {
           message =
             `${toDownloadText} ` +
-            `${node.artifactType} ${chalk.whiteBright(artifactName)} - ` +
+            `${node.artifactType} ${artifactName} - ` +
             `${formatSizeBytesWithColor1000(node.sizeBytes ?? 0)}`;
           break;
         }
@@ -565,7 +565,7 @@ async function artifactDownloadPlanToString(
       const nodeState = node.state;
       switch (nodeState) {
         case "pending": {
-          message = `⧗ ${chalk.white("Concrete Model")} ${chalk.white("- Pending...")}`;
+          message = `⧗ Concrete Model - Pending...`;
           break;
         }
         case "fetching": {
@@ -575,20 +575,20 @@ async function artifactDownloadPlanToString(
         case "satisfied": {
           const owned = node.alreadyOwned;
           if (owned === undefined) {
-            message = `${chalk.greenBright("✓ Satisfied")} ${chalk.whiteBright("Unknown")}`;
+            message = `${chalk.green("✓ Satisfied")} Unknown`;
           } else {
-            message = `${chalk.greenBright("✓ Satisfied")} ${chalk.whiteBright(modelToString(owned))}`;
+            message = `${chalk.green("✓ Satisfied")} ${modelToString(owned)}`;
           }
           break;
         }
         case "completed": {
           const selected = node.selected;
           if (selected === undefined) {
-            message = `${toDownloadText} ${chalk.whiteBright("Unknown")}`;
+            message = `${toDownloadText} Unknown`;
           } else {
             message =
               `${toDownloadText} ` +
-              `${chalk.whiteBright(modelToString(selected))} - ` +
+              `${modelToString(selected)} - ` +
               `${formatSizeBytesWithColor1000(selected.sizeBytes)}`;
           }
           break;
@@ -644,13 +644,13 @@ export async function downloadArtifact(
       if (downloadPlan.downloadSizeBytes !== 0) {
         if (yes) {
           lines.push(
-            chalk.yellowBright(
+            chalk.yellow(
               `Resolution completed. Downloading ${formatSizeBytes1000(downloadPlan.downloadSizeBytes)}...`,
             ),
           );
         } else {
           lines.push(
-            chalk.yellowBright(
+            chalk.yellow(
               `About to download ${formatSizeBytes1000(downloadPlan.downloadSizeBytes)}.`,
             ),
           );

@@ -101,9 +101,9 @@ export const create = addLogLevelOptions(
 
   console.info(
     text`
-        ${chalk.greenBright.underline(" Welcome to LM Studio Interactive Project Creator ")}
+        ${chalk.green.underline(" Welcome to LM Studio Interactive Project Creator ")}
 
-        ${chalk.white("Select a scaffold to use from the list below.")}
+       Select a scaffold to use from the list below.
       `,
   );
 
@@ -149,7 +149,7 @@ async function selectScaffold(
   const { selected } = await prompt({
     type: "autocomplete",
     name: "selected",
-    message: chalk.greenBright("Select a scaffold to use") + chalk.gray(" |"),
+    message: chalk.green("Select a scaffold to use") + chalk.gray(" |"),
     initialSearch,
     loop: false,
     pageSize: terminalSize().rows - leaveEmptyLines - 3,
@@ -358,7 +358,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
       .replaceAll("</hl>", "\x1b[39m");
     switch (type) {
       case "title":
-        motdLines.push(chalk.greenBright(`  ${message}  `));
+        motdLines.push(chalk.green(`  ${message}  `));
         break;
       case "regular":
         motdLines.push(message);
@@ -368,7 +368,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
           message
             .trim()
             .split("\n")
-            .map(msg => "    " + chalk.yellowBright(msg))
+            .map(msg => "    " + chalk.yellow(msg))
             .join("\n"),
         );
         break;
