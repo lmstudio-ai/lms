@@ -287,9 +287,7 @@ export const chat = addLogLevelOptions(
   let llm: LLM;
   if (model !== undefined && model !== "") {
     try {
-      llm = await client.llm.model(model, {
-        ttl,
-      });
+      llm = await loadModelWithProgress(client, model, ttl, logger);
     } catch (e) {
       logger.error(`Model "${model}" not found, check available models with:\n       lms ls`);
       process.exit(1);
@@ -401,11 +399,8 @@ export const chat = addLogLevelOptions(
       }
       if (!selectedModel.isDownloaded) {
         if (selectedModel.inModelCatalog) {
-          // Download artifact from hub
           const [owner, name] = selectedModel.name.split("/");
           await downloadArtifact(client, logger, owner, name, yes ?? false);
-          // Wait for model indexing to complete after download
-          await new Promise(resolve => setTimeout(resolve, 500));
         } else {
           // It is not a model from the catalog, so must be a direct model which is not downloaded,
           // unexpected path as only cataloged models are offered to download
