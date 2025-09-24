@@ -401,11 +401,33 @@ export const chat = addLogLevelOptions(
       }
       if (!selectedModel.isDownloaded) {
         if (selectedModel.inModelCatalog) {
-          // Download artifact from hub
+          const beforeKeys = new Set(
+            (await client.system.listDownloadedModels()).map(m => m.modelKey),
+          );
           const [owner, name] = selectedModel.name.split("/");
           await downloadArtifact(client, logger, owner, name, yes ?? false);
           // Wait for model indexing to complete after download
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise<void>(resolve => {
+            const interval = setInterval(async () => {
+              const afterKeys = new Set(
+                (await client.system.listDownloadedModels()).map(m => m.modelKey),
+              );
+
+              // If the sets differ in size or membership, we're done
+              if (
+                afterKeys.size !== beforeKeys.size ||
+                [...afterKeys].some(k => !beforeKeys.has(k))
+              ) {
+                clearInterval(interval);
+                resolve();
+              }
+            }, 500);
+
+            setTimeout(() => {
+              clearInterval(interval);
+              resolve();
+            }, 30_000); // safety timeout
+          });
         } else {
           // It is not a model from the catalog, so must be a direct model which is not downloaded,
           // unexpected path as only cataloged models are offered to download
