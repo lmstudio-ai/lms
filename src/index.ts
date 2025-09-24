@@ -25,10 +25,11 @@ if (process.argv.length === 2) {
   console.info("Usage");
 }
 
-const HELP_MESSAGE_PADDING_LEFT = 4; // Configure help formatting with max width and left padding
+const HELP_MESSAGE_WIDTH = 100;
+const HELP_MESSAGE_PADDING_LEFT = 4;
+
 const helpConfig = {
-  // Set help width at 100 columns for readability
-  helpWidth: 100,
+  helpWidth: HELP_MESSAGE_WIDTH,
   subcommandTerm: (cmd: { name(): string }) =>
     `${cmd.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + cmd.name().length, " "),
   subcommandDescription: (cmd: { description(): string }) => cmd.description(),
