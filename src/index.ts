@@ -25,7 +25,24 @@ if (process.argv.length === 2) {
   console.info("Usage");
 }
 
+const HELP_MESSAGE_WIDTH = 100;
+const HELP_MESSAGE_PADDING_LEFT = 4;
+
+const helpConfig = {
+  helpWidth: HELP_MESSAGE_WIDTH,
+  subcommandTerm: (cmd: { name(): string }) =>
+    `${cmd.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + cmd.name().length, " "),
+  subcommandDescription: (cmd: { description(): string }) => cmd.description(),
+  optionTerm: (option: { flags: string }) =>
+    `${option.flags}`.padStart(HELP_MESSAGE_PADDING_LEFT + option.flags.length, " "),
+  optionDescription: (option: { description?: string }) => option.description ?? "",
+  argumentTerm: (arg: { name(): string }) =>
+    `${arg.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + arg.name().length, " "),
+  argumentDescription: (arg: { description?: string }) => arg.description ?? "",
+};
+
 program.name("lms").description("LM Studio CLI");
+program.configureHelp(helpConfig);
 
 program.commandsGroup("Manage Models:");
 program.addCommand(get);
@@ -53,6 +70,10 @@ program.addCommand(log);
 program.addCommand(runtime);
 program.addCommand(status);
 program.addCommand(version);
+
+program.commands.forEach(cmd => {
+  cmd.configureHelp(helpConfig);
+});
 
 program.parseAsync(process.argv).catch((error: any) => {
   if (error instanceof UserInputError) {
