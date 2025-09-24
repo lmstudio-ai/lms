@@ -44,31 +44,6 @@ const helpConfig = {
 program.name("lms").description("LM Studio CLI");
 program.configureHelp(helpConfig);
 
-// Configure help for all subcommands
-[
-  get,
-  importCmd,
-  ls,
-  chat,
-  load,
-  ps,
-  server,
-  unload,
-  clone,
-  create,
-  dev,
-  login,
-  push,
-  bootstrap,
-  flags,
-  log,
-  runtime,
-  status,
-  version,
-].forEach(cmd => {
-  cmd.configureHelp(helpConfig);
-});
-
 program.commandsGroup("Manage Models:");
 program.addCommand(get);
 program.addCommand(importCmd);
@@ -95,6 +70,10 @@ program.addCommand(log);
 program.addCommand(runtime);
 program.addCommand(status);
 program.addCommand(version);
+
+program.commands.forEach(cmd => {
+  cmd.configureHelp(helpConfig);
+});
 
 program.parseAsync(process.argv).catch((error: any) => {
   if (error instanceof UserInputError) {
