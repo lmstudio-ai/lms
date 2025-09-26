@@ -182,7 +182,7 @@ export const ls = addLogLevelOptions(
 
         const logger = createLogger(parentOptions);
         const client = await createClient(logger, parentOptions);
-        const full = parentOptions["full"] === true;
+        const full = this.opts()["full"] === true;
 
         await listEngines(logger, client, {
           useFull: full,
