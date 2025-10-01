@@ -28,7 +28,7 @@ export class PluginProcess {
 
   private async startProcess() {
     this.status = "starting";
-    const { unregister, clientIdentifier, clientPasskey } =
+    const { unregister, clientIdentifier, clientPasskey, baseUrl, denoBrokerIpcPath } =
       await this.client.plugins.registerDevelopmentPlugin(this.registerDevelopmentPluginOpts);
     if (this.firstTime) {
       const manifest = this.registerDevelopmentPluginOpts.manifest;
@@ -42,12 +42,20 @@ export class PluginProcess {
       this.firstTime = false;
     }
     this.unregister = unregister;
+    let env: Record<string, string> = {
+      FORCE_COLOR: "1",
+      LMS_PLUGIN_CLIENT_IDENTIFIER: clientIdentifier,
+      LMS_PLUGIN_CLIENT_PASSKEY: clientPasskey,
+      LMS_PLUGIN_BASE_URL: baseUrl,
+    };
+    if (denoBrokerIpcPath !== undefined) {
+      env = {
+        ...env,
+        DENO_PERMISSION_BROKER_PATH: denoBrokerIpcPath,
+      };
+    }
     this.currentProcess = this.binary.spawn(this.args, {
-      env: {
-        FORCE_COLOR: "1",
-        LMS_PLUGIN_CLIENT_IDENTIFIER: clientIdentifier,
-        LMS_PLUGIN_CLIENT_PASSKEY: clientPasskey,
-      },
+      env,
       cwd: this.cwd,
     });
     this.currentProcess.stdout.on("data", data => this.logger.info(data.toString("utf-8").trim()));

@@ -112,12 +112,6 @@ async function handleDevServer(
       break;
     case "deno": {
       await ensureNpmDependencies(projectPath, logger, client);
-      // eslint bug - it cannot tell enabled is already a boolean when sandbox is not undefined.
-      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-      if (manifest.sandbox !== undefined && manifest.sandbox.enabled) {
-        logger.error("Sandboxing is not supported yet. Stay tuned for updates.");
-        process.exit(1);
-      }
       logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
       await startDenoDevServer(projectPath, manifest, logger, client, { noNotify });
       break;
@@ -166,9 +160,16 @@ async function startDenoDevServer(
   { noNotify }: { noNotify: boolean },
 ) {
   const watcher = new DenoPluginRunnerWatcher(projectPath, logger);
+  let denoFlags = ["--quiet"];
+  if (manifest.sandbox === undefined || !manifest.sandbox.enabled) {
+    denoFlags = ["--allow-all", ...denoFlags];
+  } else {
+    // If sandboxing is enabled, we don't pass in the --allow-all. Inside the PluginProcess, it will
+    // receive the broker path from LM Studio and pass it to deno via an environment variable.
+  }
   const pluginProcess = new PluginProcess(
     new UtilBinary("deno"),
-    ["run", "--allow-all", "--quiet", watcher.entryFilePath],
+    ["run", ...denoFlags, watcher.entryFilePath],
     projectPath,
     client,
     { manifest },
