@@ -42,7 +42,7 @@ export class PluginProcess {
       this.firstTime = false;
     }
     this.unregister = unregister;
-    let env: Record<string, string> = {
+    let env: Record<string, string | undefined> = {
       FORCE_COLOR: "1",
       LMS_PLUGIN_CLIENT_IDENTIFIER: clientIdentifier,
       LMS_PLUGIN_CLIENT_PASSKEY: clientPasskey,
