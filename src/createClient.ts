@@ -102,7 +102,7 @@ async function isLocalServerAtPortLMStudioServerOrThrow(port: number) {
   return port;
 }
 
-async function tryFindLocalAPIServer(): Promise<number | null> {
+export async function tryFindLocalAPIServer(): Promise<number | null> {
   return await Promise.any(apiServerPorts.map(isLocalServerAtPortLMStudioServerOrThrow)).then(
     port => port,
     () => null,
