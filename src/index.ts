@@ -66,7 +66,7 @@ program.addCommand(push);
 
 program.commandsGroup("System Management:");
 program.addCommand(bootstrap);
-program.addCommand(daemon);
+program.addCommand(daemon, { hidden: true });
 program.addCommand(flags);
 program.addCommand(log);
 program.addCommand(runtime);
