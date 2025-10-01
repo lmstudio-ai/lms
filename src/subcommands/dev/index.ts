@@ -12,7 +12,8 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { exists } from "../../exists.js";
 import { findProjectFolderOrExit } from "../../findProjectFolder.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
-import { PluginProcess } from "./PluginProcess.js";
+import { DenoPluginProcess } from "./DenoPluginProcess.js";
+import { NodePluginProcess } from "./NodePluginProcess.js";
 
 export const dev = addLogLevelOptions(
   addCreateClientOptions(
@@ -108,7 +109,7 @@ async function handleDevServer(
     case "node":
       await ensureNpmDependencies(projectPath, logger, client);
       logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
-      await startNodeDevServer(projectPath, manifest, logger, client, { noNotify });
+      await startNodeDevServer(projectPath, logger, client, { noNotify });
       break;
     case "deno": {
       await ensureNpmDependencies(projectPath, logger, client);
@@ -129,22 +130,13 @@ async function handleDevServer(
 
 async function startNodeDevServer(
   projectPath: string,
-  manifest: PluginManifest,
   logger: SimpleLogger,
   client: LMStudioClient,
   { noNotify }: { noNotify: boolean },
 ) {
   const esbuild = new UtilBinary("esbuild");
   const watcher = new NodePluginRunnerWatcher(esbuild, cwd(), logger);
-  const pluginProcess = new PluginProcess(
-    new UtilBinary("node"),
-    ["--enable-source-maps", join(".lmstudio", "dev.js")],
-    projectPath,
-    client,
-    { manifest },
-    logger,
-    { noNotify },
-  );
+  const pluginProcess = new NodePluginProcess(projectPath, client, logger, { noNotify });
 
   watcher.updatedEvent.subscribe(() => {
     pluginProcess.run();
@@ -160,22 +152,9 @@ async function startDenoDevServer(
   { noNotify }: { noNotify: boolean },
 ) {
   const watcher = new DenoPluginRunnerWatcher(projectPath, logger);
-  let denoFlags = ["--quiet"];
-  if (manifest.sandbox === undefined || !manifest.sandbox.enabled) {
-    denoFlags = ["--allow-all", ...denoFlags];
-  } else {
-    // If sandboxing is enabled, we don't pass in the --allow-all. Inside the PluginProcess, it will
-    // receive the broker path from LM Studio and pass it to deno via an environment variable.
-  }
-  const pluginProcess = new PluginProcess(
-    new UtilBinary("deno"),
-    ["run", ...denoFlags, watcher.entryFilePath],
-    projectPath,
-    client,
-    { manifest },
-    logger,
-    { noNotify },
-  );
+  const pluginProcess = new DenoPluginProcess(projectPath, client, watcher.entryFilePath, logger, {
+    noNotify,
+  });
 
   watcher.updatedEvent.subscribe(() => {
     pluginProcess.run();
