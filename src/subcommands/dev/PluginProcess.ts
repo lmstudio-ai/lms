@@ -1,20 +1,24 @@
 import { SimpleLogger } from "@lmstudio/lms-common";
 import { type UtilBinary } from "@lmstudio/lms-es-plugin-runner";
-import { type LMStudioClient, type RegisterDevelopmentPluginOpts } from "@lmstudio/sdk";
+import { pluginManifestSchema } from "@lmstudio/lms-shared-types";
+import { type LMStudioClient, type PluginManifest, type PluginRunnerType } from "@lmstudio/sdk";
 import { type ChildProcessWithoutNullStreams } from "child_process";
+import { readFile } from "fs/promises";
 
 type PluginProcessStatus = "stopped" | "starting" | "running" | "restarting";
-interface PluginProcessOpts {
+export interface PluginProcessOpts {
   noNotify?: boolean;
 }
 
-export class PluginProcess {
-  public constructor(
-    private readonly binary: UtilBinary,
-    private readonly args: Array<string>,
+export abstract class PluginProcess {
+  protected abstract binary: UtilBinary;
+  protected abstract runnerType: PluginRunnerType;
+  protected abstract getArgs(pluginManifest: PluginManifest): Array<string>;
+
+  protected constructor(
     private readonly cwd: string,
     private readonly client: LMStudioClient,
-    private readonly registerDevelopmentPluginOpts: RegisterDevelopmentPluginOpts,
+    private readonly manifestFilePath: string,
     private readonly logger: SimpleLogger,
     private readonly opts: PluginProcessOpts = {},
   ) {}
@@ -28,10 +32,29 @@ export class PluginProcess {
 
   private async startProcess() {
     this.status = "starting";
-    const { unregister, clientIdentifier, clientPasskey } =
-      await this.client.plugins.registerDevelopmentPlugin(this.registerDevelopmentPluginOpts);
+    let manifest: PluginManifest;
+
+    try {
+      const manifestContent = await readFile(this.manifestFilePath, "utf-8");
+      manifest = pluginManifestSchema.parse(JSON.parse(manifestContent));
+    } catch (error) {
+      this.serverLogger.error(`Failed to read or parse manifest file.`, error);
+      this.status = "stopped";
+      return;
+    }
+
+    if (manifest.runner !== this.runnerType) {
+      this.serverLogger.errorText`
+        "lms dev" currently does not support changing the runner type dynamically. Please re-run
+        "lms dev".
+      `;
+      this.status = "stopped";
+      return;
+    }
+
+    const { unregister, clientIdentifier, clientPasskey, baseUrl, denoBrokerIpcPath } =
+      await this.client.plugins.registerDevelopmentPlugin({ manifest });
     if (this.firstTime) {
-      const manifest = this.registerDevelopmentPluginOpts.manifest;
       const identifier = `${manifest.owner}/${manifest.name}`;
       if (this.opts.noNotify !== true) {
         await this.client.system.notify({
@@ -42,12 +65,20 @@ export class PluginProcess {
       this.firstTime = false;
     }
     this.unregister = unregister;
-    this.currentProcess = this.binary.spawn(this.args, {
-      env: {
-        FORCE_COLOR: "1",
-        LMS_PLUGIN_CLIENT_IDENTIFIER: clientIdentifier,
-        LMS_PLUGIN_CLIENT_PASSKEY: clientPasskey,
-      },
+    let env: Record<string, string | undefined> = {
+      FORCE_COLOR: "1",
+      LMS_PLUGIN_CLIENT_IDENTIFIER: clientIdentifier,
+      LMS_PLUGIN_CLIENT_PASSKEY: clientPasskey,
+      LMS_PLUGIN_BASE_URL: baseUrl,
+    };
+    if (denoBrokerIpcPath !== undefined) {
+      env = {
+        ...env,
+        DENO_PERMISSION_BROKER_PATH: denoBrokerIpcPath,
+      };
+    }
+    this.currentProcess = this.binary.spawn(this.getArgs(manifest), {
+      env,
       cwd: this.cwd,
     });
     this.currentProcess.stdout.on("data", data => this.logger.info(data.toString("utf-8").trim()));

@@ -12,7 +12,8 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { exists } from "../../exists.js";
 import { findProjectFolderOrExit } from "../../findProjectFolder.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
-import { PluginProcess } from "./PluginProcess.js";
+import { DenoPluginProcess } from "./DenoPluginProcess.js";
+import { NodePluginProcess } from "./NodePluginProcess.js";
 
 export const dev = addLogLevelOptions(
   addCreateClientOptions(
@@ -108,16 +109,10 @@ async function handleDevServer(
     case "node":
       await ensureNpmDependencies(projectPath, logger, client);
       logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
-      await startNodeDevServer(projectPath, manifest, logger, client, { noNotify });
+      await startNodeDevServer(projectPath, logger, client, { noNotify });
       break;
     case "deno": {
       await ensureNpmDependencies(projectPath, logger, client);
-      // eslint bug - it cannot tell enabled is already a boolean when sandbox is not undefined.
-      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-      if (manifest.sandbox !== undefined && manifest.sandbox.enabled) {
-        logger.error("Sandboxing is not supported yet. Stay tuned for updates.");
-        process.exit(1);
-      }
       logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
       await startDenoDevServer(projectPath, manifest, logger, client, { noNotify });
       break;
@@ -135,22 +130,13 @@ async function handleDevServer(
 
 async function startNodeDevServer(
   projectPath: string,
-  manifest: PluginManifest,
   logger: SimpleLogger,
   client: LMStudioClient,
   { noNotify }: { noNotify: boolean },
 ) {
   const esbuild = new UtilBinary("esbuild");
   const watcher = new NodePluginRunnerWatcher(esbuild, cwd(), logger);
-  const pluginProcess = new PluginProcess(
-    new UtilBinary("node"),
-    ["--enable-source-maps", join(".lmstudio", "dev.js")],
-    projectPath,
-    client,
-    { manifest },
-    logger,
-    { noNotify },
-  );
+  const pluginProcess = new NodePluginProcess(projectPath, client, logger, { noNotify });
 
   watcher.updatedEvent.subscribe(() => {
     pluginProcess.run();
@@ -166,15 +152,9 @@ async function startDenoDevServer(
   { noNotify }: { noNotify: boolean },
 ) {
   const watcher = new DenoPluginRunnerWatcher(projectPath, logger);
-  const pluginProcess = new PluginProcess(
-    new UtilBinary("deno"),
-    ["run", "--allow-all", "--quiet", watcher.entryFilePath],
-    projectPath,
-    client,
-    { manifest },
-    logger,
-    { noNotify },
-  );
+  const pluginProcess = new DenoPluginProcess(projectPath, client, watcher.entryFilePath, logger, {
+    noNotify,
+  });
 
   watcher.updatedEvent.subscribe(() => {
     pluginProcess.run();
