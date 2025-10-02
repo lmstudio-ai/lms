@@ -698,11 +698,13 @@ export async function downloadArtifact(
   clearInterval(autoReprintInterval);
 
   if (downloadPlan.downloadSizeBytes === 0) {
+    downloadPlanner[Symbol.dispose]();
     process.exit(0);
   }
   if (!yes) {
     const confirmed = await askQuestion("Continue?");
     if (!confirmed) {
+      downloadPlanner[Symbol.dispose]();
       process.exit(1);
     }
   }
@@ -717,6 +719,7 @@ export async function downloadArtifact(
   const sigintListener = () => {
     process.removeListener("SIGINT", sigintListener);
     process.once("SIGINT", () => {
+      downloadPlanner[Symbol.dispose]();
       process.exit(1);
     });
     pb.stopWithoutClear();
@@ -726,6 +729,7 @@ export async function downloadArtifact(
     askQuestion("Continue to download in the background?").then(confirmed => {
       if (confirmed) {
         logger.info("Download will continue in the background.");
+        downloadPlanner[Symbol.dispose]();
         process.exit(1);
       } else {
         logger.warn("Download canceled.");
@@ -754,6 +758,7 @@ export async function downloadArtifact(
     });
     pb.stopIfNotStopped();
     if (canceled) {
+      downloadPlanner[Symbol.dispose]();
       process.exit(1);
     }
     process.removeListener("SIGINT", sigintListener);
@@ -763,6 +768,7 @@ export async function downloadArtifact(
     logger.info();
   } catch (e: any) {
     if (e.name === "AbortError") {
+      downloadPlanner[Symbol.dispose]();
       process.exit(1);
     } else {
       throw e;
