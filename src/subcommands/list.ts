@@ -201,14 +201,34 @@ export const ls = addCreateClientOptions(
     return;
   }
 
-  const allDownloadedModels = await client.system.listDownloadedModels();
-  const loadedModels = await client.llm.listLoaded();
-
   if (detailed) {
     logger.warn(
       chalk.yellow("The '--detailed' flag is deprecated. Output is the same as 'lms ls'"),
     );
   }
+
+  if (modelKey !== undefined) {
+    const variants = await client.system.listDownloadedModelVariants(modelKey);
+
+    if (json) {
+      console.info(JSON.stringify(variants));
+      return;
+    }
+
+    const loadedModels = await client.llm.listLoaded();
+    const firstVariantType = variants[0]?.type;
+    const variantTitle = firstVariantType === "embedding" ? "EMBEDDING" : "LLM";
+
+    console.info();
+    console.info(`Listing variants for ${modelKey}:`);
+    console.info();
+    printDownloadedModelsTable(variantTitle, variants, loadedModels);
+    console.info();
+    return;
+  }
+
+  const allDownloadedModels = await client.system.listDownloadedModels();
+  const loadedModels = await client.llm.listLoaded();
 
   const originalModelsCount = allDownloadedModels.length;
 
@@ -227,23 +247,6 @@ export const ls = addCreateClientOptions(
   const filteredModelsCount = filteredDownloadedModels.length;
 
   if (json) {
-    if (modelKey !== undefined) {
-      const targetModel = allDownloadedModels.find(model => model.modelKey === modelKey);
-      if (targetModel === undefined) {
-        logger.error(chalk.red(`Cannot find model "${modelKey}".`));
-        process.exit(1);
-        return;
-      }
-      if (targetModel.variants === undefined) {
-        logger.error(chalk.red(`Model "${modelKey}" has no variants.`));
-        process.exit(1);
-        return;
-      }
-      const variants = await client.system.listDownloadedModelVariants(targetModel.modelKey);
-      console.info(JSON.stringify(variants));
-      return;
-    }
-
     if (variantsOption) {
       const modelsWithVariants = filteredDownloadedModels.filter(model => {
         if (model.variants === undefined) {
@@ -262,28 +265,6 @@ export const ls = addCreateClientOptions(
     }
 
     console.info(JSON.stringify(filteredDownloadedModels));
-    return;
-  }
-
-  if (modelKey !== undefined) {
-    const targetModel = allDownloadedModels.find(model => model.modelKey === modelKey);
-    if (targetModel === undefined) {
-      logger.error(chalk.red(`Model "${modelKey}" is not downloaded.`));
-      process.exit(1);
-      return;
-    }
-    if (targetModel.variants === undefined || targetModel.variants.length === 0) {
-      logger.error(chalk.red(`Model "${modelKey}" has no variants.`));
-      process.exit(1);
-      return;
-    }
-    const variants = await client.system.listDownloadedModelVariants(targetModel.modelKey);
-    console.info();
-    console.info(`Listing variants for ${targetModel.modelKey}:`);
-    console.info();
-    const variantTitle = targetModel.type === "embedding" ? "EMBEDDING" : "LLM";
-    printDownloadedModelsTable(variantTitle, variants, loadedModels);
-    console.info();
     return;
   }
 
