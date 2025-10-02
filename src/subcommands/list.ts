@@ -5,9 +5,9 @@ import chalk from "chalk";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
 import { addCreateClientOptions, createClient } from "../createClient.js";
+import { formatTimeLean } from "../formatElapsedTime.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
-import { formatTimeLean } from "../formatElapsedTime.js";
 
 function loadedCheck(count: number) {
   if (count === 0) {
@@ -26,27 +26,123 @@ function architecture(architecture?: string) {
   return architectureInfoLookup.find(architecture).name;
 }
 
+function formatModelKeyWithVariantCount(model: ModelInfo) {
+  if (model.variants === undefined) {
+    return model.modelKey;
+  }
+  const variantCount = model.variants.length;
+  const variantLabel = variantCount === 1 ? "variant" : "variants";
+  return `${model.modelKey}${chalk.gray(` (${variantCount} ${variantLabel})`)}`;
+}
+
 function printDownloadedModelsTable(
   title: string,
   downloadedModels: Array<ModelInfo>,
   loadedModels: Array<{ path: string; identifier: string }>,
 ) {
-  const downloadedModelsAndHeadlines = downloadedModels
-    .map(model => {
-      return {
-        path: model.modelKey,
-        sizeBytes: formatSizeBytes1000(model.sizeBytes),
-        params: model.paramsString,
-        arch: architecture(model.architecture),
-        loaded: loadedCheck(
-          loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
-        ),
-      };
-    })
-    .sort((a, b) => a.path.localeCompare(b.path));
+  const sortedModels = [...downloadedModels].sort((firstModel, secondModel) =>
+    firstModel.modelKey.localeCompare(secondModel.modelKey),
+  );
+  const downloadedModelsAndHeadlines = sortedModels.map(model => {
+    return {
+      path: formatModelKeyWithVariantCount(model),
+      sizeBytes: formatSizeBytes1000(model.sizeBytes),
+      params: model.paramsString,
+      arch: architecture(model.architecture),
+      loaded: loadedCheck(
+        loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
+      ),
+    };
+  });
 
   console.info(
     columnify(downloadedModelsAndHeadlines, {
+      columns: ["path", "params", "arch", "sizeBytes", "loaded"],
+      config: {
+        loaded: {
+          headingTransform: () => "",
+          align: "left",
+        },
+        path: {
+          headingTransform: () => chalk.grey(title),
+        },
+        params: {
+          headingTransform: () => chalk.grey("PARAMS"),
+          align: "left",
+        },
+        arch: {
+          headingTransform: () => chalk.grey("ARCH"),
+          align: "left",
+        },
+        sizeBytes: {
+          headingTransform: () => chalk.grey("SIZE"),
+          align: "left",
+        },
+      },
+      preserveNewLines: true,
+      columnSplitter: "    ",
+    }),
+  );
+}
+
+interface PrintModelsWithVariantRowsOpts {
+  title: string;
+  baseModels: Array<ModelInfo>;
+  loadedModels: Array<{ path: string; identifier: string }>;
+  variantInfosByModelKey: Map<string, Array<ModelInfo>>;
+}
+
+function printModelsWithVariantRows({
+  title,
+  baseModels,
+  loadedModels,
+  variantInfosByModelKey,
+}: PrintModelsWithVariantRowsOpts) {
+  const sortedBaseModels = [...baseModels].sort((firstModel, secondModel) =>
+    firstModel.modelKey.localeCompare(secondModel.modelKey),
+  );
+
+  const rows = sortedBaseModels.flatMap(model => {
+    const variantCount = model.variants === undefined ? 0 : model.variants.length;
+    const basePath = formatModelKeyWithVariantCount(model);
+    const baseRow =
+      variantCount === 0
+        ? {
+            path: basePath,
+            params: model.paramsString,
+            arch: architecture(model.architecture),
+            sizeBytes: formatSizeBytes1000(model.sizeBytes),
+            loaded: loadedCheck(
+              loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
+            ),
+          }
+        : { path: basePath };
+
+    const variantInfos = variantInfosByModelKey.get(model.modelKey);
+    if (variantInfos === undefined) {
+      return [baseRow];
+    }
+
+    const selectedVariantKey = model.selectedVariant;
+    const variantRows = variantInfos.map(variantInfo => {
+      const isSelectedVariant =
+        selectedVariantKey !== undefined && selectedVariantKey === variantInfo.modelKey;
+      return {
+        path: `${chalk.gray(isSelectedVariant ? " * " : "   ")}${variantInfo.modelKey}`,
+        params: variantInfo.paramsString,
+        arch: architecture(variantInfo.architecture),
+        sizeBytes: formatSizeBytes1000(variantInfo.sizeBytes),
+        loaded: loadedCheck(
+          loadedModels.filter(loadedModel => loadedModel.path === variantInfo.path).length,
+        ),
+      };
+    });
+
+    return [baseRow, ...variantRows];
+  });
+
+  console.info(
+    columnify(rows, {
       columns: ["path", "params", "arch", "sizeBytes", "loaded"],
       config: {
         loaded: {
@@ -80,18 +176,32 @@ export const ls = addCreateClientOptions(
     new Command()
       .name("ls")
       .description("List all downloaded models")
+      .argument("[modelKey]", "Show variants for the provided model key")
       .option("--llm", "Show only LLM models")
       .option("--embedding", "Show only embedding models")
       .option("--detailed", "[Deprecated] Show detailed view with grouping")
+      .option("--variants", "Show variants for all models")
       .option("--json", "Outputs in JSON format to stdout"),
   ),
-).action(async options => {
+).action(async (modelKey: string | undefined, options) => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
 
-  const { llm = false, embedding = false, detailed = false, json = false } = options;
+  const {
+    llm = false,
+    embedding = false,
+    detailed = false,
+    variants: variantsOption = false,
+    json = false,
+  } = options;
 
-  let downloadedModels = await client.system.listDownloadedModels();
+  if (modelKey !== undefined && variantsOption) {
+    logger.error(chalk.red("Cannot combine a model key argument with --variants."));
+    process.exit(1);
+    return;
+  }
+
+  const allDownloadedModels = await client.system.listDownloadedModels();
   const loadedModels = await client.llm.listLoaded();
 
   if (detailed) {
@@ -100,8 +210,9 @@ export const ls = addCreateClientOptions(
     );
   }
 
-  const originalModelsCount = downloadedModels.length;
+  const originalModelsCount = allDownloadedModels.length;
 
+  let filteredDownloadedModels = allDownloadedModels;
   if (llm || embedding) {
     const allowedTypes = new Set<string>();
     if (llm) {
@@ -110,17 +221,73 @@ export const ls = addCreateClientOptions(
     if (embedding) {
       allowedTypes.add("embedding");
     }
-    downloadedModels = downloadedModels.filter(model => allowedTypes.has(model.type));
+    filteredDownloadedModels = allDownloadedModels.filter(model => allowedTypes.has(model.type));
   }
 
-  const afterFilteringModelsCount = downloadedModels.length;
+  const filteredModelsCount = filteredDownloadedModels.length;
 
   if (json) {
-    console.info(JSON.stringify(downloadedModels));
+    if (modelKey !== undefined) {
+      const targetModel = allDownloadedModels.find(model => model.modelKey === modelKey);
+      if (targetModel === undefined) {
+        logger.error(chalk.red(`Cannot find model "${modelKey}".`));
+        process.exit(1);
+        return;
+      }
+      if (targetModel.variants === undefined) {
+        logger.error(chalk.red(`Model "${modelKey}" has no variants.`));
+        process.exit(1);
+        return;
+      }
+      const variants = await client.system.listDownloadedModelVariants(targetModel.modelKey);
+      console.info(JSON.stringify(variants));
+      return;
+    }
+
+    if (variantsOption) {
+      const modelsWithVariants = filteredDownloadedModels.filter(model => {
+        if (model.variants === undefined) {
+          return false;
+        }
+        return model.variants.length > 0;
+      });
+      const variantGroups = await Promise.all(
+        modelsWithVariants.map(async model => {
+          const variants = await client.system.listDownloadedModelVariants(model.modelKey);
+          return { model, variants };
+        }),
+      );
+      console.info(JSON.stringify(variantGroups));
+      return;
+    }
+
+    console.info(JSON.stringify(filteredDownloadedModels));
     return;
   }
 
-  if (afterFilteringModelsCount === 0) {
+  if (modelKey !== undefined) {
+    const targetModel = allDownloadedModels.find(model => model.modelKey === modelKey);
+    if (targetModel === undefined) {
+      logger.error(chalk.red(`Model "${modelKey}" is not downloaded.`));
+      process.exit(1);
+      return;
+    }
+    if (targetModel.variants === undefined || targetModel.variants.length === 0) {
+      logger.error(chalk.red(`Model "${modelKey}" has no variants.`));
+      process.exit(1);
+      return;
+    }
+    const variants = await client.system.listDownloadedModelVariants(targetModel.modelKey);
+    console.info();
+    console.info(`Listing variants for ${targetModel.modelKey}:`);
+    console.info();
+    const variantTitle = targetModel.type === "embedding" ? "EMBEDDING" : "LLM";
+    printDownloadedModelsTable(variantTitle, variants, loadedModels);
+    console.info();
+    return;
+  }
+
+  if (filteredModelsCount === 0) {
     if (originalModelsCount === 0) {
       console.info(chalk.red("You have not downloaded any models yet."));
     } else {
@@ -132,26 +299,68 @@ export const ls = addCreateClientOptions(
   }
 
   let totalSizeBytes = 0;
-  for (const model of downloadedModels) {
+  for (const model of filteredDownloadedModels) {
     totalSizeBytes += model.sizeBytes;
   }
 
   console.info();
   console.info(text`
-    You have ${downloadedModels.length} models,
+    You have ${filteredDownloadedModels.length} models,
     taking up ${formatSizeBytes1000(totalSizeBytes)} of disk space.
   `);
   console.info();
 
-  const llms = downloadedModels.filter(model => model.type === "llm");
-  if (llms.length > 0) {
-    printDownloadedModelsTable("LLM", llms, loadedModels);
+  if (variantsOption) {
+    const variantInfosByModelKey = new Map<string, Array<ModelInfo>>();
+    const modelsWithVariants = filteredDownloadedModels.filter(model => {
+      if (model.variants === undefined) {
+        return false;
+      }
+      return model.variants.length > 0;
+    });
+    const variantEntries = await Promise.all(
+      modelsWithVariants.map(async model => {
+        const variants = await client.system.listDownloadedModelVariants(model.modelKey);
+        return { modelKey: model.modelKey, variants };
+      }),
+    );
+    for (const entry of variantEntries) {
+      variantInfosByModelKey.set(entry.modelKey, entry.variants);
+    }
+
+    const llmModels = filteredDownloadedModels.filter(model => model.type === "llm");
+    if (llmModels.length > 0) {
+      printModelsWithVariantRows({
+        title: "LLM",
+        baseModels: llmModels,
+        loadedModels,
+        variantInfosByModelKey,
+      });
+      console.info();
+    }
+
+    const embeddingModels = filteredDownloadedModels.filter(model => model.type === "embedding");
+    if (embeddingModels.length > 0) {
+      printModelsWithVariantRows({
+        title: "EMBEDDING",
+        baseModels: embeddingModels,
+        loadedModels,
+        variantInfosByModelKey,
+      });
+      console.info();
+    }
+    return;
+  }
+
+  const llmModels = filteredDownloadedModels.filter(model => model.type === "llm");
+  if (llmModels.length > 0) {
+    printDownloadedModelsTable("LLM", llmModels, loadedModels);
     console.info();
   }
 
-  const embeddings = downloadedModels.filter(model => model.type === "embedding");
-  if (embeddings.length > 0) {
-    printDownloadedModelsTable("EMBEDDING", embeddings, loadedModels);
+  const embeddingModels = filteredDownloadedModels.filter(model => model.type === "embedding");
+  if (embeddingModels.length > 0) {
+    printDownloadedModelsTable("EMBEDDING", embeddingModels, loadedModels);
     console.info();
   }
 });
