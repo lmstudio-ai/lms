@@ -230,7 +230,7 @@ export const load = addLogLevelOptions(
   } else {
     console.info();
     if (path === undefined) {
-      model = await selectModelToLoad(models, modelPaths, "", 4, lastLoadedMap);
+      model = await selectModel(models, modelPaths, "", 4, lastLoadedMap, estimateOnly);
     } else if (initialFilteredModels.length === 0) {
       console.info(
         chalk.red(text`
@@ -239,7 +239,7 @@ export const load = addLogLevelOptions(
         `),
       );
       path = "";
-      model = await selectModelToLoad(models, modelPaths, path, 5, lastLoadedMap);
+      model = await selectModel(models, modelPaths, path, 5, lastLoadedMap, estimateOnly);
     } else if (initialFilteredModels.length === 1) {
       model = models[initialFilteredModels[0].index];
       // console.info(
@@ -254,7 +254,7 @@ export const load = addLogLevelOptions(
           ! Multiple models match the provided path. Please select one.
         `,
       );
-      model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
+      model = await selectModel(models, modelPaths, path ?? "", 5, lastLoadedMap, estimateOnly);
     }
   }
 
@@ -281,12 +281,13 @@ export const load = addLogLevelOptions(
   await loadModel(logger, client, model, identifier, loadConfig, ttlSeconds);
 });
 
-async function selectModelToLoad(
+async function selectModel(
   models: ModelInfo[],
   modelPaths: string[],
   initialSearch: string,
   leaveEmptyLines: number,
   _lastLoadedMap: Map<string, number>,
+  estimateOnly: boolean = false,
 ) {
   console.info(
     chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
@@ -297,7 +298,9 @@ async function selectModelToLoad(
   const { selected } = await prompt({
     type: "autocomplete",
     name: "selected",
-    message: chalk.green("Select a model to load") + chalk.gray(" |"),
+    message:
+      chalk.green(`Select a model to ${estimateOnly === true ? "estimate" : "load"}`) +
+      chalk.gray(" |"),
     initialSearch,
     loop: false,
     pageSize: terminalSize().rows - leaveEmptyLines,
