@@ -20,7 +20,7 @@ const status = addLogLevelOptions(
     if (useJson) {
       console.log(JSON.stringify({ status: "not-running" }));
     } else {
-      logger.info("LM Studio is not running");
+      console.info("LM Studio is not running");
     }
     return;
   }
@@ -36,7 +36,7 @@ const status = addLogLevelOptions(
 
     // Sanity check the PID
     if (!Number.isInteger(info.pid) || info.pid <= 0) {
-      logger.error("Received invalid PID from server");
+      console.error("Received invalid PID from server");
       process.exit(1);
     }
 
@@ -45,10 +45,10 @@ const status = addLogLevelOptions(
       console.log(JSON.stringify({ status: "running", pid: info.pid }));
     } else {
       const processName = info.isDaemon ? "llmster" : "LM Studio";
-      logger.info(`${processName} is running (PID: ${info.pid})`);
+      console.info(`${processName} is running (PID: ${info.pid})`);
     }
   } catch (error) {
-    logger.error("Failed to get daemon info:", error);
+    console.error("Failed to get daemon info:", error);
     process.exit(1);
   }
 });
