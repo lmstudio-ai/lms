@@ -1,4 +1,5 @@
 import { Command } from "@commander-js/extra-typings";
+import { get } from "./get.js";
 import { ls } from "./list.js";
 import { remove } from "./remove.js";
 import { select } from "./select.js";
@@ -10,5 +11,6 @@ const runtimeCommand = new Command().name("runtime").description("Manage runtime
 runtimeCommand.addCommand(ls);
 runtimeCommand.addCommand(select);
 runtimeCommand.addCommand(remove);
+runtimeCommand.addCommand(get);
 
 export const runtime = runtimeCommand;

@@ -141,7 +141,7 @@ async function listEngines(
         : engine.selectedModelFormatNames.length > 0;
 
     return {
-      engine: useFull ? engine.fullAlias : engine.minimalAlias,
+      engine: engine.fullAlias,
       selected: isSelected ? "✓" : "",
       format: engine.supportedModelFormatNames.join(", "),
     };

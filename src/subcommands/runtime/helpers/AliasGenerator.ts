@@ -1,4 +1,4 @@
-import { RuntimeEngineInfo, RuntimeEngineSpecifier } from "@lmstudio/lms-shared-types";
+import { type RuntimeEngineInfo, type RuntimeEngineSpecifier } from "@lmstudio/lms-shared-types";
 
 export const ALL_ALIAS_FIELDS = [
   "engine",
@@ -44,7 +44,7 @@ export function generateFullAlias(engine: RuntimeEngineSpecifier): BuiltAlias {
   // Note: this uses "-" instead of "@" before the version to ensure differentiation
   // from the shorter aliases.
   return {
-    alias: engine.name + "-" + engine.version,
+    alias: engine.name + "@" + engine.version,
     fields: new Set(["version"]),
   };
 }
@@ -53,7 +53,7 @@ export function generateFullAlias(engine: RuntimeEngineSpecifier): BuiltAlias {
  * Base alias generator with standard implementation that can be extended by engine-specific generators.
  */
 export class AliasGenerator {
-  constructor(protected config: AliasConfig = { delimiter: "-", versionDelimiter: "@" }) {}
+  constructor(protected config: AliasConfig = { delimiter: ":", versionDelimiter: "@" }) {}
 
   /**
    * Returns the base component sets for alias generation (without versioned variants)
@@ -138,7 +138,21 @@ export class AliasGenerator {
       aliasParts.push(engine.cpu.architecture);
     }
     if (fields.has("gpuFramework")) {
-      aliasParts.push(engine.gpu?.framework ?? "cpu");
+      const gpuFramework = engine.gpu?.framework;
+      if (gpuFramework === undefined) {
+        aliasParts.push("cpu");
+      } else if (gpuFramework.toLowerCase() === "cuda") {
+        // Depending on the cuda version, we may want to insert "cuda12" or "cuda13".
+        if (engine.name.includes("-cuda12")) {
+          aliasParts.push("cuda12");
+        } else if (engine.name.includes("-cuda13")) {
+          aliasParts.push("cuda13");
+        } else {
+          aliasParts.push("cuda");
+        }
+      } else {
+        aliasParts.push(gpuFramework);
+      }
     }
     if (fields.has("cpuInstructionSetExtensions")) {
       if (

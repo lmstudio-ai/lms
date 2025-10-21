@@ -14,16 +14,17 @@ import {
   type ModelSearchResultEntry,
 } from "@lmstudio/sdk";
 import chalk from "chalk";
+import fuzzy from "fuzzy";
 import inquirer from "inquirer";
+import inquirerPrompt from "inquirer-autocomplete-prompt";
 import { askQuestion } from "../confirm.js";
 import { addCreateClientOptions, createClient } from "../createClient.js";
 import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
 import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
+import { handleDownloadWithProgressBar } from "../handleDownloadWithProgressBar.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
-import inquirerPrompt from "inquirer-autocomplete-prompt";
-import fuzzy from "fuzzy";
 
 export const get = addLogLevelOptions(
   addCreateClientOptions(
@@ -709,63 +710,8 @@ export async function downloadArtifact(
 
   // Duplicated logic for downloading artifact. Will be cleaned up when we move to artifact download
   // only.
-  let isAskingExitingBehavior = false;
-  let canceled = false;
-  const pb = new ProgressBar(0, "", 22);
-  const updatePb = createDownloadPbUpdater(pb);
-  const abortController = new AbortController();
-  const sigintListener = () => {
-    process.removeListener("SIGINT", sigintListener);
-    process.once("SIGINT", () => {
-      process.exit(1);
-    });
-    pb.stopWithoutClear();
-    isAskingExitingBehavior = true;
-    logger.infoWithoutPrefix();
-    process.stdin.resume();
-    askQuestion("Continue to download in the background?").then(confirmed => {
-      if (confirmed) {
-        logger.info("Download will continue in the background.");
-        process.exit(1);
-      } else {
-        logger.warn("Download canceled.");
-        abortController.abort();
-        canceled = true;
-      }
-    });
-  };
-  process.addListener("SIGINT", sigintListener);
-  try {
-    await downloadPlanner.download({
-      onProgress: update => {
-        if (isAskingExitingBehavior) {
-          return;
-        }
-        updatePb(update);
-      },
-      onStartFinalizing: () => {
-        if (isAskingExitingBehavior) {
-          return;
-        }
-        pb.stop();
-        logger.info("Finalizing download...");
-      },
-      signal: abortController.signal,
-    });
-    pb.stopIfNotStopped();
-    if (canceled) {
-      process.exit(1);
-    }
-    process.removeListener("SIGINT", sigintListener);
-    logger.infoText`
-      Download completed.
-    `;
-    logger.info();
-  } catch (e: any) {
-    if (e.name === "AbortError") {
-      process.exit(1);
-    } else {
-      throw e;
-    }
-  }
+
+  await handleDownloadWithProgressBar(logger, async opts => {
+    return await downloadPlanner.download(opts);
+  });
 }
