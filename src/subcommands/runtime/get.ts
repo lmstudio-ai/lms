@@ -10,11 +10,11 @@ import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import {
   buildRuntimeExtensionsSearchOptions,
   determineLatestLocalVersion,
-  downloadRuntimeExtensionWithHandling,
+  downloadRuntimeExtensionWithErrorHandling,
   formatLatestLocalVersion,
   formatRuntimeUpdateStatus,
   type DownloadRuntimeExtensionResult,
-} from "./helpers/runtimeExtensions.js";
+} from "./helpers/runtimeExtensionDownload.js";
 
 interface RuntimeGetCommandOptions {
   allowIncompatible: boolean;
@@ -171,12 +171,11 @@ async function downloadRuntimeExtension(
   client: LMStudioClient,
   runtimeExtension: DownloadableRuntimeExtensionInfo,
 ) {
-  logger.info(`Preparing to download ${runtimeExtension.name}@${runtimeExtension.version}...`);
-  const downloadResult: DownloadRuntimeExtensionResult = await downloadRuntimeExtensionWithHandling(
-    logger,
-    client,
-    runtimeExtension,
-  );
+  logger.info(`Download ${runtimeExtension.name}@${runtimeExtension.version}...`);
+  const downloadResult: DownloadRuntimeExtensionResult =
+    await downloadRuntimeExtensionWithErrorHandling(logger, client, runtimeExtension, {
+      updateSelections: true,
+    });
   if (downloadResult === "downloaded") {
     logger.info("Select the runtime using:");
     logger.info();

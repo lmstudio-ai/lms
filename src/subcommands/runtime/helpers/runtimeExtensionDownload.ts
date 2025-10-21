@@ -68,10 +68,11 @@ export function formatRuntimeUpdateStatus(
 
 export type DownloadRuntimeExtensionResult = "downloaded" | "already-installed";
 
-export async function downloadRuntimeExtensionWithHandling(
+export async function downloadRuntimeExtensionWithErrorHandling(
   logger: SimpleLogger,
   client: LMStudioClient,
   runtimeExtension: DownloadableRuntimeExtensionInfo,
+  { updateSelections }: { updateSelections: boolean },
 ): Promise<DownloadRuntimeExtensionResult> {
   try {
     await handleDownloadWithProgressBar(logger, async downloadOptions => {
@@ -81,6 +82,7 @@ export async function downloadRuntimeExtensionWithHandling(
           version: runtimeExtension.version,
         },
         {
+          updateSelections,
           onProgress: downloadOptions.onProgress,
           onStartFinalizing: downloadOptions.onStartFinalizing,
           signal: downloadOptions.signal,

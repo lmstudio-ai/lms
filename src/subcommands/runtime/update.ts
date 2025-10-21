@@ -10,11 +10,11 @@ import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import {
   buildRuntimeExtensionsSearchOptions,
   determineLatestLocalVersion,
-  downloadRuntimeExtensionWithHandling,
+  downloadRuntimeExtensionWithErrorHandling,
   formatLatestLocalVersion,
   type DownloadRuntimeExtensionResult,
   type RuntimeExtensionsSearchOptions,
-} from "./helpers/runtimeExtensions.js";
+} from "./helpers/runtimeExtensionDownload.js";
 
 interface RuntimeUpdateCommandOptions {
   all: boolean;
@@ -155,7 +155,9 @@ async function performUpdates(
       to ${runtimeExtension.version}...
     `;
     const downloadResult: DownloadRuntimeExtensionResult =
-      await downloadRuntimeExtensionWithHandling(logger, client, runtimeExtension);
+      await downloadRuntimeExtensionWithErrorHandling(logger, client, runtimeExtension, {
+        updateSelections: true,
+      });
     if (downloadResult === "downloaded") {
       logger.info(
         "Updated " + runtimeExtension.name + " to version " + runtimeExtension.version + ".",
