@@ -1,4 +1,8 @@
-import { ModelFormatName, RuntimeEngineSpecifier, SelectedRuntimeEngineMap } from "@lmstudio/sdk";
+import {
+  type ModelFormatName,
+  type RuntimeEngineSpecifier,
+  type SelectedRuntimeEngineMap,
+} from "@lmstudio/sdk";
 
 /**
  * Creates a unique string key from a runtime engine specifier.
