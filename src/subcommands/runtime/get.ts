@@ -2,43 +2,25 @@ import { Command, Option } from "@commander-js/extra-typings";
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type DownloadableRuntimeExtensionInfo } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
-import chalk from "chalk";
 import columnify from "columnify";
 import inquirer from "inquirer";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
-import { handleDownloadWithProgressBar } from "../../handleDownloadWithProgressBar.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
-
-type RuntimeExtensionsSearchOptions = Parameters<
-  LMStudioClient["runtime"]["extensions"]["search"]
->[1];
+import {
+  buildRuntimeExtensionsSearchOptions,
+  determineLatestLocalVersion,
+  downloadRuntimeExtensionWithHandling,
+  formatLatestLocalVersion,
+  formatRuntimeUpdateStatus,
+  type DownloadRuntimeExtensionResult
+} from "./helpers/runtimeExtensions.js";
 
 interface RuntimeGetCommandOptions {
   allowIncompatible: boolean;
   channel?: "stable" | "beta";
   list: boolean;
-  upgrade: boolean;
   yes: boolean;
-}
-
-function buildRuntimeExtensionsSearchOptions(
-  channelOverride: "stable" | "beta" | undefined,
-  includeIncompatible: boolean,
-): RuntimeExtensionsSearchOptions {
-  if (channelOverride !== undefined) {
-    return {
-      channel: channelOverride,
-      includeIncompatible,
-    };
-  }
-  if (includeIncompatible === true) {
-    return {
-      channel: "stable",
-      includeIncompatible: true,
-    };
-  }
-  return undefined;
 }
 
 async function searchRuntimeExtensions(
@@ -54,28 +36,12 @@ async function searchRuntimeExtensions(
   );
   const searchResults = await client.runtime.extensions.search(searchQuery, searchOptions);
 
-  let filteredResults: Array<DownloadableRuntimeExtensionInfo> = searchResults;
-  if (options.upgrade === true) {
-    const selections = await client.runtime.engine.getSelections();
-    const selectedNames = new Set(
-      [...selections.values()].map(engineSpecifier => engineSpecifier.name),
-    );
-    // Filter to only extensions that are already selected.
-    filteredResults = filteredResults.filter(runtimeExtension =>
-      selectedNames.has(runtimeExtension.name),
-    );
-  }
-
-  if (filteredResults.length === 0) {
-    if (options.upgrade === true) {
-      logger.info("No matching runtime extensions need an upgrade.");
-    } else {
-      logger.info("No runtime extensions matched the query.");
-    }
+  if (searchResults.length === 0) {
+    logger.info("No runtime extensions matched the query.");
     process.exit(0);
   }
 
-  return filteredResults;
+  return searchResults;
 }
 
 function renderRuntimeExtensionsList(
@@ -95,15 +61,17 @@ function renderRuntimeExtensionsList(
   });
 
   const rows = sortedExtensions.map(runtimeExtension => {
+    const latestLocalVersion = determineLatestLocalVersion(runtimeExtension.localVersions);
     return {
       name: runtimeExtension.name,
       version: runtimeExtension.version,
-      localVersion: runtimeExtension.localVersions.join(chalk.gray(" / ")) ?? chalk.gray("-"),
+      latestLocalVersion: formatLatestLocalVersion(latestLocalVersion),
+      status: formatRuntimeUpdateStatus(runtimeExtension.version, latestLocalVersion),
     };
   });
 
   const table = columnify(rows, {
-    columns: ["name", "version", "localVersion"],
+    columns: ["name", "version", "latestLocalVersion", "status"],
     config: {
       name: {
         headingTransform: () => "NAME",
@@ -113,8 +81,12 @@ function renderRuntimeExtensionsList(
         headingTransform: () => "VERSION",
         align: "left",
       },
-      localVersion: {
-        headingTransform: () => "LOCAL VERSIONS",
+      latestLocalVersion: {
+        headingTransform: () => "LATEST LOCAL VERSION",
+        align: "left",
+      },
+      status: {
+        headingTransform: () => "STATUS",
         align: "left",
       },
     },
@@ -143,10 +115,23 @@ async function selectRuntimeExtension(
   const isStdoutInteractive = process.stdout.isTTY === true;
   const isStdinInteractive = process.stdin.isTTY === true;
   if (isStdoutInteractive === true && isStdinInteractive === true) {
-    const promptChoices = runtimeExtensions.map((runtimeExtension, extensionIndex) => ({
-      name: runtimeExtension.name + "@" + runtimeExtension.version,
-      value: extensionIndex,
-    }));
+    const promptChoices = runtimeExtensions.map((runtimeExtension, runtimeExtensionIndex) => {
+      const latestLocalVersion = determineLatestLocalVersion(runtimeExtension.localVersions);
+      const latestLocalDescriptor =
+        latestLocalVersion === undefined
+          ? "not installed locally"
+          : "latest local: " + latestLocalVersion;
+      return {
+        name:
+          runtimeExtension.name +
+          "@" +
+          runtimeExtension.version +
+          " (" +
+          latestLocalDescriptor +
+          ")",
+        value: runtimeExtensionIndex,
+      };
+    });
 
     const promptAnswer = await inquirer.prompt<{ extensionIndex: number }>([
       {
@@ -172,19 +157,13 @@ async function downloadRuntimeExtension(
   runtimeExtension: DownloadableRuntimeExtensionInfo,
 ) {
   logger.info("Downloading " + runtimeExtension.name + "@" + runtimeExtension.version + "...");
-  await handleDownloadWithProgressBar(logger, async downloadOpts => {
-    await client.runtime.extensions.download(
-      { name: runtimeExtension.name, version: runtimeExtension.version },
-      {
-        onProgress: downloadOpts.onProgress,
-        onStartFinalizing: downloadOpts.onStartFinalizing,
-        signal: downloadOpts.signal,
-      },
-    );
-  });
-  logger.info("Download completed. Select the runtime using:");
-  logger.info();
-  logger.info(`  lms runtime select ${runtimeExtension.name}-${runtimeExtension.version}`);
+  const downloadResult: DownloadRuntimeExtensionResult =
+    await downloadRuntimeExtensionWithHandling(logger, client, runtimeExtension);
+  if (downloadResult === "downloaded") {
+    logger.info("Download completed. Select the runtime using:");
+    logger.info();
+    logger.info(`  lms runtime select ${runtimeExtension.name}-${runtimeExtension.version}`);
+  }
 }
 
 export const get = addLogLevelOptions(
@@ -194,7 +173,6 @@ export const get = addLogLevelOptions(
     .argument("[query]", "Query runtime extensions by name, version, platform, or hardware filters")
     .option("-l, --list", "List runtime extensions without downloading")
     .option("-y, --yes", "Automatically pick the first result when multiple matches are found")
-    .option("-u, --upgrade", "Only include runtime extensions that are already installed locally")
     .option("--allow-incompatible", "Include runtime extensions that are incompatible")
     .addOption(
       new Option(

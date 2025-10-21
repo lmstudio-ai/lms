@@ -3,6 +3,7 @@ import { get } from "./get.js";
 import { ls } from "./list.js";
 import { remove } from "./remove.js";
 import { select } from "./select.js";
+import { update } from "./update.js";
 
 // Create the runtime command
 const runtimeCommand = new Command().name("runtime").description("Manage runtime engines");
@@ -11,6 +12,7 @@ const runtimeCommand = new Command().name("runtime").description("Manage runtime
 runtimeCommand.addCommand(ls);
 runtimeCommand.addCommand(select);
 runtimeCommand.addCommand(remove);
+runtimeCommand.addCommand(update);
 runtimeCommand.addCommand(get);
 
 export const runtime = runtimeCommand;
