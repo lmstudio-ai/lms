@@ -8,15 +8,13 @@ import { askQuestion } from "../../confirm.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import {
-  buildRuntimeExtensionsSearchOptions,
   determineLatestLocalVersion,
   downloadRuntimeExtensionWithErrorHandling,
   formatLatestLocalVersion,
   type DownloadRuntimeExtensionResult,
-  type RuntimeExtensionsSearchOptions,
 } from "./helpers/runtimeExtensionDownload.js";
 
-interface RuntimeUpdateCommandOptions {
+interface RuntimeUpdateCommandOpts {
   all: boolean;
   allowIncompatible: boolean;
   channel?: "stable" | "beta";
@@ -170,15 +168,11 @@ async function runtimeUpdateAction(
   logger: SimpleLogger,
   client: LMStudioClient,
   queryArgument: string | undefined,
-  commandOptions: RuntimeUpdateCommandOptions,
+  opts: RuntimeUpdateCommandOpts,
 ): Promise<void> {
   const searchQuery = queryArgument ?? "";
-  const searchOptions: RuntimeExtensionsSearchOptions = buildRuntimeExtensionsSearchOptions(
-    commandOptions.channel,
-    commandOptions.allowIncompatible,
-  );
 
-  if (commandOptions.all) {
+  if (opts.all) {
     logger.info("Checking updates for all installed runtime extensions...");
   } else {
     logger.info(
@@ -186,7 +180,10 @@ async function runtimeUpdateAction(
     );
   }
 
-  const allRuntimeExtensions = await client.runtime.extensions.search(searchQuery, searchOptions);
+  const allRuntimeExtensions = await client.runtime.extensions.search(searchQuery, {
+    channel: opts.channel,
+    includeIncompatible: opts.allowIncompatible,
+  });
 
   if (allRuntimeExtensions.length === 0) {
     logger.info("No runtime extensions matched the query.");
@@ -195,10 +192,10 @@ async function runtimeUpdateAction(
 
   const latestRuntimeExtensions = selectLatestRuntimeExtensions(allRuntimeExtensions);
   const selectedRuntimeNames =
-    commandOptions.all === true ? undefined : await getSelectedRuntimeNames(client);
+    opts.all === true ? undefined : await getSelectedRuntimeNames(client);
   const updateCandidates = prepareUpdateCandidates(
     latestRuntimeExtensions,
-    commandOptions.all,
+    opts.all,
     selectedRuntimeNames,
   );
 
@@ -209,11 +206,11 @@ async function runtimeUpdateAction(
 
   renderUpdatePlan(logger, updateCandidates);
 
-  if (commandOptions.dryRun === true) {
+  if (opts.dryRun === true) {
     return;
   }
 
-  const confirmationResult = await confirmUpdate(logger, commandOptions.yes);
+  const confirmationResult = await confirmUpdate(logger, opts.yes);
   if (confirmationResult === "declined") {
     return;
   }
@@ -250,7 +247,12 @@ export const update = addLogLevelOptions(
       const logger = createLogger(parentOptions);
       const client = await createClient(logger, parentOptions);
 
-      const runtimeUpdateOptions = options as RuntimeUpdateCommandOptions;
-      await runtimeUpdateAction(logger, client, queryArgument, runtimeUpdateOptions);
+      await runtimeUpdateAction(logger, client, queryArgument, {
+        all: options.all ?? false,
+        allowIncompatible: options.allowIncompatible ?? false,
+        channel: options.channel,
+        dryRun: options.dryRun ?? false,
+        yes: options.yes ?? false,
+      });
     }),
 );

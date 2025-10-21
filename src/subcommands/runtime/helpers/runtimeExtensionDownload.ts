@@ -5,29 +5,6 @@ import chalk from "chalk";
 import { compareVersions } from "../../../compareVersions.js";
 import { handleDownloadWithProgressBar } from "../../../handleDownloadWithProgressBar.js";
 
-export type RuntimeExtensionsSearchOptions = Parameters<
-  LMStudioClient["runtime"]["extensions"]["search"]
->[1];
-
-export function buildRuntimeExtensionsSearchOptions(
-  channelOverride: "stable" | "beta" | undefined,
-  includeIncompatible: boolean,
-): RuntimeExtensionsSearchOptions {
-  if (channelOverride !== undefined) {
-    return {
-      channel: channelOverride,
-      includeIncompatible,
-    };
-  }
-  if (includeIncompatible === true) {
-    return {
-      channel: "stable",
-      includeIncompatible: true,
-    };
-  }
-  return undefined;
-}
-
 export function determineLatestLocalVersion(localVersions: Array<string>): string | undefined {
   let latestLocalVersion: string | undefined = undefined;
   for (const localVersion of localVersions) {

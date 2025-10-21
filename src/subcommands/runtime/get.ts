@@ -8,7 +8,6 @@ import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import {
-  buildRuntimeExtensionsSearchOptions,
   determineLatestLocalVersion,
   downloadRuntimeExtensionWithErrorHandling,
   formatLatestLocalVersion,
@@ -16,7 +15,7 @@ import {
   type DownloadRuntimeExtensionResult,
 } from "./helpers/runtimeExtensionDownload.js";
 
-interface RuntimeGetCommandOptions {
+interface RuntimeGetCommandOpts {
   allowIncompatible: boolean;
   channel?: "stable" | "beta";
   list: boolean;
@@ -27,17 +26,32 @@ async function searchRuntimeExtensions(
   logger: SimpleLogger,
   client: LMStudioClient,
   queryArgument: string | undefined,
-  options: RuntimeGetCommandOptions,
+  opts: RuntimeGetCommandOpts,
 ): Promise<Array<DownloadableRuntimeExtensionInfo>> {
   const searchQuery = queryArgument ?? "";
-  const searchOptions = buildRuntimeExtensionsSearchOptions(
-    options.channel,
-    options.allowIncompatible,
-  );
-  const searchResults = await client.runtime.extensions.search(searchQuery, searchOptions);
+  const searchResults = await client.runtime.extensions.search(searchQuery, {
+    channel: opts.channel,
+    includeIncompatible: opts.allowIncompatible,
+  });
 
   if (searchResults.length === 0) {
-    logger.info("No runtime extensions matched the query.");
+    if (opts.allowIncompatible) {
+      logger.info("No runtime extensions matched the query.");
+    } else {
+      // Let's try again including incompatible extensions
+      const incompatibleResults = await client.runtime.extensions.search(searchQuery, {
+        channel: opts.channel,
+        includeIncompatible: true,
+      });
+      logger.info("No runtime extensions matched the query.");
+      if (incompatibleResults.length > 0) {
+        logger.info();
+        logger.infoText`
+          However, ${incompatibleResults.length} incompatible runtime extension(s) were found.
+          Re-run with --allow-incompatible to see and download them.
+        `;
+      }
+    }
     process.exit(0);
   }
 
@@ -96,10 +110,10 @@ function renderRuntimeExtensionsList(
   logger.info(table);
 }
 
-async function selectRuntimeExtension(
+async function selectRuntimeExtensionToDownload(
   logger: SimpleLogger,
   runtimeExtensions: Array<DownloadableRuntimeExtensionInfo>,
-  options: RuntimeGetCommandOptions,
+  options: RuntimeGetCommandOpts,
 ): Promise<DownloadableRuntimeExtensionInfo> {
   if (runtimeExtensions.length === 1) {
     return runtimeExtensions[0];
@@ -208,7 +222,12 @@ export const get = addLogLevelOptions(
       const logger = createLogger(parentOptions);
       const client = await createClient(logger, parentOptions);
 
-      const runtimeGetOptions = commandOptions as RuntimeGetCommandOptions;
+      const runtimeGetOptions: RuntimeGetCommandOpts = {
+        allowIncompatible: commandOptions.allowIncompatible ?? false,
+        channel: commandOptions.channel,
+        list: commandOptions.list ?? false,
+        yes: commandOptions.yes ?? false,
+      };
 
       const runtimeExtensions = await searchRuntimeExtensions(
         logger,
@@ -222,7 +241,7 @@ export const get = addLogLevelOptions(
         return;
       }
 
-      const runtimeExtension = await selectRuntimeExtension(
+      const runtimeExtension = await selectRuntimeExtensionToDownload(
         logger,
         runtimeExtensions,
         runtimeGetOptions,
