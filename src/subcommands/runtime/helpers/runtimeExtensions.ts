@@ -1,6 +1,6 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
-import { type LMStudioClient } from "@lmstudio/sdk";
 import { type DownloadableRuntimeExtensionInfo } from "@lmstudio/lms-shared-types";
+import { type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { compareVersions } from "../../../compareVersions.js";
 import { handleDownloadWithProgressBar } from "../../../handleDownloadWithProgressBar.js";
@@ -28,9 +28,7 @@ export function buildRuntimeExtensionsSearchOptions(
   return undefined;
 }
 
-export function determineLatestLocalVersion(
-  localVersions: Array<string>,
-): string | undefined {
+export function determineLatestLocalVersion(localVersions: Array<string>): string | undefined {
   let latestLocalVersion: string | undefined = undefined;
   for (const localVersion of localVersions) {
     if (latestLocalVersion === undefined) {
@@ -44,9 +42,7 @@ export function determineLatestLocalVersion(
   return latestLocalVersion;
 }
 
-export function formatLatestLocalVersion(
-  latestLocalVersion: string | undefined,
-): string {
+export function formatLatestLocalVersion(latestLocalVersion: string | undefined): string {
   if (latestLocalVersion === undefined) {
     return chalk.gray("-");
   }
@@ -61,10 +57,13 @@ export function formatRuntimeUpdateStatus(
     return chalk.gray("not installed");
   }
   const versionComparison = compareVersions(remoteVersion, latestLocalVersion);
-  if (versionComparison === 1) {
-    return chalk.keyword("orange")("update available");
+  if (versionComparison > 0) {
+    return chalk.yellow("update available");
+  } else if (versionComparison < 0) {
+    return chalk.yellow("newer version installed");
+  } else {
+    return chalk.gray("up-to-date");
   }
-  return chalk.gray("up to date");
 }
 
 export type DownloadRuntimeExtensionResult = "downloaded" | "already-installed";
@@ -90,18 +89,8 @@ export async function downloadRuntimeExtensionWithHandling(
     });
     return "downloaded";
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.includes("is already installed")
-    ) {
-      logger.info(
-        chalk.white(
-          runtimeExtension.name +
-            "@" +
-            runtimeExtension.version +
-            " is already installed.",
-        ),
-      );
+    if (error instanceof Error && error.message.includes("is already installed")) {
+      logger.info(`${runtimeExtension.name}@${runtimeExtension.version} is already installed.`);
       return "already-installed";
     }
     throw error;

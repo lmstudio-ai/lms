@@ -68,6 +68,7 @@ export async function handleDownloadWithProgressBar(
     if (e.name === "AbortError") {
       process.exit(1);
     } else {
+      pb.stopIfNotStopped();
       throw e;
     }
   }

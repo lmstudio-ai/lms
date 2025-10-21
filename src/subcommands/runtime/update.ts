@@ -2,9 +2,9 @@ import { Command, Option } from "@commander-js/extra-typings";
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type DownloadableRuntimeExtensionInfo } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
-import columnify from "columnify";
-import { askQuestion } from "../../confirm.js";
+import chalk from "chalk";
 import { compareVersions } from "../../compareVersions.js";
+import { askQuestion } from "../../confirm.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import {
@@ -106,25 +106,14 @@ function renderUpdatePlan(
     };
   });
 
-  const table = columnify(rows, {
-    columns: ["name", "current", "target"],
-    config: {
-      name: {
-        headingTransform: () => "NAME",
-        align: "left",
-      },
-      current: {
-        headingTransform: () => "CURRENT",
-        align: "left",
-      },
-      target: {
-        headingTransform: () => "TARGET",
-        align: "left",
-      },
-    },
-    columnSplitter: "    ",
-  });
-  logger.info(table);
+  logger.info("Update Plan:");
+  logger.info();
+  const longestName = Math.max(...rows.map(row => row.name.length));
+  const nameWidth = longestName + 4;
+  for (const row of rows) {
+    logger.info(`  ${row.name.padEnd(nameWidth)}${row.current} → ${chalk.yellow(row.target)}`);
+  }
+  logger.info();
 }
 
 type ConfirmationResult = "confirmed" | "declined" | "cannot-confirm";
@@ -161,15 +150,10 @@ async function performUpdates(
 ): Promise<void> {
   for (const updateCandidate of updateCandidates) {
     const runtimeExtension = updateCandidate.runtimeExtension;
-    logger.info(
-      "Updating " +
-        runtimeExtension.name +
-        " from " +
-        updateCandidate.latestLocalVersion +
-        " to " +
-        runtimeExtension.version +
-        "...",
-    );
+    logger.infoText`
+      Updating ${runtimeExtension.name} from ${updateCandidate.latestLocalVersion}
+      to ${runtimeExtension.version}...
+    `;
     const downloadResult: DownloadRuntimeExtensionResult =
       await downloadRuntimeExtensionWithHandling(logger, client, runtimeExtension);
     if (downloadResult === "downloaded") {
@@ -191,10 +175,16 @@ async function runtimeUpdateAction(
     commandOptions.channel,
     commandOptions.allowIncompatible,
   );
-  const allRuntimeExtensions = await client.runtime.extensions.search(
-    searchQuery,
-    searchOptions,
-  );
+
+  if (commandOptions.all) {
+    logger.info("Checking updates for all installed runtime extensions...");
+  } else {
+    logger.info(
+      "Checking updates for selected installed runtime extensions... (Pass --all to include all)",
+    );
+  }
+
+  const allRuntimeExtensions = await client.runtime.extensions.search(searchQuery, searchOptions);
 
   if (allRuntimeExtensions.length === 0) {
     logger.info("No runtime extensions matched the query.");
@@ -211,7 +201,7 @@ async function runtimeUpdateAction(
   );
 
   if (updateCandidates.length === 0) {
-    logger.info("All matching runtime extensions are already up to date.");
+    logger.info("All matching runtime extensions are already up-to-date.");
     return;
   }
 
@@ -236,13 +226,20 @@ export const update = addLogLevelOptions(
   addCreateClientOptions(
     new Command().name("update").description("Update installed runtime extensions."),
   )
-    .argument("[query]", "Filter runtime extensions by name, version, platform, or hardware filters")
+    .argument(
+      "[query]",
+      "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
+    )
     .option("-a, --all", "Update all installed runtime extensions")
-    .option("--allow-incompatible", "Include runtime extensions that are incompatible")
+    .option(
+      "--allow-incompatible",
+      "Include runtime extensions that are incompatible with your system",
+    )
     .addOption(
-      new Option("--channel <channel>", "Override the runtime extension channel to query from").choices(
-        ["stable", "beta"],
-      ),
+      new Option(
+        "--channel <channel>",
+        "Override the runtime extension channel to query from",
+      ).choices(["stable", "beta"]),
     )
     .option("--dry-run", "Show extensions that would be updated without performing downloads")
     .option("-y, --yes", "Skip confirmation prompts")

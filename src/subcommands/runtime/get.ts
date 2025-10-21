@@ -13,7 +13,7 @@ import {
   downloadRuntimeExtensionWithHandling,
   formatLatestLocalVersion,
   formatRuntimeUpdateStatus,
-  type DownloadRuntimeExtensionResult
+  type DownloadRuntimeExtensionResult,
 } from "./helpers/runtimeExtensions.js";
 
 interface RuntimeGetCommandOptions {
@@ -71,22 +71,22 @@ function renderRuntimeExtensionsList(
   });
 
   const table = columnify(rows, {
-    columns: ["name", "version", "latestLocalVersion", "status"],
+    columns: ["name", "latestLocalVersion", "version", "status"],
     config: {
       name: {
         headingTransform: () => "NAME",
         align: "left",
       },
-      version: {
-        headingTransform: () => "VERSION",
+      latestLocalVersion: {
+        headingTransform: () => "LATEST LOCAL",
         align: "left",
       },
-      latestLocalVersion: {
-        headingTransform: () => "LATEST LOCAL VERSION",
+      version: {
+        headingTransform: () => "AVAILABLE",
         align: "left",
       },
       status: {
-        headingTransform: () => "STATUS",
+        headingTransform: () => "",
         align: "left",
       },
     },
@@ -106,9 +106,10 @@ async function selectRuntimeExtension(
   }
 
   if (options.yes === true) {
-    logger.warn(
-      "Multiple runtime extensions matched the query. Selecting the first result because --yes was provided.",
-    );
+    logger.warnText`
+      Multiple runtime extensions matched the query. Selecting the first result because --yes was
+      provided.
+    `;
     return runtimeExtensions[0];
   }
 
@@ -117,18 +118,31 @@ async function selectRuntimeExtension(
   if (isStdoutInteractive === true && isStdinInteractive === true) {
     const promptChoices = runtimeExtensions.map((runtimeExtension, runtimeExtensionIndex) => {
       const latestLocalVersion = determineLatestLocalVersion(runtimeExtension.localVersions);
-      const latestLocalDescriptor =
-        latestLocalVersion === undefined
-          ? "not installed locally"
-          : "latest local: " + latestLocalVersion;
+      const remoteVersion = runtimeExtension.version;
+
+      let latestLocalDescriptor: string;
+
+      if (latestLocalVersion === undefined) {
+        latestLocalDescriptor = "No local version";
+      } else if (runtimeExtension.localVersions.includes(remoteVersion)) {
+        if (latestLocalVersion === remoteVersion) {
+          latestLocalDescriptor = "Up-to-date";
+        } else {
+          latestLocalDescriptor = "Same version installed";
+        }
+      } else {
+        const versionComparison = compareVersions(runtimeExtension.version, latestLocalVersion);
+        if (versionComparison < 0) {
+          latestLocalDescriptor = `Downgrade available: ${latestLocalVersion} -> ${remoteVersion}`;
+        } else if (versionComparison > 0) {
+          latestLocalDescriptor = `Update available: ${latestLocalVersion} -> ${remoteVersion}`;
+        } else {
+          // Should not happen as this is handled in the previous branch
+          latestLocalDescriptor = "Up-to-date";
+        }
+      }
       return {
-        name:
-          runtimeExtension.name +
-          "@" +
-          runtimeExtension.version +
-          " (" +
-          latestLocalDescriptor +
-          ")",
+        name: `${runtimeExtension.name}@${runtimeExtension.version} (${latestLocalDescriptor})`,
         value: runtimeExtensionIndex,
       };
     });
@@ -145,9 +159,10 @@ async function selectRuntimeExtension(
     return runtimeExtensions[promptAnswer.extensionIndex];
   }
 
-  logger.error(
-    "Multiple runtime extensions matched the query. Re-run with a more specific query or use -l to list all matches.",
-  );
+  logger.errorText`
+    Multiple runtime extensions matched the query. Re-run with a more specific query or use -l to
+    list all matches.
+  `;
   process.exit(1);
 }
 
@@ -156,13 +171,16 @@ async function downloadRuntimeExtension(
   client: LMStudioClient,
   runtimeExtension: DownloadableRuntimeExtensionInfo,
 ) {
-  logger.info("Downloading " + runtimeExtension.name + "@" + runtimeExtension.version + "...");
-  const downloadResult: DownloadRuntimeExtensionResult =
-    await downloadRuntimeExtensionWithHandling(logger, client, runtimeExtension);
+  logger.info(`Preparing to download ${runtimeExtension.name}@${runtimeExtension.version}...`);
+  const downloadResult: DownloadRuntimeExtensionResult = await downloadRuntimeExtensionWithHandling(
+    logger,
+    client,
+    runtimeExtension,
+  );
   if (downloadResult === "downloaded") {
-    logger.info("Download completed. Select the runtime using:");
+    logger.info("Select the runtime using:");
     logger.info();
-    logger.info(`  lms runtime select ${runtimeExtension.name}-${runtimeExtension.version}`);
+    logger.info(`  lms runtime select ${runtimeExtension.name}@${runtimeExtension.version}`);
   }
 }
 
@@ -170,10 +188,16 @@ export const get = addLogLevelOptions(
   addCreateClientOptions(
     new Command().name("get").description("Download or list runtime extensions."),
   )
-    .argument("[query]", "Query runtime extensions by name, version, platform, or hardware filters")
+    .argument(
+      "[query]",
+      "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
+    )
     .option("-l, --list", "List runtime extensions without downloading")
     .option("-y, --yes", "Automatically pick the first result when multiple matches are found")
-    .option("--allow-incompatible", "Include runtime extensions that are incompatible")
+    .option(
+      "--allow-incompatible",
+      "Include runtime extensions that are incompatible with your system",
+    )
     .addOption(
       new Option(
         "--channel <channel>",
