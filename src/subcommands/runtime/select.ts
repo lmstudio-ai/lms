@@ -6,71 +6,88 @@ import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
-import { generateFullAlias } from "./helpers/AliasGenerator.js";
-import { resolveLatestAlias, resolveUniqueAlias } from "./helpers/aliasResolution.js";
-import { createEngineKey, invertSelections } from "./helpers/invertSelections.js";
+import { findLatestVersion } from "./helpers/findLatestVersion.js";
+import {
+  doesSpecifierStringSpecifyVersion,
+  resolveMultipleRuntimeExtensions,
+} from "./helpers/resolveRuntimeExtensions.js";
 
 /**
  * Selects a runtime engine by alias
  * @param logger - Logger instance for output
  * @param client - LMStudio client for API calls
- * @param alias - Engine alias to select
+ * @param name - Engine alias to select
  * @param latest - Whether to select the latest version
  * @param modelFormats - Optional set of model format filters
  */
 async function selectRuntimeEngine(
   logger: SimpleLogger,
   client: LMStudioClient,
-  alias: string,
+  name: string,
   latest: boolean,
-  modelFormats?: Set<ModelFormatName>,
 ) {
   const engineInfos = await client.runtime.engine.list();
-  const existingEngineKey2Selections = invertSelections(
-    await client.runtime.engine.getSelections(),
-  );
 
-  const { engine: choice, fields } = latest
-    ? resolveLatestAlias(engineInfos, alias, modelFormats)
-    : resolveUniqueAlias(engineInfos, alias, modelFormats);
+  if (latest && doesSpecifierStringSpecifyVersion(name)) {
+    // This is to avoid user confusion where, for example, they have
+    //  1. llama.cpp-win-x86_64-avx2@1.0.0
+    //  2. llama.cpp-win-x86_64-avx2@1.1.0
+    // Then run `lms runtime select llm-engine llama.cpp-win-x86_64-avx2@1.0.0 --latest`
+    // Without this Error, the command would select @1.0.0, but that may or may not
+    // be what the user intends.
+    throw new UserInputError("Cannot specify version with --latest.");
+  }
 
-  if (latest === true) {
-    if (fields.has("version")) {
-      // This is to avoid user confusion where, for example, they have
-      //  1. llama.cpp-metal@1.0.0
-      //  2. llama.cpp-metal@1.1.0
-      // Then run `lms runtime select llm-engine llama.cpp-metal@1.0.0 --latest`
-      // Without this Error, the command would select @1.0.0, but that may or may not
-      // be what the user intends.
-      throw new UserInputError("Cannot specify a version alias with --latest.");
+  let runtimeExtensions = resolveMultipleRuntimeExtensions(engineInfos, name);
+
+  if (latest) {
+    // Filter to only the latest version
+    const latestVersion = findLatestVersion(runtimeExtensions);
+    if (latestVersion === null) {
+      runtimeExtensions = [];
+    } else {
+      runtimeExtensions = [latestVersion];
     }
   }
 
-  const selectForModelFormats =
-    modelFormats !== undefined
-      ? new Set(
-          // Filter is for safety, but choice return from alias resolutions _should_ support all
-          // the supplied modelFormats.
-          [...modelFormats].filter(format => choice.supportedModelFormatNames.includes(format)),
-        )
-      : new Set(choice.supportedModelFormatNames);
+  if (runtimeExtensions.length === 0) {
+    logger.info("No installed runtime extensions found matching: " + name);
+    logger.info();
+    logger.info("Use 'lms runtime ls' to see installed runtime extensions.");
+    process.exit(1);
+  }
 
-  const alreadySelectedFor = existingEngineKey2Selections.get(createEngineKey(choice)) ?? [];
+  if (runtimeExtensions.length > 1) {
+    logger.info("Multiple runtime extensions found:");
+    logger.info();
+    for (const runtimeExtension of runtimeExtensions) {
+      logger.info(`  - ${runtimeExtension.name}@${runtimeExtension.version}`);
+    }
+    logger.info();
+    logger.info("Please disambiguate by specifying a version.");
+    process.exit(1);
+  }
 
-  const formatStatus = [...selectForModelFormats].map(modelFormat => {
-    return {
-      modelFormat: modelFormat,
-      shouldSelect: !alreadySelectedFor.includes(modelFormat),
-    };
-  });
+  const runtimeExtension = runtimeExtensions[0];
+  const supportedModelFormatNames = runtimeExtension.supportedModelFormatNames;
+  const selections = await client.runtime.engine.getSelections();
 
-  const full = generateFullAlias(choice).alias;
-  for (const { modelFormat, shouldSelect } of formatStatus) {
-    if (shouldSelect === true) {
-      await client.runtime.engine.select(choice, modelFormat);
-      logger.info("Selected " + full + " for " + modelFormat);
+  for (const modelFormatName of supportedModelFormatNames) {
+    const existingSelection = selections.get(modelFormatName);
+    if (
+      existingSelection === undefined ||
+      existingSelection.name !== runtimeExtension.name ||
+      existingSelection.version !== runtimeExtension.version
+    ) {
+      await client.runtime.engine.select(runtimeExtension, modelFormatName);
+      logger.infoText`
+        Selected ${runtimeExtension.name}@${runtimeExtension.version} for ${modelFormatName}
+      `;
     } else {
-      logger.info("Already selected " + full + " for " + modelFormat);
+      logger.infoText`
+        Already selected ${runtimeExtension.name}@${runtimeExtension.version}
+        for ${modelFormatName}
+      `;
     }
   }
 }
@@ -112,12 +129,15 @@ async function selectLatestVersionOfSelectedEngines(
   });
 
   for (const selection of latestSelections) {
-    const full = generateFullAlias(selection).alias;
     if (selection.version !== selection.previousVersion) {
       await client.runtime.engine.select(selection, selection.modelFormatName);
-      logger.info("Selected " + full + " for " + selection.modelFormatName);
+      logger.infoText`
+        Selected ${selection.name}@${selection.version} for ${selection.modelFormatName}
+      `;
     } else {
-      logger.info("Already selected " + full + " for " + selection.modelFormatName);
+      logger.infoText`
+        Already selected ${selection.name}@${selection.version} for ${selection.modelFormatName}
+      `;
     }
   }
 }
