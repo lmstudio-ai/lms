@@ -199,8 +199,7 @@ async function downloadRuntimeExtension(
 
 export const get = addLogLevelOptions(
   addCreateClientOptions(
-    new Command().name("get").description("Download or list runtime extensions."),
-  )
+    new Command().name("get").description("Download or list runtime extensions.")
     .argument(
       "[query]",
       "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
@@ -248,4 +247,5 @@ export const get = addLogLevelOptions(
       );
       await downloadRuntimeExtension(logger, client, runtimeExtension);
     }),
+  )
 );
