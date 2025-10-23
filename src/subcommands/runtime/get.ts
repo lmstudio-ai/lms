@@ -207,7 +207,6 @@ export const get = addLogLevelOptions(
         "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
       )
       .option("-l, --list", "List runtime extensions without downloading")
-      .option("-y, --yes", "Automatically pick the first result when multiple matches are found")
       .option(
         "--allow-incompatible",
         "Include runtime extensions that are incompatible with your system",
@@ -218,6 +217,7 @@ export const get = addLogLevelOptions(
           "Override the runtime extension channel to query from",
         ).choices(["stable", "beta"]),
       )
+      .option("-y, --yes", "Automatically pick the first result when multiple matches are found")
       .action(async function (queryArgument: string | undefined, commandOptions) {
         const parentOptions = this.parent?.opts() ?? {};
         const logger = createLogger(parentOptions);
