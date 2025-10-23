@@ -223,36 +223,38 @@ async function runtimeUpdateAction(
 
 export const update = addLogLevelOptions(
   addCreateClientOptions(
-    new Command().name("update").description("Update installed runtime extensions."),
-  )
-    .argument(
-      "[query]",
-      "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
-    )
-    .option("-a, --all", "Update all installed runtime extensions")
-    .option(
-      "--allow-incompatible",
-      "Include runtime extensions that are incompatible with your system",
-    )
-    .addOption(
-      new Option(
-        "--channel <channel>",
-        "Override the runtime extension channel to query from",
-      ).choices(["stable", "beta"]),
-    )
-    .option("--dry-run", "Show extensions that would be updated without performing downloads")
-    .option("-y, --yes", "Skip confirmation prompts")
-    .action(async function (queryArgument: string | undefined, options) {
-      const parentOptions = this.parent?.opts() ?? {};
-      const logger = createLogger(parentOptions);
-      const client = await createClient(logger, parentOptions);
+    new Command()
+      .name("update")
+      .description("Update installed runtime extensions.")
+      .argument(
+        "[query]",
+        "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
+      )
+      .option("-a, --all", "Update all installed runtime extensions")
+      .option(
+        "--allow-incompatible",
+        "Include runtime extensions that are incompatible with your system",
+      )
+      .addOption(
+        new Option(
+          "--channel <channel>",
+          "Override the runtime extension channel to query from",
+        ).choices(["stable", "beta"]),
+      )
+      .option("--dry-run", "Show extensions that would be updated without performing downloads")
+      .option("-y, --yes", "Skip confirmation prompts")
+      .action(async function (queryArgument: string | undefined, options) {
+        const parentOptions = this.parent?.opts() ?? {};
+        const logger = createLogger(parentOptions);
+        const client = await createClient(logger, parentOptions);
 
-      await runtimeUpdateAction(logger, client, queryArgument, {
-        all: options.all ?? false,
-        allowIncompatible: options.allowIncompatible ?? false,
-        channel: options.channel,
-        dryRun: options.dryRun ?? false,
-        yes: options.yes ?? false,
-      });
-    }),
+        await runtimeUpdateAction(logger, client, queryArgument, {
+          all: options.all ?? false,
+          allowIncompatible: options.allowIncompatible ?? false,
+          channel: options.channel,
+          dryRun: options.dryRun ?? false,
+          yes: options.yes ?? false,
+        });
+      }),
+  ),
 );
