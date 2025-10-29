@@ -18,9 +18,10 @@ export const DEFAULT_SERVER_PORT: number = 1234;
 export async function checkHttpServer(
   logger: SimpleLogger,
   port: number,
-  host: string = "127.0.0.1",
+  host: string | undefined = undefined,
 ) {
-  const url = `http://${host}:${port}/lmstudio-greeting`;
+  const resolvedHost = host ?? "127.0.0.1";
+  const url = `http://${resolvedHost}:${port}/lmstudio-greeting`;
   logger.debug(`Checking server at ${url}`);
   try {
     const abortController = new AbortController();
