@@ -56,7 +56,7 @@ const start = addLogLevelOptions(
         text`
           Port to run the server on. If not provided, the server will run on the same port as the last
           time it was started.
-      `,
+        `,
       ).argParser(createRefinedNumberParser({ integer: true, min: 0, max: 65535 })),
     )
     .option(
@@ -65,14 +65,14 @@ const start = addLogLevelOptions(
         Network address to bind the server to. Use "0.0.0.0" to accept connections from the
         local network, or "127.0.0.1" (default) for localhost only. Can also be set via the
         LMS_SERVER_HOST environment variable.
-    `,
+      `,
     )
     .option(
       "--cors",
       text`
         Enable CORS on the server. Allows any website you visit to access the server. This is
         required if you are developing a web application.
-    `,
+      `,
     ),
 ).action(async options => {
   const { port, bind, cors = false, ...logArgs } = options;
@@ -85,15 +85,18 @@ const start = addLogLevelOptions(
   }
 
   // Priority order: CLI flag > Environment variable > Persisted setting > Default value
-  const envNetworkInterface = process.env.LMS_SERVER_HOST;
-  const resolvedNetworkInterface = bind ?? (envNetworkInterface || "127.0.0.1");
+  let envNetworkInterface = process.env.LMS_SERVER_HOST;
+  if (envNetworkInterface === "") {
+    envNetworkInterface = undefined;
+  }
+  const resolvedNetworkInterface = bind ?? envNetworkInterface ?? "127.0.0.1";
 
   const resolvedPort = port ?? (await getServerConfig(logger))?.port ?? DEFAULT_SERVER_PORT;
   logger.debug(`Attempting to start the server on port ${resolvedPort}...`);
 
   if (resolvedNetworkInterface !== "127.0.0.1") {
     logger.warnText`
-      Server will accept connections from the local network. Only use this if you know what you are doing!
+      Server will accept connections from the network. Only use this if you know what you are doing!
     `;
   }
 

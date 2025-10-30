@@ -15,11 +15,7 @@ export const DEFAULT_SERVER_PORT: number = 1234;
 /**
  * Checks if the HTTP server is running.
  */
-export async function checkHttpServer(
-  logger: SimpleLogger,
-  port: number,
-  host: string | undefined = undefined,
-) {
+export async function checkHttpServer(logger: SimpleLogger, port: number, host?: string) {
   const resolvedHost = host ?? "127.0.0.1";
   const url = `http://${resolvedHost}:${port}/lmstudio-greeting`;
   logger.debug(`Checking server at ${url}`);
