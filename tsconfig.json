@@ -3,7 +3,7 @@
     "rootDir": "src",
     "outDir": "dist",
     "strict": true,
-    "target": "ES2021",
+    "target": "ES2024",
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "jsx": "react-jsx",
