@@ -141,7 +141,7 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
   }
   let path = pathArg;
   const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
   const cliPref = await getCliPref(logger);
 
   const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];

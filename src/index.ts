@@ -5,6 +5,7 @@ import {
   type HelpConfiguration,
 } from "@commander-js/extra-typings";
 import chalk from "chalk";
+import { resolve as resolvePath } from "path";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
 import { clone } from "./subcommands/clone.js";
@@ -26,7 +27,24 @@ import { unload } from "./subcommands/unload.js";
 import { getVersion, printVersionCompact, version } from "./subcommands/version.js";
 import { UserInputError } from "./types/UserInputError.js";
 
-if (process.argv.length === 2) {
+const processArguments = process.argv.slice();
+let commandArguments = processArguments.slice(2);
+
+// If we don't pass in any arguments, in bun, the first argument is the path to the execPath.
+// So we need to check for that and remove it.
+if (commandArguments.length === 1) {
+  try {
+    const resolvedCandidatePath = resolvePath(commandArguments[0]);
+    const resolvedExecPath = resolvePath(process.execPath);
+    if (resolvedCandidatePath === resolvedExecPath) {
+      commandArguments = [];
+    }
+  } catch {
+    // If path resolution fails for any reason, fall back to the original arguments.
+  }
+}
+
+if (commandArguments.length === 0) {
   printVersionCompact();
   console.info();
 }
@@ -156,8 +174,13 @@ program.addCommand(status, { hidden: true });
 program.addCommand(version, { hidden: true });
 
 applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig);
-
-program.parseAsync(process.argv).catch((error: unknown) => {
+// Here we manually pass in the arguments to avoid Commander.js's built-in parsing of process.argv
+// which can interfere with our custom handling of no-argument case above.
+//
+// According to the docs, the first two are - the application as argv[0] and the script being run in
+// argv[1].
+// https://nodejs.org/docs/latest/api/process.html#processargv
+await program.parseAsync(["node", "lms", ...commandArguments]).catch((error: unknown) => {
   if (error instanceof UserInputError) {
     // Omit stack trace for UserInputErrors
     console.error(error.message);

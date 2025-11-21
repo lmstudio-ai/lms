@@ -66,7 +66,10 @@ removeCommand
   .action(async function (alias) {
     const mergedOptions = this.optsWithGlobals();
     const logger = createLogger(mergedOptions as LogLevelArgs);
-    const client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
+    await using client = await createClient(
+      logger,
+      mergedOptions as CreateClientArgs & LogLevelArgs,
+    );
 
     const { yes = false, dryRun = false } = mergedOptions;
     await removeRuntimeEngine(logger, client, alias, yes, dryRun);

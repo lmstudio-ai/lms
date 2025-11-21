@@ -33,7 +33,7 @@ addLogLevelOptions(unloadCommand);
 unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
   const unloadAll = options.all === true;
   const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
 
   if (unloadAll === true && identifier !== undefined) {
     logger.errorWithoutPrefix(

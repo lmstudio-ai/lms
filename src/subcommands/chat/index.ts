@@ -183,76 +183,78 @@ export async function startInteractiveChat(
   modelName: string,
   opts: StartPredictionOpts,
 ): Promise<void> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: "› ",
-  });
+  return new Promise<void>(resolve => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      prompt: "› ",
+    });
 
-  process.stdout.write("\n");
-  rl.prompt();
-  let isPredicting = false;
-  let abortController: AbortController;
-  rl.addListener("SIGINT", () => {
-    if (isPredicting) {
-      abortController.abort();
-      isPredicting = false;
-    } else {
-      process.exit(0);
-    }
-  });
-  rl.on("line", async (line: string) => {
-    abortController = new AbortController();
-    opts.signal = abortController.signal;
-    const input = line.trim();
-    if (input === "exit" || input === "quit") {
-      rl.close();
-      return;
-    }
+    process.stdout.write("\n");
+    rl.prompt();
+    let isPredicting = false;
+    let abortController: AbortController;
+    rl.addListener("SIGINT", () => {
+      if (isPredicting) {
+        abortController.abort();
+        isPredicting = false;
+      } else {
+        process.exit(0);
+      }
+    });
+    rl.on("line", async (line: string) => {
+      abortController = new AbortController();
+      opts.signal = abortController.signal;
+      const input = line.trim();
+      if (input === "exit" || input === "quit") {
+        rl.close();
+        return;
+      }
 
-    // Skip empty input
-    if (input.length === 0) {
-      rl.prompt();
-      return;
-    }
+      // Skip empty input
+      if (input.length === 0) {
+        rl.prompt();
+        return;
+      }
 
-    try {
-      isPredicting = true;
-      await runInteractivePrediction(llm, chat, input, logger, rl, opts);
-    } catch (err) {
-      isPredicting = false;
-      if (err instanceof Error && err.message.toLowerCase().includes("unloaded") === true) {
-        const shouldReload = await askQuestion("Looks like the model unloaded. Reload?", {
-          rl,
-        });
-        if (shouldReload) {
-          try {
-            llm = await loadModelWithProgress(client, modelName, opts.ttl, logger);
-            process.stdout.write("\n");
-            isPredicting = true;
-            await runInteractivePrediction(llm, chat, input, logger, rl, opts);
-            return;
-          } catch (reloadErr) {
-            logger.error("Error reloading model:", reloadErr);
-            rl.prompt();
-          } finally {
-            isPredicting = false;
+      try {
+        isPredicting = true;
+        await runInteractivePrediction(llm, chat, input, logger, rl, opts);
+      } catch (err) {
+        isPredicting = false;
+        if (err instanceof Error && err.message.toLowerCase().includes("unloaded") === true) {
+          const shouldReload = await askQuestion("Looks like the model unloaded. Reload?", {
+            rl,
+          });
+          if (shouldReload) {
+            try {
+              llm = await loadModelWithProgress(client, modelName, opts.ttl, logger);
+              process.stdout.write("\n");
+              isPredicting = true;
+              await runInteractivePrediction(llm, chat, input, logger, rl, opts);
+              return;
+            } catch (reloadErr) {
+              logger.error("Error reloading model:", reloadErr);
+              rl.prompt();
+            } finally {
+              isPredicting = false;
+            }
+          } else {
+            // User chose not to reload, exit
+            process.exit(0);
           }
         } else {
-          // User chose not to reload, exit
-          process.exit(0);
+          logger.error("Error during chat:", err);
+          rl.prompt();
         }
-      } else {
-        logger.error("Error during chat:", err);
-        rl.prompt();
+      } finally {
+        isPredicting = false;
       }
-    } finally {
-      isPredicting = false;
-    }
-  });
+    });
 
-  rl.on("close", () => {
-    process.exit(0);
+    rl.on("close", () => {
+      resolve();
+    });
   });
 }
 
@@ -276,7 +278,7 @@ const chatCommand = addLogLevelOptions(chatCommandWithClient);
 
 chatCommand.action(async (model, options: ChatCommandOptions) => {
   const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
   const { dontFetchCatalog, yes } = options;
 
   let providedPrompt = "";

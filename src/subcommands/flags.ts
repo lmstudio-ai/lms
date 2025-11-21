@@ -41,7 +41,7 @@ addLogLevelOptions(flagsCommand);
 
 flagsCommand.action(async (flag, value, options: FlagsCommandOptions) => {
   const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
   const { json } = options;
 
   if (flag === undefined) {

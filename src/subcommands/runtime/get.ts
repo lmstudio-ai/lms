@@ -228,7 +228,7 @@ const getCommand = new Command<[], RuntimeGetCommandOptions>()
   .action(async function (queryArgument: string | undefined) {
     const options = this.optsWithGlobals();
     const logger = createLogger(options);
-    const client = await createClient(logger, options);
+    await using client = await createClient(logger, options);
 
     const runtimeGetOptions: RuntimeGetCommandOpts = {
       allowIncompatible: options.allowIncompatible ?? false,

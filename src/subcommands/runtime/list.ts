@@ -132,7 +132,7 @@ const lsCommand = new Command()
     // Access options for logging and client creation
     const options = this.optsWithGlobals();
     const logger = createLogger(options);
-    const client = await createClient(logger, options);
+    await using client = await createClient(logger, options);
 
     await listEngines(logger, client, {});
   });

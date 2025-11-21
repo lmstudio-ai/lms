@@ -53,7 +53,7 @@ addLogLevelOptions(devCommand);
 devCommand.action(async (options: DevCommandOptions) => {
   const { install = false, notify } = options;
   const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
   const projectPath = await findProjectFolderOrExit(logger, cwd());
   const manifestPath = join(projectPath, "manifest.json");
   const manifestParseResult = pluginManifestSchema.safeParse(
