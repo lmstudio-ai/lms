@@ -21,8 +21,11 @@ export function printVersionWithLogo() {
   });
 
   console.info();
-  console.info(`lms - LM Studio CLI - v${getVersion()}`);
-  console.info(chalk.gray("GitHub: https://github.com/lmstudio-ai/lms"));
+  printVersionCompact();
+  console.info();
+  console.info(chalk.blue("Docs: https://lmstudio.ai/docs/developer"));
+  console.info(chalk.blue("Join our Discord: https://discord.gg/lmstudio"));
+  console.info(chalk.blue("Contribute: https://github.com/lmstudio-ai/lms"));
 }
 
 export function printVersionCompact() {

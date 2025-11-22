@@ -17,7 +17,7 @@ import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
-import { printVersionCompact, version } from "./subcommands/version.js";
+import { getVersion, printVersionCompact, printVersionWithLogo, version } from "./subcommands/version.js";
 import { UserInputError } from "./types/UserInputError.js";
 
 if (process.argv.length === 2) {
@@ -54,6 +54,13 @@ program.helpOption(false);
 program.addOption(new Option("-h, --help", "display help for command").hideHelp());
 program.on("option:help", () => {
   program.help({ error: false });
+});
+
+// Add a hidden global version option (-v/--version) that prints and exits without cluttering help
+program.addOption(new Option("-v, --version", "Print the version of the CLI").hideHelp());
+program.on("option:version", () => {
+  console.info(getVersion());
+  process.exit(0);
 });
 
 program.commandsGroup("Manage Models:");
