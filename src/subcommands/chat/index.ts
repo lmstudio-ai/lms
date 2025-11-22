@@ -251,7 +251,7 @@ export const chat = addLogLevelOptions(
   addCreateClientOptions(
     new Command()
       .name("chat")
-      .description("Open an interactive chat with the currently loaded model.")
+      .description("Start an interactive chat with a model")
       .argument("[model]", "Model name to use")
       .option("-p, --prompt <prompt>", "Print response to stdout and quit")
       .option("-s, --system-prompt <systemPrompt>", "Custom system prompt to use for the chat")

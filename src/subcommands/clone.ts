@@ -30,7 +30,7 @@ export const clone = addLogLevelOptions(
   addCreateClientOptions(
     new Command()
       .name("clone")
-      .description("Clone an artifact from LM Studio Hub to a local folder.")
+      .description("Clone an artifact from LM Studio Hub to a local folder")
       .argument(
         "<artifact>",
         "The identifier for the artifact. Must be in the form of 'owner/name'.",

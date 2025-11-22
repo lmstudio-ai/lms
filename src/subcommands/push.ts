@@ -35,7 +35,7 @@ export const push = addLogLevelOptions(
   addCreateClientOptions(
     new Command()
       .name("push")
-      .description("Uploads the plugin in the current folder to LM Studio Hub.")
+      .description("Uploads the artifact in the current folder to LM Studio Hub")
       .option(
         "--description <value>",
         text`

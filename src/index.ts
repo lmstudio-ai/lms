@@ -80,33 +80,35 @@ Learn more:           ${chalk.blue("https://lmstudio.ai/docs/developer")}
 Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`
 );
 
-program.commandsGroup(chalk.bold("Manage Models"));
-program.addCommand(get);
-program.addCommand(importCmd);
-program.addCommand(ls);
-
 program.commandsGroup(chalk.bold("Use Models"));
 program.addCommand(chat);
-program.addCommand(load);
-program.addCommand(ps);
 program.addCommand(server);
+program.addCommand(load);
 program.addCommand(unload);
 
-program.commandsGroup(chalk.bold("Develop & Publish Artifacts"));
-program.addCommand(clone);
-program.addCommand(create);
-program.addCommand(dev);
-program.addCommand(login);
-program.addCommand(push);
+program.commandsGroup(chalk.bold("Manage Models"));
+program.addCommand(get);
+program.addCommand(ls);
+program.addCommand(ps);
+program.addCommand(importCmd);
 
-program.commandsGroup(chalk.bold("System Management"));
+program.commandsGroup(chalk.bold("Runtime"));
+program.addCommand(runtime);
 program.addCommand(bootstrap, { hidden: true });
 program.addCommand(daemon, { hidden: true });
-program.addCommand(flags);
+program.addCommand(flags, { hidden: true });
+program.addCommand(status, { hidden: true });
+program.addCommand(version, { hidden: true });
+
+program.commandsGroup(chalk.bold("Develop & Publish (Beta)"));
+program.addCommand(clone);
+program.addCommand(push);
+program.addCommand(dev);
 program.addCommand(log);
-program.addCommand(runtime);
-program.addCommand(status);
-program.addCommand(version);
+program.addCommand(login);
+program.addCommand(create, { hidden: true });
+
+
 
 program.parseAsync(process.argv).catch((error: any) => {
   if (error instanceof UserInputError) {

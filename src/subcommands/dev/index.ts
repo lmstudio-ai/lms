@@ -19,7 +19,7 @@ export const dev = addLogLevelOptions(
   addCreateClientOptions(
     new Command()
       .name("dev")
-      .description("Starts the development server for the plugin in the current folder.")
+      .description("Starts a plugin dev server in the current folder")
       .option(
         "-i, --install",
         text`
