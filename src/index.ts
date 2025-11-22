@@ -1,4 +1,5 @@
 import { Option, program, type HelpConfiguration } from "@commander-js/extra-typings";
+import chalk from "chalk";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
 import { clone } from "./subcommands/clone.js";
@@ -31,15 +32,24 @@ const HELP_MESSAGE_GAP = 10;
 
 const helpConfig: HelpConfiguration = {
   helpWidth: HELP_MESSAGE_MAX_WIDTH,
+  commandUsage: command => chalk.bold(`${command.name()} ${command.usage()}`),
   subcommandTerm: (cmd: { name(): string }) =>
-    `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${cmd.name().padEnd(cmd.name().length + HELP_MESSAGE_GAP)}`,
+    chalk.cyan(
+      `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${cmd
+        .name()
+        .padEnd(cmd.name().length + HELP_MESSAGE_GAP)}`,
+    ),
   subcommandDescription: (cmd: { description(): string }) => cmd.description(),
   visibleOptions: command =>
     command.options.filter(
       option => option.long !== "--help" && option.short !== "-h" && option.hidden !== true,
     ),
   optionTerm: (option: { flags: string }) =>
-    `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${option.flags.padEnd(option.flags.length + HELP_MESSAGE_GAP)}`,
+    chalk.cyan(
+      `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${option.flags.padEnd(
+        option.flags.length + HELP_MESSAGE_GAP,
+      )}`,
+    ),
   optionDescription: (option: { description?: string }) => option.description ?? "",
   argumentTerm: (arg: { name(): string }) =>
     `${arg.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + arg.name().length, " "),
@@ -66,30 +76,30 @@ program.on("option:version", () => {
 
 program.addHelpText(
   "after", `
-Learn more:           https://lmstudio.ai/docs/developer
-Join our Discord:     https://discord.gg/lmstudio`
+Learn more:           ${chalk.blue("https://lmstudio.ai/docs/developer")}
+Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`
 );
 
-program.commandsGroup("Manage Models");
+program.commandsGroup(chalk.bold("Manage Models"));
 program.addCommand(get);
 program.addCommand(importCmd);
 program.addCommand(ls);
 
-program.commandsGroup("Use Models");
+program.commandsGroup(chalk.bold("Use Models"));
 program.addCommand(chat);
 program.addCommand(load);
 program.addCommand(ps);
 program.addCommand(server);
 program.addCommand(unload);
 
-program.commandsGroup("Develop & Publish Artifacts");
+program.commandsGroup(chalk.bold("Develop & Publish Artifacts"));
 program.addCommand(clone);
 program.addCommand(create);
 program.addCommand(dev);
 program.addCommand(login);
 program.addCommand(push);
 
-program.commandsGroup("System Management");
+program.commandsGroup(chalk.bold("System Management"));
 program.addCommand(bootstrap, { hidden: true });
 program.addCommand(daemon, { hidden: true });
 program.addCommand(flags);
