@@ -140,9 +140,4 @@ function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolea
   }
 }
 
-export const log = new Command()
-  .name("log")
-  .description(
-    "Log operations. Currently only supports streaming logs from LM Studio via `lms log stream`",
-  )
-  .addCommand(stream);
+export const log = new Command().name("log").description("Log operations").addCommand(stream);

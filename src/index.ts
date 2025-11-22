@@ -1,4 +1,4 @@
-import { program } from "@commander-js/extra-typings";
+import { type HelpConfiguration, program } from "@commander-js/extra-typings";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
 import { clone } from "./subcommands/clone.js";
@@ -17,20 +17,19 @@ import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
-import { printVersion, version } from "./subcommands/version.js";
+import { printVersionCompact, version } from "./subcommands/version.js";
 import { UserInputError } from "./types/UserInputError.js";
 
 if (process.argv.length === 2) {
-  printVersion();
+  printVersionCompact();
   console.info();
-  console.info("Usage");
 }
 
-const HELP_MESSAGE_WIDTH = 100;
-const HELP_MESSAGE_PADDING_LEFT = 4;
+const HELP_MESSAGE_PADDING_LEFT = 2;
+const HELP_MESSAGE_MAX_WIDTH = 80;
 
-const helpConfig = {
-  helpWidth: HELP_MESSAGE_WIDTH,
+const helpConfig: HelpConfiguration = {
+  helpWidth: HELP_MESSAGE_MAX_WIDTH,
   subcommandTerm: (cmd: { name(): string }) =>
     `${cmd.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + cmd.name().length, " "),
   subcommandDescription: (cmd: { description(): string }) => cmd.description(),
@@ -42,7 +41,7 @@ const helpConfig = {
   argumentDescription: (arg: { description?: string }) => arg.description ?? "",
 };
 
-program.name("lms").description("LM Studio CLI");
+program.name("lms")
 program.configureHelp(helpConfig);
 
 program.commandsGroup("Manage Models:");
@@ -65,17 +64,13 @@ program.addCommand(login);
 program.addCommand(push);
 
 program.commandsGroup("System Management:");
-program.addCommand(bootstrap);
+program.addCommand(bootstrap, { hidden: true });
 program.addCommand(daemon, { hidden: true });
 program.addCommand(flags);
 program.addCommand(log);
 program.addCommand(runtime);
 program.addCommand(status);
 program.addCommand(version);
-
-program.commands.forEach(cmd => {
-  cmd.configureHelp(helpConfig);
-});
 
 program.parseAsync(process.argv).catch((error: any) => {
   if (error instanceof UserInputError) {

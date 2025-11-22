@@ -1,11 +1,11 @@
 import { Command } from "@commander-js/extra-typings";
 import chalk from "chalk";
 
-function getVersion() {
+export function getVersion() {
   return "<LMS-CLI-CURRENT-VERSION>";
 }
 
-export function printVersion() {
+export function printVersionWithLogo() {
   const lines = [
     String.raw`   __   __  ___  ______          ___        _______   ____`,
     String.raw`  / /  /  |/  / / __/ /___ _____/ (_)__    / ___/ /  /  _/`,
@@ -25,6 +25,13 @@ export function printVersion() {
   console.info(chalk.gray("GitHub: https://github.com/lmstudio-ai/lms"));
 }
 
+export function printVersionCompact() {
+  console.info(
+    chalk.blue("lms"),
+    `is LM Studio's CLI utility for your models, server, and inference runtime. (v${getVersion()})`,
+  );
+}
+
 export const version = new Command()
   .name("version")
   .description("Prints the version of the CLI")
@@ -34,6 +41,6 @@ export const version = new Command()
     if (json) {
       console.info(JSON.stringify({ version: getVersion() }));
     } else {
-      printVersion();
+      printVersionWithLogo();
     }
   });
