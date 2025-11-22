@@ -1,4 +1,4 @@
-import { type HelpConfiguration, program } from "@commander-js/extra-typings";
+import { Option, program, type HelpConfiguration } from "@commander-js/extra-typings";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
 import { clone } from "./subcommands/clone.js";
@@ -33,6 +33,10 @@ const helpConfig: HelpConfiguration = {
   subcommandTerm: (cmd: { name(): string }) =>
     `${cmd.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + cmd.name().length, " "),
   subcommandDescription: (cmd: { description(): string }) => cmd.description(),
+  visibleOptions: command =>
+    command.options.filter(
+      option => option.long !== "--help" && option.short !== "-h" && option.hidden !== true,
+    ),
   optionTerm: (option: { flags: string }) =>
     `${option.flags}`.padStart(HELP_MESSAGE_PADDING_LEFT + option.flags.length, " "),
   optionDescription: (option: { description?: string }) => option.description ?? "",
@@ -41,8 +45,16 @@ const helpConfig: HelpConfiguration = {
   argumentDescription: (arg: { description?: string }) => arg.description ?? "",
 };
 
-program.name("lms")
+program.name("lms");
 program.configureHelp(helpConfig);
+program.helpCommand(false);
+program.helpOption(false);
+
+// Re-add a hidden help option so `-h/--help` still works without showing in help output
+program.addOption(new Option("-h, --help", "display help for command").hideHelp());
+program.on("option:help", () => {
+  program.help({ error: false });
+});
 
 program.commandsGroup("Manage Models:");
 program.addCommand(get);
