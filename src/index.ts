@@ -17,7 +17,7 @@ import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
-import { getVersion, printVersionCompact, printVersionWithLogo, version } from "./subcommands/version.js";
+import { getVersion, printVersionCompact, version } from "./subcommands/version.js";
 import { UserInputError } from "./types/UserInputError.js";
 
 if (process.argv.length === 2) {
@@ -25,20 +25,21 @@ if (process.argv.length === 2) {
   console.info();
 }
 
-const HELP_MESSAGE_PADDING_LEFT = 2;
-const HELP_MESSAGE_MAX_WIDTH = 80;
+const HELP_MESSAGE_PADDING_LEFT = 1;
+const HELP_MESSAGE_MAX_WIDTH = 90;
+const HELP_MESSAGE_GAP = 10;
 
 const helpConfig: HelpConfiguration = {
   helpWidth: HELP_MESSAGE_MAX_WIDTH,
   subcommandTerm: (cmd: { name(): string }) =>
-    `${cmd.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + cmd.name().length, " "),
+    `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${cmd.name().padEnd(cmd.name().length + HELP_MESSAGE_GAP)}`,
   subcommandDescription: (cmd: { description(): string }) => cmd.description(),
   visibleOptions: command =>
     command.options.filter(
       option => option.long !== "--help" && option.short !== "-h" && option.hidden !== true,
     ),
   optionTerm: (option: { flags: string }) =>
-    `${option.flags}`.padStart(HELP_MESSAGE_PADDING_LEFT + option.flags.length, " "),
+    `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${option.flags.padEnd(option.flags.length + HELP_MESSAGE_GAP)}`,
   optionDescription: (option: { description?: string }) => option.description ?? "",
   argumentTerm: (arg: { name(): string }) =>
     `${arg.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + arg.name().length, " "),
@@ -63,26 +64,32 @@ program.on("option:version", () => {
   process.exit(0);
 });
 
-program.commandsGroup("Manage Models:");
+program.addHelpText(
+  "after", `
+Learn more:           https://lmstudio.ai/docs/developer
+Join our Discord:     https://discord.gg/lmstudio`
+);
+
+program.commandsGroup("Manage Models");
 program.addCommand(get);
 program.addCommand(importCmd);
 program.addCommand(ls);
 
-program.commandsGroup("Use Models:");
+program.commandsGroup("Use Models");
 program.addCommand(chat);
 program.addCommand(load);
 program.addCommand(ps);
 program.addCommand(server);
 program.addCommand(unload);
 
-program.commandsGroup("Develop & Publish Artifacts:");
+program.commandsGroup("Develop & Publish Artifacts");
 program.addCommand(clone);
 program.addCommand(create);
 program.addCommand(dev);
 program.addCommand(login);
 program.addCommand(push);
 
-program.commandsGroup("System Management:");
+program.commandsGroup("System Management");
 program.addCommand(bootstrap, { hidden: true });
 program.addCommand(daemon, { hidden: true });
 program.addCommand(flags);
