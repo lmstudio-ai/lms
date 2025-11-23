@@ -84,13 +84,6 @@ const helpConfig: HelpConfiguration = {
 program.name("lms");
 program.configureHelp(helpConfig);
 program.helpCommand(false);
-program.helpOption(false);
-
-// Re-add a hidden help option so `-h/--help` still works without showing in help output
-program.addOption(new Option("-h, --help", "display help for command").hideHelp());
-program.on("option:help", () => {
-  program.help({ error: false });
-});
 
 // Add a hidden global version option (-v/--version) that prints and exits without cluttering help
 program.addOption(new Option("-v, --version", "Print the version of the CLI").hideHelp());
@@ -98,7 +91,6 @@ program.on("option:version", () => {
   console.info(getVersion());
   process.exit(0);
 });
-
 program.addHelpText(
   "after",
   `
