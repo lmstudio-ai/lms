@@ -39,7 +39,7 @@ const FETCH_MODEL_CATALOG_MESSAGE =
   "Always fetch the model catalog ? (requires internet connection)";
 
 export async function getOrAskShouldFetchModelCatalog(
-  offline: boolean,
+  dontFetchCatalog: boolean,
   cliPref: SimpleFileData<CliPref>,
   logger: SimpleLogger,
 ): Promise<boolean> {
@@ -47,7 +47,7 @@ export async function getOrAskShouldFetchModelCatalog(
   let shouldFetchModelCatalog = false;
   inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
   const { prompt } = inquirer;
-  if (offline !== true && fetchModelCatalogPreference !== false) {
+  if (dontFetchCatalog !== true && fetchModelCatalogPreference !== false) {
     if (fetchModelCatalogPreference === undefined) {
       const fetchAnswer = await prompt([
         {
@@ -73,13 +73,13 @@ export async function getOrAskShouldFetchModelCatalog(
 
 export function createModelDisplayOptions(
   modelsMap: Array<{ name: string; isDownloaded: boolean; size: number; inModelCatalog: boolean }>,
-  offline: boolean,
+  dontFetchCatalog: boolean,
 ) {
   return modelsMap.map((model, index) => {
     const status = model.isDownloaded === false ? "DOWNLOAD" : "";
     const size = formatSizeBytes1000(model.size);
 
-    const displayName = offline
+    const displayName = dontFetchCatalog
       ? `${model.name} ${chalk.gray(`(${size})`)}`
       : // uses columnify to align text in columns because we have both downloaded and local models
         // here.
@@ -261,13 +261,13 @@ export const chat = addLogLevelOptions(
           .argParser(createRefinedNumberParser({ integer: true, min: 1 }))
           .default(3600),
       )
-      .option("--offline", "Do not fetch available models to download or updates", false)
+      .option("--dont-fetch-catalog", "Skip fetching the model catalog", false)
       .option("-y, --yes", "Assume 'yes' as answer to all CLI prompts"),
   ),
 ).action(async (model, options) => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
-  const { offline, yes } = options;
+  const { dontFetchCatalog, yes } = options;
 
   let providedPrompt = "";
   if (options.prompt !== undefined && options.prompt !== "") {
@@ -312,7 +312,7 @@ export const chat = addLogLevelOptions(
 
       let modelCatalogModels: HubModel[] = [];
       const shouldFetchModelCatalog = await getOrAskShouldFetchModelCatalog(
-        offline,
+        dontFetchCatalog,
         cliPref,
         logger,
       );
@@ -371,7 +371,7 @@ export const chat = addLogLevelOptions(
       ];
 
       // Pre-compute all display options to avoid recreation on each keystroke
-      const displayOptions = createModelDisplayOptions(modelsMap, offline);
+      const displayOptions = createModelDisplayOptions(modelsMap, dontFetchCatalog);
 
       inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
       const { prompt } = inquirer;
@@ -414,14 +414,14 @@ export const chat = addLogLevelOptions(
       llm = await loadModelWithProgress(client, selectedModel.name, ttl, logger);
     }
   }
-  if (!providedPrompt) {
+  if (providedPrompt.length === 0) {
     logger.info(`Chatting with ${llm.identifier}.  Type 'exit', 'quit' or Ctrl+C to quit`);
   }
 
   const chat = Chat.empty();
   chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
 
-  if (providedPrompt) {
+  if (providedPrompt.length !== 0) {
     await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
       stats: options.stats,
       ttl,
