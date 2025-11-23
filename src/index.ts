@@ -1,4 +1,4 @@
-import { Option, program, type HelpConfiguration } from "@commander-js/extra-typings";
+import { Option, program, type Command, type HelpConfiguration } from "@commander-js/extra-typings";
 import chalk from "chalk";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
@@ -29,16 +29,41 @@ if (process.argv.length === 2) {
 const HELP_MESSAGE_PADDING_LEFT = 1;
 const HELP_MESSAGE_MAX_WIDTH = 90;
 const HELP_MESSAGE_GAP = 10;
+const commandColorByName = new Map<string, string | undefined>();
+
+function formatCommandTerm(commandName: string): string {
+  const color = commandColorByName.get(commandName);
+  const formatter =
+    color === undefined
+      ? (text: string) => chalk.bold(text)
+      : (text: string) => chalk.bold.hex(color)(text);
+  return formatter(
+    `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${commandName.padEnd(
+      commandName.length + HELP_MESSAGE_GAP,
+    )}`,
+  );
+}
+
+function addCommandsGroup(
+  title: string,
+  commands: Array<Command | any>,
+  colorHex?: string | null,
+): void {
+  const commandColor = colorHex ?? undefined;
+  commands.forEach(command => {
+    commandColorByName.set(command.name(), commandColor);
+  });
+  const groupTitle = chalk.bold(title);
+  program.commandsGroup(groupTitle);
+  commands.forEach(command => {
+    program.addCommand(command);
+  });
+}
 
 const helpConfig: HelpConfiguration = {
   helpWidth: HELP_MESSAGE_MAX_WIDTH,
   commandUsage: command => chalk.bold(`${command.name()} ${command.usage()}`),
-  subcommandTerm: (cmd: { name(): string }) =>
-    chalk.cyan(
-      `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${cmd
-        .name()
-        .padEnd(cmd.name().length + HELP_MESSAGE_GAP)}`,
-    ),
+  subcommandTerm: (cmd: { name(): string }) => formatCommandTerm(cmd.name()),
   subcommandDescription: (cmd: { description(): string }) => cmd.description(),
   visibleOptions: command =>
     command.options.filter(
@@ -75,40 +100,23 @@ program.on("option:version", () => {
 });
 
 program.addHelpText(
-  "after", `
+  "after",
+  `
 Learn more:           ${chalk.blue("https://lmstudio.ai/docs/developer")}
-Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`
+Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`,
 );
 
-program.commandsGroup(chalk.bold("Use Models"));
-program.addCommand(chat);
-program.addCommand(server);
-program.addCommand(load);
-program.addCommand(unload);
+addCommandsGroup("Local models", [chat, get, load, unload, ls, ps, importCmd], "#22D3EE");
+addCommandsGroup("Serve", [server, log], "#34D399");
+addCommandsGroup("Runtime", [runtime], "#C084FC");
+addCommandsGroup("Develop & Publish (Beta)", [clone, push, dev, login], "#F9A8D4");
 
-program.commandsGroup(chalk.bold("Manage Models"));
-program.addCommand(get);
-program.addCommand(ls);
-program.addCommand(ps);
-program.addCommand(importCmd);
-
-program.commandsGroup(chalk.bold("Runtime"));
-program.addCommand(runtime);
+program.addCommand(create, { hidden: true });
 program.addCommand(bootstrap, { hidden: true });
 program.addCommand(daemon, { hidden: true });
 program.addCommand(flags, { hidden: true });
 program.addCommand(status, { hidden: true });
 program.addCommand(version, { hidden: true });
-
-program.commandsGroup(chalk.bold("Develop & Publish (Beta)"));
-program.addCommand(clone);
-program.addCommand(push);
-program.addCommand(dev);
-program.addCommand(log);
-program.addCommand(login);
-program.addCommand(create, { hidden: true });
-
-
 
 program.parseAsync(process.argv).catch((error: any) => {
   if (error instanceof UserInputError) {
