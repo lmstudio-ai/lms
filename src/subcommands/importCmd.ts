@@ -380,6 +380,7 @@ async function warnAboutMove(
   }
   if (yes) {
     logger.warn("Warning about move suppressed by the --yes flag.");
+    return;
   }
   logger.debug("Asking user to confirm moving the file");
   process.stderr.write(text`

@@ -1,0 +1,118 @@
+name: LMS CLI Tests
+
+# Group workflow runs by branch and cancel in-progress runs on new commits to avoid PR wastefulness
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+jobs:
+  build-and-test:
+    name: Build and Test LMS CLI
+    runs-on: ubuntu-latest
+    container:
+      image: lmstudio/llmster-preview:cpu
+    timeout-minutes: 30
+    steps:
+      - name: Install git on container
+        run: |
+          apt update
+          apt install -y git
+      - name: Determine lmstudio.js branch
+        id: branch
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          echo "$PR_BODY" > pr_body.txt
+
+          # Always look below separators first
+          LMS_JS_BRANCH=$(awk '/^-+$/{flag=1; next} flag && /lmstudio-js-branch:/{gsub(/.*lmstudio-js-branch:[ \t]*/, ""); gsub(/[ \t].*/, ""); print; exit}' pr_body.txt || true)
+
+          # If not found in separator sections, try anywhere in PR body
+          if [ -z "$LMS_JS_BRANCH" ]; then
+            LMS_JS_BRANCH=$(grep -oP 'lmstudio-js-branch:\s*\K\S+' pr_body.txt || true)
+          fi
+
+          # Fallback to main if not found
+          if [ -z "$LMS_JS_BRANCH" ]; then
+            LMS_JS_BRANCH="main"
+          fi
+
+          echo "branch=$LMS_JS_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Checkout lmstudio.js repo
+        uses: actions/checkout@v4
+        with:
+          repository: lmstudio-ai/lmstudio-js
+          ref: ${{ steps.branch.outputs.branch }}
+          path: lmstudio.js
+          submodules: true
+      - name: Fetch and checkout lms-cli branch
+        run: |
+          cd lmstudio.js/packages/lms-cli
+          git fetch origin ${{ github.head_ref }}:${{ github.head_ref }}
+          git checkout ${{ github.head_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: lmstudio.js/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd lmstudio.js
+          npm install
+
+      - name: Build lmstudio.js
+        run: |
+          cd lmstudio.js
+          npm run build
+
+      - name: Run daemon and tests
+        id: run
+        run: |
+          cd /app
+          echo "Starting up llmd..."
+          ./daemon-run.sh &
+          DAEMON_PID=$!
+          LM_HOME="${HOME}/.lmstudio"
+          MAX_WAIT=120
+          START_TIME=$(date +%s)
+          # Check for the ready files
+          while true; do
+            # Check for any .ready file
+            if ls "${LM_HOME}"/.ready* 1> /dev/null 2>&1; then
+              break
+            fi
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
+            if [ $ELAPSED -ge $MAX_WAIT ]; then
+            echo "Timed out waiting for llmster to start after ${MAX_WAIT} seconds."
+              break
+            fi
+            sleep 1
+          done
+
+          # Setup model
+          # mkdir -p /.lmstudio/hub/models/google
+          # cd /.lmstudio/hub/models/google
+          # lms clone google/gemma-3-1b
+          # mkdir -p /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
+          # cd /.lmstudio/models/lmstudio-community/gemma-3-1b-it-GGUF
+          # if ! command -v wget &> /dev/null; then
+          #   apt-get update
+          #   apt-get install -y wget
+          # fi
+          # wget --quiet -P /tmp https://models.lmstudio.ai/models/gemma-3-1b-it-Q4_K_M.gguf && mv /tmp/gemma-3-1b-it-Q4_K_M.gguf gemma-3-1b-it-Q4_K_M.gguf
+
+          lms get google/gemma-3-1b -y
+
+          # Run tests
+          cd $GITHUB_WORKSPACE/lmstudio.js
+          npm run test-cli -- --verbose
