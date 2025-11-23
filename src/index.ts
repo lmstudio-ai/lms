@@ -1,4 +1,5 @@
-import { program } from "@commander-js/extra-typings";
+import { Option, program, type Command, type HelpConfiguration } from "@commander-js/extra-typings";
+import chalk from "chalk";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
 import { clone } from "./subcommands/clone.js";
@@ -17,65 +18,97 @@ import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
-import { printVersion, version } from "./subcommands/version.js";
+import { getVersion, printVersionCompact, version } from "./subcommands/version.js";
 import { UserInputError } from "./types/UserInputError.js";
 
 if (process.argv.length === 2) {
-  printVersion();
+  printVersionCompact();
   console.info();
-  console.info("Usage");
 }
 
-const HELP_MESSAGE_WIDTH = 100;
-const HELP_MESSAGE_PADDING_LEFT = 4;
+const HELP_MESSAGE_PADDING_LEFT = 1;
+const HELP_MESSAGE_MAX_WIDTH = 90;
+const HELP_MESSAGE_GAP = 10;
+const commandColorByName = new Map<string, string | undefined>();
 
-const helpConfig = {
-  helpWidth: HELP_MESSAGE_WIDTH,
-  subcommandTerm: (cmd: { name(): string }) =>
-    `${cmd.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + cmd.name().length, " "),
+function formatCommandTerm(commandName: string): string {
+  const color = commandColorByName.get(commandName);
+  const formatter =
+    color === undefined
+      ? (text: string) => chalk.bold(text)
+      : (text: string) => chalk.bold.hex(color)(text);
+  return formatter(
+    `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${commandName.padEnd(
+      commandName.length + HELP_MESSAGE_GAP,
+    )}`,
+  );
+}
+
+function addCommandsGroup(
+  title: string,
+  commands: Array<Command | any>,
+  colorHex?: string | null,
+): void {
+  const commandColor = colorHex ?? undefined;
+  commands.forEach(command => {
+    commandColorByName.set(command.name(), commandColor);
+  });
+  const groupTitle = chalk.bold(title);
+  program.commandsGroup(groupTitle);
+  commands.forEach(command => {
+    program.addCommand(command);
+  });
+}
+
+const helpConfig: HelpConfiguration = {
+  helpWidth: HELP_MESSAGE_MAX_WIDTH,
+  commandUsage: command => chalk.bold(`${command.name()} ${command.usage()}`),
+  subcommandTerm: (cmd: { name(): string }) => formatCommandTerm(cmd.name()),
   subcommandDescription: (cmd: { description(): string }) => cmd.description(),
+  visibleOptions: command =>
+    command.options.filter(
+      option => option.long !== "--help" && option.short !== "-h" && option.hidden !== true,
+    ),
   optionTerm: (option: { flags: string }) =>
-    `${option.flags}`.padStart(HELP_MESSAGE_PADDING_LEFT + option.flags.length, " "),
+    chalk.cyan(
+      `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${option.flags.padEnd(
+        option.flags.length + HELP_MESSAGE_GAP,
+      )}`,
+    ),
   optionDescription: (option: { description?: string }) => option.description ?? "",
   argumentTerm: (arg: { name(): string }) =>
     `${arg.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + arg.name().length, " "),
   argumentDescription: (arg: { description?: string }) => arg.description ?? "",
 };
 
-program.name("lms").description("LM Studio CLI");
+program.name("lms");
 program.configureHelp(helpConfig);
+program.helpCommand(false);
 
-program.commandsGroup("Manage Models:");
-program.addCommand(get);
-program.addCommand(importCmd);
-program.addCommand(ls);
-
-program.commandsGroup("Use Models:");
-program.addCommand(chat);
-program.addCommand(load);
-program.addCommand(ps);
-program.addCommand(server);
-program.addCommand(unload);
-
-program.commandsGroup("Develop & Publish Artifacts:");
-program.addCommand(clone);
-program.addCommand(create);
-program.addCommand(dev);
-program.addCommand(login);
-program.addCommand(push);
-
-program.commandsGroup("System Management:");
-program.addCommand(bootstrap);
-program.addCommand(daemon, { hidden: true });
-program.addCommand(flags);
-program.addCommand(log);
-program.addCommand(runtime);
-program.addCommand(status);
-program.addCommand(version);
-
-program.commands.forEach(cmd => {
-  cmd.configureHelp(helpConfig);
+// Add a hidden global version option (-v/--version) that prints and exits without cluttering help
+program.addOption(new Option("-v, --version", "Print the version of the CLI").hideHelp());
+program.on("option:version", () => {
+  console.info(getVersion());
+  process.exit(0);
 });
+program.addHelpText(
+  "after",
+  `
+Learn more:           ${chalk.blue("https://lmstudio.ai/docs/developer")}
+Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`,
+);
+
+addCommandsGroup("Local models", [chat, get, load, unload, ls, ps, importCmd], "#22D3EE");
+addCommandsGroup("Serve", [server, log], "#34D399");
+addCommandsGroup("Runtime", [runtime], "#C084FC");
+addCommandsGroup("Develop & Publish (Beta)", [clone, push, dev, login], "#F9A8D4");
+
+program.addCommand(create, { hidden: true });
+program.addCommand(bootstrap, { hidden: true });
+program.addCommand(daemon, { hidden: true });
+program.addCommand(flags, { hidden: true });
+program.addCommand(status, { hidden: true });
+program.addCommand(version, { hidden: true });
 
 program.parseAsync(process.argv).catch((error: any) => {
   if (error instanceof UserInputError) {

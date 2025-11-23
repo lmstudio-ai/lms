@@ -175,7 +175,7 @@ export const ls = addCreateClientOptions(
   addLogLevelOptions(
     new Command()
       .name("ls")
-      .description("List all downloaded models")
+      .description("List the models available on disk")
       .argument("[modelKey]", "Show variants for the provided model key")
       .option("--llm", "Show only LLM models")
       .option("--embedding", "Show only embedding models")
@@ -350,7 +350,7 @@ export const ps = addCreateClientOptions(
   addLogLevelOptions(
     new Command()
       .name("ps")
-      .description("List all loaded models")
+      .description("List the models currently loaded in memory")
       .option("--json", "Outputs in JSON format to stdout"),
   ),
 ).action(async options => {

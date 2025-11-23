@@ -30,7 +30,7 @@ export const get = addLogLevelOptions(
   addCreateClientOptions(
     new Command()
       .name("get")
-      .description("Searching and downloading a model from online.")
+      .description("Search and download models")
       .argument(
         "[modelName]",
         text`
