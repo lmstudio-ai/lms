@@ -67,13 +67,31 @@ function addCommandsGroup(
   });
 }
 
+type CommandWithOptionalParent = CommandUnknownOpts & { parent?: CommandUnknownOpts | null };
+
+function getCommandPath(command: CommandUnknownOpts): string {
+  const segments: Array<string> = [];
+  let current: CommandWithOptionalParent | null | undefined =
+    command as CommandWithOptionalParent;
+  // Walk up the tree to include the program name in usage
+  while (current !== undefined && current !== null) {
+    segments.push(current.name());
+    const parentCommand = current.parent;
+    if (parentCommand === undefined || parentCommand === null) {
+      break;
+    }
+    current = parentCommand as CommandWithOptionalParent;
+  }
+  return segments.reverse().join(" ");
+}
+
 function createHelpConfiguration(
   maxWidth: number,
   helpMessageGap: number,
 ): HelpConfiguration {
   return {
     helpWidth: maxWidth,
-    commandUsage: command => chalk.bold(`${command.name()} ${command.usage()}`),
+    commandUsage: command => chalk.bold(`${getCommandPath(command)} ${command.usage()}`),
     subcommandTerm: (command: { name(): string }) =>
       formatCommandTerm(command.name(), helpMessageGap),
     subcommandDescription: (command: { description(): string }) => command.description(),
