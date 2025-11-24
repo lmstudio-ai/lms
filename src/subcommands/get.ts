@@ -30,7 +30,10 @@ export const get = addLogLevelOptions(
   addCreateClientOptions(
     new Command()
       .name("get")
-      .description("Search and download models")
+      .description(text`Search and download local models
+
+${chalk.yellow.bold("Use 'lms get' to download models from Hugging Face or the LM Studio Hub.")}
+        `)
       .argument(
         "[modelName]",
         text`
