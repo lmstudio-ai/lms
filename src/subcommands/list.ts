@@ -400,15 +400,13 @@ psCommand.action(async (options: PsCommandOptions) => {
   }
 
   if (loadedModels.length === 0) {
-    logger.error(
-      text`
-        No models are currently loaded
+    logger.infoText`
+      No models are currently loaded.
 
-        To load a model, run:
-
-            ${chalk.yellow("lms load")}${"\n"}
-      `,
-    );
+      To load a model, run:
+        
+          ${chalk.cyan("lms load <model path>")}
+    `;
     return;
   }
 
