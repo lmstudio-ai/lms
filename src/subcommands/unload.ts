@@ -1,34 +1,41 @@
-import { Command } from "@commander-js/extra-typings";
+import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { makeTitledPrettyError, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
 import inquirer from "inquirer";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
-import { addCreateClientOptions, createClient } from "../createClient.js";
-import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
-export const unload = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("unload")
-      .description("Unload a model")
-      .argument(
-        "[identifier]",
-        text`
-          The identifier of the model to unload. If not provided and exactly one model is loaded, it
-          will be unloaded automatically. Otherwise, you will be prompted to select a model
-          interactively from a list.
-        `,
-      )
-      .option("-a, --all", "Unload all models"),
-  ),
-).action(async (identifier, options) => {
-  const { all } = options;
+type UnloadCommandOptions = OptionValues &
+  CreateClientArgs &
+  LogLevelArgs & {
+    all?: boolean;
+  };
+
+const unloadCommand = new Command<[], UnloadCommandOptions>()
+  .name("unload")
+  .description("Unload a model")
+  .argument(
+    "[identifier]",
+    text`
+      The identifier of the model to unload. If not provided and exactly one model is loaded, it
+      will be unloaded automatically. Otherwise, you will be prompted to select a model
+      interactively from a list.
+    `,
+  )
+  .option("-a, --all", "Unload all models");
+
+addCreateClientOptions(unloadCommand);
+addLogLevelOptions(unloadCommand);
+
+unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
+  const unloadAll = options.all === true;
   const logger = createLogger(options);
   const client = await createClient(logger, options);
 
-  if (all && identifier !== undefined) {
+  if (unloadAll === true && identifier !== undefined) {
     logger.errorWithoutPrefix(
       makeTitledPrettyError(
         "Invalid Usage",
@@ -55,7 +62,7 @@ export const unload = addLogLevelOptions(
     return `${identifier} ?(${path})`;
   });
 
-  if (all) {
+  if (unloadAll === true) {
     if (models.length === 0) {
       logger.info("No models to unload.");
     } else {
@@ -143,3 +150,5 @@ export const unload = addLogLevelOptions(
     logger.info(`Model "${selected.identifier}" unloaded.`);
   }
 });
+
+export const unload = unloadCommand;

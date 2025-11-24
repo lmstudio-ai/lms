@@ -40,15 +40,10 @@ const commandColorByName = new Map<string, string | undefined>();
 
 function formatCommandTerm(commandName: string, helpMessageGap: number): string {
   const color = commandColorByName.get(commandName);
-  const formatter =
-    color === undefined
-      ? (text: string) => chalk.bold(text)
-      : (text: string) => chalk.bold.hex(color)(text);
-  return formatter(
-    `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${commandName.padEnd(
-      commandName.length + helpMessageGap,
-    )}`,
-  );
+  const paddedName = commandName.padEnd(commandName.length + helpMessageGap);
+  const coloredName = color === undefined ? paddedName : chalk.hex(color)(paddedName);
+  const boldName = chalk.bold(coloredName);
+  return `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${boldName}`;
 }
 
 function addCommandsGroup(
@@ -71,8 +66,7 @@ type CommandWithOptionalParent = CommandUnknownOpts & { parent?: CommandUnknownO
 
 function getCommandPath(command: CommandUnknownOpts): string {
   const segments: Array<string> = [];
-  let current: CommandWithOptionalParent | null | undefined =
-    command as CommandWithOptionalParent;
+  let current: CommandWithOptionalParent | null | undefined = command as CommandWithOptionalParent;
   // Walk up the tree to include the program name in usage
   while (current !== undefined && current !== null) {
     segments.push(current.name());
@@ -85,10 +79,14 @@ function getCommandPath(command: CommandUnknownOpts): string {
   return segments.reverse().join(" ");
 }
 
-function createHelpConfiguration(
-  maxWidth: number,
-  helpMessageGap: number,
-): HelpConfiguration {
+function dimOptionParameters(flags: string, helpMessageGap: number): string {
+  const dimmedFlags = flags.replace(/(<[^>]+>|\[[^\]]+\])/g, match => chalk.dim(match));
+  return `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${dimmedFlags.padEnd(
+    flags.length + helpMessageGap,
+  )}`;
+}
+
+function createHelpConfiguration(maxWidth: number, helpMessageGap: number): HelpConfiguration {
   return {
     helpWidth: maxWidth,
     commandUsage: command => chalk.bold(`${getCommandPath(command)} ${command.usage()}`),
@@ -100,23 +98,19 @@ function createHelpConfiguration(
         option => option.long !== "--help" && option.short !== "-h" && option.hidden !== true,
       ),
     optionTerm: (option: { flags: string }) =>
-      chalk.cyan(
-        `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${option.flags.padEnd(
-          option.flags.length + helpMessageGap,
-        )}`,
-      ),
+      chalk.cyan(dimOptionParameters(option.flags, helpMessageGap)),
     optionDescription: (option: { description?: string }) => option.description ?? "",
-    argumentTerm: (argument: { name(): string }) =>
-      `${argument.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + argument.name().length, " "),
+    argumentTerm: (argument: { name(): string }) => {
+      const argumentName = argument.name();
+      const paddedName = argumentName.padEnd(argumentName.length + helpMessageGap, " ");
+      return `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${paddedName}`;
+    },
     argumentDescription: (argument: { description?: string }) => argument.description ?? "",
   };
 }
 
 const rootHelpConfig = createHelpConfiguration(HELP_MESSAGE_MAX_WIDTH, HELP_MESSAGE_GAP);
-const subcommandHelpConfig = createHelpConfiguration(
-  SUBCOMMAND_HELP_MESSAGE_MAX_WIDTH,
-  SUBCOMMAND_HELP_MESSAGE_GAP,
-);
+const subcommandHelpConfig = rootHelpConfig;
 
 interface HelpConfigurableCommand {
   commands: ReadonlyArray<CommandUnknownOpts>;

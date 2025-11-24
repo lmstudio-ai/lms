@@ -1,4 +1,4 @@
-import { Command, Option } from "@commander-js/extra-typings";
+import { Command, Option, type OptionValues } from "@commander-js/extra-typings";
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import type { HubModel } from "@lmstudio/lms-shared-types";
@@ -11,9 +11,9 @@ import inquirerAutocompletePrompt from "inquirer-autocomplete-prompt";
 import * as readline from "readline/promises";
 import { getCliPref, type CliPref } from "../../cliPref.js";
 import { askQuestion } from "../../confirm.js";
-import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
 import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
-import { addLogLevelOptions, createLogger } from "../../logLevel.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { type SimpleFileData } from "../../SimpleFileData.js";
 import { createRefinedNumberParser } from "../../types/refinedNumber.js";
 import { downloadArtifact } from "../get.js";
@@ -30,8 +30,19 @@ interface StartPredictionOpts {
   signal?: AbortSignal;
 }
 
+type ChatCommandOptions = OptionValues &
+  CreateClientArgs &
+  LogLevelArgs & {
+    prompt?: string;
+    systemPrompt?: string;
+    stats?: true;
+    ttl: number;
+    dontFetchCatalog: boolean;
+    yes?: boolean;
+  };
+
 const DEFAULT_SYSTEM_PROMPT =
-  "You are a technical AI assistant. Answer questions clearly, concisely and to-the-point.";
+  "You are an AI assistant running in the user's terminal. Provide helpful and concise responses.";
 
 const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
 const MODEL_FILTER_EMPTY_TEXT = "No model matched the filter";
@@ -247,24 +258,25 @@ export async function startInteractiveChat(
   });
 }
 
-export const chat = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("chat")
-      .description("Start an interactive chat with a model")
-      .argument("[model]", "Model name to use")
-      .option("-p, --prompt <prompt>", "Print response to stdout and quit")
-      .option("-s, --system-prompt <systemPrompt>", "Custom system prompt to use for the chat")
-      .option("--stats", "Display detailed prediction statistics after each response")
-      .addOption(
-        new Option("--ttl <ttl>", "Time (in seconds) to keep the model loaded after the chat ends")
-          .argParser(createRefinedNumberParser({ integer: true, min: 1 }))
-          .default(3600),
-      )
-      .option("--dont-fetch-catalog", "Skip fetching the model catalog", false)
-      .option("-y, --yes", "Assume 'yes' as answer to all CLI prompts"),
-  ),
-).action(async (model, options) => {
+const chatCommandBase = new Command<[], ChatCommandOptions>()
+  .name("chat")
+  .description("Start an interactive chat with a model")
+  .argument("[model]", "Model name to use")
+  .option("-p, --prompt <prompt>", "Print response to stdout and quit")
+  .option("-s, --system-prompt <systemPrompt>", "Custom system prompt to use for the chat")
+  .option("--stats", "Display detailed prediction statistics after each response")
+  .addOption(
+    new Option("--ttl <ttl>", "Time (in seconds) to keep the model loaded after the chat ends")
+      .argParser(createRefinedNumberParser({ integer: true, min: 1 }))
+      .default(3600),
+  )
+  .option("--dont-fetch-catalog", "Skip fetching the model catalog", false)
+  .option("-y, --yes", "Assume 'yes' as answer to all CLI prompts");
+
+const chatCommandWithClient = addCreateClientOptions(chatCommandBase);
+const chatCommand = addLogLevelOptions(chatCommandWithClient);
+
+chatCommand.action(async (model, options: ChatCommandOptions) => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
   const { dontFetchCatalog, yes } = options;
@@ -436,3 +448,5 @@ export const chat = addLogLevelOptions(
     process.exit(0);
   }
 });
+
+export const chat = chatCommand;

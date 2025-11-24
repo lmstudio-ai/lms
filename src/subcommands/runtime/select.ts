@@ -3,8 +3,8 @@ import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type ModelFormatName } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { compareVersions } from "../../compareVersions.js";
-import { addCreateClientOptions, createClient } from "../../createClient.js";
-import { addLogLevelOptions, createLogger } from "../../logLevel.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { findLatestVersion } from "./helpers/findLatestVersion.js";
 import {
@@ -142,29 +142,28 @@ async function selectLatestVersionOfSelectedEngines(
   }
 }
 
-export const select = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("select")
-      .description("Select installed LLM engines")
-      .argument("[alias]", "Alias of an LLM engine")
-      .option("--latest", "Select the latest version")
-      .action(async function (alias, options) {
-        const parentOptions = this.parent?.opts() ?? {};
-        const logger = createLogger(parentOptions);
-        const client = await createClient(logger, parentOptions);
+const selectCommand = new Command()
+  .name("select")
+  .description("Select installed LLM engines")
+  .argument("[alias]", "Alias of an LLM engine")
+  .option("--latest", "Select the latest version")
+  .action(async function (alias) {
+    const mergedOptions = this.optsWithGlobals();
+    const logger = createLogger(mergedOptions as LogLevelArgs);
+    const client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
 
-        const { latest = false } = options;
+    const { latest = false } = mergedOptions;
 
-        if (alias === undefined && latest === false) {
-          throw new UserInputError("Must specify at least one of [alias] or --latest");
-        } else if (alias === undefined) {
-          // latest must be true
-          await selectLatestVersionOfSelectedEngines(logger, client);
-        } else {
-          // alias must be defined, latest may be true or false
-          await selectRuntimeEngine(logger, client, alias, latest);
-        }
-      }),
-  ),
-);
+    if (alias === undefined && latest === false) {
+      throw new UserInputError("Must specify at least one of [alias] or --latest");
+    } else if (alias === undefined) {
+      await selectLatestVersionOfSelectedEngines(logger, client);
+    } else {
+      await selectRuntimeEngine(logger, client, alias, latest);
+    }
+  });
+
+addCreateClientOptions(selectCommand);
+addLogLevelOptions(selectCommand);
+
+export const select = selectCommand;

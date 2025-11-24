@@ -1,4 +1,9 @@
-import { Command, InvalidArgumentError, Option } from "@commander-js/extra-typings";
+import {
+  Command,
+  InvalidArgumentError,
+  Option,
+  type OptionValues,
+} from "@commander-js/extra-typings";
 import { type SimpleLogger, text } from "@lmstudio/lms-common";
 import {
   type ArtifactDependency,
@@ -16,12 +21,12 @@ import { join } from "path";
 import { cwd } from "process";
 import YAML from "yaml";
 import { askQuestion } from "../confirm.js";
-import { addCreateClientOptions, createClient } from "../createClient.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { ensureAuthenticated } from "../ensureAuthenticated.js";
 import { exists } from "../exists.js";
 import { findProjectFolderOrExit } from "../findProjectFolder.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
-import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 const overridesParser = (str: string): any => {
   try {
@@ -31,41 +36,52 @@ const overridesParser = (str: string): any => {
   }
 };
 
-export const push = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("push")
-      .description("Uploads the artifact in the current folder to LM Studio Hub")
-      .option(
-        "--description <value>",
-        text`
-          Description of the artifact. If provided, will overwrite the existing description.
-        `,
-      )
-      .addOption(new Option("--overrides <value>", "JSON string").argParser(overridesParser))
-      .option(
-        "-y, --yes",
-        text`
-          Suppress all confirmations and warnings.
-        `,
-      )
-      .option(
-        "--private",
-        text`
-          When specified, the published artifact will be marked as private. This flag is only
-          effective if the artifact did not exist before. (It will not change the visibility of an
-          existing artifact.)
-        `,
-      )
-      .option(
-        "--write-revision",
-        text`
-          When specified, the revision number will be written to the manifest.json file. This is
-          useful if you want to keep track of the revision number in your source control.
-        `,
-      ),
-  ),
-).action(async options => {
+type PushCommandOptions = OptionValues &
+  CreateClientArgs &
+  LogLevelArgs & {
+    description?: string;
+    overrides?: string;
+    yes?: boolean;
+    private?: boolean;
+    writeRevision?: boolean;
+  };
+
+const pushCommand = new Command<[], PushCommandOptions>()
+  .name("push")
+  .description("Uploads the artifact in the current folder to LM Studio Hub")
+  .option(
+    "--description <value>",
+    text`
+      Description of the artifact. If provided, will overwrite the existing description.
+    `,
+  )
+  .addOption(new Option("--overrides <value>", "JSON string").argParser(overridesParser))
+  .option(
+    "--write-revision",
+    text`
+      When specified, the revision number will be written to the manifest.json file. This is
+      useful if you want to keep track of the revision number in your source control.
+    `,
+  )
+  .option(
+    "--private",
+    text`
+      When specified, the published artifact will be marked as private. This flag is only
+      effective if the artifact did not exist before. (It will not change the visibility of an
+      existing artifact.)
+    `,
+  )
+  .option(
+    "-y, --yes",
+    text`
+      Automatically approve all prompts. 
+    `,
+  );
+
+addCreateClientOptions(pushCommand);
+addLogLevelOptions(pushCommand);
+
+pushCommand.action(async options => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
   const {
@@ -114,6 +130,8 @@ export const push = addLogLevelOptions(
     onMessage: message => logger.info(message),
   });
 });
+
+export const push = pushCommand;
 
 function printFileList(fileList: LocalArtifactFileList, logger: SimpleLogger) {
   logger.info();

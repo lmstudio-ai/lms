@@ -18,12 +18,17 @@ export function addLogLevelOptions<
   Args extends any[],
   Opts extends OptionValues,
   GlobalOpts extends OptionValues,
->(command: Command<Args, Opts, GlobalOpts>) {
+>(command: Command<Args, Opts, GlobalOpts>): Command<Args, Opts & LogLevelArgs, GlobalOpts> {
   return command
-    .optionsGroup("Logging Options:")
-    .addOption(new Option("--log-level <level>", "The level of logging to use").choices(levels))
-    .option("--quiet", "Suppress all logging")
-    .option("--verbose", "Enable verbose logging");
+    .addOption(
+      new Option("--log-level <level>", "The level of logging to use").choices(levels).hideHelp(),
+    )
+    .addOption(new Option("--quiet", "Suppress all logging").hideHelp())
+    .addOption(new Option("--verbose", "Enable verbose logging").hideHelp()) as Command<
+    Args,
+    Opts & LogLevelArgs,
+    GlobalOpts
+  >;
 }
 
 export interface LogLevelArgs {

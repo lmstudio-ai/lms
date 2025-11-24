@@ -1,13 +1,13 @@
-import { Command } from "@commander-js/extra-typings";
+import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import { type ModelInfo } from "@lmstudio/sdk";
 import chalk from "chalk";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
-import { addCreateClientOptions, createClient } from "../createClient.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { formatTimeLean } from "../formatElapsedTime.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
-import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 function loadedCheck(count: number) {
   if (count === 0) {
@@ -171,19 +171,36 @@ function printModelsWithVariantRows({
   );
 }
 
-export const ls = addCreateClientOptions(
-  addLogLevelOptions(
-    new Command()
-      .name("ls")
-      .description("List the models available on disk")
-      .argument("[modelKey]", "Show variants for the provided model key")
-      .option("--llm", "Show only LLM models")
-      .option("--embedding", "Show only embedding models")
-      .option("--detailed", "[Deprecated] Show detailed view with grouping")
-      .option("--variants", "Show variants for all models")
-      .option("--json", "Outputs in JSON format to stdout"),
-  ),
-).action(async (modelKey: string | undefined, options) => {
+type ListCommandOptions = OptionValues &
+  CreateClientArgs &
+  LogLevelArgs & {
+    llm?: boolean;
+    embedding?: boolean;
+    detailed?: boolean;
+    variants?: boolean;
+    json?: boolean;
+  };
+
+type PsCommandOptions = OptionValues &
+  CreateClientArgs &
+  LogLevelArgs & {
+    json?: boolean;
+  };
+
+const lsCommand = new Command<[], ListCommandOptions>()
+  .name("ls")
+  .description("List the models available on disk")
+  .argument("[modelKey]", "Show variants for the provided model key")
+  .option("--llm", "Show only LLM models")
+  .option("--embedding", "Show only embedding models")
+  .option("--detailed", "[Deprecated] Show detailed view with grouping")
+  .option("--variants", "Show variants for all models")
+  .option("--json", "Outputs in JSON format to stdout");
+
+addCreateClientOptions(lsCommand);
+addLogLevelOptions(lsCommand);
+
+lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
 
@@ -346,14 +363,15 @@ export const ls = addCreateClientOptions(
   }
 });
 
-export const ps = addCreateClientOptions(
-  addLogLevelOptions(
-    new Command()
-      .name("ps")
-      .description("List the models currently loaded in memory")
-      .option("--json", "Outputs in JSON format to stdout"),
-  ),
-).action(async options => {
+const psCommand = new Command<[], PsCommandOptions>()
+  .name("ps")
+  .description("List the models currently loaded in memory")
+  .option("--json", "Outputs in JSON format to stdout");
+
+addCreateClientOptions(psCommand);
+addLogLevelOptions(psCommand);
+
+psCommand.action(async (options: PsCommandOptions) => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
 
@@ -459,3 +477,6 @@ export const ps = addCreateClientOptions(
   );
   console.info();
 });
+
+export const ls = lsCommand;
+export const ps = psCommand;

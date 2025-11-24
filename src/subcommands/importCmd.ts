@@ -1,4 +1,4 @@
-import { Command, InvalidArgumentError } from "@commander-js/extra-typings";
+import { Command, InvalidArgumentError, type OptionValues } from "@commander-js/extra-typings";
 import {
   doesFileNameIndicateModel,
   makeTitledPrettyError,
@@ -18,7 +18,7 @@ import { basename, dirname, join } from "path";
 import { z } from "zod";
 import { getCliPref } from "../cliPref.js";
 import { defaultModelsFolder } from "../lmstudioPaths.js";
-import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 /**
  * Parse user/repo string into tuple
@@ -45,63 +45,86 @@ function validateFilePath(filePath: string): void {
   }
 }
 
-export const importCmd = addLogLevelOptions(
-  new Command()
-    .name("import")
-    .description("Import a model file into LM Studio")
-    .argument("<file-path>", "Path to the model file to import", value => {
-      validateFilePath(value);
-      return value;
-    })
-    .option(
-      "-y, --yes",
-      text`
-        Suppress all confirmations and warnings. Will also attempt to automatically resolve the
-        user and repository from the file name.
-      `,
-    )
-    .option(
-      "--user-repo <user/repo>",
-      text`
-        Manually provide the user and repository in the format "user/repo". Specifying this will
-        skip prompts about how to categorize the model file.
-      `,
-      parseUserRepo,
-    )
-    .option(
-      "-c, --copy",
-      text`
-        Copy the file instead of moving it. This is useful when you want to keep the original file
-        in place.
-      `,
-    )
-    .option(
-      "-L, --hard-link",
-      text`
-        Create a hard link instead of moving or copying the file. This is useful when you want to
-        keep the original file in place.
-      `,
-    )
-    .option(
-      "-l, --symbolic-link",
-      text`
-        Create a symbolic link instead of moving or copying the file. This is useful when you want
-        to keep the original file in place.
-      `,
-    )
-    .option(
-      "--dry-run",
-      text`
-        Do not actually perform the import, just show what would be done.
-      `,
-    ),
-).action(async (path, options) => {
+type ImportCommandOptions = OptionValues &
+  LogLevelArgs & {
+    yes?: boolean;
+    userRepo?: [string, string];
+    copy?: boolean;
+    hardLink?: boolean;
+    symbolicLink?: boolean;
+    dryRun?: boolean;
+  };
+
+const importCommand = new Command<[], ImportCommandOptions>()
+  .name("import")
+  .description("Import a model file into LM Studio")
+  .argument("<file-path>", "Path to the model file to import", value => {
+    validateFilePath(value);
+    return value;
+  })
+  .option(
+    "-y, --yes",
+    text`
+      Automatically approve all prompts. Will also attempt to automatically resolve the
+      user and repository from the file name.
+    `,
+  )
+  .option(
+    "--user-repo <user/repo>",
+    text`
+      Manually provide the user and repository in the format "user/repo". Specifying this will
+      skip prompts about how to categorize the model file.
+    `,
+    parseUserRepo,
+  )
+  .option(
+    "-c, --copy",
+    text`
+      Copy the file instead of moving it. This is useful when you want to keep the original file
+      in place.
+    `,
+  )
+  .option(
+    "-L, --hard-link",
+    text`
+      Create a hard link instead of moving or copying the file. This is useful when you want to
+      keep the original file in place.
+    `,
+  )
+  .option(
+    "-l, --symbolic-link",
+    text`
+      Create a symbolic link instead of moving or copying the file. This is useful when you want
+      to keep the original file in place.
+    `,
+  )
+  .option(
+    "--dry-run",
+    text`
+      Do not actually perform the import, just show what would be done.
+    `,
+  );
+
+addLogLevelOptions(importCommand);
+
+importCommand.action(async (path, options: ImportCommandOptions) => {
   const logger = createLogger(options);
-  const { yes = false, copy, hardLink, symbolicLink, dryRun } = options;
+  const {
+    yes = false,
+    copy: copyOption,
+    hardLink: hardLinkOption,
+    symbolicLink: symbolicLinkOption,
+    dryRun: dryRunOption,
+  } = options;
   let { userRepo } = options;
   logger.debug("Importing model file", path);
 
-  if ((copy === true ? 1 : 0) + (hardLink === true ? 1 : 0) + (symbolicLink === true ? 1 : 0) > 1) {
+  const isCopy = copyOption === true;
+  const isHardLink = hardLinkOption === true;
+  const isSymbolicLink = symbolicLinkOption === true;
+  const isDryRun = dryRunOption === true;
+
+  if ((isCopy ? 1 : 0) + (isHardLink ? 1 : 0) + (isSymbolicLink ? 1 : 0) > 1) {
     logger.error(
       makeTitledPrettyError(
         "Invalid Usage",
@@ -110,12 +133,12 @@ export const importCmd = addLogLevelOptions(
     );
     process.exit(1);
   }
-  const move = copy !== true && hardLink !== true && symbolicLink !== true;
+  const move = isCopy !== true && isHardLink !== true && isSymbolicLink !== true;
   const pm = inquirer.createPromptModule({
     output: process.stderr,
   });
   await validateModelNameOrWarn(logger, pm, path, yes);
-  if (symbolicLink) {
+  if (isSymbolicLink === true) {
     await maybeWarnAboutWindowsSymlink(logger);
   }
   const modelsFolderPath = await resolveModelsFolderPath(logger);
@@ -140,25 +163,25 @@ export const importCmd = addLogLevelOptions(
     /* ignore */
   }
 
-  if (dryRun) {
+  if (isDryRun === true) {
     if (move) {
       logger.info("Would move the file to", targetPath);
-    } else if (copy) {
+    } else if (isCopy === true) {
       logger.info("Would copy the file to", targetPath);
-    } else if (hardLink) {
+    } else if (isHardLink === true) {
       logger.info("Would create a hard link at", targetPath);
-    } else if (symbolicLink) {
+    } else if (isSymbolicLink === true) {
       logger.info("Would create a symbolic link at", targetPath);
     }
     logger.info(`But not actually doing it because of ${chalk.yellow("--dry-run")}`);
   } else {
     if (move) {
       await importViaMove(logger, path, targetPath);
-    } else if (copy) {
+    } else if (isCopy === true) {
       await importViaCopy(logger, path, targetPath);
-    } else if (hardLink) {
+    } else if (isHardLink === true) {
       await importViaHardLink(logger, path, targetPath);
-    } else if (symbolicLink) {
+    } else if (isSymbolicLink === true) {
       await importViaSymbolicLink(logger, path, targetPath);
     }
   }
@@ -739,3 +762,5 @@ async function findCandidateHuggingFaceUserRepos(logger: SimpleLogger, fileName:
   logger.debug("Candidates found", candidates);
   return candidates;
 }
+
+export const importCmd = importCommand;

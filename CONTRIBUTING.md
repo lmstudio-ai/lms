@@ -2,7 +2,7 @@
 
 First off, thank you for considering contributing to our open source projects! 👾❤️
 
-`lms` is LM Studio’s command line utility tool. It is an open-source project under the MIT license. We welcome community contributions. 
+`lms` is LM Studio’s command line utility tool. It is an open-source project under the MIT license. We welcome community contributions.
 
 There are many ways to help, from writing tutorials or blog posts, improving the documentation, submitting bug reports and feature requests or contributing code which can be incorporated into `lms` itself.
 

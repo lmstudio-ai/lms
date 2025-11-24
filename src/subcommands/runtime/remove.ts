@@ -2,8 +2,8 @@ import { Command } from "@commander-js/extra-typings";
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { askQuestion } from "../../confirm.js";
-import { addCreateClientOptions, createClient } from "../../createClient.js";
-import { addLogLevelOptions, createLogger } from "../../logLevel.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { resolveMultipleRuntimeExtensions } from "./helpers/resolveRuntimeExtensions.js";
 
 /**
@@ -52,19 +52,24 @@ async function removeRuntimeEngine(
   }
 }
 
-export const remove = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command().name("remove").description("Remove installed runtime extension packs"),
-  )
-    .argument("<name>", "Name of a runtime extension pack")
-    .option("-y, --yes", "Answer yes to all confirmations")
-    .option("--dry-run", "Do not execute the operation")
-    .action(async function (alias, options) {
-      const parentOptions = this.parent?.opts() ?? {};
-      const logger = createLogger(parentOptions);
-      const client = await createClient(logger, parentOptions);
+const removeCommand = new Command()
+  .name("remove")
+  .description("Remove installed runtime extension packs");
 
-      const { yes = false, dryRun = false } = options;
-      await removeRuntimeEngine(logger, client, alias, yes, dryRun);
-    }),
-);
+addCreateClientOptions(removeCommand);
+addLogLevelOptions(removeCommand);
+
+removeCommand
+  .argument("<name>", "Name of a runtime extension pack")
+  .option("-y, --yes", "Answer yes to all confirmations")
+  .option("--dry-run", "Do not execute the operation")
+  .action(async function (alias) {
+    const mergedOptions = this.optsWithGlobals();
+    const logger = createLogger(mergedOptions as LogLevelArgs);
+    const client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
+
+    const { yes = false, dryRun = false } = mergedOptions;
+    await removeRuntimeEngine(logger, client, alias, yes, dryRun);
+  });
+
+export const remove = removeCommand;

@@ -47,28 +47,23 @@ interface AppInstallLocation {
 
 /**
  * Adds create client options to a commander.js command
- *
- * This creates an Options Group. If other options are added without defining their own group,
- * then they will be (likely erroneously) added to the this group.
- * To avoid this, developers should either:
- *   1. Define an options group before adding subsequent options
- *   2. Add all options _before_ adding this group
  */
 export function addCreateClientOptions<
   Args extends any[],
   Opts extends OptionValues,
   GlobalOpts extends OptionValues,
->(command: Command<Args, Opts, GlobalOpts>) {
+>(command: Command<Args, Opts, GlobalOpts>): Command<Args, Opts & CreateClientArgs, GlobalOpts> {
   return command
-    .optionsGroup("Instance Options:")
-    .option(
-      "--host <host>",
-      text`
-        If you wish to connect to a remote LM Studio instance, specify the host here. Note that, in
-        this case, lms will connect using client identifier "lms-cli-remote-<random chars>", which
-        will not be a privileged client, and will restrict usage of functionalities such as
-        "lms push".
-      `,
+    .addOption(
+      new Option(
+        "--host <host>",
+        text`
+          If you wish to connect to a remote LM Studio instance, specify the host here. Note that, in
+          this case, lms will connect using client identifier "lms-cli-remote-<random chars>", which
+          will not be a privileged client, and will restrict usage of functionalities such as
+          "lms push".
+        `,
+      ).hideHelp(),
     )
     .addOption(
       new Option(
@@ -77,11 +72,13 @@ export function addCreateClientOptions<
           The port where LM Studio can be reached. If not provided and the host is set to "127.0.0.1"
           (default), the last used port will be used; otherwise, ${DEFAULT_SERVER_PORT} will be used.
         `,
-      ).argParser(createRefinedNumberParser({ integer: true, min: 0, max: 65535 })),
-    );
+      )
+        .argParser(createRefinedNumberParser({ integer: true, min: 0, max: 65535 }))
+        .hideHelp(),
+    ) as Command<Args, Opts & CreateClientArgs, GlobalOpts>;
 }
 
-interface CreateClientArgs {
+export interface CreateClientArgs {
   yes?: boolean;
   host?: string;
   port?: number;

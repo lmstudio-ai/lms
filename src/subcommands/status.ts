@@ -1,4 +1,4 @@
-import { Command } from "@commander-js/extra-typings";
+import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import chalk from "chalk";
 import {
@@ -6,16 +6,26 @@ import {
   checkHttpServer,
   createClient,
   DEFAULT_SERVER_PORT,
+  type CreateClientArgs,
 } from "../createClient.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
-import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { getServerConfig } from "./server.js";
 
-export const status = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command().name("status").description("Prints the status of LM Studio"),
-  ),
-).action(async options => {
+type StatusCommandOptions = OptionValues &
+  CreateClientArgs &
+  LogLevelArgs & {
+    json?: boolean;
+  };
+
+const statusCommand = new Command<[], StatusCommandOptions>()
+  .name("status")
+  .description("Prints the status of LM Studio");
+
+addCreateClientOptions(statusCommand);
+addLogLevelOptions(statusCommand);
+
+statusCommand.action(async options => {
   const logger = createLogger(options);
   let { host, port } = options;
   if (host === undefined) {
@@ -70,3 +80,5 @@ export const status = addLogLevelOptions(
   }
   console.info(content);
 });
+
+export const status = statusCommand;

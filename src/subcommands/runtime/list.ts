@@ -125,19 +125,19 @@ async function listEngines(
   );
 }
 
-export const ls = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("ls")
-      .description("List installed LLM engines")
-      .action(async function () {
-        // Access parent options for logging and client creation
-        const parentOptions = this.parent?.opts() ?? {};
+const lsCommand = new Command()
+  .name("ls")
+  .description("List installed LLM engines")
+  .action(async function () {
+    // Access options for logging and client creation
+    const options = this.optsWithGlobals();
+    const logger = createLogger(options);
+    const client = await createClient(logger, options);
 
-        const logger = createLogger(parentOptions);
-        const client = await createClient(logger, parentOptions);
+    await listEngines(logger, client, {});
+  });
 
-        await listEngines(logger, client, {});
-      }),
-  ),
-);
+addCreateClientOptions(lsCommand);
+addLogLevelOptions(lsCommand);
+
+export const ls = lsCommand;
