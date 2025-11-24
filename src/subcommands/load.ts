@@ -59,35 +59,33 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   .argument(
     "[path]",
     text`
-      The path of the model to load. If not provided, you will be prompted to select one. If
-      multiple models match the path, you will also be prompted to select one. If you don't wish
-      to be prompted, please use the --exact or the --yes flag.
+      The path of the model to load. If not provided, enters an interactive mode to select a model.
     `,
+  )
+  .addOption(
+    new Option(
+      "--gpu <offload-ratio>",
+      text`
+        GPU offload ratio. Valid values: "off" (disable GPU), "max" (full offload), or a number
+        between 0 and 1 (e.g., "0.5" for 50% offload). By default, LM Studio automatically
+        determines the optimal offload ratio.
+      `,
+    ).argParser(gpuOptionParser),
+  )
+  .addOption(
+    new Option(
+      "-c, --context-length <length>",
+      text`
+        The number of tokens to consider as context when generating text. If not provided, the
+        default value will be used.
+      `,
+    ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
   .addOption(
     new Option(
       "--ttl <seconds>",
       text`
         TTL: If provided, when the model is not used for this number of seconds, it will be unloaded.
-      `,
-    ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
-  )
-  .addOption(
-    new Option(
-      "--gpu <offload-ratio>",
-      text`
-        How much to offload to the GPU. If "off", GPU offloading is disabled. If "max", all layers
-        are offloaded to GPU. If a number between 0 and 1, that fraction of layers will be offloaded
-        to the GPU. By default, LM Studio will decide how much to offload to the GPU.
-      `,
-    ).argParser(gpuOptionParser),
-  )
-  .addOption(
-    new Option(
-      "--context-length <length>",
-      text`
-        The number of tokens to consider as context when generating text. If not provided, the
-        default value will be used.
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
@@ -106,17 +104,17 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     `,
   )
   .option(
+    "--estimate-only",
+    text`
+      Calculate an estimate of the resources required to load the model. Does not load the model.
+    `,
+  )
+  .option(
     "-y, --yes",
     text`
       Automatically approve all prompts. Useful for scripting. If there are multiple
       models matching the path, the first one will be loaded. Fails if the path provided does not
       match any model.
-    `,
-  )
-  .option(
-    "--estimate-only",
-    text`
-      Calculate an estimate of the resources required to load the model. Does not load the model.
     `,
   );
 
