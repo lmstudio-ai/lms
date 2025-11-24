@@ -1,14 +1,21 @@
-import { Command } from "@commander-js/extra-typings";
+import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { LMStudioClient } from "@lmstudio/sdk";
 import { tryFindLocalAPIServer } from "../createClient.js";
-import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
-const status = addLogLevelOptions(
-  new Command()
-    .name("status")
-    .description("Check the status of the LM Studio daemon")
-    .option("--json", "Output status in JSON format"),
-).action(async options => {
+type DaemonStatusCommandOptions = OptionValues &
+  LogLevelArgs & {
+    json?: boolean;
+  };
+
+const status = new Command<[], DaemonStatusCommandOptions>()
+  .name("status")
+  .description("Check the status of the LM Studio daemon")
+  .option("--json", "Output status in JSON format");
+
+addLogLevelOptions(status);
+
+status.action(async (options: DaemonStatusCommandOptions) => {
   const logger = createLogger(options);
   const useJson = options.json ?? false;
 

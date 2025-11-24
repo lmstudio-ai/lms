@@ -1,4 +1,9 @@
-import { Option, program, type Command, type HelpConfiguration } from "@commander-js/extra-typings";
+import {
+  Option,
+  program,
+  type CommandUnknownOpts,
+  type HelpConfiguration,
+} from "@commander-js/extra-typings";
 import chalk from "chalk";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
@@ -29,24 +34,21 @@ if (process.argv.length === 2) {
 const HELP_MESSAGE_PADDING_LEFT = 1;
 const HELP_MESSAGE_MAX_WIDTH = 90;
 const HELP_MESSAGE_GAP = 10;
+const SUBCOMMAND_HELP_MESSAGE_MAX_WIDTH = 130;
+const SUBCOMMAND_HELP_MESSAGE_GAP = 3;
 const commandColorByName = new Map<string, string | undefined>();
 
-function formatCommandTerm(commandName: string): string {
+function formatCommandTerm(commandName: string, helpMessageGap: number): string {
   const color = commandColorByName.get(commandName);
-  const formatter =
-    color === undefined
-      ? (text: string) => chalk.bold(text)
-      : (text: string) => chalk.bold.hex(color)(text);
-  return formatter(
-    `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${commandName.padEnd(
-      commandName.length + HELP_MESSAGE_GAP,
-    )}`,
-  );
+  const paddedName = commandName.padEnd(commandName.length + helpMessageGap);
+  const coloredName = color === undefined ? paddedName : chalk.hex(color)(paddedName);
+  const boldName = chalk.bold(coloredName);
+  return `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${boldName}`;
 }
 
 function addCommandsGroup(
   title: string,
-  commands: Array<Command | any>,
+  commands: Array<CommandUnknownOpts>,
   colorHex?: string | null,
 ): void {
   const commandColor = colorHex ?? undefined;
@@ -60,29 +62,74 @@ function addCommandsGroup(
   });
 }
 
-const helpConfig: HelpConfiguration = {
-  helpWidth: HELP_MESSAGE_MAX_WIDTH,
-  commandUsage: command => chalk.bold(`${command.name()} ${command.usage()}`),
-  subcommandTerm: (cmd: { name(): string }) => formatCommandTerm(cmd.name()),
-  subcommandDescription: (cmd: { description(): string }) => cmd.description(),
-  visibleOptions: command =>
-    command.options.filter(
-      option => option.long !== "--help" && option.short !== "-h" && option.hidden !== true,
-    ),
-  optionTerm: (option: { flags: string }) =>
-    chalk.cyan(
-      `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${option.flags.padEnd(
-        option.flags.length + HELP_MESSAGE_GAP,
-      )}`,
-    ),
-  optionDescription: (option: { description?: string }) => option.description ?? "",
-  argumentTerm: (arg: { name(): string }) =>
-    `${arg.name()}`.padStart(HELP_MESSAGE_PADDING_LEFT + arg.name().length, " "),
-  argumentDescription: (arg: { description?: string }) => arg.description ?? "",
-};
+type CommandWithOptionalParent = CommandUnknownOpts & { parent?: CommandUnknownOpts | null };
+
+function getCommandPath(command: CommandUnknownOpts): string {
+  const segments: Array<string> = [];
+  let current: CommandWithOptionalParent | null | undefined = command as CommandWithOptionalParent;
+  // Walk up the tree to include the program name in usage
+  while (current !== undefined && current !== null) {
+    segments.push(current.name());
+    const parentCommand = current.parent;
+    if (parentCommand === undefined || parentCommand === null) {
+      break;
+    }
+    current = parentCommand as CommandWithOptionalParent;
+  }
+  return segments.reverse().join(" ");
+}
+
+function dimOptionParameters(flags: string, helpMessageGap: number): string {
+  const dimmedFlags = flags.replace(/(<[^>]+>|\[[^\]]+\])/g, match => chalk.dim(match));
+  return `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${dimmedFlags.padEnd(
+    flags.length + helpMessageGap,
+  )}`;
+}
+
+function createHelpConfiguration(maxWidth: number, helpMessageGap: number): HelpConfiguration {
+  return {
+    helpWidth: maxWidth,
+    commandUsage: command => chalk.bold(`${getCommandPath(command)} ${command.usage()}`),
+    subcommandTerm: (command: { name(): string }) =>
+      formatCommandTerm(command.name(), helpMessageGap),
+    subcommandDescription: (command: { description(): string }) => command.description(),
+    visibleOptions: command =>
+      command.options.filter(
+        option => option.long !== "--help" && option.short !== "-h" && option.hidden !== true,
+      ),
+    optionTerm: (option: { flags: string }) =>
+      chalk.cyan(dimOptionParameters(option.flags, helpMessageGap)),
+    optionDescription: (option: { description?: string }) => option.description ?? "",
+    argumentTerm: (argument: { name(): string }) => {
+      const argumentName = argument.name();
+      const paddedName = argumentName.padEnd(argumentName.length + helpMessageGap, " ");
+      return `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${paddedName}`;
+    },
+    argumentDescription: (argument: { description?: string }) => argument.description ?? "",
+  };
+}
+
+const rootHelpConfig = createHelpConfiguration(HELP_MESSAGE_MAX_WIDTH, HELP_MESSAGE_GAP);
+const subcommandHelpConfig = rootHelpConfig;
+
+interface HelpConfigurableCommand {
+  commands: ReadonlyArray<CommandUnknownOpts>;
+  configureHelp(helpConfiguration: HelpConfiguration): void;
+}
+
+function applyHelpConfigurationRecursively(
+  commandToConfigure: HelpConfigurableCommand,
+  commandHelpConfig: HelpConfiguration,
+  nestedHelpConfig: HelpConfiguration,
+): void {
+  commandToConfigure.configureHelp(commandHelpConfig);
+  const subcommands = commandToConfigure.commands;
+  for (const subcommand of subcommands) {
+    applyHelpConfigurationRecursively(subcommand, nestedHelpConfig, nestedHelpConfig);
+  }
+}
 
 program.name("lms");
-program.configureHelp(helpConfig);
 program.helpCommand(false);
 
 // Add a hidden global version option (-v/--version) that prints and exits without cluttering help
@@ -110,12 +157,16 @@ program.addCommand(flags, { hidden: true });
 program.addCommand(status, { hidden: true });
 program.addCommand(version, { hidden: true });
 
-program.parseAsync(process.argv).catch((error: any) => {
+applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig);
+
+program.parseAsync(process.argv).catch((error: unknown) => {
   if (error instanceof UserInputError) {
     // Omit stack trace for UserInputErrors
     console.error(error.message);
+  } else if (error instanceof Error) {
+    console.error(error.stack ?? error.message);
   } else {
-    console.error(error?.stack ?? error);
+    console.error(String(error));
   }
   process.exit(1);
 });

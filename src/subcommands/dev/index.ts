@@ -1,4 +1,4 @@
-import { Command } from "@commander-js/extra-typings";
+import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { type SimpleLogger, text, Validator } from "@lmstudio/lms-common";
 import { DenoPluginRunnerWatcher } from "@lmstudio/lms-es-plugin-runner/deno-runner-watcher";
 import { NodePluginRunnerWatcher } from "@lmstudio/lms-es-plugin-runner/node-runner-watcher";
@@ -8,41 +8,50 @@ import { type LMStudioClient, type PluginManifest } from "@lmstudio/sdk";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import { cwd } from "process";
-import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
 import { exists } from "../../exists.js";
 import { findProjectFolderOrExit } from "../../findProjectFolder.js";
-import { addLogLevelOptions, createLogger } from "../../logLevel.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { DenoPluginProcess } from "./DenoPluginProcess.js";
 import { NodePluginProcess } from "./NodePluginProcess.js";
 
-export const dev = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("dev")
-      .description("Starts a plugin dev server in the current folder")
-      .option(
-        "-i, --install",
-        text`
-          When specified, instead of starting the development server, installs the plugin to
-          LM Studio.
-        `,
-      )
-      .option(
-        "-y, --yes",
-        text`
-          Suppress all confirmations and warnings. Useful for scripting.
-          When used with --install, it will overwrite the plugin without asking.
-        `,
-      )
-      .option(
-        "--no-notify",
-        text`
-          When specified, will not produce the "Plugin started" notification in LM Studio.
-        `,
-      ),
-  ),
-).action(async options => {
-  const { install = false, yes = false, notify } = options;
+type DevCommandOptions = OptionValues &
+  CreateClientArgs &
+  LogLevelArgs & {
+    install?: boolean;
+    yes?: boolean;
+    notify?: boolean;
+  };
+
+const devCommand = new Command<[], DevCommandOptions>()
+  .name("dev")
+  .description("Starts a plugin dev server in the current folder")
+  .option(
+    "-i, --install",
+    text`
+      When specified, instead of starting the development server, installs the plugin to
+      LM Studio.
+    `,
+  )
+  .option(
+    "-y, --yes",
+    text`
+      Automatically approve all prompts. Useful for scripting.
+      When used with --install, it will overwrite the plugin without asking.
+    `,
+  )
+  .option(
+    "--no-notify",
+    text`
+      When specified, will not produce the "Plugin started" notification in LM Studio.
+    `,
+  );
+
+addCreateClientOptions(devCommand);
+addLogLevelOptions(devCommand);
+
+devCommand.action(async (options: DevCommandOptions) => {
+  const { install = false, notify } = options;
   const logger = createLogger(options);
   const client = await createClient(logger, options);
   const projectPath = await findProjectFolderOrExit(logger, cwd());
@@ -60,7 +69,8 @@ export const dev = addLogLevelOptions(
   if (install) {
     process.exit(await handleInstall(projectPath, manifest, logger, client));
   } else {
-    await handleDevServer(projectPath, manifest, logger, client, { noNotify: !notify });
+    const noNotify = notify === false;
+    await handleDevServer(projectPath, manifest, logger, client, { noNotify });
   }
 });
 
@@ -143,6 +153,8 @@ async function startNodeDevServer(
   });
   await watcher.start();
 }
+
+export const dev = devCommand;
 
 async function startDenoDevServer(
   projectPath: string,

@@ -6,7 +6,9 @@ import { select } from "./select.js";
 import { update } from "./update.js";
 
 // Create the runtime command
-const runtimeCommand = new Command().name("runtime").description("Manage and update the inference runtime");
+const runtimeCommand = new Command()
+  .name("runtime")
+  .description("Manage and update the inference runtime");
 
 // Add subcommands
 runtimeCommand.addCommand(ls);

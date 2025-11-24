@@ -1,4 +1,4 @@
-import { Command, Option } from "@commander-js/extra-typings";
+import { Command, Option, type OptionValues } from "@commander-js/extra-typings";
 import { type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import {
@@ -18,77 +18,89 @@ import fuzzy from "fuzzy";
 import inquirer from "inquirer";
 import inquirerPrompt from "inquirer-autocomplete-prompt";
 import { askQuestion } from "../confirm.js";
-import { addCreateClientOptions, createClient } from "../createClient.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
 import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
 import { handleDownloadWithProgressBar } from "../handleDownloadWithProgressBar.js";
-import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
-export const get = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("get")
-      .description("Search and download models")
-      .argument(
-        "[modelName]",
-        text`
-          The model to download. If not provided, staff picked models will be shown. For models that
-          have multiple quantizations, you can specify the quantization by appending it with "@". For
-          example, use "llama-3.1-8b@q4_k_m" to download the llama-3.1-8b model with the specified
-          quantization.
-        `,
-      )
-      .option(
-        "--mlx",
-        text`
-          Whether to include MLX models in the search results. If any of "--mlx" or "--gguf" flag is
-          specified, only models that match the specified flags will be shown; Otherwise only models
-          supported by your installed LM Runtimes will be shown.
-        `,
-      )
-      .option(
-        "--gguf",
-        text`
-          Whether to include GGUF models in the search results. If any of "--mlx" or "--gguf" flag
-          is specified, only models that match the specified flags will be shown; Otherwise only
-          models supported by your installed LM Runtimes will be shown.
-        `,
-      )
-      .addOption(
-        new Option("-n, --limit <value>", "Limit the number of model options.").argParser(
-          createRefinedNumberParser({ integer: true, min: 1 }),
-        ),
-      )
-      .option(
-        "--always-show-all-results",
-        text`
-          By default, an exact model match to the query is automatically selected. If this flag is
-          specified, you're prompted to choose from the model results, even when there's an exact
-          match.
-        `,
-      )
-      .option(
-        "-a, --always-show-download-options",
-        text`
-          By default, if there an exact match for your query, the system will automatically select a
-          quantization based on your hardware. Specifying this flag will always prompt you to choose
-          a download option.
-        `,
-      )
-      .option(
-        "-y, --yes",
-        text`
-          Suppress all confirmations and warnings. Useful for scripting. If there are multiple
-          models matching the search term, the first one will be used. If there are multiple download
-          options, the recommended one based on your hardware will be chosen. Fails if you have
-          specified a quantization via the "@" syntax and the quantization does not exist in the
-          options.
-        `,
-      ),
-  ),
-).action(async (modelName, options) => {
+type GetCommandOptions = OptionValues &
+  CreateClientArgs &
+  LogLevelArgs & {
+    mlx?: boolean;
+    gguf?: boolean;
+    limit?: number;
+    alwaysShowAllResults?: boolean;
+    alwaysShowDownloadOptions?: boolean;
+    yes?: boolean;
+  };
+
+const getCommand = new Command<[], GetCommandOptions>()
+  .name("get")
+  .description(text`Search and download local models`)
+  .argument(
+    "[modelName]",
+    text`
+      The model to download. If not provided, staff picked models will be shown. For models that
+      have multiple quantizations, you can specify the quantization by appending it with "@". For
+      example, use "llama-3.1-8b@q4_k_m" to download the llama-3.1-8b model with the specified
+      quantization.
+    `,
+  )
+  .option(
+    "--mlx",
+    text`
+      Whether to include MLX models in the search results. If any of "--mlx" or "--gguf" flag is
+      specified, only models that match the specified flags will be shown; Otherwise only models
+      supported by your installed LM Runtimes will be shown.
+    `,
+  )
+  .option(
+    "--gguf",
+    text`
+      Whether to include GGUF models in the search results. If any of "--mlx" or "--gguf" flag
+      is specified, only models that match the specified flags will be shown; Otherwise only
+      models supported by your installed LM Runtimes will be shown.
+    `,
+  )
+  .addOption(
+    new Option("-n, --limit <value>", "Limit the number of model options.").argParser(
+      createRefinedNumberParser({ integer: true, min: 1 }),
+    ),
+  )
+  .option(
+    "--always-show-all-results",
+    text`
+      By default, an exact model match to the query is automatically selected. If this flag is
+      specified, you're prompted to choose from the model results, even when there's an exact
+      match.
+    `,
+  )
+  .option(
+    "-a, --always-show-download-options",
+    text`
+      By default, if there an exact match for your query, the system will automatically select a
+      quantization based on your hardware. Specifying this flag will always prompt you to choose
+      a download option.
+    `,
+  )
+  .option(
+    "-y, --yes",
+    text`
+      Automatically approve all prompts. Useful for scripting. If there are multiple
+      models matching the search term, the first one will be used. If there are multiple download
+      options, the recommended one based on your hardware will be chosen. Fails if you have
+      specified a quantization via the "@" syntax and the quantization does not exist in the
+      options.
+    `,
+  );
+
+addCreateClientOptions(getCommand);
+addLogLevelOptions(getCommand);
+
+getCommand.action(async (modelName, options: GetCommandOptions) => {
   const {
     mlx = false,
     gguf = false,
@@ -98,11 +110,11 @@ export const get = addLogLevelOptions(
     yes = false,
   } = options;
   const logger = createLogger(options);
-  if (yes && alwaysShowAllResults) {
+  if (yes === true && alwaysShowAllResults === true) {
     logger.error("You cannot use the --yes flag with the --always-show-all-results flag.");
     process.exit(1);
   }
-  if (yes && alwaysShowDownloadOptions) {
+  if (yes === true && alwaysShowDownloadOptions === true) {
     logger.error("You cannot use the --yes flag with the --always-show-download-options flag.");
     process.exit(1);
   }
@@ -715,3 +727,5 @@ export async function downloadArtifact(
     return await downloadPlanner.download(opts);
   });
 }
+
+export const get = getCommand;

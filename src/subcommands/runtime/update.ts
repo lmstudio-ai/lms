@@ -5,8 +5,8 @@ import { type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { compareVersions } from "../../compareVersions.js";
 import { askQuestion } from "../../confirm.js";
-import { addCreateClientOptions, createClient } from "../../createClient.js";
-import { addLogLevelOptions, createLogger } from "../../logLevel.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import {
   determineLatestLocalVersion,
   downloadRuntimeExtensionWithErrorHandling,
@@ -221,40 +221,41 @@ async function runtimeUpdateAction(
   await performUpdates(logger, client, updateCandidates);
 }
 
-export const update = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("update")
-      .description("Update installed runtime extensions.")
-      .argument(
-        "[query]",
-        "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
-      )
-      .option("-a, --all", "Update all installed runtime extensions")
-      .option(
-        "--allow-incompatible",
-        "Include runtime extensions that are incompatible with your system",
-      )
-      .addOption(
-        new Option(
-          "--channel <channel>",
-          "Override the runtime extension channel to query from",
-        ).choices(["stable", "beta"]),
-      )
-      .option("--dry-run", "Show extensions that would be updated without performing downloads")
-      .option("-y, --yes", "Skip confirmation prompts")
-      .action(async function (queryArgument: string | undefined, options) {
-        const parentOptions = this.parent?.opts() ?? {};
-        const logger = createLogger(parentOptions);
-        const client = await createClient(logger, parentOptions);
+const updateCommand = new Command()
+  .name("update")
+  .description("Update installed runtime extensions.")
+  .argument(
+    "[query]",
+    "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
+  )
+  .option("-a, --all", "Update all installed runtime extensions")
+  .option(
+    "--allow-incompatible",
+    "Include runtime extensions that are incompatible with your system",
+  )
+  .addOption(
+    new Option(
+      "--channel <channel>",
+      "Override the runtime extension channel to query from",
+    ).choices(["stable", "beta"]),
+  )
+  .option("--dry-run", "Show extensions that would be updated without performing downloads")
+  .option("-y, --yes", "Skip confirmation prompts")
+  .action(async function (queryArgument: string | undefined) {
+    const mergedOptions = this.optsWithGlobals();
+    const logger = createLogger(mergedOptions as LogLevelArgs);
+    const client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
 
-        await runtimeUpdateAction(logger, client, queryArgument, {
-          all: options.all ?? false,
-          allowIncompatible: options.allowIncompatible ?? false,
-          channel: options.channel,
-          dryRun: options.dryRun ?? false,
-          yes: options.yes ?? false,
-        });
-      }),
-  ),
-);
+    await runtimeUpdateAction(logger, client, queryArgument, {
+      all: mergedOptions.all ?? false,
+      allowIncompatible: mergedOptions.allowIncompatible ?? false,
+      channel: mergedOptions.channel,
+      dryRun: mergedOptions.dryRun ?? false,
+      yes: mergedOptions.yes ?? false,
+    });
+  });
+
+addCreateClientOptions(updateCommand);
+addLogLevelOptions(updateCommand);
+
+export const update = updateCommand;

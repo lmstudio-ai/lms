@@ -34,7 +34,7 @@ export async function openUrl(url: string): Promise<void> {
       }
     });
 
-    child.on("error", (error) => {
+    child.on("error", error => {
       reject(error);
     });
   });

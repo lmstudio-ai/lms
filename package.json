@@ -10,6 +10,8 @@
     "build": "tsc",
     "watch": "tsc -w",
     "clean": "shx rm -rf ./dist ./tsconfig.tsbuildinfo",
+    "lint": "eslint .",
+    "format": "prettier --write .",
     "postinstall": "patch-package"
   },
   "engines": {
@@ -17,7 +19,7 @@
     "npm": ">=8"
   },
   "author": "LM Studio <team@lmstudio.ai> (https://lmstudio.ai)",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "dependencies": {
     "@lmstudio/lms-common": "^0.8.9",
     "@lmstudio/lms-common-server": "^0.2.18",

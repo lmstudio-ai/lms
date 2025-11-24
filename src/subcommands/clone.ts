@@ -26,25 +26,26 @@ const artifactIdentifierParser = (str: string): { owner: string; name: string } 
   return { owner, name };
 };
 
-export const clone = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("clone")
-      .description("Clone an artifact from LM Studio Hub to a local folder")
-      .argument(
-        "<artifact>",
-        "The identifier for the artifact. Must be in the form of 'owner/name'.",
-        artifactIdentifierParser,
-      )
-      .argument(
-        "[path]",
-        text`
-          The path to the folder to clone the resources into. If not provided, defaults to a new
-          folder with the artifact name in the current working directory.
-      `,
-      ),
-  ),
-).action(async (artifactIdentifier, path = "", options) => {
+const cloneCommand = new Command()
+  .name("clone")
+  .description("Clone an artifact from LM Studio Hub to a local folder")
+  .argument(
+    "<artifact>",
+    "The identifier for the artifact. Must be in the form of 'owner/name'.",
+    artifactIdentifierParser,
+  )
+  .argument(
+    "[path]",
+    text`
+      The path to the folder to clone the resources into. If not provided, defaults to a new
+      folder with the artifact name in the current working directory.
+  `,
+  );
+
+addCreateClientOptions(cloneCommand);
+addLogLevelOptions(cloneCommand);
+
+cloneCommand.action(async (artifactIdentifier, path = "", options) => {
   const logger = createLogger(options);
   const client = await createClient(logger, options);
   const { owner, name } = artifactIdentifier;
@@ -86,3 +87,5 @@ export const clone = addLogLevelOptions(
   });
   logger.info(`Artifact successfully cloned to ${resolvedPath}.`);
 });
+
+export const clone = cloneCommand;

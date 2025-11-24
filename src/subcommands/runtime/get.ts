@@ -1,12 +1,12 @@
-import { Command, Option } from "@commander-js/extra-typings";
+import { Command, Option, type OptionValues } from "@commander-js/extra-typings";
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type DownloadableRuntimeExtensionInfo } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import columnify from "columnify";
 import inquirer from "inquirer";
 import { compareVersions } from "../../compareVersions.js";
-import { addCreateClientOptions, createClient } from "../../createClient.js";
-import { addLogLevelOptions, createLogger } from "../../logLevel.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import {
   determineLatestLocalVersion,
   downloadRuntimeExtensionWithErrorHandling,
@@ -21,6 +21,15 @@ interface RuntimeGetCommandOpts {
   list: boolean;
   yes: boolean;
 }
+
+type RuntimeGetCommandOptions = OptionValues &
+  CreateClientArgs &
+  LogLevelArgs & {
+    allowIncompatible?: boolean;
+    channel?: "stable" | "beta";
+    list?: boolean;
+    yes?: boolean;
+  };
 
 async function searchRuntimeExtensions(
   logger: SimpleLogger,
@@ -197,57 +206,58 @@ async function downloadRuntimeExtension(
   }
 }
 
-export const get = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("get")
-      .description("Download or list runtime extensions.")
-      .argument(
-        "[query]",
-        "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
-      )
-      .option("-l, --list", "List runtime extensions without downloading")
-      .option(
-        "--allow-incompatible",
-        "Include runtime extensions that are incompatible with your system",
-      )
-      .addOption(
-        new Option(
-          "--channel <channel>",
-          "Override the runtime extension channel to query from",
-        ).choices(["stable", "beta"]),
-      )
-      .option("-y, --yes", "Automatically pick the first result when multiple matches are found")
-      .action(async function (queryArgument: string | undefined, commandOptions) {
-        const parentOptions = this.parent?.opts() ?? {};
-        const logger = createLogger(parentOptions);
-        const client = await createClient(logger, parentOptions);
+const getCommand = new Command<[], RuntimeGetCommandOptions>()
+  .name("get")
+  .description("Download or list runtime extensions.")
+  .argument(
+    "[query]",
+    "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
+  )
+  .option("-l, --list", "List runtime extensions without downloading")
+  .option(
+    "--allow-incompatible",
+    "Include runtime extensions that are incompatible with your system",
+  )
+  .addOption(
+    new Option(
+      "--channel <channel>",
+      "Override the runtime extension channel to query from",
+    ).choices(["stable", "beta"]),
+  )
+  .option("-y, --yes", "Automatically pick the first result when multiple matches are found")
+  .action(async function (queryArgument: string | undefined) {
+    const options = this.optsWithGlobals();
+    const logger = createLogger(options);
+    const client = await createClient(logger, options);
 
-        const runtimeGetOptions: RuntimeGetCommandOpts = {
-          allowIncompatible: commandOptions.allowIncompatible ?? false,
-          channel: commandOptions.channel,
-          list: commandOptions.list ?? false,
-          yes: commandOptions.yes ?? false,
-        };
+    const runtimeGetOptions: RuntimeGetCommandOpts = {
+      allowIncompatible: options.allowIncompatible ?? false,
+      channel: options.channel,
+      list: options.list ?? false,
+      yes: options.yes ?? false,
+    };
 
-        const runtimeExtensions = await searchRuntimeExtensions(
-          logger,
-          client,
-          queryArgument,
-          runtimeGetOptions,
-        );
+    const runtimeExtensions = await searchRuntimeExtensions(
+      logger,
+      client,
+      queryArgument,
+      runtimeGetOptions,
+    );
 
-        if (runtimeGetOptions.list === true) {
-          renderRuntimeExtensionsList(logger, runtimeExtensions);
-          return;
-        }
+    if (runtimeGetOptions.list === true) {
+      renderRuntimeExtensionsList(logger, runtimeExtensions);
+      return;
+    }
 
-        const runtimeExtension = await selectRuntimeExtensionToDownload(
-          logger,
-          runtimeExtensions,
-          runtimeGetOptions,
-        );
-        await downloadRuntimeExtension(logger, client, runtimeExtension);
-      }),
-  ),
-);
+    const runtimeExtension = await selectRuntimeExtensionToDownload(
+      logger,
+      runtimeExtensions,
+      runtimeGetOptions,
+    );
+    await downloadRuntimeExtension(logger, client, runtimeExtension);
+  });
+
+addCreateClientOptions(getCommand);
+addLogLevelOptions(getCommand);
+
+export const get = getCommand;

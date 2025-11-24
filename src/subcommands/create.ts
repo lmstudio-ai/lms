@@ -75,12 +75,14 @@ async function getScaffolds(_logger: SimpleLogger) {
   return json as Array<unknown>;
 }
 
-export const create = addLogLevelOptions(
-  new Command()
-    .name("create")
-    .description("Create a new project with scaffolding")
-    .argument("[scaffold]", "The scaffold to use"),
-).action(async (scaffoldName, options) => {
+const createCommand = new Command()
+  .name("create")
+  .description("Create a new project with scaffolding")
+  .argument("[scaffold]", "The scaffold to use");
+
+addLogLevelOptions(createCommand);
+
+createCommand.action(async (scaffoldName, options) => {
   const logger = createLogger(options);
   let allScaffolds: Array<unknown>;
   logger.info("Fetching scaffolds list...");
@@ -380,3 +382,5 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
 
   logger.infoWithoutPrefix(motdLines.join("\n"));
 }
+
+export const create = createCommand;

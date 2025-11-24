@@ -1,16 +1,36 @@
-import { Command, Option } from "@commander-js/extra-typings";
+import { Command, Option, type OptionValues } from "@commander-js/extra-typings";
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { readFile } from "fs/promises";
-import { checkHttpServer, createClient, DEFAULT_SERVER_PORT } from "../createClient.js";
+import {
+  checkHttpServer,
+  createClient,
+  DEFAULT_SERVER_PORT,
+  type CreateClientArgs,
+} from "../createClient.js";
 import { exists } from "../exists.js";
 import { serverConfigPath } from "../lmstudioPaths.js";
-import { addLogLevelOptions, createLogger } from "../logLevel.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
 interface HttpServerConfig {
   port: number;
   networkInterface: string;
 }
+
+type ServerStartCommandOptions = OptionValues &
+  CreateClientArgs &
+  LogLevelArgs & {
+    port?: number;
+    bind?: string;
+    cors?: boolean;
+  };
+
+type ServerStopCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs & {};
+
+type ServerStatusCommandOptions = OptionValues &
+  LogLevelArgs & {
+    json?: boolean;
+  };
 
 /**
  * Checks the HTTP server with retries.
@@ -46,35 +66,37 @@ export async function getServerConfig(logger: SimpleLogger): Promise<HttpServerC
   return lastStatus;
 }
 
-const start = addLogLevelOptions(
-  new Command()
-    .name("start")
-    .description("Starts the local server")
-    .addOption(
-      new Option(
-        "-p, --port <port>",
-        text`
-          Port to run the server on. If not provided, the server will run on the same port as the last
-          time it was started.
-        `,
-      ).argParser(createRefinedNumberParser({ integer: true, min: 0, max: 65535 })),
-    )
-    .option(
-      "--bind <address>",
+const start = new Command<[], ServerStartCommandOptions>()
+  .name("start")
+  .description("Starts the local server")
+  .addOption(
+    new Option(
+      "-p, --port <port>",
       text`
-        Network address to bind the server to. Use "0.0.0.0" to accept connections from the
-        local network, or "127.0.0.1" (default) for localhost only. Can also be set via the
-        LMS_SERVER_HOST environment variable.
+        Port to run the server on. If not provided, the server will run on the same port as the last
+        time it was started.
       `,
-    )
-    .option(
-      "--cors",
-      text`
-        Enable CORS on the server. Allows any website you visit to access the server. This is
-        required if you are developing a web application.
-      `,
-    ),
-).action(async options => {
+    ).argParser(createRefinedNumberParser({ integer: true, min: 0, max: 65535 })),
+  )
+  .option(
+    "--bind <address>",
+    text`
+      Network address to bind the server to. Use "0.0.0.0" to accept connections from the
+      local network, or "127.0.0.1" (default) for localhost only. Can also be set via the
+      LMS_SERVER_HOST environment variable.
+    `,
+  )
+  .option(
+    "--cors",
+    text`
+      Enable CORS on the server. Allows any website you visit to access the server. This is
+      required if you are developing a web application.
+    `,
+  );
+
+addLogLevelOptions(start);
+
+start.action(async options => {
   const { port, bind, cors = false, ...logArgs } = options;
   const logger = createLogger(logArgs);
   const client = await createClient(logger, logArgs);
@@ -115,9 +137,13 @@ const start = addLogLevelOptions(
   }
 });
 
-const stop = addLogLevelOptions(
-  new Command().name("stop").description("Stops the local server"),
-).action(async options => {
+const stop = new Command<[], ServerStopCommandOptions>()
+  .name("stop")
+  .description("Stops the local server");
+
+addLogLevelOptions(stop);
+
+stop.action(async options => {
   const logger = createLogger(options);
   let port: number;
   let networkInterface: string;
@@ -140,17 +166,19 @@ const stop = addLogLevelOptions(
   logger.info(`Stopped the server on port ${port}.`);
 });
 
-const status = addLogLevelOptions(
-  new Command()
-    .name("status")
-    .description("Displays the status of the local server")
-    .option(
-      "--json",
-      text`
-        Outputs the status in JSON format to stdout.
-    `,
-    ),
-).action(async options => {
+const status = new Command<[], ServerStatusCommandOptions>()
+  .name("status")
+  .description("Displays the status of the local server")
+  .option(
+    "--json",
+    text`
+      Outputs the status in JSON format to stdout.
+  `,
+  );
+
+addLogLevelOptions(status);
+
+status.action(async options => {
   const logger = createLogger(options);
   const { json = false } = options;
   let port: undefined | number = undefined;
