@@ -3,10 +3,11 @@ import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type DownloadableRuntimeExtensionInfo } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import columnify from "columnify";
-import inquirer from "inquirer";
+import { select } from "@inquirer/prompts";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
+import { runPromptWithExitHandling } from "../../prompt.js";
 import {
   determineLatestLocalVersion,
   downloadRuntimeExtensionWithErrorHandling,
@@ -139,7 +140,7 @@ async function selectRuntimeExtensionToDownload(
   const isStdoutInteractive = process.stdout.isTTY === true;
   const isStdinInteractive = process.stdin.isTTY === true;
   if (isStdoutInteractive === true && isStdinInteractive === true) {
-    const promptChoices = runtimeExtensions.map((runtimeExtension, runtimeExtensionIndex) => {
+    const promptChoices = runtimeExtensions.map(runtimeExtension => {
       const latestLocalVersion = determineLatestLocalVersion(runtimeExtension.localVersions);
       const remoteVersion = runtimeExtension.version;
 
@@ -166,20 +167,19 @@ async function selectRuntimeExtensionToDownload(
       }
       return {
         name: `${runtimeExtension.name}@${runtimeExtension.version} (${latestLocalDescriptor})`,
-        value: runtimeExtensionIndex,
+        value: runtimeExtension,
       };
     });
 
-    const promptAnswer = await inquirer.prompt<{ extensionIndex: number }>([
-      {
-        type: "list",
-        name: "extensionIndex",
-        message: "Multiple runtime extensions matched the query. Select one to download:",
-        choices: promptChoices,
-      },
-    ]);
-
-    return runtimeExtensions[promptAnswer.extensionIndex];
+    return await runPromptWithExitHandling(() =>
+      select<DownloadableRuntimeExtensionInfo>(
+        {
+          message: "Multiple runtime extensions matched the query. Select one to download:",
+          choices: promptChoices,
+        },
+        { output: process.stderr },
+      ),
+    );
   }
 
   logger.errorText`

@@ -6,8 +6,7 @@ import { Chat, type LLM, type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import columnify from "columnify";
 import fuzzy from "fuzzy";
-import inquirer from "inquirer";
-import inquirerAutocompletePrompt from "inquirer-autocomplete-prompt";
+import { confirm, search } from "@inquirer/prompts";
 import * as readline from "readline/promises";
 import { getCliPref, type CliPref } from "../../cliPref.js";
 import { askQuestion } from "../../confirm.js";
@@ -23,6 +22,7 @@ import {
   loadModelWithProgress,
   readStdin,
 } from "./util.js";
+import { runPromptWithExitHandling } from "../../prompt.js";
 
 interface StartPredictionOpts {
   stats?: true;
@@ -45,7 +45,6 @@ const DEFAULT_SYSTEM_PROMPT =
   "You are an AI assistant running in the user's terminal. Provide helpful and concise responses.";
 
 const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
-const MODEL_FILTER_EMPTY_TEXT = "No model matched the filter";
 const FETCH_MODEL_CATALOG_MESSAGE =
   "Always fetch the model catalog ? (requires internet connection)";
 
@@ -56,21 +55,20 @@ export async function getOrAskShouldFetchModelCatalog(
 ): Promise<boolean> {
   const fetchModelCatalogPreference = cliPref.get().fetchModelCatalog;
   let shouldFetchModelCatalog = false;
-  inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
-  const { prompt } = inquirer;
   if (dontFetchCatalog !== true && fetchModelCatalogPreference !== false) {
     if (fetchModelCatalogPreference === undefined) {
-      const fetchAnswer = await prompt([
-        {
-          type: "confirm",
-          name: "fetch",
-          message: FETCH_MODEL_CATALOG_MESSAGE,
-        },
-      ]);
+      const fetchAnswer = await runPromptWithExitHandling(() =>
+        confirm(
+          {
+            message: FETCH_MODEL_CATALOG_MESSAGE,
+          },
+          { output: process.stderr },
+        ),
+      );
       cliPref.setWithProducer(draft => {
-        draft.fetchModelCatalog = fetchAnswer.fetch;
+        draft.fetchModelCatalog = fetchAnswer;
       });
-      if (fetchAnswer.fetch === true) {
+      if (fetchAnswer === true) {
         logger.info("Setting the preference to always fetch the model catalog.");
         shouldFetchModelCatalog = true;
       }
@@ -385,25 +383,27 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       // Pre-compute all display options to avoid recreation on each keystroke
       const displayOptions = createModelDisplayOptions(modelsMap, dontFetchCatalog);
 
-      inquirer.registerPrompt("autocomplete", inquirerAutocompletePrompt);
-      const { prompt } = inquirer;
-      const answers = await prompt([
-        {
-          type: "autocomplete",
-          name: "model",
-          message: MODEL_SELECTION_MESSAGE,
-          loop: false,
-          pageSize: terminalSize().rows - 4,
-          emptyText: MODEL_FILTER_EMPTY_TEXT,
-          source: async (_answersSoFar: any, input: string | undefined) => {
-            if (input === undefined || input.length === 0) return displayOptions;
-            const options = fuzzy.filter(input, displayOptions, { extract: el => el.searchText });
-            return options.map(option => option.original);
+      const selectedModelName = await runPromptWithExitHandling(() =>
+        search<string>(
+          {
+            message: MODEL_SELECTION_MESSAGE,
+            pageSize: terminalSize().rows - 4,
+            source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
+              void signal;
+              if (inputValue === undefined || inputValue.length === 0) {
+                return displayOptions;
+              }
+              const options = fuzzy.filter(inputValue, displayOptions, {
+                extract: option => option.searchText,
+              });
+              return options.map(option => option.original);
+            },
           },
-        },
-      ]);
+          { output: process.stderr },
+        ),
+      );
 
-      const selectedModel = modelsMap.find(m => m.name === answers.model);
+      const selectedModel = modelsMap.find(modelEntry => modelEntry.name === selectedModelName);
 
       if (selectedModel === undefined) {
         logger.error("No model selected, exiting.");

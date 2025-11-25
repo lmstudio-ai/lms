@@ -7,8 +7,7 @@ import fg from "fast-glob";
 import { existsSync } from "fs";
 import { mkdir, readFile, rename, rm, unlink, writeFile } from "fs/promises";
 import fuzzy from "fuzzy";
-import inquirer from "inquirer";
-import inquirerPrompt from "inquirer-autocomplete-prompt";
+import { input as promptInput, search } from "@inquirer/prompts";
 import { tmpdir } from "os";
 import { join } from "path";
 import * as tar from "tar";
@@ -16,6 +15,7 @@ import util from "util";
 import { z } from "zod";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
+import { runPromptWithExitHandling } from "../prompt.js";
 
 const execAsync = util.promisify(exec);
 const illegalPathChars = ["/", "\\", ":", "*", "?", '"', "<", ">", "|"];
@@ -146,37 +146,37 @@ async function selectScaffold(
   initialSearch: string,
   leaveEmptyLines: number,
 ) {
-  const prompt = inquirer.createPromptModule({ output: process.stderr });
-  prompt.registerPrompt("autocomplete", inquirerPrompt);
-  const { selected } = await prompt({
-    type: "autocomplete",
-    name: "selected",
-    message: chalk.green("Select a scaffold to use") + chalk.gray(" |"),
-    initialSearch,
-    loop: false,
-    pageSize: terminalSize().rows - leaveEmptyLines - 3,
-    emptyText: "No scaffold matched the filter",
-    source: async (_: any, input: string) => {
-      const options = fuzzy.filter(input ?? "", searchKeys, {
-        pre: "\x1b[91m",
-        post: "\x1b[39m",
-      });
-      return options.map(option => {
-        input = input.split("(").join("");
-        const scaffoldBasics = scaffoldBasicsList[option.index];
-        const parenIndex = option.string.lastIndexOf("(");
-        const colored =
-          option.string.slice(0, parenIndex) + chalk.gray(option.string.slice(parenIndex));
-        return {
-          value: option.index,
-          short: scaffoldBasics.displayName,
-          name: colored,
-          description: scaffoldBasics.description,
-        };
-      });
-    },
-  } as any);
-  return selected as number;
+  const pageSize = terminalSize().rows - leaveEmptyLines - 3;
+  return await runPromptWithExitHandling(() =>
+    search<number>(
+      {
+        message: chalk.green("Select a scaffold to use") + chalk.gray(" |"),
+        pageSize,
+        source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
+          void signal;
+          const searchTerm = inputValue ?? initialSearch;
+          const options = fuzzy.filter(searchTerm, searchKeys, {
+            pre: "\x1b[91m",
+            post: "\x1b[39m",
+          });
+          return options.map(option => {
+            const scaffoldBasics = scaffoldBasicsList[option.index];
+            const parenthesisIndex = option.string.lastIndexOf("(");
+            const colored =
+              option.string.slice(0, parenthesisIndex) +
+              chalk.gray(option.string.slice(parenthesisIndex));
+            return {
+              value: option.index,
+              short: scaffoldBasics.displayName,
+              name: colored,
+              description: scaffoldBasics.description,
+            };
+          });
+        },
+      },
+      { output: process.stderr },
+    ),
+  );
 }
 
 class Replacer {
@@ -212,14 +212,15 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     const { name, replaceFrom, default: originalDefaultValue } = arg;
     const defaultValue = replacer.replace(originalDefaultValue);
 
-    const { value } = await inquirer.createPromptModule({
-      output: process.stderr,
-    })({
-      type: "input",
-      name: "value",
-      message: `${name}`,
-      default: defaultValue === "" ? undefined : defaultValue,
-    });
+    const value = await runPromptWithExitHandling(() =>
+      promptInput(
+        {
+          message: `${name}`,
+          default: defaultValue === "" ? undefined : defaultValue,
+        },
+        { output: process.stderr },
+      ),
+    );
 
     if (arg.isProjectName === true) {
       projectName = value;

@@ -3,10 +3,10 @@ import { makeTitledPrettyError, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
-import inquirer from "inquirer";
-import inquirerPrompt from "inquirer-autocomplete-prompt";
+import { search } from "@inquirer/prompts";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import { runPromptWithExitHandling } from "../prompt.js";
 
 type UnloadCommandOptions = OptionValues &
   CreateClientArgs &
@@ -115,36 +115,36 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     );
     console.info(chalk.gray("! To unload all models, use the --all flag."));
     console.info();
-    const prompt = inquirer.createPromptModule({ output: process.stderr });
-    prompt.registerPrompt("autocomplete", inquirerPrompt);
-    const { selected } = await prompt({
-      type: "autocomplete",
-      name: "selected",
-      message: chalk.green("Select a model to unload") + chalk.gray(" |"),
-      initialSearch: "",
-      loop: false,
-      pageSize: terminalSize().rows - 5,
-      emptyText: "No loaded model matched the filter",
-      source: async (_: any, input: string) => {
-        input = input.split("?").join(""); // Strip the question mark to prevent issues
-        const options = fuzzy.filter(input ?? "", modelSearchStrings, {
-          pre: "\x1b[91m",
-          post: "\x1b[39m",
-        });
-        return options.map(option => {
-          const model = models[option.index];
-          const questionMarkIndex = option.string.lastIndexOf("?");
-          const displayName =
-            option.string.slice(0, questionMarkIndex) +
-            chalk.gray(option.string.slice(questionMarkIndex + 1));
-          return {
-            value: model,
-            short: models[option.index].identifier,
-            name: displayName,
-          };
-        });
-      },
-    } as any);
+    const pageSize = terminalSize().rows - 5;
+    const selected = await runPromptWithExitHandling(() =>
+      search<(typeof models)[number]>(
+        {
+          message: chalk.green("Select a model to unload") + chalk.gray(" |"),
+          pageSize,
+          source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
+            void signal;
+            const sanitizedInput = (input ?? "").split("?").join("");
+            const options = fuzzy.filter(sanitizedInput, modelSearchStrings, {
+              pre: "\x1b[91m",
+              post: "\x1b[39m",
+            });
+            return options.map(option => {
+              const model = models[option.index];
+              const questionMarkIndex = option.string.lastIndexOf("?");
+              const displayName =
+                option.string.slice(0, questionMarkIndex) +
+                chalk.gray(option.string.slice(questionMarkIndex + 1));
+              return {
+                value: model,
+                short: models[option.index].identifier,
+                name: displayName,
+              };
+            });
+          },
+        },
+        { output: process.stderr },
+      ),
+    );
     logger.debug(`Unloading "${selected}"...`);
     await client.llm.unload(selected.identifier);
     logger.info(`Model "${selected.identifier}" unloaded.`);

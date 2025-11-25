@@ -34,8 +34,6 @@ if (process.argv.length === 2) {
 const HELP_MESSAGE_PADDING_LEFT = 1;
 const HELP_MESSAGE_MAX_WIDTH = 90;
 const HELP_MESSAGE_GAP = 10;
-const SUBCOMMAND_HELP_MESSAGE_MAX_WIDTH = 130;
-const SUBCOMMAND_HELP_MESSAGE_GAP = 3;
 const commandColorByName = new Map<string, string | undefined>();
 
 function formatCommandTerm(commandName: string, helpMessageGap: number): string {
