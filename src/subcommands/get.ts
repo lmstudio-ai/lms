@@ -5,6 +5,7 @@ import { terminalSize } from "@lmstudio/lms-isomorphic";
 import {
   type ArtifactDownloadPlan,
   type ArtifactDownloadPlanModelInfo,
+  type HubModel,
   kebabCaseRegex,
   kebabCaseWithDotsRegex,
   type ModelCompatibilityType,
@@ -36,6 +37,18 @@ type GetCommandOptions = OptionValues &
     alwaysShowDownloadOptions?: boolean;
     yes?: boolean;
   };
+
+type SearchResultItem =
+  | {
+      kind: "staffPick";
+      model: HubModel;
+      isExactMatch: boolean;
+      displayName: string;
+    }
+  | {
+      kind: "hf";
+      model: ModelSearchResultEntry;
+    };
 
 const getCommand = new Command<[], GetCommandOptions>()
   .name("get")
@@ -203,66 +216,83 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
     limit,
   };
   logger.debug("Searching for models with options", opts);
-  const results = await client.repository.searchModels(opts);
-  logger.debug(`Found ${results.length} result(s)`);
+  const hfResults = await client.repository.searchModels(opts);
+  logger.debug(`Found ${hfResults.length} HF result(s)`);
 
-  if (results.length === 0) {
+  const normalizedSearchTerm = searchTerm?.toLowerCase().trim() ?? "";
+
+  let staffPickResults: Array<SearchResultItem> = [];
+  try {
+    const modelCatalogModels = await client.repository.unstable.getModelCatalog();
+    staffPickResults = modelCatalogModels
+      .filter(model => {
+        if (compatibilityTypes === undefined) {
+          return true;
+        }
+        return model.metadata.compatibilityTypes.some(type => compatibilityTypes!.includes(type));
+      })
+      .filter(model => {
+        if (normalizedSearchTerm === "") {
+          return true;
+        }
+        const fullName = `${model.owner}/${model.name}`.toLowerCase();
+        return (
+          fullName.includes(normalizedSearchTerm) ||
+          model.name.toLowerCase().includes(normalizedSearchTerm)
+        );
+      })
+      .map(model => ({
+        kind: "staffPick" as const,
+        model,
+        isExactMatch:
+          normalizedSearchTerm !== "" &&
+          (model.name.toLowerCase() === normalizedSearchTerm ||
+            `${model.owner}/${model.name}`.toLowerCase() === normalizedSearchTerm),
+        displayName: `${model.owner}/${model.name}`,
+      }));
+    logger.debug(`Found ${staffPickResults.length} staff pick result(s)`);
+  } catch (error) {
+    logger.warn("Failed to load staff picks, continuing with HF search only.", error);
+  }
+
+  const combinedResults: Array<SearchResultItem> = [
+    ...staffPickResults,
+    ...hfResults.map(result => ({ kind: "hf" as const, model: result })),
+  ];
+
+  if (combinedResults.length === 0) {
     logger.error("No models found with the specified search criteria.");
     process.exit(1);
   }
 
-  const exactMatchIndex = results.findIndex(result => result.isExactMatch());
+  const exactMatchIndex = combinedResults.findIndex(result => {
+    return result.kind === "hf" ? result.model.isExactMatch() : result.isExactMatch;
+  });
   const hasExactMatch = exactMatchIndex !== -1;
-  let model: ModelSearchResultEntry;
+  let result: SearchResultItem;
   if (hasExactMatch && !alwaysShowAllResults) {
     logger.debug("Automatically selecting an exact match model at index", exactMatchIndex);
-    model = results[exactMatchIndex];
+    result = combinedResults[exactMatchIndex];
   } else {
     if (yes) {
       logger.info("Multiple models found. Automatically selecting the first one due to --yes.");
-      model = results[0];
+      result = combinedResults[0];
     } else {
       logger.debug("Prompting user to choose a model");
-      if (searchTerm !== undefined && !hasExactMatch) {
+      if (!hasExactMatch && searchTerm !== undefined) {
         logger.info("No exact match found. Please choose a model from the list below.");
       }
       logger.infoWithoutPrefix();
-      model = await askToChooseModel(results, 2);
+      result = await askToChooseModel(combinedResults, 2);
     }
   }
-
-  if (model.isStaffPick()) {
-    const [owner, name] = model.name.toLowerCase().split("/");
-    if (owner === undefined || name === undefined) {
-      logger.error(`Invalid staff pick identifier: ${model.name}`);
-      process.exit(1);
-    }
+  if (result.kind === "staffPick") {
+    const { owner, name } = result.model;
     await downloadArtifact(client, logger, owner, name, yes);
     return;
   }
 
-  let stopResolvingSpinner: (() => void) | null = null;
-  if (process.stdout.isTTY) {
-    stopResolvingSpinner = (() => {
-      const render = () => {
-        const spinnerFrame = spinnerFrames[Math.floor(Date.now() / 100) % spinnerFrames.length];
-        process.stdout.write(`\r${spinnerFrame} Resolving download options...\x1b[0K`);
-      };
-      process.stdout.write("\x1B[?25l");
-      const interval = setInterval(render, 80);
-      render();
-      return () => {
-        clearInterval(interval);
-        process.stdout.write("\r\x1b[0K\x1B[?25h\n");
-      };
-    })();
-  }
-  let downloadOptions: Array<ModelSearchResultDownloadOption>;
-  try {
-    downloadOptions = await model.getDownloadOptions();
-  } finally {
-    stopResolvingSpinner?.();
-  }
+  const downloadOptions = await result.model.getDownloadOptions();
   if (downloadOptions.length === 0) {
     logger.error("No compatible download options available for this model.");
     process.exit(1);
@@ -420,13 +450,15 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
 });
 
 async function askToChooseModel(
-  models: Array<ModelSearchResultEntry>,
+  models: Array<SearchResultItem>,
   additionalRowsToReserve = 0,
-): Promise<ModelSearchResultEntry> {
-  const modelNames = models.map(model => model.name);
+): Promise<SearchResultItem> {
+  const modelNames = models.map(model =>
+    model.kind === "hf" ? model.model.name : model.displayName,
+  );
   const pageSize = terminalSize().rows - 4 - additionalRowsToReserve;
   return await runPromptWithExitHandling(() =>
-    search<ModelSearchResultEntry>(
+    search<SearchResultItem>(
       {
         message: "Select a model to download",
         pageSize,
@@ -440,10 +472,19 @@ async function askToChooseModel(
           return options.map(option => {
             const model = models[option.index];
             let name: string = "";
-            if (model.isExactMatch()) {
+            const isExact =
+              model.kind === "staffPick" ? model.isExactMatch : model.model.isExactMatch();
+            if (isExact) {
               name += chalk.yellow("[Exact Match] ");
             }
             name += option.string;
+            if (model.kind === "staffPick" && model.model.description !== undefined) {
+              const truncated =
+                model.model.description.length > 80
+                  ? `${model.model.description.slice(0, 55)}...`
+                  : model.model.description;
+              name += chalk.dim(` — ${truncated}`);
+            }
             return {
               name,
               value: model,
@@ -461,6 +502,8 @@ async function askToChooseDownloadOption(
   defaultIndex: number,
   additionalRowsToReserve = 0,
 ): Promise<ModelSearchResultDownloadOption> {
+  console.info(chalk.gray("! Use the arrow keys to navigate, and press enter to select."));
+
   const pageSize = terminalSize().rows - 4 - additionalRowsToReserve;
   const choiceDefault = downloadOptions[defaultIndex] ?? downloadOptions[0];
   return await runPromptWithExitHandling(() =>
