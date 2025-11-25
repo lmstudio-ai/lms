@@ -1,9 +1,9 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
+import { search } from "@inquirer/prompts";
 import { makeTitledPrettyError, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
-import { search } from "@inquirer/prompts";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
@@ -98,7 +98,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     logger.info(`Model "${identifier}" unloaded.`);
   } else {
     if (models.length === 0) {
-      logger.error(`You don't have any models loaded. Use "lms load" to load a model.`);
+      logger.info(`You don't have any models loaded. Use "lms load" to load a model.`);
       process.exit(1);
     }
     // If there is exactly one model loaded, unload it automatically without prompting.
@@ -109,10 +109,6 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
       logger.info(`Model "${model.identifier}" unloaded.`);
       return;
     }
-    console.info();
-    console.info(
-      chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
-    );
     console.info(chalk.gray("! To unload all models, use the --all flag."));
     console.info();
     const pageSize = terminalSize().rows - 5;

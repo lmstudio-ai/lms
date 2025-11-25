@@ -23,8 +23,8 @@ import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSize
 import { handleDownloadWithProgressBar } from "../handleDownloadWithProgressBar.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
-import { createRefinedNumberParser } from "../types/refinedNumber.js";
 import { runPromptWithExitHandling } from "../prompt.js";
+import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
 type GetCommandOptions = OptionValues &
   CreateClientArgs &
@@ -423,7 +423,6 @@ async function askToChooseModel(
   models: Array<ModelSearchResultEntry>,
   additionalRowsToReserve = 0,
 ): Promise<ModelSearchResultEntry> {
-  console.info();
   const modelNames = models.map(model => model.name);
   const pageSize = terminalSize().rows - 4 - additionalRowsToReserve;
   return await runPromptWithExitHandling(() =>
@@ -462,8 +461,6 @@ async function askToChooseDownloadOption(
   defaultIndex: number,
   additionalRowsToReserve = 0,
 ): Promise<ModelSearchResultDownloadOption> {
-  console.info(chalk.gray("! Use the arrow keys to navigate, and press enter to select."));
-  console.info();
   const pageSize = terminalSize().rows - 4 - additionalRowsToReserve;
   const choiceDefault = downloadOptions[defaultIndex] ?? downloadOptions[0];
   return await runPromptWithExitHandling(() =>
@@ -656,7 +653,6 @@ export async function downloadArtifact(
   name: string,
   yes: boolean,
 ) {
-  console.info();
   let downloadPlan: ArtifactDownloadPlan = {
     nodes: [
       {
