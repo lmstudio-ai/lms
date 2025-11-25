@@ -4,6 +4,7 @@ import {
   Option,
   type OptionValues,
 } from "@commander-js/extra-typings";
+import { search } from "@inquirer/prompts";
 import { makeTitledPrettyError, type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import { type ModelInfo } from "@lmstudio/lms-shared-types";
@@ -14,15 +15,14 @@ import {
 } from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
-import { search } from "@inquirer/prompts";
 import { getCliPref } from "../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { formatElapsedTime } from "../formatElapsedTime.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
-import { createRefinedNumberParser } from "../types/refinedNumber.js";
 import { runPromptWithExitHandling } from "../prompt.js";
+import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
 const gpuOptionParser = (str: string): number => {
   str = str.trim().toLowerCase();
@@ -305,10 +305,6 @@ async function selectModel(
   _lastLoadedMap: Map<string, number>,
   estimateOnly: boolean = false,
 ) {
-  console.info(
-    chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
-  );
-  console.info();
   const pageSize = terminalSize().rows - leaveEmptyLines;
   return await runPromptWithExitHandling(() =>
     search<ModelInfo>(
@@ -384,11 +380,6 @@ async function loadModel(
   logger.info(text`
     To use the model in the API/SDK, use the identifier "${chalk.green(info!.identifier)}".
   `);
-  if (identifier === undefined) {
-    logger.info(text`
-      To set a custom identifier, use the ${chalk.yellow("--identifier <identifier>")} option.
-    `);
-  }
 }
 
 function printEstimatedResourceUsage(
