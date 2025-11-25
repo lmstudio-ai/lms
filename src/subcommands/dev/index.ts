@@ -134,11 +134,17 @@ async function handleDevServer(
       process.exit(1);
     }
   }
-  client.system.whenDisconnected().then(async () => {
-    await client[Symbol.asyncDispose]();
-    logger.info("Disconnected from the server. Stopping the development server.");
-    process.exit(1);
-  });
+  client.system
+    .whenDisconnected()
+    .then(async () => {
+      await client[Symbol.asyncDispose]();
+      logger.info("Disconnected from the server. Stopping the development server.");
+      process.exit(1);
+    })
+    .catch(() => {
+      console.error("Error while disposing the client.");
+      process.exit(1);
+    });
 }
 
 async function startNodeDevServer(
