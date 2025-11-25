@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError, type OptionValues } from "@commander-js/extra-typings";
+import { confirm, input as promptInput, search, select } from "@inquirer/prompts";
 import {
   doesFileNameIndicateModel,
   makeTitledPrettyError,
@@ -11,7 +12,6 @@ import chalk from "chalk";
 import { existsSync, statSync } from "fs";
 import { access, copyFile, link, mkdir, readFile, rename, symlink } from "fs/promises";
 import fuzzy from "fuzzy";
-import { confirm, input as promptInput, search, select } from "@inquirer/prompts";
 import { homedir } from "os";
 import { basename, dirname, join } from "path";
 import { z } from "zod";
@@ -54,6 +54,14 @@ type ImportCommandOptions = OptionValues &
     symbolicLink?: boolean;
     dryRun?: boolean;
   };
+
+const missingFilePathHelpMessage = text`
+  Provide the path to the model file you downloaded (e.g. .gguf).
+  
+  Example:
+
+      ${chalk.yellow("lms import ~/Downloads/mistral-7b-instruct.Q4_K_M.gguf")}
+`;
 
 const importCommand = new Command<[], ImportCommandOptions>()
   .name("import")
@@ -104,6 +112,20 @@ const importCommand = new Command<[], ImportCommandOptions>()
       Do not actually perform the import, just show what would be done.
     `,
   );
+
+importCommand.configureOutput({
+  outputError: (str, write) => {
+    if (str.startsWith("error: missing required argument 'file-path'")) {
+      write(
+        `${str.trimEnd()}\n\n${missingFilePathHelpMessage}\n\n${chalk.blue(
+          "Run 'lms import -h' for more info.",
+        )}\n\n`,
+      );
+    } else {
+      write(str);
+    }
+  },
+});
 
 addLogLevelOptions(importCommand);
 
