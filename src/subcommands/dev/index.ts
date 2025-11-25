@@ -53,7 +53,11 @@ addLogLevelOptions(devCommand);
 devCommand.action(async (options: DevCommandOptions) => {
   const { install = false, notify } = options;
   const logger = createLogger(options);
-  await using client = await createClient(logger, options);
+  // We don't want to dispose the client immediately, instead of using 'using'
+  // we'll dispose it when the client disconnects from the server.
+  const client = await createClient(logger, options, {
+    skipDisposeCheck: true,
+  });
   const projectPath = await findProjectFolderOrExit(logger, cwd());
   const manifestPath = join(projectPath, "manifest.json");
   const manifestParseResult = pluginManifestSchema.safeParse(
@@ -132,7 +136,8 @@ async function handleDevServer(
       process.exit(1);
     }
   }
-  client.system.whenDisconnected().then(() => {
+  client.system.whenDisconnected().then(async () => {
+    await client[Symbol.asyncDispose]();
     logger.info("Disconnected from the server. Stopping the development server.");
     process.exit(1);
   });

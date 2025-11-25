@@ -35,7 +35,7 @@ addLogLevelOptions(stream);
 
 stream.action(async options => {
   const logger = createLogger(options);
-  await using client = await createClient(logger, options, { skipDisposeCheck: true });
+  await using client = await createClient(logger, options);
   const { json = false, stats = false, source = "model", filter } = options;
 
   // Don't allow stats with non-model sources
