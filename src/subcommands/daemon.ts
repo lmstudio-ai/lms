@@ -1,6 +1,6 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
+import { tryFindLocalAPIServer } from "@lmstudio/lms-common-server";
 import { LMStudioClient } from "@lmstudio/sdk";
-import { tryFindLocalAPIServer } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 type DaemonStatusCommandOptions = OptionValues &
@@ -20,9 +20,9 @@ status.action(async (options: DaemonStatusCommandOptions) => {
   const useJson = options.json ?? false;
 
   // First, check if the daemon is running without waking it up
-  const port = await tryFindLocalAPIServer();
+  const serverStatus = await tryFindLocalAPIServer(logger);
 
-  if (port === null) {
+  if (serverStatus === null) {
     // Daemon is not running
     if (useJson) {
       console.log(JSON.stringify({ status: "not-running" }));
@@ -35,7 +35,7 @@ status.action(async (options: DaemonStatusCommandOptions) => {
   // Daemon is running, now get detailed info
   try {
     await using client = new LMStudioClient({
-      baseUrl: `ws://127.0.0.1:${port}`,
+      baseUrl: `ws://127.0.0.1:${serverStatus.port}`,
       logger,
     });
 

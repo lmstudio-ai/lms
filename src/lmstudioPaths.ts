@@ -10,6 +10,11 @@ export const appInstallLocationFilePath = join(
   ".internal",
   "app-install-location.json",
 );
+export const llmsterInstallLocationFilePath = join(
+  lmstudioHome,
+  ".internal",
+  "llmster-install-location.json",
+);
 export const defaultModelsFolder = join(lmstudioHome, "models");
 export const serverCtlPath = join(lmstudioHome, ".internal", "http-server-ctl.json");
 export const serverConfigPath = join(lmstudioHome, ".internal", "http-server-config.json");
