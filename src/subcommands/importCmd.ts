@@ -11,14 +11,14 @@ import chalk from "chalk";
 import { existsSync, statSync } from "fs";
 import { access, copyFile, link, mkdir, readFile, rename, symlink } from "fs/promises";
 import fuzzy from "fuzzy";
-import inquirer, { type PromptModule } from "inquirer";
-import inquirerPrompt from "inquirer-autocomplete-prompt";
+import { confirm, input as promptInput, search, select } from "@inquirer/prompts";
 import { homedir } from "os";
 import { basename, dirname, join } from "path";
 import { z } from "zod";
 import { getCliPref } from "../cliPref.js";
 import { defaultModelsFolder } from "../lmstudioPaths.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import { runPromptWithExitHandling } from "../prompt.js";
 
 /**
  * Parse user/repo string into tuple
@@ -134,20 +134,17 @@ importCommand.action(async (path, options: ImportCommandOptions) => {
     process.exit(1);
   }
   const move = isCopy !== true && isHardLink !== true && isSymbolicLink !== true;
-  const pm = inquirer.createPromptModule({
-    output: process.stderr,
-  });
-  await validateModelNameOrWarn(logger, pm, path, yes);
+  await validateModelNameOrWarn(logger, path, yes);
   if (isSymbolicLink === true) {
     await maybeWarnAboutWindowsSymlink(logger);
   }
   const modelsFolderPath = await resolveModelsFolderPath(logger);
   if (move) {
-    await warnAboutMove(logger, pm, yes, modelsFolderPath);
+    await warnAboutMove(logger, yes, modelsFolderPath);
   }
 
   if (userRepo === undefined) {
-    userRepo = await resolveUserRepo(logger, pm, path, yes);
+    userRepo = await resolveUserRepo(logger, path, yes);
   }
 
   const [user, repo] = userRepo;
@@ -247,17 +244,11 @@ async function importViaSymbolicLink(logger: SimpleLogger, sourcePath: string, t
  * Validate the model file name and warn the user if it does not look like a model file.
  *
  * @param logger - The logger to use.
- * @param pm - The prompt module to use.
  * @param path - The path of the file.
  * @param yes - Whether to suppress warnings.
  * @returns A promise that resolves when the user confirms to continue.
  */
-async function validateModelNameOrWarn(
-  logger: SimpleLogger,
-  pm: PromptModule,
-  path: string,
-  yes: boolean,
-) {
+async function validateModelNameOrWarn(logger: SimpleLogger, path: string, yes: boolean) {
   if (!doesFileNameIndicateModel(path)) {
     if (yes) {
       logger.warn("The file name does not look like a model file. This may not work.");
@@ -272,17 +263,16 @@ async function validateModelNameOrWarn(
 
         Model files usually have extension: ${modelExtensions.join(", ")}${"\n\n"}
       `);
-      const { cont } = await pm([
-        {
-          type: "confirm",
-          name: "cont",
-          message: chalk.green("Do you wish to continue? (Not recommended)"),
-          default: false,
-        },
-      ]);
-      // cont is any as returned from 3p module
-      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-      if (!cont) {
+      const shouldContinue = await runPromptWithExitHandling(() =>
+        confirm(
+          {
+            message: chalk.green("Do you wish to continue? (Not recommended)"),
+            default: false,
+          },
+          { output: process.stderr },
+        ),
+      );
+      if (shouldContinue !== true) {
         process.exit(1);
       }
     }
@@ -387,16 +377,10 @@ async function resolveModelsFolderPath(logger: SimpleLogger) {
  * Warn the user about moving the file to the models folder if they have not been warned before.
  *
  * @param logger - The logger to use.
- * @param pm - The prompt module to use.
  * @param yes - Whether to suppress warnings.
  * @param modelsFolderPath - The path to the models folder.
  */
-async function warnAboutMove(
-  logger: SimpleLogger,
-  pm: PromptModule,
-  yes: boolean,
-  modelsFolderPath: string,
-) {
+async function warnAboutMove(logger: SimpleLogger, yes: boolean, modelsFolderPath: string) {
   const cliPref = await getCliPref(logger);
   if (cliPref.get().importWillMoveWarned === true) {
     return;
@@ -425,17 +409,16 @@ async function warnAboutMove(
     This message will only show up once. You can always look up the usage via the
     ${chalk.yellow("--help")} flag.${"\n\n"}
   `);
-  const { cont } = await pm([
-    {
-      type: "confirm",
-      name: "cont",
-      message: chalk.green("Do you wish to continue?"),
-      default: true,
-    },
-  ]);
-  // cont is any as returned from 3p module
-  // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-  if (!cont) {
+  const shouldContinue = await runPromptWithExitHandling(() =>
+    confirm(
+      {
+        message: chalk.green("Do you wish to continue?"),
+        default: true,
+      },
+      { output: process.stderr },
+    ),
+  );
+  if (shouldContinue !== true) {
     process.exit(1);
   }
   if (!yes) {
@@ -496,13 +479,11 @@ type ResolutionMethod = "custom" | "huggingFace" | "uncategorized";
  * Resolve the user and repository of the model file.
  *
  * @param logger - The logger to use.
- * @param pm - The prompt module to use.
  * @param path - The path of the file.
  * @param yes - Whether to suppress warnings.
  */
 async function resolveUserRepo(
   logger: SimpleLogger,
-  pm: PromptModule,
   path: string,
   yes: boolean,
 ): Promise<[string, string]> {
@@ -519,40 +500,41 @@ async function resolveUserRepo(
     // Use file name without extension as repo
     return [getDefaultUserName(), autoNameRepo(fileName)];
   }
-  const resolutionMethod: ResolutionMethod = (
-    await pm({
-      type: "list",
-      name: "value",
-      message: chalk.green("Choose categorization option"),
-      choices: [
-        {
-          name: text`
-            Auto search Hugging Face
-            ${chalk.gray("(Recommended for models downloaded from Hugging Face)")}
-          `,
-          value: "huggingFace",
-        },
-        {
-          name: text`
-            Interactive import
-            ${chalk.gray("(Recommended for custom models)")}
-          `,
-          value: "custom",
-        },
-        {
-          name: text`
-            Don't categorize
-            ${chalk.gray("(will put the model under imported-models/uncategorized)")}
-          `,
-          value: "uncategorized",
-        },
-      ],
-    })
-  ).value;
+  const resolutionMethod: ResolutionMethod = await runPromptWithExitHandling(() =>
+    select<ResolutionMethod>(
+      {
+        message: chalk.green("Choose categorization option"),
+        choices: [
+          {
+            name: text`
+              Auto search Hugging Face
+              ${chalk.gray("(Recommended for models downloaded from Hugging Face)")}
+            `,
+            value: "huggingFace",
+          },
+          {
+            name: text`
+              Interactive import
+              ${chalk.gray("(Recommended for custom models)")}
+            `,
+            value: "custom",
+          },
+          {
+            name: text`
+              Don't categorize
+              ${chalk.gray("(will put the model under imported-models/uncategorized)")}
+            `,
+            value: "uncategorized",
+          },
+        ],
+      },
+      { output: process.stderr },
+    ),
+  );
   if (resolutionMethod === "custom") {
-    return await resolveByAskUserRepo(logger, pm, path);
+    return await resolveByAskUserRepo(logger, path);
   } else if (resolutionMethod === "huggingFace") {
-    return await resolveByHuggingFaceInteractive(logger, pm, fileName);
+    return await resolveByHuggingFaceInteractive(logger, fileName);
   } else {
     return ["imported-models", "uncategorized"];
   }
@@ -562,30 +544,29 @@ async function resolveUserRepo(
  * Resolve the user and repository of the model file by asking the user.
  *
  * @param logger - The logger to use.
- * @param pm - The prompt module to use.
  * @param path - The path of the file.
  */
-async function resolveByAskUserRepo(
-  logger: SimpleLogger,
-  pm: PromptModule,
-  path: string,
-): Promise<[string, string]> {
-  const { user, repo } = await pm([
-    {
-      type: "input",
-      name: "user",
-      message: chalk.green("Who is the creator of the model?"),
-      default: getDefaultUserName(),
-      validate: input => isValidFolderName("User", input),
-    },
-    {
-      type: "input",
-      name: "repo",
-      message: chalk.green("What is the model name?"),
-      default: autoNameRepo(basename(path)),
-      validate: input => isValidFolderName("Repository", input),
-    },
-  ]);
+async function resolveByAskUserRepo(logger: SimpleLogger, path: string): Promise<[string, string]> {
+  const user = await runPromptWithExitHandling(() =>
+    promptInput(
+      {
+        message: chalk.green("Who is the creator of the model?"),
+        default: getDefaultUserName(),
+        validate: (inputValue: string) => isValidFolderName("User", inputValue),
+      },
+      { output: process.stderr },
+    ),
+  );
+  const repo = await runPromptWithExitHandling(() =>
+    promptInput(
+      {
+        message: chalk.green("What is the model name?"),
+        default: autoNameRepo(basename(path)),
+        validate: (inputValue: string) => isValidFolderName("Repository", inputValue),
+      },
+      { output: process.stderr },
+    ),
+  );
 
   logger.debug("User and repo answered", user, repo);
 
@@ -596,12 +577,10 @@ async function resolveByAskUserRepo(
  * Resolve the user and repository of the model file by searching Hugging Face.
  *
  * @param logger - The logger to use.
- * @param pm - The prompt module to use.
  * @param fileName - The file name.
  */
 async function resolveByHuggingFaceInteractive(
   logger: SimpleLogger,
-  pm: PromptModule,
   fileName: string,
 ): Promise<[string, string]> {
   logger.info("Searching for the model on Hugging Face using the file name...");
@@ -610,42 +589,40 @@ async function resolveByHuggingFaceInteractive(
     logger.warnText`
       Cannot find the model on Hugging Face, you need to manually specify the user/repo.
     `;
-    return await resolveByAskUserRepo(logger, pm, fileName);
+    return await resolveByAskUserRepo(logger, fileName);
   }
   const candidatesJoined = candidates.map(([user, repo]) => `${user}/${repo}`);
   logger.info("Found the following repositories on Hugging Face containing this file:");
-  pm.registerPrompt("autocomplete", inquirerPrompt);
-  const { selected } = await pm({
-    type: "autocomplete",
-    name: "selected",
-    message: chalk.green("Please select the correct one") + chalk.gray(" |"),
-    loop: false,
-    pageSize: terminalSize().rows - 3,
-    emptyText: "No model matched the filter",
-    source: async (_: any, input: string) => {
-      const options = fuzzy.filter(
-        input === undefined || input === null ? "" : input,
-        candidatesJoined,
-        {
-          pre: "\x1b[91m",
-          post: "\x1b[39m",
+  const pageSize = terminalSize().rows - 3;
+  const selected = await runPromptWithExitHandling(() =>
+    search<[string, string] | null>(
+      {
+        message: chalk.green("Please select the correct one") + chalk.gray(" |"),
+        pageSize,
+        source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
+          void signal;
+          const options = fuzzy.filter(inputValue ?? "", candidatesJoined, {
+            pre: "\x1b[91m",
+            post: "\x1b[39m",
+          });
+          return [
+            ...options.map(option => {
+              return {
+                value: candidates[option.index],
+                short: option.original,
+                name: option.string,
+              };
+            }),
+            { value: null, short: "None of the above", name: "None of the above" },
+          ];
         },
-      );
-      return [
-        ...options.map(option => {
-          return {
-            value: candidates[option.index],
-            short: option.original,
-            name: option.string,
-          };
-        }),
-        { value: null, short: "None of the above", name: "None of the above" },
-      ];
-    },
-  } as any);
+      },
+      { output: process.stderr },
+    ),
+  );
   if (selected === null) {
     logger.info("Please specify the user and repository manually.");
-    return await resolveByAskUserRepo(logger, pm, fileName);
+    return await resolveByAskUserRepo(logger, fileName);
   } else {
     return selected;
   }

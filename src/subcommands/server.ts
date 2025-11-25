@@ -25,7 +25,7 @@ type ServerStartCommandOptions = OptionValues &
     cors?: boolean;
   };
 
-type ServerStopCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs & {};
+type ServerStopCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
 type ServerStatusCommandOptions = OptionValues &
   LogLevelArgs & {

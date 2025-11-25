@@ -14,8 +14,7 @@ import {
 } from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
-import inquirer from "inquirer";
-import inquirerPrompt from "inquirer-autocomplete-prompt";
+import { search } from "@inquirer/prompts";
 import { getCliPref } from "../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { formatElapsedTime } from "../formatElapsedTime.js";
@@ -23,6 +22,7 @@ import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
+import { runPromptWithExitHandling } from "../prompt.js";
 
 const gpuOptionParser = (str: string): number => {
   str = str.trim().toLowerCase();
@@ -309,39 +309,36 @@ async function selectModel(
     chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
   );
   console.info();
-  const prompt = inquirer.createPromptModule({ output: process.stderr });
-  prompt.registerPrompt("autocomplete", inquirerPrompt);
-  const { selected } = await prompt({
-    type: "autocomplete",
-    name: "selected",
-    message:
-      chalk.green(`Select a model to ${estimateOnly === true ? "estimate" : "load"}`) +
-      chalk.gray(" |"),
-    initialSearch,
-    loop: false,
-    pageSize: terminalSize().rows - leaveEmptyLines,
-    emptyText: "No model matched the filter",
-    source: async (_: any, input: string) => {
-      const options = fuzzy.filter(input ?? "", modelPaths, {
-        pre: "\x1b[91m",
-        post: "\x1b[39m",
-      });
-      return options.map(option => {
-        const model = models[option.index];
-        const displayName =
-          option.string + " " + chalk.gray(`(${formatSizeBytes1000(model.sizeBytes)})`);
-        // if (lastLoadedMap.has(model.path)) {
-        //   displayName = chalk.yellow("[Recent] ") + displayName;
-        // }
-        return {
-          value: model,
-          short: option.original,
-          name: displayName,
-        };
-      });
-    },
-  } as any);
-  return selected;
+  const pageSize = terminalSize().rows - leaveEmptyLines;
+  return await runPromptWithExitHandling(() =>
+    search<ModelInfo>(
+      {
+        message:
+          chalk.green(`Select a model to ${estimateOnly === true ? "estimate" : "load"}`) +
+          chalk.gray(" |"),
+        pageSize,
+        source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
+          void signal;
+          const searchTerm = input ?? initialSearch;
+          const options = fuzzy.filter(searchTerm, modelPaths, {
+            pre: "\x1b[91m",
+            post: "\x1b[39m",
+          });
+          return options.map(option => {
+            const model = models[option.index];
+            const displayName =
+              option.string + " " + chalk.gray(`(${formatSizeBytes1000(model.sizeBytes)})`);
+            return {
+              value: model,
+              short: option.original,
+              name: displayName,
+            };
+          });
+        },
+      },
+      { output: process.stderr },
+    ),
+  );
 }
 
 async function loadModel(

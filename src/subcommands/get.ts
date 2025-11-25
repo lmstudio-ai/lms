@@ -1,4 +1,5 @@
 import { Command, Option, type OptionValues } from "@commander-js/extra-typings";
+import { search, select } from "@inquirer/prompts";
 import { type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import {
@@ -15,8 +16,6 @@ import {
 } from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
-import inquirer from "inquirer";
-import inquirerPrompt from "inquirer-autocomplete-prompt";
 import { askQuestion } from "../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
@@ -25,6 +24,7 @@ import { handleDownloadWithProgressBar } from "../handleDownloadWithProgressBar.
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
+import { runPromptWithExitHandling } from "../prompt.js";
 
 type GetCommandOptions = OptionValues &
   CreateClientArgs &
@@ -389,96 +389,93 @@ async function askToChooseModel(
   models: Array<ModelSearchResultEntry>,
   additionalRowsToReserve = 0,
 ): Promise<ModelSearchResultEntry> {
-  const prompt = inquirer.createPromptModule({ output: process.stderr });
-  prompt.registerPrompt("autocomplete", inquirerPrompt);
-  console.info(
-    chalk.gray("! Use the arrow keys to navigate, type to filter, and press enter to select."),
-  );
   console.info();
   const modelNames = models.map(model => model.name);
-  const answers = await prompt([
-    {
-      type: "autocomplete",
-      name: "model",
-      message: "Select a model to download",
-      loop: false,
-      pageSize: terminalSize().rows - 4 - additionalRowsToReserve,
-      emptyText: "No model matched the filter",
-      source: async (_: any, input: string) => {
-        const options = fuzzy.filter(input ?? "", modelNames, {
-          pre: "\x1b[91m",
-          post: "\x1b[39m",
-        });
-        return options.map(option => {
-          const model = models[option.index];
-          let name: string = "";
-          if (model.isStaffPick()) {
-            name += "[Staff Pick] ";
-          }
-          if (model.isExactMatch()) {
-            name += chalk.yellow("[Exact Match] ");
-          }
-          name += option.string;
-          return {
-            name,
-            value: model,
-            short: option.original,
-          };
-        });
+  const pageSize = terminalSize().rows - 4 - additionalRowsToReserve;
+  return await runPromptWithExitHandling(() =>
+    search<ModelSearchResultEntry>(
+      {
+        message: "Select a model to download",
+        pageSize,
+        source: async (term: string | undefined, { signal }: { signal: AbortSignal }) => {
+          void signal;
+          const searchTerm = term ?? "";
+          const options = fuzzy.filter(searchTerm, modelNames, {
+            pre: "\x1b[91m",
+            post: "\x1b[39m",
+          });
+          return options.map(option => {
+            const model = models[option.index];
+            let name: string = "";
+            if (model.isStaffPick()) {
+              name += "[Staff Pick] ";
+            }
+            if (model.isExactMatch()) {
+              name += chalk.yellow("[Exact Match] ");
+            }
+            name += option.string;
+            return {
+              name,
+              value: model,
+              short: option.original,
+            };
+          });
+        },
       },
-    },
-  ]);
-  return answers.model;
+      { output: process.stderr },
+    ),
+  );
 }
 async function askToChooseDownloadOption(
   downloadOptions: Array<ModelSearchResultDownloadOption>,
   defaultIndex: number,
   additionalRowsToReserve = 0,
 ): Promise<ModelSearchResultDownloadOption> {
-  const prompt = inquirer.createPromptModule({ output: process.stderr });
   console.info(chalk.gray("! Use the arrow keys to navigate, and press enter to select."));
   console.info();
-  const answers = await prompt([
-    {
-      type: "list",
-      name: "option",
-      default: defaultIndex,
-      message: chalk.green("Select an option to download"),
-      loop: false,
-      pageSize: terminalSize().rows - 4 - additionalRowsToReserve,
-      choices: downloadOptions.map(option => {
-        let name = "";
-        if (option.quantization !== undefined && option.quantization !== "") {
-          name += `${option.quantization} `.padEnd(9);
-        }
-        name += `${formatSizeBytes1000(option.sizeBytes)} `.padStart(11);
-        name += chalk.gray(option.name) + " ";
-        switch (option.fitEstimation) {
-          case "willNotFit":
-            name += chalk.red("[Likely too large for this machine]");
-            break;
-          case "fitWithoutGPU":
-            name += chalk.green("[Likely fit]");
-            break;
-          case "partialGPUOffload":
-            name += chalk.yellow("[Partial GPU offload possible]");
-            break;
-          case "fullGPUOffload":
-            name += chalk.green("[Full GPU offload possible]");
-            break;
-        }
-        if (option.isRecommended()) {
-          name += " " + chalk.green(" Recommended ");
-        }
-        return {
-          name,
-          value: option,
-          short: formatOptionShortName(option),
-        };
-      }),
-    },
-  ]);
-  return answers.option;
+  const pageSize = terminalSize().rows - 4 - additionalRowsToReserve;
+  const choiceDefault = downloadOptions[defaultIndex] ?? downloadOptions[0];
+  return await runPromptWithExitHandling(() =>
+    select<ModelSearchResultDownloadOption>(
+      {
+        message: chalk.green("Select an option to download"),
+        loop: false,
+        pageSize,
+        default: choiceDefault,
+        choices: downloadOptions.map(option => {
+          let name = "";
+          if (option.quantization !== undefined && option.quantization !== "") {
+            name += `${option.quantization} `.padEnd(9);
+          }
+          name += `${formatSizeBytes1000(option.sizeBytes)} `.padStart(11);
+          name += chalk.gray(option.name) + " ";
+          switch (option.fitEstimation) {
+            case "willNotFit":
+              name += chalk.red("[Likely too large for this machine]");
+              break;
+            case "fitWithoutGPU":
+              name += chalk.green("[Likely fit]");
+              break;
+            case "partialGPUOffload":
+              name += chalk.yellow("[Partial GPU offload possible]");
+              break;
+            case "fullGPUOffload":
+              name += chalk.green("[Full GPU offload possible]");
+              break;
+          }
+          if (option.isRecommended()) {
+            name += " " + chalk.green(" Recommended ");
+          }
+          return {
+            name,
+            value: option,
+            short: formatOptionShortName(option),
+          };
+        }),
+      },
+      { output: process.stderr },
+    ),
+  );
 }
 
 function formatOptionShortName(option: ModelSearchResultDownloadOption) {
