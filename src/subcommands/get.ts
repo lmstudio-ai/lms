@@ -230,6 +230,17 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
       model = await askToChooseModel(results, 2);
     }
   }
+
+  if (model.isStaffPick()) {
+    const [owner, name] = model.name.toLowerCase().split("/");
+    if (owner === undefined || name === undefined) {
+      logger.error(`Invalid staff pick identifier: ${model.name}`);
+      process.exit(1);
+    }
+    await downloadArtifact(client, logger, owner, name, yes);
+    return;
+  }
+
   let stopResolvingSpinner: (() => void) | null = null;
   if (process.stdout.isTTY) {
     stopResolvingSpinner = (() => {
