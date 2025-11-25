@@ -223,12 +223,35 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
       model = results[0];
     } else {
       logger.debug("Prompting user to choose a model");
-      logger.info("No exact match found. Please choose a model from the list below.");
+      if (searchTerm !== undefined && !hasExactMatch) {
+        logger.info("No exact match found. Please choose a model from the list below.");
+      }
       logger.infoWithoutPrefix();
       model = await askToChooseModel(results, 2);
     }
   }
-  const downloadOptions = await model.getDownloadOptions();
+  let stopResolvingSpinner: (() => void) | null = null;
+  if (process.stdout.isTTY) {
+    stopResolvingSpinner = (() => {
+      const render = () => {
+        const spinnerFrame = spinnerFrames[Math.floor(Date.now() / 100) % spinnerFrames.length];
+        process.stdout.write(`\r${spinnerFrame} Resolving download options...\x1b[0K`);
+      };
+      process.stdout.write("\x1B[?25l");
+      const interval = setInterval(render, 80);
+      render();
+      return () => {
+        clearInterval(interval);
+        process.stdout.write("\r\x1b[0K\x1B[?25h\n");
+      };
+    })();
+  }
+  let downloadOptions: Array<ModelSearchResultDownloadOption>;
+  try {
+    downloadOptions = await model.getDownloadOptions();
+  } finally {
+    stopResolvingSpinner?.();
+  }
   if (downloadOptions.length === 0) {
     logger.error("No compatible download options available for this model.");
     process.exit(1);
@@ -407,9 +430,6 @@ async function askToChooseModel(
           return options.map(option => {
             const model = models[option.index];
             let name: string = "";
-            if (model.isStaffPick()) {
-              name += "[Staff Pick] ";
-            }
             if (model.isExactMatch()) {
               name += chalk.yellow("[Exact Match] ");
             }
