@@ -140,16 +140,13 @@ export async function wakeUpService(logger: SimpleLogger): Promise<boolean> {
   }
 }
 
-export interface CreateClientOpts {
-  skipDisposeCheck?: boolean;
-}
+export interface CreateClientOpts {}
 const lmsKey = "<LMS-CLI-LMS-KEY>";
-const undisposedClients = new Set<LMStudioClient>();
 
 export async function createClient(
   logger: SimpleLogger,
   args: CreateClientArgs & LogLevelArgs,
-  opts: CreateClientOpts = {},
+  _opts: CreateClientOpts = {},
 ) {
   let { host, port } = args;
   let isRemote = true;
@@ -262,32 +259,5 @@ export async function createClient(
     ...auth,
   });
 
-  if (opts.skipDisposeCheck === undefined || opts.skipDisposeCheck === false) {
-    undisposedClients.add(client);
-    const originalDispose = client[Symbol.asyncDispose].bind(client);
-    client[Symbol.asyncDispose] = async () => {
-      undisposedClients.delete(client);
-      await originalDispose();
-    };
-  }
   return client;
 }
-
-function checkUndisposedClients() {
-  if (undisposedClients.size > 0) {
-    console.error(
-      `ERROR: ${undisposedClients.size} client(s) were not disposed. Use 'await using' or call dispose() explicitly.`,
-    );
-    process.exit(1);
-  }
-}
-
-process.on("exit", checkUndisposedClients);
-process.on("SIGINT", () => {
-  checkUndisposedClients();
-  process.exit(130);
-});
-process.on("SIGTERM", () => {
-  checkUndisposedClients();
-  process.exit(143);
-});
