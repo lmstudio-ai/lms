@@ -78,6 +78,62 @@ export interface CreateClientArgs {
   port?: number;
 }
 
+async function isLocalServerAtPortLMStudioServerOrThrow(port: number) {
+  const response = await fetch(`http://127.0.0.1:${port}/lmstudio-greeting`);
+  if (response.status !== 200) {
+    throw new Error("Status is not 200.");
+  }
+  const json = await response.json();
+  if (json?.lmstudio !== true) {
+    throw new Error("Not an LM Studio server.");
+  }
+  return port;
+}
+
+export async function tryFindLocalAPIServer(): Promise<number | null> {
+  return await Promise.any(apiServerPorts.map(isLocalServerAtPortLMStudioServerOrThrow)).then(
+    port => port,
+    () => null,
+  );
+}
+
+export async function wakeUpService(logger: SimpleLogger): Promise<boolean> {
+  logger.info("Waking up LM Studio service...");
+  const appInstallLocationPath = appInstallLocationFilePath;
+  logger.debug(`Resolved appInstallLocationPath: ${appInstallLocationPath}`);
+  try {
+    const appInstallLocation = JSON.parse(
+      await readFile(appInstallLocationPath, "utf-8"),
+    ) as AppInstallLocation;
+    logger.debug(`Read executable pointer:`, appInstallLocation);
+
+    const args: Array<string> = [];
+    const { path, argv, cwd } = appInstallLocation;
+    if (argv[1] === ".") {
+      // We are in development environment
+      args.push(".");
+    }
+    // Also add the headless flag
+    args.push("--run-as-service");
+
+    logger.debug(`Spawning process:`, { path, args, cwd });
+
+    const env = {
+      ...(process.platform === "linux" ? { DISPLAY: ":0" } : {}),
+      ...process.env,
+    };
+
+    const child = spawn(path, args, { cwd, detached: true, stdio: "ignore", env });
+    child.unref();
+
+    logger.debug(`Process spawned`);
+    return true;
+  } catch (e) {
+    logger.debug(`Failed to launch application`, e);
+    return false;
+  }
+}
+
 export interface CreateClientOpts {}
 const lmsKey = "<LMS-CLI-LMS-KEY>";
 
