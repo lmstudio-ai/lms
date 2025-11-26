@@ -135,14 +135,6 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
 
   if (modelName !== undefined && modelName.split("/").length === 2) {
     // New lms get behavior: download artifact
-    if (mlx) {
-      logger.error("You cannot use the --mlx flag when an exact artifact is specified.");
-      process.exit(1);
-    }
-    if (gguf) {
-      logger.error("You cannot use the --gguf flag when an exact artifact is specified.");
-      process.exit(1);
-    }
     if (limit !== undefined) {
       logger.error("You cannot use the --limit flag when an exact artifact is specified.");
       process.exit(1);
@@ -159,7 +151,31 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
       `;
       process.exit(1);
     }
-    const [owner, name] = modelName.toLowerCase().split("/");
+
+    let owner: string, name: string, quant: string | undefined;
+    // Parse owner/name@quant format
+    if (modelName.includes("@")) {
+      const parts = modelName.toLowerCase().split("@");
+      if (parts.length !== 2) {
+        logger.error("Invalid model format. Use: owner/name or owner/name@quant");
+        process.exit(1);
+      }
+      const [ownerName, quantPart] = parts;
+      const ownerNameParts = ownerName.split("/");
+      if (ownerNameParts.length !== 2) {
+        logger.error("Invalid model format. Use: owner/name or owner/name@quant");
+        process.exit(1);
+      }
+      [owner, name] = ownerNameParts;
+      quant = quantPart;
+    } else {
+      const parts = modelName.toLowerCase().split("/");
+      if (parts.length !== 2) {
+        logger.error("Invalid model format. Use: owner/name or owner/name@quant");
+        process.exit(1);
+      }
+      [owner, name] = parts;
+    }
     if (!kebabCaseRegex.test(owner)) {
       logger.error("Invalid artifact owner:", owner);
       process.exit(1);
@@ -168,7 +184,11 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
       logger.error("Invalid artifact name:", name);
       process.exit(1);
     }
-    await downloadArtifact(client, logger, owner, name, yes);
+    await downloadArtifact(client, logger, owner, name, yes, {
+      mlx,
+      gguf,
+      quant,
+    });
     return;
   }
 
@@ -689,12 +709,19 @@ async function artifactDownloadPlanToString(
   }
 }
 
+interface DownloadArtifactOpts {
+  mlx?: boolean;
+  gguf?: boolean;
+  quant?: string;
+}
+
 export async function downloadArtifact(
   client: LMStudioClient,
   logger: SimpleLogger,
   owner: string,
   name: string,
   yes: boolean,
+  { mlx, gguf, quant }: DownloadArtifactOpts = {},
 ) {
   let downloadPlan: ArtifactDownloadPlan = {
     nodes: [
@@ -760,6 +787,13 @@ export async function downloadArtifact(
     }
   };
   process.stdout.write("\x1B[?25l");
+  const types: Array<ModelCompatibilityType> = [];
+  if (mlx === true) {
+    types.push("safetensors");
+  }
+  if (gguf === true) {
+    types.push("gguf");
+  }
   using downloadPlanner = client.repository.createArtifactDownloadPlanner({
     owner,
     name,
@@ -767,6 +801,8 @@ export async function downloadArtifact(
       downloadPlan = newPlan;
       reprintDownloadPlan(false);
     },
+    compatibilityTypeFilter: types.length > 0 ? types : undefined,
+    quantizationFilter: quant !== undefined ? [quant] : undefined,
   });
   reprintDownloadPlan(false);
   const autoReprintInterval = setInterval(() => {
