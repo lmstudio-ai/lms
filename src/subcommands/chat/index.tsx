@@ -7,9 +7,7 @@ import chalk from "chalk";
 import columnify from "columnify";
 import fuzzy from "fuzzy";
 import { confirm, search } from "@inquirer/prompts";
-import * as readline from "readline/promises";
 import { getCliPref, type CliPref } from "../../cliPref.js";
-import { askQuestion } from "../../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
 import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
@@ -23,11 +21,13 @@ import {
   readStdin,
 } from "./util.js";
 import { runPromptWithExitHandling } from "../../prompt.js";
+import { render } from "ink";
+import { ChatComponent } from "./Chat.js";
 
 interface StartPredictionOpts {
   stats?: true;
   ttl: number;
-  signal?: AbortSignal;
+  controller?: AbortController;
 }
 
 type ChatCommandOptions = OptionValues &
@@ -41,7 +41,7 @@ type ChatCommandOptions = OptionValues &
     yes?: boolean;
   };
 
-const DEFAULT_SYSTEM_PROMPT =
+export const DEFAULT_SYSTEM_PROMPT =
   "You are an AI assistant running in the user's terminal. Provide helpful and concise responses.";
 
 const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
@@ -149,30 +149,6 @@ export async function handleNonInteractiveChat(
 }
 
 /**
- * Runs a single prediction in an interactive chat session. Pauses readline during prediction and
- * resumes for next input.
- */
-async function runInteractivePrediction(
-  llm: LLM,
-  chat: Chat,
-  input: string,
-  logger: SimpleLogger,
-  rl: readline.Interface,
-  opts: StartPredictionOpts,
-): Promise<void> {
-  process.stdout.write("\n● ");
-
-  const { result } = await executePrediction(llm, chat, input, opts.signal);
-
-  if (opts.stats !== undefined) {
-    displayVerboseStats(result.stats, logger);
-  }
-
-  process.stdout.write("\n\n");
-  rl.prompt();
-}
-
-/**
  * Starts an interactive chat session in the terminal.
  */
 export async function startInteractiveChat(
@@ -184,77 +160,16 @@ export async function startInteractiveChat(
   opts: StartPredictionOpts,
 ): Promise<void> {
   return new Promise<void>(resolve => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      prompt: "› ",
-    });
-
-    process.stdout.write("\n");
-    rl.prompt();
-    let isPredicting = false;
-    let abortController: AbortController;
-    rl.addListener("SIGINT", () => {
-      if (isPredicting) {
-        abortController.abort();
-        isPredicting = false;
-      } else {
-        process.exit(0);
-      }
-    });
-    rl.on("line", async (line: string) => {
-      abortController = new AbortController();
-      opts.signal = abortController.signal;
-      const input = line.trim();
-      if (input === "exit" || input === "quit") {
-        rl.close();
-        return;
-      }
-
-      // Skip empty input
-      if (input.length === 0) {
-        rl.prompt();
-        return;
-      }
-
-      try {
-        isPredicting = true;
-        await runInteractivePrediction(llm, chat, input, logger, rl, opts);
-      } catch (err) {
-        isPredicting = false;
-        if (err instanceof Error && err.message.toLowerCase().includes("unloaded") === true) {
-          const shouldReload = await askQuestion("Looks like the model unloaded. Reload?", {
-            rl,
-          });
-          if (shouldReload) {
-            try {
-              llm = await loadModelWithProgress(client, modelName, opts.ttl, logger);
-              process.stdout.write("\n");
-              isPredicting = true;
-              await runInteractivePrediction(llm, chat, input, logger, rl, opts);
-              return;
-            } catch (reloadErr) {
-              logger.error("Error reloading model:", reloadErr);
-              rl.prompt();
-            } finally {
-              isPredicting = false;
-            }
-          } else {
-            // User chose not to reload, exit
-            process.exit(0);
-          }
-        } else {
-          logger.error("Error during chat:", err);
-          rl.prompt();
-        }
-      } finally {
-        isPredicting = false;
-      }
-    });
-
-    rl.on("close", () => {
-      resolve();
-    });
+    render(
+      <ChatComponent
+        client={client}
+        llm={llm}
+        chat={chat}
+        logger={logger}
+        opts={opts}
+        onExit={resolve}
+      />,
+    );
   });
 }
 
@@ -434,16 +349,18 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
 
   const chat = Chat.empty();
   chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
-
+  const abortController = new AbortController();
   if (providedPrompt.length !== 0) {
     await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
       stats: options.stats,
       ttl,
+      controller: abortController,
     });
   } else if (process.stdin.isTTY) {
     await startInteractiveChat(client, llm, chat, logger, (await llm.getModelInfo()).modelKey, {
       stats: options.stats,
       ttl,
+      controller: abortController,
     });
   } else {
     logger.error("No prompt provided for non-interactive chat.");
