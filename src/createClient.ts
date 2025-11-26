@@ -253,9 +253,11 @@ export async function createClient(
   }
   const baseUrl = `ws://${host}:${port}`;
   logger.debug(`Found server at ${port}`);
-  return new LMStudioClient({
+  const client = new LMStudioClient({
     baseUrl,
     logger,
     ...auth,
   });
+
+  return client;
 }

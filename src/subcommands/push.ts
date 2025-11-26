@@ -83,7 +83,7 @@ addLogLevelOptions(pushCommand);
 
 pushCommand.action(async options => {
   const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
   const {
     yes = false,
     description,

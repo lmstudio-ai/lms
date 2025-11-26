@@ -34,7 +34,7 @@ status.action(async (options: DaemonStatusCommandOptions) => {
 
   // Daemon is running, now get detailed info
   try {
-    const client = new LMStudioClient({
+    await using client = new LMStudioClient({
       baseUrl: `ws://127.0.0.1:${port}`,
       logger,
     });

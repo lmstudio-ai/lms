@@ -51,7 +51,7 @@ statusCommand.action(async options => {
     `;
     content += "\n\n";
 
-    const client = await createClient(logger, options);
+    await using client = await createClient(logger, options);
     const loadedModels = (
       await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
     ).flat();

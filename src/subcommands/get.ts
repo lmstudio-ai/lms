@@ -131,7 +131,7 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
     logger.error("You cannot use the --yes flag with the --always-show-download-options flag.");
     process.exit(1);
   }
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
 
   if (modelName !== undefined && modelName.split("/").length === 2) {
     // New lms get behavior: download artifact

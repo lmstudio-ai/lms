@@ -47,7 +47,7 @@ addLogLevelOptions(cloneCommand);
 
 cloneCommand.action(async (artifactIdentifier, path = "", options) => {
   const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
   const { owner, name } = artifactIdentifier;
   let resolvedPath = path;
   let autoNamed: boolean;

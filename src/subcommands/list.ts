@@ -202,7 +202,7 @@ addLogLevelOptions(lsCommand);
 
 lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
 
   const {
     llm = false,
@@ -215,7 +215,6 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   if (modelKey !== undefined && variantsOption) {
     logger.error(chalk.red("Cannot combine a model key argument with --variants."));
     process.exit(1);
-    return;
   }
 
   if (detailed) {
@@ -373,7 +372,7 @@ addLogLevelOptions(psCommand);
 
 psCommand.action(async (options: PsCommandOptions) => {
   const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
 
   const { json = false } = options;
 

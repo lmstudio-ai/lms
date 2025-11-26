@@ -14,16 +14,18 @@ export abstract class PluginProcess {
   protected abstract binary: UtilBinary;
   protected abstract runnerType: PluginRunnerType;
   protected abstract getArgs(pluginManifest: PluginManifest): Array<string>;
-
+  private readonly serverLogger: SimpleLogger;
+  private readonly stderrLogger: SimpleLogger;
   protected constructor(
     private readonly cwd: string,
     private readonly client: LMStudioClient,
     private readonly manifestFilePath: string,
     private readonly logger: SimpleLogger,
     private readonly opts: PluginProcessOpts = {},
-  ) {}
-  private readonly serverLogger = new SimpleLogger("plugin-server", this.logger);
-  private readonly stderrLogger = new SimpleLogger("stderr", this.logger);
+  ) {
+    this.serverLogger = new SimpleLogger("plugin-server", this.logger);
+    this.stderrLogger = new SimpleLogger("stderr", this.logger);
+  }
 
   private currentProcess: ChildProcessWithoutNullStreams | null = null;
   private status: PluginProcessStatus = "stopped";

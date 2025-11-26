@@ -51,7 +51,7 @@ addLogLevelOptions(loginCommand);
 
 loginCommand.action(async options => {
   const logger = createLogger(options);
-  const client = await createClient(logger, options);
+  await using client = await createClient(logger, options);
   const { withPreAuthenticatedKeys = false, keyId, publicKey, privateKey } = options;
   if (withPreAuthenticatedKeys) {
     if (keyId === undefined || publicKey === undefined || privateKey === undefined) {

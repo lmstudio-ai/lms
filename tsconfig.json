@@ -6,6 +6,7 @@
     "target": "ES2021",
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "jsx": "react-jsx",
     "declaration": true,
     "incremental": true,
     "noImplicitOverride": true,
