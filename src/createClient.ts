@@ -143,7 +143,7 @@ export async function createClient(
       const baseUrl = `ws://${host}:${localPort}`;
       logger.debug(`Found local API server at ${baseUrl}`);
 
-      if (auth.clientIdentifier === "lms-cli" && auth.clientPasskey === undefined) {
+      if (auth.clientIdentifier === "lms-cli") {
         // Refetch the lms key due to the possibility of a new key being generated.
         const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
         auth = {
