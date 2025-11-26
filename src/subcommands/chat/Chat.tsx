@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Box, Text, useInput, useApp } from "ink";
-import { type LLM, type LMStudioClient, Chat } from "@lmstudio/sdk";
+import { type LLM, type LMStudioClient, Chat, text } from "@lmstudio/sdk";
 import type { SimpleLogger } from "@lmstudio/lms-common";
 import { type SlashCommand, SlashCommandHandler } from "./SlashCommandHandler.js";
+import { log } from "../log.js";
 export const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant. Provide clear and concise answers to the user's questions. If you don't know the answer, admit it honestly.`;
 interface ChatComponentProps {
   client: LMStudioClient;
@@ -19,20 +20,33 @@ interface ChatComponentProps {
 
 type InkChatMessage =
   | {
-      role: "user";
+      type: "user";
       content: string;
     }
   | {
-      role: "assistant";
+      type: "assistant";
       content: Array<{
         type: "reasoning" | "response";
         text: string;
       }>;
+    }
+  | {
+      type: "help";
+      content: string;
+    }
+  | {
+      type: "log";
+      content: string;
     };
+
+type Suggestion =
+  | { type: "command"; data: SlashCommand }
+  | { type: "model"; data: { modelKey: string; isLoaded: boolean; isCurrent: boolean } };
+
 export function trimNewlines(input: string): string {
   return input.replace(/^[\r\n]+|[\r\n]+$/g, "");
 }
-
+const SUGGESTIONS_PER_PAGE = 12;
 const commandHandler = new SlashCommandHandler();
 
 export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatComponentProps) => {
@@ -46,9 +60,63 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
   const [, setRenderTrigger] = useState(0);
   const chatRef = useRef<Chat>(chat);
   const llmRef = useRef<LLM>(llm);
-  const [commandSuggestions, setCommandSuggestions] = useState<SlashCommand[]>([]);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
+
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+
+  const sortedSuggestions = useMemo(() => {
+    return [...suggestions].sort((a, b) => {
+      if (a.type === "model" && b.type === "model") {
+        if (a.data.isCurrent && !b.data.isCurrent) return -1;
+        if (!a.data.isCurrent && b.data.isCurrent) return 1;
+        if (a.data.isLoaded && !b.data.isLoaded) return -1;
+        if (!a.data.isLoaded && b.data.isLoaded) return 1;
+        return a.data.modelKey.localeCompare(b.data.modelKey);
+      }
+      if (a.type === "model" && b.type === "command") {
+        return -1;
+      }
+      if (a.type === "command" && b.type === "model") {
+        return 1;
+      }
+      if (a.type === "command" && b.type === "command") {
+        return a.data.name.localeCompare(b.data.name);
+      }
+      return 0;
+    });
+  }, [suggestions]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const modelName = llmRef.current.displayName;
+  const [downloadedModels, setDownloadedModels] = useState<
+    Array<{ modelKey: string; isLoaded: boolean; isCurrent: boolean }>
+  >([]);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      const dm = await client.system.listDownloadedModels();
+      const lm = await client.llm.listLoaded();
+      const currentModelIdentifier = llmRef.current.identifier;
+      const models = dm.map(model => {
+        const loadedCount = lm.filter(loadedModel => loadedModel.path === model.path).length;
+        const isCurrent = lm.some(
+          loadedModel =>
+            loadedModel.path === model.path && loadedModel.identifier === currentModelIdentifier,
+        );
+        return {
+          modelKey: model.modelKey,
+          isLoaded: loadedCount > 0,
+          isCurrent,
+        };
+      });
+      setDownloadedModels(models);
+    };
+
+    fetchModels();
+  }, [client]);
+
+  const logInChat = (logText: string) => {
+    setMessages(previousMessages => [...previousMessages, { type: "log", content: logText }]);
+  };
 
   useEffect(() => {
     // Setup slash command handler
@@ -56,7 +124,14 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
       name: "help",
       description: "Show help information",
       handler: async () => {
-        // No ops for now
+        const helpText = `Available commands:
+/help - Show this help information
+/exit - Exit the chat
+/model [model_path] - Load a model (type /model to see list)
+/clear - Clear the chat history
+/system-prompt [prompt] - Set the system prompt
+`;
+        setMessages(previousMessages => [...previousMessages, { type: "help", content: helpText }]);
       },
     });
 
@@ -71,13 +146,26 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
 
     commandHandler.register({
       name: "model",
-      description: "Show the current model name",
+      description: "Load a model (type /model to see list)",
       handler: async args => {
-        if (args[0] !== undefined) {
-          llmRef.current = await client.llm.load(args[0], {
+        if (args.length === 0) {
+          logInChat("Please specify a model to load. Type /model to see the list.");
+          return;
+        }
+        const modelPath = args.join(" ");
+        setModelLoadingProgress(0);
+        try {
+          llmRef.current = await client.llm.load(modelPath, {
             verbose: false,
-            onProgress(progress) {},
+            onProgress(progress) {
+              setModelLoadingProgress(progress);
+            },
           });
+          logInChat(`Model loaded: ${llmRef.current.displayName}`);
+        } catch (error) {
+          console.error(`Failed to load model: ${(error as Error).message}`);
+        } finally {
+          setModelLoadingProgress(null);
         }
       },
     });
@@ -93,22 +181,12 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
     });
 
     commandHandler.register({
-      name: "clay",
-      description: "Test command",
-      handler: async () => {
-        setMessages([]);
-        chatRef.current = Chat.empty();
-        chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
-      },
-    });
-
-    commandHandler.register({
       name: "system-prompt",
       description: "Set the system prompt",
       handler: async args => {
         const prompt = args.join(" ");
         if (prompt.length === 0) {
-          console.info("Please provide a system prompt.");
+          logInChat("Please provide a system prompt.");
           return;
         }
         // Copy existing user and assistant messages and replace system prompt(s)
@@ -121,7 +199,6 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
           newChat.append(message);
         }
         chatRef.current = newChat;
-        console.info("System prompt updated.");
       },
     });
   }, [exit, onExit, client]);
@@ -129,15 +206,26 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
   useEffect(() => {
     if (input.startsWith("/") && !isPredicting) {
       const commandPart = input.slice(1).toLowerCase();
-      const filtered = commandHandler
-        .list()
-        .filter(cmd => cmd.name.toLowerCase().startsWith(commandPart));
-      setCommandSuggestions(filtered);
-      setSelectedSuggestionIndex(0);
+
+      // Check if typing /model with space - show model list
+      if (input === "/model " || input.startsWith("/model ")) {
+        const modelFilter = input.slice(7).toLowerCase();
+        const filtered = downloadedModels.filter(model =>
+          model.modelKey.toLowerCase().includes(modelFilter),
+        );
+        setSuggestions(filtered.map(model => ({ type: "model", data: model })));
+        setSelectedSuggestionIndex(0);
+      } else {
+        const filtered = commandHandler
+          .list()
+          .filter(cmd => cmd.name.toLowerCase().startsWith(commandPart));
+        setSuggestions(filtered.map(cmd => ({ type: "command", data: cmd })));
+        setSelectedSuggestionIndex(0);
+      }
     } else {
-      setCommandSuggestions([]);
+      setSuggestions([]);
     }
-  }, [input, isPredicting]);
+  }, [input, isPredicting, client, downloadedModels]);
 
   useInput(async (inputChar, key) => {
     if (key.ctrl && inputChar === "c") {
@@ -153,33 +241,80 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
 
     if (isPredicting) return;
 
-    if (commandSuggestions.length > 0) {
+    if (suggestions.length > 0) {
       if (key.upArrow) {
         setSelectedSuggestionIndex(prev => Math.max(0, prev - 1));
         return;
       }
       if (key.downArrow) {
-        setSelectedSuggestionIndex(prev => Math.min(commandSuggestions.length - 1, prev + 1));
+        setSelectedSuggestionIndex(prev => Math.min(sortedSuggestions.length - 1, prev + 1));
         return;
       }
-      if (key.tab) {
-        setInput(`/${commandSuggestions[selectedSuggestionIndex].name} `);
-        setCommandSuggestions([]);
+      if (key.leftArrow) {
+        const currentPage = Math.floor(selectedSuggestionIndex / SUGGESTIONS_PER_PAGE);
+        if (currentPage > 0) {
+          const newIndex = (currentPage - 1) * SUGGESTIONS_PER_PAGE;
+          setSelectedSuggestionIndex(newIndex);
+        }
         return;
+      }
+      if (key.rightArrow) {
+        const currentPage = Math.floor(selectedSuggestionIndex / SUGGESTIONS_PER_PAGE);
+        const totalPages = Math.ceil(sortedSuggestions.length / SUGGESTIONS_PER_PAGE);
+        if (currentPage < totalPages - 1) {
+          const newIndex = (currentPage + 1) * SUGGESTIONS_PER_PAGE;
+          setSelectedSuggestionIndex(newIndex);
+        }
+        return;
+      }
+
+      if (selectedSuggestionIndex !== -1 && key.tab) {
+        const selectedSuggestion = sortedSuggestions[selectedSuggestionIndex];
+        if (selectedSuggestion.type === "model") {
+          {
+            setSuggestions([]);
+            setInput("");
+            return;
+          }
+        } else if (selectedSuggestion.type === "command") {
+          setInput(`/${selectedSuggestion.data.name} `);
+          setSuggestions([]);
+          return;
+        }
       }
     }
 
     if (key.return) {
       const userInput = input.trim();
       if (userInput.startsWith("/")) {
-        setCommandSuggestions([]);
+        const selectedSuggestion = sortedSuggestions[selectedSuggestionIndex];
+        setSuggestions([]);
+        const commandName =
+          selectedSuggestion?.type === "command"
+            ? selectedSuggestion.data.name
+            : selectedSuggestion?.type === "model"
+              ? "model"
+              : userInput.slice(1);
+        let args = userInput
+          .slice(commandName.length + 1)
+          .trim()
+          .split(" ")
+          .filter(arg => arg.length > 0);
+        // Check if suggestion for model is selected
+        // If so, use that model
+        // Otherwise, use typed command
+        if (selectedSuggestion?.type === "model") {
+          const model = selectedSuggestion.data;
+          args = [model.modelKey];
+        }
+
+        setInput("");
         const result = await commandHandler.execute(
-          commandSuggestions[selectedSuggestionIndex]?.name ?? userInput.slice(1),
+          commandName + (args.length > 0 ? " " + args.join(" ") : ""),
         );
         if (!result) {
-          console.info(`Unknown command: ${userInput}`);
+          logInChat(`Unknown command: ${userInput}`);
         }
-        setInput("");
         return;
       }
       setInput("");
@@ -211,7 +346,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         chatRef.current.append("user", userInput);
         setMessages(previousMessages => [
           ...previousMessages,
-          { role: "user", content: userInput },
+          { type: "user", content: userInput },
         ]);
         await llmRef.current.act(chatRef.current, [], {
           onPredictionFragment(fragment) {
@@ -232,7 +367,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
 
           onMessage(message) {
             const assistantMessage: InkChatMessage = {
-              role: "assistant",
+              type: "assistant",
               content: [],
             };
             if (reasoningStreamingContentRef.current.length > 0) {
@@ -269,31 +404,119 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
       setInput(previousInput => previousInput + inputChar);
     }
   });
+  function renderMessage(message: InkChatMessage, index: number) {
+    const type = message.type;
+    switch (type) {
+      case "user":
+        return (
+          <Box flexDirection="row">
+            <Text color="cyan">You: </Text>
+            <Text>{trimNewlines(message.content)}</Text>
+          </Box>
+        );
+
+      case "assistant":
+        return (
+          <Box marginBottom={1} flexDirection="column">
+            <Text color="magenta">{modelName}:</Text>
+            {(message.content as Array<{ type: string; text: string }>).map((part, partIndex) => (
+              <Text key={partIndex} color={part.type === "reasoning" ? "gray" : undefined}>
+                {trimNewlines(part.text)}
+              </Text>
+            ))}
+          </Box>
+        );
+
+      case "help":
+        return (
+          <Box marginBottom={1} flexDirection="column">
+            <Text color="green">Help:</Text>
+            <Text>{trimNewlines(message.content)}</Text>
+          </Box>
+        );
+      case "log":
+        return (
+          <Box marginBottom={1} flexDirection="column">
+            <Text color="yellow">{trimNewlines(message.content)}</Text>
+          </Box>
+        );
+
+      default: {
+        const exhaustiveCheck: never = type;
+        throw new Error(`Unhandled message type: ${exhaustiveCheck}`);
+      }
+    }
+  }
+
+  function renderSuggestions() {
+    if (sortedSuggestions.length === 0) {
+      return null;
+    }
+    // Sort all suggestions such that model loaded and current appear first
+    // Then paginate
+
+    if (selectedSuggestionIndex === -1) {
+      setSelectedSuggestionIndex(0);
+    }
+
+    const totalPages = Math.ceil(sortedSuggestions.length / SUGGESTIONS_PER_PAGE);
+    const currentPage = Math.floor(selectedSuggestionIndex / SUGGESTIONS_PER_PAGE);
+    const startIndex = currentPage * SUGGESTIONS_PER_PAGE;
+    const endIndex = Math.min(startIndex + SUGGESTIONS_PER_PAGE, sortedSuggestions.length);
+    const visibleSuggestions = sortedSuggestions.slice(startIndex, endIndex);
+
+    function renderSuggestion(suggestion: Suggestion, index: number) {
+      const globalIndex = startIndex + index;
+      if (suggestion.type === "command") {
+        return (
+          <Box key={suggestion.data.name}>
+            <Text backgroundColor={selectedSuggestionIndex === globalIndex ? "gray" : undefined}>
+              /{suggestion.data.name} - {suggestion.data.description}
+            </Text>
+          </Box>
+        );
+      } else {
+        const model = suggestion.data;
+
+        return (
+          <Box key={model.modelKey}>
+            <Text
+              bold={model.isCurrent}
+              backgroundColor={selectedSuggestionIndex === globalIndex ? "gray" : undefined}
+            >
+              {model.modelKey}
+              {model.isLoaded ? " (loaded)" : model.isCurrent ? " (current)" : null}
+            </Text>
+          </Box>
+        );
+      }
+    }
+
+    return (
+      <Box flexDirection="column" marginLeft={2}>
+        {visibleSuggestions.map((suggestion, index) => renderSuggestion(suggestion, index))}
+        {totalPages > 1 && (
+          <Box marginTop={1}>
+            <Text color="gray">
+              {Array.from({ length: totalPages }, (_, pageIndex) =>
+                pageIndex === currentPage ? "●" : "○",
+              ).join(" ")}
+            </Text>
+          </Box>
+        )}
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column">
       {messages.map((message, index) => (
-        <Box key={index} flexDirection="column" marginBottom={1}>
-          {message.role === "user" ? (
-            <Box flexDirection="row">
-              <Text color="cyan">You: </Text>
-              <Text>{trimNewlines(message.content)}</Text>
-            </Box>
-          ) : (
-            <Box marginBottom={1} flexDirection="column">
-              <Text color="magenta">{modelName}:</Text>
-              {message.content.map((part, partIndex) => (
-                <Text key={partIndex} color={part.type === "reasoning" ? "gray" : undefined}>
-                  {trimNewlines(part.text)}
-                </Text>
-              ))}
-            </Box>
-          )}
-        </Box>
+        <Box key={index}>{renderMessage(message, index)}</Box>
       ))}
       {isPredicting && (
         <Box marginBottom={1} flexDirection="column">
           <Text color="magenta">{modelName}:</Text>
+          <Text color="gray">(predicting...)</Text>
           {reasoningStreamingContentRef.current.length > 0 && (
             <Text color="gray">{trimNewlines(reasoningStreamingContentRef.current)}</Text>
           )}
@@ -302,31 +525,16 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
           )}
         </Box>
       )}
+      {modelLoadingProgress !== null && (
+        <Box marginBottom={1}>
+          <Text color="yellow">Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
+        </Box>
+      )}
       <Box>
         <Text color="cyan">› </Text>
         <Text>{input}</Text>
-
-        {isPredicting && <Text color="gray"> (predicting...)</Text>}
       </Box>
-      <Box>
-        {commandSuggestions.length > 0 && (
-          <Box flexDirection="column" marginLeft={2}>
-            {commandSuggestions.map(cmd => (
-              <Box key={cmd.name}>
-                <Text
-                  color={
-                    selectedSuggestionIndex === commandSuggestions.indexOf(cmd)
-                      ? "green"
-                      : undefined
-                  }
-                >
-                  /{cmd.name} - {cmd.description}
-                </Text>
-              </Box>
-            ))}
-          </Box>
-        )}
-      </Box>
+      {renderSuggestions()}
     </Box>
   );
 };
