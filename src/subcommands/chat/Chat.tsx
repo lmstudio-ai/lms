@@ -74,7 +74,10 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
       description: "Show the current model name",
       handler: async args => {
         if (args[0] !== undefined) {
-          llmRef.current = await client.llm.load(args[0]);
+          llmRef.current = await client.llm.load(args[0], {
+            verbose: false,
+            onProgress(progress) {},
+          });
         }
       },
     });
@@ -96,6 +99,29 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         setMessages([]);
         chatRef.current = Chat.empty();
         chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
+      },
+    });
+
+    commandHandler.register({
+      name: "system-prompt",
+      description: "Set the system prompt",
+      handler: async args => {
+        const prompt = args.join(" ");
+        if (prompt.length === 0) {
+          console.info("Please provide a system prompt.");
+          return;
+        }
+        // Copy existing user and assistant messages and replace system prompt(s)
+        // with the new prompt
+
+        const newChat = Chat.empty();
+        newChat.append("system", prompt);
+        for (const message of chatRef.current.getMessagesArray()) {
+          if (message.getRole() === "system") continue;
+          newChat.append(message);
+        }
+        chatRef.current = newChat;
+        console.info("System prompt updated.");
       },
     });
   }, [exit, onExit, client]);
@@ -189,6 +215,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         ]);
         await llmRef.current.act(chatRef.current, [], {
           onPredictionFragment(fragment) {
+            if (fragment.isStructural) return;
             if (fragment.reasoningType === "none") {
               streamingContentRef.current += fragment.content;
               setRenderTrigger(prev => prev + 1);
@@ -197,7 +224,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
               fragment.reasoningType === "reasoningEndTag"
             ) {
               // Ignore reasoning tags for display
-            } else if (fragment.isStructural === false) {
+            } else {
               reasoningStreamingContentRef.current += fragment.content;
               setRenderTrigger(prev => prev + 1);
             }
