@@ -77,11 +77,11 @@ export async function executePrediction(
   llmModel: LLM,
   chat: Chat,
   input: string,
-  signal?: AbortSignal,
+  controller?: AbortController,
 ): Promise<{ result: any; lastFragment: string }> {
   chat.append("user", input);
   const prediction = llmModel.respond(chat, {
-    signal: signal,
+    signal: controller?.signal,
   });
 
   let lastFragment = "";
@@ -90,7 +90,7 @@ export async function executePrediction(
     lastFragment = fragment.content;
   }
 
-  if (signal?.aborted === true) {
+  if (controller?.signal.aborted === true) {
     process.stdout.write(chalk.gray("\nGeneration interrupted by user with Ctrl^C\n"));
   }
 
