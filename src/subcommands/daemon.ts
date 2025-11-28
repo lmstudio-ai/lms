@@ -131,7 +131,6 @@ info.action(async (options: DaemonInfoCommandOptions) => {
           status: "running",
           pid: daemonInfo.pid,
           version: daemonInfo.version,
-          build: daemonInfo.build,
         }),
       );
       return;
@@ -139,8 +138,7 @@ info.action(async (options: DaemonInfoCommandOptions) => {
 
     const processName = daemonInfo.isDaemon === true ? "llmster" : "LM Studio";
     console.info(`${processName} is running (PID: ${daemonInfo.pid})`);
-    const buildSuffix = daemonInfo.build !== undefined ? ` (build: ${daemonInfo.build})` : "";
-    console.info(`Version: ${daemonInfo.version}${buildSuffix}`);
+    console.info(`Version: ${daemonInfo.version}`);
   } catch (error) {
     console.error("Failed to get daemon info:", error);
     process.exit(1);
