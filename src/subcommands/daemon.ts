@@ -59,19 +59,19 @@ status.action(async (options: DaemonStatusCommandOptions) => {
   const logger = createLogger(options);
   const useJson = options.json ?? false;
 
-  const daemonInfo = await fetchDaemonInfo(logger);
-
-  if (daemonInfo.status === "not-running") {
-    if (useJson === true) {
-      console.log(JSON.stringify({ status: "not-running" }));
-    } else {
-      console.info("LM Studio is not running");
-    }
-    return;
-  }
-
-  // Daemon is running, now get detailed info
   try {
+    const daemonInfo = await fetchDaemonInfo(logger);
+
+    if (daemonInfo.status === "not-running") {
+      if (useJson === true) {
+        console.log(JSON.stringify({ status: "not-running" }));
+      } else {
+        console.info("LM Studio is not running");
+      }
+      return;
+    }
+
+    // Daemon is running, now get detailed info
     // Sanity check the PID
     if (!Number.isInteger(daemonInfo.pid) || daemonInfo.pid <= 0) {
       console.error("Received invalid PID from server");
@@ -107,19 +107,19 @@ info.action(async (options: DaemonInfoCommandOptions) => {
   const logger = createLogger(options);
   const useJson = options.json ?? false;
 
-  const daemonInfo = await fetchDaemonInfo(logger);
-
-  if (daemonInfo.status === "not-running") {
-    const notRunningPayload = { status: "not-running" };
-    if (useJson === true) {
-      console.log(JSON.stringify(notRunningPayload));
-    } else {
-      console.info("LM Studio is not running");
-    }
-    return;
-  }
-
   try {
+    const daemonInfo = await fetchDaemonInfo(logger);
+
+    if (daemonInfo.status === "not-running") {
+      const notRunningPayload = { status: "not-running" };
+      if (useJson === true) {
+        console.log(JSON.stringify(notRunningPayload));
+      } else {
+        console.info("LM Studio is not running");
+      }
+      return;
+    }
+
     if (!Number.isInteger(daemonInfo.pid) || daemonInfo.pid <= 0) {
       console.error("Received invalid PID from server");
       process.exit(1);
