@@ -23,15 +23,10 @@ async function withLocalApiClient<TResult>(
 function normalizeServiceInfo(serviceInfo: ServiceInfo): ServiceInfo {
   const buildValue =
     serviceInfo.build !== undefined && serviceInfo.build.length > 0 ? serviceInfo.build : undefined;
-  const channelValue =
-    serviceInfo.channel !== undefined && serviceInfo.channel.length > 0
-      ? serviceInfo.channel
-      : undefined;
 
   return {
     ...serviceInfo,
     build: buildValue,
-    channel: channelValue,
   };
 }
 
@@ -137,7 +132,6 @@ info.action(async (options: DaemonInfoCommandOptions) => {
           pid: daemonInfo.pid,
           version: daemonInfo.version,
           build: daemonInfo.build,
-          channel: daemonInfo.channel,
         }),
       );
       return;
@@ -146,9 +140,7 @@ info.action(async (options: DaemonInfoCommandOptions) => {
     const processName = daemonInfo.isDaemon === true ? "llmster" : "LM Studio";
     console.info(`${processName} is running (PID: ${daemonInfo.pid})`);
     const buildSuffix = daemonInfo.build !== undefined ? ` (build: ${daemonInfo.build})` : "";
-    const channelSuffix =
-      daemonInfo.channel !== undefined ? ` (channel: ${daemonInfo.channel})` : "";
-    console.info(`Version: ${daemonInfo.version}${buildSuffix}${channelSuffix}`);
+    console.info(`Version: ${daemonInfo.version}${buildSuffix}`);
   } catch (error) {
     console.error("Failed to get daemon info:", error);
     process.exit(1);
