@@ -244,7 +244,10 @@ const updateCommand = new Command()
   .action(async function (queryArgument: string | undefined) {
     const mergedOptions = this.optsWithGlobals();
     const logger = createLogger(mergedOptions as LogLevelArgs);
-    await using client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
+    await using client = await createClient(
+      logger,
+      mergedOptions as CreateClientArgs & LogLevelArgs,
+    );
 
     await runtimeUpdateAction(logger, client, queryArgument, {
       all: mergedOptions.all ?? false,

@@ -1,10 +1,52 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { findLMStudioHome, tryFindLocalAPIServer } from "@lmstudio/lms-common-server";
-import { LMStudioClient } from "@lmstudio/sdk";
+import { LMStudioClient, type ServiceInfo } from "@lmstudio/sdk";
 import { spawn } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+
+type DaemonInfoResult = { status: "not-running" } | ({ status: "running" } & ServiceInfo);
+
+async function withLocalApiClient<TResult>(
+  logger: ReturnType<typeof createLogger>,
+  port: number,
+  handler: (client: LMStudioClient) => Promise<TResult>,
+): Promise<TResult> {
+  await using client = new LMStudioClient({
+    baseUrl: `ws://127.0.0.1:${port}`,
+    logger,
+  });
+  return await handler(client);
+}
+
+function normalizeServiceInfo(serviceInfo: ServiceInfo): ServiceInfo {
+  const buildValue =
+    serviceInfo.build !== undefined && serviceInfo.build.length > 0 ? serviceInfo.build : undefined;
+  const channelValue =
+    serviceInfo.channel !== undefined && serviceInfo.channel.length > 0
+      ? serviceInfo.channel
+      : undefined;
+
+  return {
+    ...serviceInfo,
+    build: buildValue,
+    channel: channelValue,
+  };
+}
+
+async function fetchDaemonInfo(logger: ReturnType<typeof createLogger>): Promise<DaemonInfoResult> {
+  const serverStatus = await tryFindLocalAPIServer(logger);
+
+  if (serverStatus === null) {
+    return { status: "not-running" };
+  }
+
+  return await withLocalApiClient(logger, serverStatus.port, async client => {
+    const info = normalizeServiceInfo(await client.system.getInfo());
+    return { status: "running", ...info };
+  });
+}
 
 type DaemonStatusCommandOptions = OptionValues &
   LogLevelArgs & {
@@ -22,12 +64,10 @@ status.action(async (options: DaemonStatusCommandOptions) => {
   const logger = createLogger(options);
   const useJson = options.json ?? false;
 
-  // First, check if the daemon is running without waking it up
-  const serverStatus = await tryFindLocalAPIServer(logger);
+  const daemonInfo = await fetchDaemonInfo(logger);
 
-  if (serverStatus === null) {
-    // Daemon is not running
-    if (useJson) {
+  if (daemonInfo.status === "not-running") {
+    if (useJson === true) {
       console.log(JSON.stringify({ status: "not-running" }));
     } else {
       console.info("LM Studio is not running");
@@ -37,26 +77,78 @@ status.action(async (options: DaemonStatusCommandOptions) => {
 
   // Daemon is running, now get detailed info
   try {
-    await using client = new LMStudioClient({
-      baseUrl: `ws://127.0.0.1:${serverStatus.port}`,
-      logger,
-    });
-
-    const info = await client.system.getInfo();
-
     // Sanity check the PID
-    if (!Number.isInteger(info.pid) || info.pid <= 0) {
+    if (!Number.isInteger(daemonInfo.pid) || daemonInfo.pid <= 0) {
       console.error("Received invalid PID from server");
       process.exit(1);
     }
 
     // Output results
-    if (useJson) {
-      console.log(JSON.stringify({ status: "running", pid: info.pid }));
+    if (useJson === true) {
+      console.log(JSON.stringify({ status: "running", pid: daemonInfo.pid }));
     } else {
-      const processName = info.isDaemon ? "llmster" : "LM Studio";
-      console.info(`${processName} is running (PID: ${info.pid})`);
+      const processName = daemonInfo.isDaemon === true ? "llmster" : "LM Studio";
+      console.info(`${processName} is running (PID: ${daemonInfo.pid})`);
     }
+  } catch (error) {
+    console.error("Failed to get daemon info:", error);
+    process.exit(1);
+  }
+});
+
+type DaemonInfoCommandOptions = OptionValues &
+  LogLevelArgs & {
+    json?: boolean;
+  };
+
+const info = new Command<[], DaemonInfoCommandOptions>()
+  .name("info")
+  .description("Show daemon status including version/build information")
+  .option("--json", "Output info in JSON format");
+
+addLogLevelOptions(info);
+
+info.action(async (options: DaemonInfoCommandOptions) => {
+  const logger = createLogger(options);
+  const useJson = options.json ?? false;
+
+  const daemonInfo = await fetchDaemonInfo(logger);
+
+  if (daemonInfo.status === "not-running") {
+    const notRunningPayload = { status: "not-running" };
+    if (useJson === true) {
+      console.log(JSON.stringify(notRunningPayload));
+    } else {
+      console.info("LM Studio is not running");
+    }
+    return;
+  }
+
+  try {
+    if (!Number.isInteger(daemonInfo.pid) || daemonInfo.pid <= 0) {
+      console.error("Received invalid PID from server");
+      process.exit(1);
+    }
+
+    if (useJson === true) {
+      console.log(
+        JSON.stringify({
+          status: "running",
+          pid: daemonInfo.pid,
+          version: daemonInfo.version,
+          build: daemonInfo.build,
+          channel: daemonInfo.channel,
+        }),
+      );
+      return;
+    }
+
+    const processName = daemonInfo.isDaemon === true ? "llmster" : "LM Studio";
+    console.info(`${processName} is running (PID: ${daemonInfo.pid})`);
+    const buildSuffix = daemonInfo.build !== undefined ? ` (build: ${daemonInfo.build})` : "";
+    const channelSuffix =
+      daemonInfo.channel !== undefined ? ` (channel: ${daemonInfo.channel})` : "";
+    console.info(`Version: ${daemonInfo.version}${buildSuffix}${channelSuffix}`);
   } catch (error) {
     console.error("Failed to get daemon info:", error);
     process.exit(1);
@@ -142,4 +234,5 @@ export const daemon = new Command()
   .name("daemon")
   .description("Commands for managing the LM Studio daemon")
   .addCommand(status)
+  .addCommand(info)
   .addCommand(updateDaemon);
