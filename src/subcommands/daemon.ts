@@ -1,5 +1,5 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
-import { tryFindLocalAPIServer } from "@lmstudio/lms-common-server";
+import { apiServerPorts } from "@lmstudio/lms-common";
 import { LMStudioClient, type ServiceInfo } from "@lmstudio/sdk";
 import { spawn } from "child_process";
 import { existsSync, readFileSync } from "fs";
@@ -9,33 +9,63 @@ import { llmsterInstallLocationFilePath } from "../lmstudioPaths.js";
 
 type DaemonInfoResult = { status: "not-running" } | ({ status: "running" } & ServiceInfo);
 
-async function withLocalApiClient<TResult>(
-  logger: ReturnType<typeof createLogger>,
-  port: number,
-  handler: (client: LMStudioClient) => Promise<TResult>,
-): Promise<TResult> {
-  await using client = new LMStudioClient({
-    baseUrl: `ws://127.0.0.1:${port}`,
-    logger,
-  });
-  return await handler(client);
-}
-
-function normalizeServiceInfo(serviceInfo: ServiceInfo): ServiceInfo {
-  return serviceInfo;
-}
-
 async function fetchDaemonInfo(logger: ReturnType<typeof createLogger>): Promise<DaemonInfoResult> {
-  const serverStatus = await tryFindLocalAPIServer(logger);
+  const probeStatus = async (port: number): Promise<number | undefined> => {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/lms-status`, { method: "GET" });
+      const isOk = response.status === 200;
+      if (isOk === true) {
+        return port;
+      }
+    } catch {
+      /* ignore */
+    }
+    return undefined;
+  };
 
-  if (serverStatus === null) {
+  const availablePorts: Array<number> = [];
+  for (const port of apiServerPorts) {
+    const reachablePort = await probeStatus(port);
+    if (reachablePort !== undefined) {
+      availablePorts.push(reachablePort);
+    }
+  }
+
+  if (availablePorts.length === 0) {
     return { status: "not-running" };
   }
 
-  return await withLocalApiClient(logger, serverStatus.port, async client => {
-    const info = normalizeServiceInfo(await client.system.getInfo());
-    return { status: "running", ...info };
-  });
+  const fetchInfoForPort = async (
+    port: number,
+  ): Promise<(ServiceInfo & { port: number }) | undefined> => {
+    try {
+      await using client = new LMStudioClient({
+        baseUrl: `ws://127.0.0.1:${port}`,
+        logger,
+      });
+      const info = await client.system.getInfo();
+      return { ...info, port };
+    } catch {
+      return undefined;
+    }
+  };
+
+  const infoResults: Array<ServiceInfo & { port: number }> = [];
+  for (const port of availablePorts) {
+    const infoResult = await fetchInfoForPort(port);
+    if (infoResult !== undefined) {
+      infoResults.push(infoResult);
+    }
+  }
+
+  if (infoResults.length === 0) {
+    return { status: "not-running" };
+  }
+
+  const daemonResult = infoResults.find(result => result.isDaemon === true);
+  const chosen = daemonResult ?? infoResults[0];
+
+  return { status: "running", ...chosen };
 }
 
 type DaemonStatusCommandOptions = OptionValues &
