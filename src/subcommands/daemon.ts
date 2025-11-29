@@ -21,13 +21,7 @@ async function withLocalApiClient<TResult>(
 }
 
 function normalizeServiceInfo(serviceInfo: ServiceInfo): ServiceInfo {
-  const buildValue =
-    serviceInfo.build !== undefined && serviceInfo.build.length > 0 ? serviceInfo.build : undefined;
-
-  return {
-    ...serviceInfo,
-    build: buildValue,
-  };
+  return serviceInfo;
 }
 
 async function fetchDaemonInfo(logger: ReturnType<typeof createLogger>): Promise<DaemonInfoResult> {
