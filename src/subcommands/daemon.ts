@@ -75,7 +75,9 @@ status.action(async (options: DaemonStatusCommandOptions) => {
 
     // Output results
     if (useJson === true) {
-      console.log(JSON.stringify({ status: "running", pid: daemonInfo.pid }));
+      console.log(
+        JSON.stringify({ status: "running", pid: daemonInfo.pid, isDaemon: daemonInfo.isDaemon }),
+      );
     } else {
       const processName = daemonInfo.isDaemon === true ? "llmster" : "LM Studio";
       console.info(`${processName} is running (PID: ${daemonInfo.pid})`);
@@ -126,6 +128,7 @@ info.action(async (options: DaemonInfoCommandOptions) => {
           status: "running",
           pid: daemonInfo.pid,
           version: daemonInfo.version,
+          isDaemon: daemonInfo.isDaemon,
         }),
       );
       return;
