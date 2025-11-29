@@ -1,10 +1,11 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
-import { findLMStudioHome, tryFindLocalAPIServer } from "@lmstudio/lms-common-server";
+import { tryFindLocalAPIServer } from "@lmstudio/lms-common-server";
 import { LMStudioClient, type ServiceInfo } from "@lmstudio/sdk";
 import { spawn } from "child_process";
 import { existsSync, readFileSync } from "fs";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import { llmsterInstallLocationFilePath } from "../lmstudioPaths.js";
 
 type DaemonInfoResult = { status: "not-running" } | ({ status: "running" } & ServiceInfo);
 
@@ -145,6 +146,12 @@ type DaemonUpdateCommandOptions = OptionValues &
     channel?: string;
   };
 
+interface InstallLocationFileContent {
+  path?: string;
+  argv?: Array<string>;
+  cwd?: string;
+}
+
 const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
   .name("update")
   .description("Update the llmster daemon")
@@ -153,42 +160,53 @@ const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
   .action(async (options: DaemonUpdateCommandOptions) => {
     const logger = createLogger(options);
 
-    const lmstudioHome = findLMStudioHome();
-    const installLocationPath = join(lmstudioHome, ".internal", "app-install-location.json");
+    const installLocationPath = llmsterInstallLocationFilePath;
+    const installLocationDescription = "llmster-install-location.json";
+
     if (existsSync(installLocationPath) === false) {
       logger.error(`Cannot find install location file at ${installLocationPath}.`);
       process.exit(1);
     }
 
-    let executablePath: string | undefined;
+    let parsedInstallLocation: InstallLocationFileContent | undefined;
     let workingDirectory: string | undefined;
     try {
       const rawInstallLocation = readFileSync(installLocationPath, "utf-8");
-      const parsedInstallLocation = JSON.parse(rawInstallLocation) as {
-        path?: string;
-        cwd?: string;
-      };
-      if (typeof parsedInstallLocation.path === "string") {
-        executablePath = parsedInstallLocation.path;
-        if (typeof parsedInstallLocation.cwd === "string" && parsedInstallLocation.cwd.length > 0) {
-          workingDirectory = parsedInstallLocation.cwd;
-        } else {
-          workingDirectory = dirname(executablePath);
-        }
+      const parsedInstallLocationUnknown: unknown = JSON.parse(rawInstallLocation);
+      if (
+        typeof parsedInstallLocationUnknown === "object" &&
+        parsedInstallLocationUnknown !== null
+      ) {
+        parsedInstallLocation = parsedInstallLocationUnknown as InstallLocationFileContent;
       }
     } catch (error) {
       logger.error(
-        `Failed to read or parse install location from ${installLocationPath}:`,
+        `Failed to read or parse install location from ${installLocationDescription} at ${installLocationPath}:`,
         error as Error,
       );
       process.exit(1);
     }
 
-    if (executablePath === undefined || executablePath.length === 0) {
+    if (
+      parsedInstallLocation === undefined ||
+      typeof parsedInstallLocation.path !== "string" ||
+      parsedInstallLocation.path.length === 0
+    ) {
       logger.error(
-        `Install location file ${installLocationPath} does not contain a valid executable path.`,
+        `Install location file ${installLocationDescription} at ${installLocationPath} does not contain a valid executable path.`,
       );
       process.exit(1);
+    }
+
+    const executablePath = parsedInstallLocation.path;
+    if (
+      parsedInstallLocation.cwd !== undefined &&
+      typeof parsedInstallLocation.cwd === "string" &&
+      parsedInstallLocation.cwd.length > 0
+    ) {
+      workingDirectory = parsedInstallLocation.cwd;
+    } else {
+      workingDirectory = dirname(executablePath);
     }
 
     const spawnOptions = {
