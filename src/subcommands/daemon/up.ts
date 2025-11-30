@@ -33,7 +33,7 @@ up.action(async (options: DaemonUpCommandOptions) => {
       );
     } else {
       if (currentStatus.isDaemon === true) {
-        console.info(`The llmster daemon is already running (PID: ${currentStatus.pid}).`);
+        console.info(`The daemon is already running (PID: ${currentStatus.pid}).`);
       } else {
         console.info(
           `LM Studio is already running (PID: ${currentStatus.pid}); not starting a second daemon.`,
