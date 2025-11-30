@@ -10,7 +10,7 @@ import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
 import { clone } from "./subcommands/clone.js";
 import { create } from "./subcommands/create.js";
-import { daemon } from "./subcommands/daemon.js";
+import { daemon } from "./subcommands/daemon/index.js";
 import { dev } from "./subcommands/dev/index.js";
 import { flags } from "./subcommands/flags.js";
 import { get } from "./subcommands/get.js";
