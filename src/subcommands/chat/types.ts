@@ -20,6 +20,10 @@ export type InkChatMessage =
   | {
       type: "log";
       content: string;
+    }
+  | {
+      type: "error";
+      content: string;
     };
 
 export type ModelState = {

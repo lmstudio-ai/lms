@@ -34,6 +34,10 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [cursorPosition, setCursorPosition] = useState(0);
+  const [confirmReload, setConfirmReload] = useState<{
+    userInput: string;
+    modelKey: string;
+  } | null>(null);
   const streamingContentRef = useRef("");
   const reasoningStreamingContentRef = useRef("");
   const abortControllerRef = useRef<AbortController | null>(opts?.abortController ?? null);
@@ -45,6 +49,9 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
   const modelName = llmRef.current.displayName;
   const logInChat = (logText: string) => {
     setMessages(previousMessages => [...previousMessages, { type: "log", content: logText }]);
+  };
+  const logErrorInChat = (errorText: string) => {
+    setMessages(previousMessages => [...previousMessages, { type: "error", content: errorText }]);
   };
 
   useEffect(() => {
@@ -138,7 +145,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
   }, [exit, onExit, client, opts?.ttl]);
 
   useEffect(() => {
-    if (input.startsWith("/") && !isPredicting) {
+    if (input.startsWith("/") && !isPredicting && confirmReload === null) {
       const commandPart = input.slice(1).toLowerCase();
 
       // Check if typing /model with space - show model list
@@ -238,6 +245,44 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
       setInput("");
       setCursorPosition(0);
 
+      // Handle model reload confirmation
+      if (confirmReload !== null) {
+        if (userInput.toLowerCase() === "y" || userInput.toLowerCase() === "yes") {
+          const { userInput: originalInput, modelKey } = confirmReload;
+          setConfirmReload(null);
+          logInChat("Reloading model...");
+          setModelLoadingProgress(0);
+          try {
+            llmRef.current = await client.llm.model(modelKey, {
+              verbose: false,
+              ttl: opts?.ttl,
+              onProgress(progress) {
+                setModelLoadingProgress(progress);
+              },
+            });
+            logInChat(`Model reloaded: ${llmRef.current.displayName}`);
+            setModelLoadingProgress(null);
+            // Retry the original request
+            setInput(originalInput);
+            setCursorPosition(originalInput.length);
+            return;
+          } catch (error) {
+            setModelLoadingProgress(null);
+            logErrorInChat(`Failed to reload model: ${(error as Error).message}`);
+            return;
+          }
+        } else if (userInput.toLowerCase() === "n" || userInput.toLowerCase() === "no") {
+          setConfirmReload(null);
+          logInChat("Model reload cancelled.");
+          onExit();
+          exit();
+          return;
+        } else {
+          logInChat("Please answer 'yes' or 'no'");
+          return;
+        }
+      }
+
       // Handle slash commands
       if (userInput.startsWith("/")) {
         const { command, args } = SlashCommandHandler.parseSlashCommand(
@@ -322,7 +367,17 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         }
       } catch (error) {
         // Handle prediction errors
-        logger.error(`Prediction error: ${(error as Error).message}`);
+        if (error instanceof Error) {
+          const errorMessage = error.message.toLowerCase();
+          if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
+            const currentModelKey = llmRef.current.modelKey;
+            logErrorInChat(`${error.message}`);
+            logInChat(`Would you like to reload the model?`);
+            setConfirmReload({ userInput, modelKey: currentModelKey });
+          } else {
+            logErrorInChat(`Prediction error: ${error.message}`);
+          }
+        }
       } finally {
         setIsPredicting(false);
         abortControllerRef.current = null;
@@ -382,7 +437,12 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
             <Text color="yellow">{trimNewlines(message.content)}</Text>
           </Box>
         );
-
+      case "error":
+        return (
+          <Box marginBottom={1} flexDirection="column">
+            <Text color="red">{trimNewlines(message.content)}</Text>
+          </Box>
+        );
       default: {
         const exhaustiveCheck: never = type;
         throw new Error(`Unhandled message type: ${exhaustiveCheck}`);
@@ -396,11 +456,6 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
     }
     // Sort all suggestions such that model loaded and current appear first
     // Then paginate
-
-    if (selectedSuggestionIndex === -1) {
-      setSelectedSuggestionIndex(0);
-    }
-
     const totalPages = Math.ceil(sortedSuggestions.length / suggestionsPerPage);
     const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
     const startIndex = currentPage * suggestionsPerPage;
@@ -479,6 +534,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         </Box>
       )}
       <Box>
+        {confirmReload !== null && <Text color="cyan">(yes/no) </Text>}
         <Text color="cyan">› </Text>
         <Text>{input.slice(0, cursorPosition)}</Text>
         <Text inverse>{cursorPosition < input.length ? input[cursorPosition] : " "}</Text>
