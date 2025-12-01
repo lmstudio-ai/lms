@@ -134,7 +134,7 @@ export async function handleNonInteractiveChat(
     const { result, lastFragment } = await executePrediction(llm, chat, prompt);
 
     if (opts.stats !== undefined) {
-      displayVerboseStats(result.stats, logger);
+      displayVerboseStats(result.stats, logger.info.bind(logger));
     }
 
     if (lastFragment.endsWith("\n") !== true) {

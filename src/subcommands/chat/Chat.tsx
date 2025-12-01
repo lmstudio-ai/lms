@@ -4,7 +4,7 @@ import { type LLM, type LMStudioClient, Chat } from "@lmstudio/sdk";
 import type { SimpleLogger } from "@lmstudio/lms-common";
 import { SlashCommandHandler } from "./SlashCommandHandler.js";
 import { useModels, useSortedSuggestions, useSuggestionsPerPage } from "./hooks.js";
-import { trimNewlines } from "./util.js";
+import { displayVerboseStats, trimNewlines } from "./util.js";
 import type { InkChatMessage, Suggestion } from "./types.js";
 import { DEFAULT_SYSTEM_PROMPT } from "./index.js";
 
@@ -92,6 +92,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         try {
           llmRef.current = await client.llm.model(modelKey, {
             verbose: false,
+            ttl: opts?.ttl,
             onProgress(progress) {
               setModelLoadingProgress(progress);
             },
@@ -112,6 +113,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         setMessages([]);
         setCursorPosition(0);
         setInput("");
+        // We clear the entire chat and just use the default system prompt
         chatRef.current = Chat.empty();
         chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
       },
@@ -126,8 +128,6 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
           logInChat("Please provide a system prompt.");
           return;
         }
-        // Copy existing user and assistant messages and replace system prompt(s)
-        // with the new prompt
 
         const newChat = chatRef.current.asMutableCopy();
         newChat.append("system", prompt);
@@ -135,7 +135,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         chatRef.current = newChat;
       },
     });
-  }, [exit, onExit, client]);
+  }, [exit, onExit, client, opts?.ttl]);
 
   useEffect(() => {
     if (input.startsWith("/") && !isPredicting) {
@@ -275,7 +275,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
           ...previousMessages,
           { type: "user", content: userInput },
         ]);
-        await llmRef.current.act(chatRef.current, [], {
+        const result = await llmRef.current.respond(chatRef.current, {
           onPredictionFragment(fragment) {
             if (fragment.isStructural) return;
             if (fragment.reasoningType === "none") {
@@ -317,6 +317,9 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
           },
           signal,
         });
+        if (opts?.stats === true) {
+          displayVerboseStats(result.stats, logInChat);
+        }
       } catch (error) {
         // Handle prediction errors
         logger.error(`Prediction error: ${(error as Error).message}`);

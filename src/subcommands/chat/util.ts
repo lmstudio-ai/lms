@@ -49,25 +49,28 @@ export async function readStdin(): Promise<string> {
     });
   });
 }
-
-export function displayVerboseStats(stats: LLMPredictionStats, logger: SimpleLogger) {
-  logger.info("\n\nPrediction Stats:");
-  logger.info(`  Stop Reason: ${stats.stopReason}`);
+export function displayVerboseStats(
+  stats: LLMPredictionStats,
+  logFunction: (text: string) => void,
+) {
+  let result = "\n\nPrediction Stats:";
+  result += `\n  Stop Reason: ${stats.stopReason}`;
   if (stats.tokensPerSecond !== undefined) {
-    logger.info(`  Tokens/Second: ${stats.tokensPerSecond.toFixed(2)}`);
+    result += `\n  Tokens/Second: ${stats.tokensPerSecond.toFixed(2)}`;
   }
   if (stats.timeToFirstTokenSec !== undefined) {
-    logger.info(`  Time to First Token: ${stats.timeToFirstTokenSec.toFixed(3)}s`);
+    result += `\n  Time to First Token: ${stats.timeToFirstTokenSec.toFixed(3)}s`;
   }
   if (stats.promptTokensCount !== undefined) {
-    logger.info(`  Prompt Tokens: ${stats.promptTokensCount}`);
+    result += `\n  Prompt Tokens: ${stats.promptTokensCount}`;
   }
   if (stats.predictedTokensCount !== undefined) {
-    logger.info(`  Predicted Tokens: ${stats.predictedTokensCount}`);
+    result += `\n  Predicted Tokens: ${stats.predictedTokensCount}`;
   }
   if (stats.totalTokensCount !== undefined) {
-    logger.info(`  Total Tokens: ${stats.totalTokensCount}`);
+    result += `\n  Total Tokens: ${stats.totalTokensCount}`;
   }
+  logFunction(result);
 }
 
 /**
