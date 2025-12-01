@@ -6,7 +6,7 @@ import { SlashCommandHandler } from "./SlashCommandHandler.js";
 import { useModels, useSortedSuggestions, useSuggestionsPerPage } from "./hooks.js";
 import { trimNewlines } from "./util.js";
 import type { InkChatMessage, Suggestion } from "./types.js";
-export const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant. Provide clear and concise answers to the user's questions. If you don't know the answer, admit it honestly.`;
+import { DEFAULT_SYSTEM_PROMPT } from "./index.js";
 
 interface ChatComponentProps {
   client: LMStudioClient;
@@ -33,6 +33,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
   const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [cursorPosition, setCursorPosition] = useState(0);
   const streamingContentRef = useRef("");
   const reasoningStreamingContentRef = useRef("");
   const abortControllerRef = useRef<AbortController | null>(opts?.abortController ?? null);
@@ -42,7 +43,6 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
   const sortedSuggestions = useSortedSuggestions(suggestions);
   const suggestionsPerPage = useSuggestionsPerPage(messages);
   const modelName = llmRef.current.displayName;
-
   const logInChat = (logText: string) => {
     setMessages(previousMessages => [...previousMessages, { type: "log", content: logText }]);
   };
@@ -110,6 +110,8 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
       description: "Clear the chat history",
       handler: async () => {
         setMessages([]);
+        setCursorPosition(0);
+        setInput("");
         chatRef.current = Chat.empty();
         chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
       },
@@ -127,12 +129,9 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         // Copy existing user and assistant messages and replace system prompt(s)
         // with the new prompt
 
-        const newChat = Chat.empty();
+        const newChat = chatRef.current.asMutableCopy();
         newChat.append("system", prompt);
-        for (const message of chatRef.current.getMessagesArray()) {
-          if (message.getRole() === "system") continue;
-          newChat.append(message);
-        }
+        logInChat("System prompt updated to: " + prompt);
         chatRef.current = newChat;
       },
     });
@@ -143,7 +142,8 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
       const commandPart = input.slice(1).toLowerCase();
 
       // Check if typing /model with space - show model list
-      if (input === "/model" || input.startsWith("/model ")) {
+      // only show models if input is exactly "/model " or starts with "/model " and has more text
+      if (input.startsWith("/model ") && input.split(" ").length === 2) {
         const modelFilter = input.slice(6).trim().toLowerCase();
         const filtered = models.filter(model => model.modelKey.toLowerCase().includes(modelFilter));
         setSuggestions(filtered.map(model => ({ type: "model", data: model })));
@@ -208,30 +208,42 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         const selectedSuggestion = sortedSuggestions[selectedSuggestionIndex];
         if (selectedSuggestion.type === "model") {
           {
+            setInput(`/model ${selectedSuggestion.data.modelKey}`);
+            setCursorPosition(selectedSuggestion.data.modelKey.length + 7);
             setSuggestions([]);
-            setInput("");
             return;
           }
         } else if (selectedSuggestion.type === "command") {
           setInput(`/${selectedSuggestion.data.name} `);
+          setCursorPosition(selectedSuggestion.data.name.length + 2);
           setSuggestions([]);
           return;
         }
       }
     }
-
+    if (key.leftArrow && suggestions.length === 0) {
+      setCursorPosition(prev => Math.max(0, prev - 1));
+      return;
+    }
+    if (key.rightArrow && suggestions.length === 0) {
+      setCursorPosition(prev => Math.min(input.length, prev + 1));
+      return;
+    }
     if (key.return) {
       const userInput = input.trim();
       if (userInput.length === 0) {
         return;
       }
 
+      setInput("");
+      setCursorPosition(0);
+
+      // Handle slash commands
       if (userInput.startsWith("/")) {
         const { command, args } = SlashCommandHandler.parseSlashCommand(
           userInput,
           sortedSuggestions[selectedSuggestionIndex],
         );
-        setInput("");
         if (command === null) {
           return;
         }
@@ -241,7 +253,6 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         }
         return;
       }
-      setInput("");
 
       if (userInput === "exit" || userInput === "quit") {
         onExit();
@@ -316,9 +327,19 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
         streamingContentRef.current = "";
       }
     } else if (key.backspace || key.delete) {
-      setInput(previousInput => previousInput.slice(0, -1));
+      if (cursorPosition > 0) {
+        setInput(
+          previousInput =>
+            previousInput.slice(0, cursorPosition - 1) + previousInput.slice(cursorPosition),
+        );
+        setCursorPosition(prev => prev - 1);
+      }
     } else if (!key.ctrl && !key.meta && inputChar) {
-      setInput(previousInput => previousInput + inputChar);
+      setInput(
+        previousInput =>
+          previousInput.slice(0, cursorPosition) + inputChar + previousInput.slice(cursorPosition),
+      );
+      setCursorPosition(prev => prev + 1);
     }
   });
 
@@ -456,7 +477,9 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
       )}
       <Box>
         <Text color="cyan">› </Text>
-        <Text>{input}</Text>
+        <Text>{input.slice(0, cursorPosition)}</Text>
+        <Text inverse>{cursorPosition < input.length ? input[cursorPosition] : " "}</Text>
+        <Text>{input.slice(cursorPosition + 1)}</Text>
       </Box>
       {renderSuggestions()}
     </Box>
