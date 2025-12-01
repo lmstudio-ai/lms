@@ -83,7 +83,7 @@ const lmsKey = "<LMS-CLI-LMS-KEY>";
 
 export async function createClient(
   logger: SimpleLogger,
-  args: CreateClientArgs & LogLevelArgs,
+  args: CreateClientArgs & LogLevelArgs = {},
   _opts: CreateClientOpts = {},
 ) {
   let { host, port } = args;
@@ -137,10 +137,10 @@ export async function createClient(
   }
   if (port === undefined && host === "127.0.0.1") {
     // Use shared helper to find or start llmster
-    const localPort = await findOrStartLlmster({ logger });
+    const serverStatus = await findOrStartLlmster({ logger });
 
-    if (localPort !== null) {
-      const baseUrl = `ws://${host}:${localPort}`;
+    if (serverStatus !== null) {
+      const baseUrl = `ws://${host}:${serverStatus.port}`;
       logger.debug(`Found local API server at ${baseUrl}`);
 
       if (auth.clientIdentifier === "lms-cli") {
@@ -155,7 +155,8 @@ export async function createClient(
       return new LMStudioClient({ baseUrl, logger, ...auth });
     }
 
-    logger.error("");
+    logger.error("Failed to start or connect to local LM Studio API server.");
+    process.exit(1);
   }
 
   if (port === undefined) {
@@ -170,6 +171,7 @@ export async function createClient(
         is running and accessible at the specified address.
       `,
     );
+    process.exit(1);
   }
   const baseUrl = `ws://${host}:${port}`;
   logger.debug(`Found server at ${port}`);
