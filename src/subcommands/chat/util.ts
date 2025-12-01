@@ -2,6 +2,7 @@ import type { SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { ProgressBar } from "../../ProgressBar.js";
 import chalk from "chalk";
+import { type InkChatMessage } from "./types.js";
 
 export async function loadModelWithProgress(
   client: LMStudioClient,
@@ -99,3 +100,36 @@ export async function executePrediction(
 
   return { result, lastFragment };
 }
+
+export function trimNewlines(input: string): string {
+  return input.replace(/^[\r\n]+|[\r\n]+$/g, "");
+}
+
+export const countMessageLines = (message: InkChatMessage): number => {
+  const terminalWidth = process.stdout.columns ?? 80;
+
+  const countWrappedLines = (text: string, prefixLength: number = 0): number => {
+    const effectiveWidth = terminalWidth - prefixLength;
+    if (effectiveWidth <= 0) return 1;
+    return Math.max(1, Math.ceil(text.length / effectiveWidth));
+  };
+
+  const type = message.type;
+  switch (type) {
+    case "user":
+      return countWrappedLines(message.content, 5); // "You: " prefix
+    case "assistant": {
+      let lines = 1; // displayName line
+      message.content.forEach(part => {
+        lines += countWrappedLines(part.text, 0);
+      });
+      return lines + 1; // marginBottom
+    }
+    case "help":
+      return 1 + countWrappedLines(message.content, 0) + 1; // label + content + margin
+    case "log":
+      return countWrappedLines(message.content, 0) + 1; // content + margin
+    default:
+      return 1;
+  }
+};
