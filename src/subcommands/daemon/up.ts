@@ -1,6 +1,6 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { tryFindLocalAPIServer } from "@lmstudio/lms-common-server";
-import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 
 type DaemonUpCommandOptions = OptionValues &
@@ -13,7 +13,6 @@ const up = new Command<[], DaemonUpCommandOptions>()
   .description("Manually start the llmster daemon")
   .option("--json", "Output result in JSON format");
 
-addCreateClientOptions(up);
 addLogLevelOptions(up);
 
 up.action(async (options: DaemonUpCommandOptions) => {
