@@ -1,13 +1,7 @@
-import { apiServerPorts } from "@lmstudio/lms-common";
-import { LMStudioClient, type ServiceInfo } from "@lmstudio/sdk";
+import { type SimpleLogger } from "@lmstudio/lms-common";
 import { existsSync, readFileSync } from "fs";
 import { dirname } from "path";
 import { llmsterInstallLocationFilePath } from "../../lmstudioPaths.js";
-import type { createLogger } from "../../logLevel.js";
-
-type Logger = ReturnType<typeof createLogger>;
-
-export type DaemonInfoResult = { status: "not-running" } | ({ status: "running" } & ServiceInfo);
 
 export interface InstallLocationFileContent {
   path?: string;
@@ -21,66 +15,7 @@ export interface InstallLocationData {
   argv: Array<string>;
 }
 
-export async function fetchDaemonInfo(logger: Logger): Promise<DaemonInfoResult> {
-  const probeStatus = async (port: number): Promise<number | undefined> => {
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/lms-status`, { method: "GET" });
-      const isOk = response.status === 200;
-      if (isOk === true) {
-        return port;
-      }
-    } catch {
-      /* ignore */
-    }
-    return undefined;
-  };
-
-  const availablePorts: Array<number> = [];
-  for (const port of apiServerPorts) {
-    const reachablePort = await probeStatus(port);
-    if (reachablePort !== undefined) {
-      availablePorts.push(reachablePort);
-    }
-  }
-
-  if (availablePorts.length === 0) {
-    return { status: "not-running" };
-  }
-
-  const fetchInfoForPort = async (
-    port: number,
-  ): Promise<(ServiceInfo & { port: number }) | undefined> => {
-    try {
-      await using client = new LMStudioClient({
-        baseUrl: `ws://127.0.0.1:${port}`,
-        logger,
-      });
-      const info = await client.system.getInfo();
-      return { ...info, port };
-    } catch {
-      return undefined;
-    }
-  };
-
-  const infoResults: Array<ServiceInfo & { port: number }> = [];
-  for (const port of availablePorts) {
-    const infoResult = await fetchInfoForPort(port);
-    if (infoResult !== undefined) {
-      infoResults.push(infoResult);
-    }
-  }
-
-  if (infoResults.length === 0) {
-    return { status: "not-running" };
-  }
-
-  const daemonResult = infoResults.find(result => result.isDaemon === true);
-  const chosen = daemonResult ?? infoResults[0];
-
-  return { status: "running", ...chosen };
-}
-
-export function readInstallLocationOrExit(logger: Logger): InstallLocationData {
+export function readInstallLocationOrExit(logger: SimpleLogger): InstallLocationData {
   const installLocationPath = llmsterInstallLocationFilePath;
   const installLocationDescription = "llmster-install-location.json";
 
