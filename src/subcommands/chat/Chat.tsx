@@ -1,18 +1,19 @@
 import { useState, useRef, useEffect } from "react";
-import { Box, Text, useInput, useApp } from "ink";
+import { Box, Text, useApp } from "ink";
 import { type LLM, type LMStudioClient, Chat } from "@lmstudio/sdk";
-import type { SimpleLogger } from "@lmstudio/lms-common";
 import { SlashCommandHandler } from "./SlashCommandHandler.js";
 import { useModels, useSortedSuggestions, useSuggestionsPerPage } from "./hooks.js";
 import { displayVerboseStats, trimNewlines } from "./util.js";
-import type { InkChatMessage, Suggestion } from "./types.js";
+import type { ChatInputSegment, ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
 import { DEFAULT_SYSTEM_PROMPT } from "./index.js";
+import { ChatInput } from "./ChatInput.js";
+import { ChatSuggestions } from "./ChatSuggestions.js";
+import { produce } from "@lmstudio/immer-with-plugins";
 
 interface ChatComponentProps {
   client: LMStudioClient;
   llm: LLM;
   chat: Chat;
-  logger: SimpleLogger;
   onExit: () => void;
   opts?: {
     stats?: true;
@@ -23,19 +24,27 @@ interface ChatComponentProps {
 
 const commandHandler = new SlashCommandHandler();
 
-export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatComponentProps) => {
-  const { exit } = useApp();
-  const [messages, setMessages] = useState<InkChatMessage[]>([]);
+const emptyChatInputState: ChatUserInputState = {
+  segments: [{ type: "text", content: "" }],
+  cursorOnSegmentIndex: 0,
+  cursorInSegmentOffset: 0,
+};
 
-  const [input, setInput] = useState("");
+export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponentProps) => {
+  const { exit } = useApp();
+  const [messages, setMessages] = useState<InkChatMessage[]>([
+    {
+      type: "welcome",
+    },
+  ]);
+  const [userInputState, setUserInputState] = useState<ChatUserInputState>(emptyChatInputState);
   const [isPredicting, setIsPredicting] = useState(false);
   const [, setRenderTrigger] = useState(0);
   const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [cursorPosition, setCursorPosition] = useState(0);
   const [confirmReload, setConfirmReload] = useState<{
-    userInput: string;
+    userInput: ChatUserInputState;
     modelKey: string;
   } | null>(null);
   const streamingContentRef = useRef("");
@@ -46,7 +55,13 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
   const models = useModels(client, llmRef.current.identifier);
   const sortedSuggestions = useSortedSuggestions(suggestions);
   const suggestionsPerPage = useSuggestionsPerPage(messages);
+  const areSuggestionsVisible = sortedSuggestions.length > 0;
   const modelName = llmRef.current.displayName;
+  const lastSegment = [...userInputState.segments]
+    .reverse()
+    .find(segment => segment.type === "text");
+
+  const lastSegmentInputSegment = lastSegment?.content ?? "";
   const logInChat = (logText: string) => {
     setMessages(previousMessages => [...previousMessages, { type: "log", content: logText }]);
   };
@@ -61,11 +76,11 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
       description: "Show help information",
       handler: async () => {
         const helpText = `Available commands:
-/help - Show this help information
 /exit - Exit the chat
 /model [model_key] - Load a model (type /model to see list)
 /clear - Clear the chat history
 /system-prompt [prompt] - Set the system prompt
+/help - Show this help information
 `;
         setMessages(previousMessages => [...previousMessages, { type: "help", content: helpText }]);
       },
@@ -118,8 +133,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
       description: "Clear the chat history",
       handler: async () => {
         setMessages([]);
-        setCursorPosition(0);
-        setInput("");
+        setUserInputState(emptyChatInputState);
         // We clear the entire chat and just use the default system prompt
         chatRef.current = Chat.empty();
         chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
@@ -145,6 +159,7 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
   }, [exit, onExit, client, opts?.ttl]);
 
   useEffect(() => {
+    const input = lastSegmentInputSegment;
     if (input.startsWith("/") && !isPredicting && confirmReload === null) {
       const commandPart = input.slice(1).toLowerCase();
 
@@ -165,241 +180,318 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
     } else {
       setSuggestions([]);
     }
-  }, [input, isPredicting, client, models]);
+  }, [lastSegmentInputSegment, isPredicting, client, models, confirmReload]);
 
-  useInput(async (inputChar, key) => {
-    if (key.ctrl && inputChar === "c") {
-      // Handle Ctrl+C
-      if (isPredicting) {
-        abortControllerRef.current?.abort();
-        setIsPredicting(false);
-      } else {
-        onExit();
-        exit();
-      }
+  // Input handling and rendering is delegated to ChatInput.
+
+  const handleAbortPrediction = () => {
+    if (abortControllerRef.current !== null) {
+      abortControllerRef.current.abort();
+    }
+    setIsPredicting(false);
+  };
+
+  const handleExit = () => {
+    onExit();
+    exit();
+  };
+
+  const handleSuggestionsUp = () => {
+    setSelectedSuggestionIndex(previousIndex => Math.max(0, previousIndex - 1));
+  };
+
+  const handleSuggestionsDown = () => {
+    setSelectedSuggestionIndex(previousIndex =>
+      Math.min(sortedSuggestions.length - 1, previousIndex + 1),
+    );
+  };
+
+  const handleSuggestionsPageLeft = () => {
+    const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
+    if (currentPage > 0) {
+      const newIndex = (currentPage - 1) * suggestionsPerPage;
+      setSelectedSuggestionIndex(newIndex);
+    }
+  };
+
+  const handleSuggestionsPageRight = () => {
+    const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
+    const totalPages = Math.ceil(sortedSuggestions.length / suggestionsPerPage);
+    if (currentPage < totalPages - 1) {
+      const newIndex = (currentPage + 1) * suggestionsPerPage;
+      setSelectedSuggestionIndex(newIndex);
+    }
+  };
+
+  const handleSuggestionAccept = () => {
+    if (selectedSuggestionIndex === -1) {
       return;
     }
-
-    // If predicting, ignore all keys except Ctrl+C
-    if (isPredicting) return;
-
-    // Check if suggestions are visible
-    if (suggestions.length > 0) {
-      if (key.upArrow) {
-        setSelectedSuggestionIndex(prev => Math.max(0, prev - 1));
-        return;
-      }
-      if (key.downArrow) {
-        setSelectedSuggestionIndex(prev => Math.min(sortedSuggestions.length - 1, prev + 1));
-        return;
-      }
-      if (key.leftArrow) {
-        const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
-        if (currentPage > 0) {
-          const newIndex = (currentPage - 1) * suggestionsPerPage;
-          setSelectedSuggestionIndex(newIndex);
-        }
-        return;
-      }
-      if (key.rightArrow) {
-        const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
-        const totalPages = Math.ceil(sortedSuggestions.length / suggestionsPerPage);
-        if (currentPage < totalPages - 1) {
-          const newIndex = (currentPage + 1) * suggestionsPerPage;
-          setSelectedSuggestionIndex(newIndex);
-        }
-        return;
-      }
-
-      if (selectedSuggestionIndex !== -1 && key.tab) {
-        const selectedSuggestion = sortedSuggestions[selectedSuggestionIndex];
-        if (selectedSuggestion.type === "model") {
-          {
-            setInput(`/model ${selectedSuggestion.data.modelKey}`);
-            setCursorPosition(selectedSuggestion.data.modelKey.length + 7);
-            setSuggestions([]);
-            return;
-          }
-        } else if (selectedSuggestion.type === "command") {
-          setInput(`/${selectedSuggestion.data.name} `);
-          setCursorPosition(selectedSuggestion.data.name.length + 2);
-          setSuggestions([]);
-          return;
-        }
-      }
-    }
-    if (key.leftArrow && suggestions.length === 0) {
-      setCursorPosition(prev => Math.max(0, prev - 1));
+    const selectedSuggestion = sortedSuggestions[selectedSuggestionIndex];
+    if (selectedSuggestion === undefined) {
       return;
     }
-    if (key.rightArrow && suggestions.length === 0) {
-      setCursorPosition(prev => Math.min(input.length, prev + 1));
-      return;
-    }
-    if (key.return) {
-      const userInput = input.trim();
-      if (userInput.length === 0) {
-        return;
-      }
-
-      setInput("");
-      setCursorPosition(0);
-
-      // Handle model reload confirmation
-      if (confirmReload !== null) {
-        if (userInput.toLowerCase() === "y" || userInput.toLowerCase() === "yes") {
-          const { userInput: originalInput, modelKey } = confirmReload;
-          setConfirmReload(null);
-          logInChat("Reloading model...");
-          setModelLoadingProgress(0);
-          try {
-            llmRef.current = await client.llm.model(modelKey, {
-              verbose: false,
-              ttl: opts?.ttl,
-              onProgress(progress) {
-                setModelLoadingProgress(progress);
-              },
-            });
-            logInChat(`Model reloaded: ${llmRef.current.displayName}`);
-            setModelLoadingProgress(null);
-            // Retry the original request
-            setInput(originalInput);
-            setCursorPosition(originalInput.length);
-            return;
-          } catch (error) {
-            setModelLoadingProgress(null);
-            logErrorInChat(`Failed to reload model: ${(error as Error).message}`);
-            return;
-          }
-        } else if (userInput.toLowerCase() === "n" || userInput.toLowerCase() === "no") {
-          setConfirmReload(null);
-          logInChat("Model reload cancelled.");
-          onExit();
-          exit();
-          return;
+    if (selectedSuggestion.type === "model") {
+      const suggestionText = `/model ${selectedSuggestion.data.modelKey}`;
+      setUserInputState(previousState => {
+        const newSegments: ChatInputSegment[] = [...previousState.segments];
+        const lastSegmentIndex = newSegments.length - 1;
+        const lastSegment = newSegments[lastSegmentIndex];
+        if (lastSegment.type === "text") {
+          newSegments[lastSegmentIndex] = {
+            type: "text",
+            content: suggestionText,
+          };
         } else {
-          logInChat("Please answer 'yes' or 'no'");
-          return;
+          newSegments.push({
+            type: "text",
+            content: suggestionText,
+          });
         }
-      }
-
-      // Handle slash commands
-      if (userInput.startsWith("/")) {
-        const { command, args } = SlashCommandHandler.parseSlashCommand(
-          userInput,
-          sortedSuggestions[selectedSuggestionIndex],
-        );
-        if (command === null) {
-          return;
+        return {
+          segments: newSegments,
+          cursorOnSegmentIndex: newSegments.length - 1,
+          cursorInSegmentOffset: suggestionText.length,
+        };
+      });
+      setSuggestions([]);
+      return;
+    }
+    if (selectedSuggestion.type === "command") {
+      const suggestionText = `/${selectedSuggestion.data.name} `;
+      setUserInputState(previousState => {
+        const newSegments: ChatInputSegment[] = [...previousState.segments];
+        const lastSegmentIndex = newSegments.length - 1;
+        const lastSegment = newSegments[lastSegmentIndex];
+        if (lastSegment.type === "text") {
+          newSegments[lastSegmentIndex] = {
+            type: "text",
+            content: suggestionText,
+          };
+        } else {
+          newSegments.push({
+            type: "text",
+            content: suggestionText,
+          });
         }
-        const result = await commandHandler.execute(command, args);
-        if (!result) {
-          logInChat(`Unknown command: ${userInput}`);
-        }
-        return;
-      }
+        return {
+          segments: newSegments,
+          cursorOnSegmentIndex: newSegments.length - 1,
+          cursorInSegmentOffset: suggestionText.length,
+        };
+      });
+      setSuggestions([]);
+      return;
+    }
+  };
 
-      if (userInput === "exit" || userInput === "quit") {
-        onExit();
-        exit();
-        return;
-      }
+  const handlePaste = (content: string) => {
+    const normalizedContent = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-      // Handle normal user input
-      setIsPredicting(true);
-      streamingContentRef.current = "";
-      reasoningStreamingContentRef.current = "";
-      if (!abortControllerRef.current || abortControllerRef.current.signal.aborted) {
-        abortControllerRef.current = new AbortController();
-      }
-      const signal = abortControllerRef.current.signal;
+    if (normalizedContent.length === 0) {
+      return;
+    }
 
-      try {
-        chatRef.current.append("user", userInput);
-        setMessages(previousMessages => [
-          ...previousMessages,
-          { type: "user", content: userInput },
-        ]);
-        const result = await llmRef.current.respond(chatRef.current, {
-          onPredictionFragment(fragment) {
-            if (fragment.isStructural) return;
-            if (fragment.reasoningType === "none") {
-              streamingContentRef.current += fragment.content;
-              setRenderTrigger(prev => prev + 1);
-            } else if (
-              fragment.reasoningType === "reasoningStartTag" ||
-              fragment.reasoningType === "reasoningEndTag"
-            ) {
-              // Ignore reasoning tags for display
-            } else {
-              reasoningStreamingContentRef.current += fragment.content;
-              setRenderTrigger(prev => prev + 1);
-            }
-          },
+    const LARGE_PASTE_THRESHOLD = 200;
+    const isLargePaste = normalizedContent.length >= LARGE_PASTE_THRESHOLD;
 
-          onMessage(message) {
-            const assistantMessage: InkChatMessage = {
-              type: "assistant",
-              content: [],
-              displayName: modelName,
-            };
-            if (reasoningStreamingContentRef.current.length > 0) {
-              assistantMessage.content.push({
-                type: "reasoning",
-                text: reasoningStreamingContentRef.current,
-              });
-            }
-            if (streamingContentRef.current.length > 0) {
-              assistantMessage.content.push({
-                type: "response",
-                text: streamingContentRef.current,
-              });
-            }
-            setMessages(previousMessages => [...previousMessages, assistantMessage]);
-            streamingContentRef.current = "";
-            reasoningStreamingContentRef.current = "";
-            chatRef.current.append(message);
-          },
-          signal,
-        });
-        if (opts?.stats === true) {
-          displayVerboseStats(result.stats, logInChat);
-        }
-      } catch (error) {
-        // Handle prediction errors
-        if (error instanceof Error) {
-          const errorMessage = error.message.toLowerCase();
-          if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
-            const currentModelKey = llmRef.current.modelKey;
-            logErrorInChat(`${error.message}`);
-            logInChat(`Would you like to reload the model?`);
-            setConfirmReload({ userInput, modelKey: currentModelKey });
+    setUserInputState(
+      produce(draft => {
+        const segment = draft.segments[draft.cursorOnSegmentIndex];
+
+        if (segment.type === "largePaste") {
+          const largePasteIndex = draft.cursorOnSegmentIndex;
+          const insertIndex =
+            draft.cursorInSegmentOffset === 0 ? largePasteIndex : largePasteIndex + 1;
+
+          draft.segments.splice(insertIndex, 0, {
+            type: isLargePaste === true ? "largePaste" : "text",
+            content: normalizedContent,
+          });
+          draft.cursorOnSegmentIndex = insertIndex;
+          draft.cursorInSegmentOffset = normalizedContent.length;
+        } else if (segment.type === "text") {
+          if (isLargePaste === true) {
+            const cursorPos = draft.cursorInSegmentOffset;
+            const before = segment.content.slice(0, cursorPos);
+            const after = segment.content.slice(cursorPos);
+
+            segment.content = before;
+            draft.segments.splice(
+              draft.cursorOnSegmentIndex + 1,
+              0,
+              { type: "largePaste", content: normalizedContent },
+              { type: "text", content: after },
+            );
+            draft.cursorOnSegmentIndex = draft.cursorOnSegmentIndex + 1;
+            draft.cursorInSegmentOffset = normalizedContent.length;
           } else {
-            logErrorInChat(`Prediction error: ${error.message}`);
+            const cursorPos = draft.cursorInSegmentOffset;
+            segment.content =
+              segment.content.slice(0, cursorPos) +
+              normalizedContent +
+              segment.content.slice(cursorPos);
+            draft.cursorInSegmentOffset = cursorPos + normalizedContent.length;
           }
         }
-      } finally {
-        setIsPredicting(false);
-        abortControllerRef.current = null;
-        reasoningStreamingContentRef.current = "";
-        streamingContentRef.current = "";
+      }),
+    );
+  };
+
+  const handleSubmit = async () => {
+    // Collect the full text input from the userInputState
+    const input = userInputState.segments.reduce((acc, segment) => {
+      if (segment.type === "text") {
+        return acc + segment.content;
+      } else if (segment.type === "largePaste") {
+        const showPastedPreview = segment.content.length > 50;
+        if (showPastedPreview) {
+          return acc + segment.content.slice(0, 50) + "...";
+        }
+        return acc + segment.content;
       }
-    } else if (key.backspace || key.delete) {
-      if (cursorPosition > 0) {
-        setInput(
-          previousInput =>
-            previousInput.slice(0, cursorPosition - 1) + previousInput.slice(cursorPosition),
-        );
-        setCursorPosition(prev => prev - 1);
+      return acc;
+    }, "");
+    const userInputText = input.trim();
+    setUserInputState(emptyChatInputState);
+    if (confirmReload !== null) {
+      if (userInputText.toLowerCase() === "y" || userInputText.toLowerCase() === "yes") {
+        const { userInput: originalInput, modelKey } = confirmReload;
+        setConfirmReload(null);
+        logInChat("Reloading model...");
+        setModelLoadingProgress(0);
+        try {
+          llmRef.current = await client.llm.model(modelKey, {
+            verbose: false,
+            ttl: opts?.ttl,
+            onProgress(progress) {
+              setModelLoadingProgress(progress);
+            },
+          });
+          logInChat(`Model reloaded: ${llmRef.current.displayName}`);
+          setModelLoadingProgress(null);
+          setUserInputState(originalInput);
+          return;
+        } catch (error) {
+          setModelLoadingProgress(null);
+          logErrorInChat(`Failed to reload model: ${(error as Error).message}`);
+          return;
+        }
+      } else if (userInputText.toLowerCase() === "n" || userInputText.toLowerCase() === "no") {
+        setConfirmReload(null);
+        logInChat("Model reload cancelled.");
+        handleExit();
+        return;
+      } else {
+        logInChat("Please answer 'yes' or 'no'");
+        return;
       }
-    } else if (!key.ctrl && !key.meta && inputChar) {
-      setInput(
-        previousInput =>
-          previousInput.slice(0, cursorPosition) + inputChar + previousInput.slice(cursorPosition),
-      );
-      setCursorPosition(prev => prev + 1);
     }
-  });
+
+    if (userInputText.length === 0) {
+      return;
+    }
+
+    if (userInputText.startsWith("/")) {
+      const { command, args } = SlashCommandHandler.parseSlashCommand(
+        userInputText,
+        sortedSuggestions[selectedSuggestionIndex],
+      );
+      if (command === null) {
+        return;
+      }
+      const result = await commandHandler.execute(command, args);
+      if (result === false) {
+        logInChat(`Unknown command: ${userInputText}`);
+      }
+      return;
+    }
+
+    if (userInputText === "exit" || userInputText === "quit") {
+      handleExit();
+      return;
+    }
+
+    setIsPredicting(true);
+    streamingContentRef.current = "";
+    reasoningStreamingContentRef.current = "";
+    if (abortControllerRef.current === null || abortControllerRef.current.signal.aborted === true) {
+      abortControllerRef.current = new AbortController();
+    }
+    const signal = abortControllerRef.current.signal;
+
+    try {
+      chatRef.current.append("user", userInputText);
+      setMessages(previousMessages => [
+        ...previousMessages,
+        { type: "user", content: userInputText },
+      ]);
+      const result = await llmRef.current.respond(chatRef.current, {
+        onPredictionFragment(fragment) {
+          if (fragment.isStructural) {
+            return;
+          }
+          if (fragment.reasoningType === "none") {
+            streamingContentRef.current += fragment.content;
+            setRenderTrigger(previousTrigger => previousTrigger + 1);
+          } else if (
+            fragment.reasoningType === "reasoningStartTag" ||
+            fragment.reasoningType === "reasoningEndTag"
+          ) {
+            // Ignore reasoning tags
+          } else {
+            reasoningStreamingContentRef.current += fragment.content;
+            setRenderTrigger(previousTrigger => previousTrigger + 1);
+          }
+        },
+
+        onMessage(message) {
+          const assistantMessage: InkChatMessage = {
+            type: "assistant",
+            content: [],
+            displayName: modelName,
+          };
+          if (reasoningStreamingContentRef.current.length > 0) {
+            assistantMessage.content.push({
+              type: "reasoning",
+              text: reasoningStreamingContentRef.current,
+            });
+          }
+          if (streamingContentRef.current.length > 0) {
+            assistantMessage.content.push({
+              type: "response",
+              text: streamingContentRef.current,
+            });
+          }
+          setMessages(previousMessages => [...previousMessages, assistantMessage]);
+          streamingContentRef.current = "";
+          reasoningStreamingContentRef.current = "";
+          chatRef.current.append(message);
+        },
+        signal,
+      });
+      if (opts?.stats === true) {
+        displayVerboseStats(result.stats, logInChat);
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
+          const currentModelKey = llmRef.current.modelKey;
+          logErrorInChat(`${error.message}`);
+          logInChat(`Would you like to reload the model?`);
+          setConfirmReload({ userInput: userInputState, modelKey: currentModelKey });
+        } else {
+          logErrorInChat(`Prediction error: ${error.message}`);
+        }
+      }
+    } finally {
+      setIsPredicting(false);
+      abortControllerRef.current = null;
+      reasoningStreamingContentRef.current = "";
+      streamingContentRef.current = "";
+    }
+  };
 
   function renderMessage(message: InkChatMessage) {
     const type = message.type;
@@ -443,6 +535,25 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
             <Text color="red">{trimNewlines(message.content)}</Text>
           </Box>
         );
+      case "welcome":
+        return (
+          <Box marginBottom={1} marginLeft={1} flexDirection="column">
+            <Box paddingX={1} borderStyle={"round"} borderColor={"magenta"} flexDirection="column">
+              <Text color={"gray"}>👾 lms chat v0.42 </Text>
+              <Text>
+                Chatting with {modelName}. Type <Text bold>exit</Text> or Ctrl+C to quit.
+              </Text>
+              <Box marginTop={1} flexDirection="column">
+                <Text color={"gray"}>Try one of the following commands:</Text>
+                <Text color="gray">/help - Show help information</Text>
+                <Text color={"gray"}>
+                  /model [model_key] - Load a model (type /model to see list)
+                </Text>
+                <Text color="gray">/clear - Clear the chat history</Text>
+              </Box>
+            </Box>
+          </Box>
+        );
       default: {
         const exhaustiveCheck: never = type;
         throw new Error(`Unhandled message type: ${exhaustiveCheck}`);
@@ -454,66 +565,31 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
     if (sortedSuggestions.length === 0) {
       return null;
     }
-    // Sort all suggestions such that model loaded and current appear first
-    // Then paginate
-    const totalPages = Math.ceil(sortedSuggestions.length / suggestionsPerPage);
-    const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
-    const startIndex = currentPage * suggestionsPerPage;
-    const endIndex = Math.min(startIndex + suggestionsPerPage, sortedSuggestions.length);
-    const visibleSuggestions = sortedSuggestions.slice(startIndex, endIndex);
-
-    function renderSuggestion(suggestion: Suggestion, index: number) {
-      const globalIndex = startIndex + index;
-      const suggestionType = suggestion.type;
-      switch (suggestionType) {
-        case "command": {
-          return (
-            <Box key={suggestion.data.name}>
-              <Text backgroundColor={selectedSuggestionIndex === globalIndex ? "gray" : undefined}>
-                /{suggestion.data.name} - {suggestion.data.description}
-              </Text>
-            </Box>
-          );
-        }
-        case "model": {
-          const model = suggestion.data;
-          return (
-            <Box key={model.modelKey}>
-              <Text
-                bold={model.isCurrent}
-                backgroundColor={selectedSuggestionIndex === globalIndex ? "gray" : undefined}
-              >
-                {model.modelKey}
-                {model.isLoaded ? " (loaded)" : model.isCurrent ? " (current)" : null}
-              </Text>
-            </Box>
-          );
-        }
-        default: {
-          const exhaustiveCheck: never = suggestionType;
-          throw new Error(`Unhandled suggestion type: ${exhaustiveCheck}`);
-        }
-      }
-    }
 
     return (
-      <Box flexDirection="column" marginLeft={2}>
-        {visibleSuggestions.map((suggestion, index) => renderSuggestion(suggestion, index))}
-        {totalPages > 1 && (
-          <Box marginTop={1}>
-            <Text color="gray">
-              {Array.from({ length: totalPages }, (_, pageIndex) =>
-                pageIndex === currentPage ? "●" : "○",
-              ).join(" ")}
-            </Text>
-          </Box>
-        )}
-      </Box>
+      <ChatSuggestions
+        suggestions={sortedSuggestions}
+        selectedSuggestionIndex={selectedSuggestionIndex}
+        suggestionsPerPage={suggestionsPerPage}
+      />
     );
   }
 
   return (
     <Box flexDirection="column">
+      <Box>
+        <Text>
+          Debug:{" "}
+          {JSON.stringify({
+            ...userInputState,
+            segments: userInputState.segments.map(segment =>
+              segment.type === "largePaste"
+                ? { type: "largePaste", content: "[content hidden]" }
+                : segment,
+            ),
+          })}
+        </Text>
+      </Box>
       {messages.map((message, index) => (
         <Box key={index}>{renderMessage(message)}</Box>
       ))}
@@ -533,13 +609,22 @@ export const ChatComponent = ({ client, llm, chat, logger, onExit, opts }: ChatC
           <Text color="yellow">Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
         </Box>
       )}
-      <Box>
-        {confirmReload !== null && <Text color="cyan">(yes/no) </Text>}
-        <Text color="cyan">› </Text>
-        <Text>{input.slice(0, cursorPosition)}</Text>
-        <Text inverse>{cursorPosition < input.length ? input[cursorPosition] : " "}</Text>
-        <Text>{input.slice(cursorPosition + 1)}</Text>
-      </Box>
+      <ChatInput
+        inputState={userInputState}
+        isPredicting={isPredicting}
+        isConfirmReloadActive={confirmReload !== null}
+        areSuggestionsVisible={areSuggestionsVisible}
+        setUserInputState={setUserInputState}
+        onSubmit={handleSubmit}
+        onAbortPrediction={handleAbortPrediction}
+        onExit={handleExit}
+        onSuggestionsUp={handleSuggestionsUp}
+        onSuggestionsDown={handleSuggestionsDown}
+        onSuggestionsPageLeft={handleSuggestionsPageLeft}
+        onSuggestionsPageRight={handleSuggestionsPageRight}
+        onSuggestionAccept={handleSuggestionAccept}
+        onPaste={handlePaste}
+      />
       {renderSuggestions()}
     </Box>
   );

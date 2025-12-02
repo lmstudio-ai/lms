@@ -24,6 +24,9 @@ export type InkChatMessage =
   | {
       type: "error";
       content: string;
+    }
+  | {
+      type: "welcome";
     };
 
 export type ModelState = {
@@ -35,3 +38,19 @@ export type ModelState = {
 export type Suggestion =
   | { type: "command"; data: SlashCommand }
   | { type: "model"; data: ModelState };
+
+export type ChatInputSegment =
+  | {
+      type: "text";
+      content: string;
+    }
+  | {
+      type: "largePaste";
+      content: string;
+    };
+
+export interface ChatUserInputState {
+  segments: ChatInputSegment[];
+  cursorOnSegmentIndex: number;
+  cursorInSegmentOffset: number;
+}

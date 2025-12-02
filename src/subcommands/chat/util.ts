@@ -129,10 +129,16 @@ export const countMessageLines = (message: InkChatMessage): number => {
       return lines + 1; // marginBottom
     }
     case "help":
-      return 1 + countWrappedLines(message.content, 0) + 1; // label + content + margin
+      return 1 + countWrappedLines(message.content, 0) + 1;
     case "log":
-      return countWrappedLines(message.content, 0) + 1; // content + margin
-    default:
-      return 1;
+      return countWrappedLines(message.content, 0) + 1;
+    case "error":
+      return countWrappedLines(message.content, 0) + 1;
+    case "welcome":
+      return 10;
+    default: {
+      const exhaustiveCheck: never = type;
+      throw new Error(`Unknown message type: ${exhaustiveCheck}`);
+    }
   }
 };

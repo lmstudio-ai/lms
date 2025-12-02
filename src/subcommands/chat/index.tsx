@@ -155,21 +155,10 @@ export async function startInteractiveChat(
   client: LMStudioClient,
   llm: LLM,
   chat: Chat,
-  logger: SimpleLogger,
-  modelName: string,
   opts: StartPredictionOpts,
 ): Promise<void> {
   return new Promise<void>(resolve => {
-    render(
-      <ChatComponent
-        client={client}
-        llm={llm}
-        chat={chat}
-        logger={logger}
-        opts={opts}
-        onExit={resolve}
-      />,
-    );
+    render(<ChatComponent client={client} llm={llm} chat={chat} opts={opts} onExit={resolve} />);
   });
 }
 
@@ -343,9 +332,6 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       llm = await loadModelWithProgress(client, selectedModel.name, ttl, logger);
     }
   }
-  if (providedPrompt.length === 0) {
-    logger.info(`Chatting with ${llm.identifier}.  Type 'exit', 'quit' or Ctrl+C to quit`);
-  }
 
   const chat = Chat.empty();
   chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
@@ -357,7 +343,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       controller: abortController,
     });
   } else if (process.stdin.isTTY) {
-    await startInteractiveChat(client, llm, chat, logger, (await llm.getModelInfo()).modelKey, {
+    await startInteractiveChat(client, llm, chat, {
       stats: options.stats,
       ttl,
       controller: abortController,
