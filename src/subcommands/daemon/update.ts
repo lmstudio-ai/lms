@@ -51,7 +51,7 @@ const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
       // Use cmd.exe to start the process in a new window
       const child = spawn(
         "cmd.exe",
-        ["/c", "start", installLocation.executablePath, ...upgradeArgs],
+        ["/c", "start", "", installLocation.executablePath, ...upgradeArgs],
         {
           cwd: installLocation.workingDirectory,
           detached: true,
