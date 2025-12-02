@@ -340,19 +340,11 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
 
   const handleSubmit = async () => {
     // Collect the full text input from the userInputState
-    const input = userInputState.segments.reduce((acc, segment) => {
-      if (segment.type === "text") {
-        return acc + segment.content;
-      } else if (segment.type === "largePaste") {
-        const showPastedPreview = segment.content.length > 50;
-        if (showPastedPreview) {
-          return acc + segment.content.slice(0, 50) + "...";
-        }
-        return acc + segment.content;
-      }
-      return acc;
-    }, "");
-    const userInputText = input.trim();
+    const userInputText = userInputState.segments
+      .map(segment => segment.content)
+      .join("")
+      .trim();
+    // Clear the input state
     setUserInputState(emptyChatInputState);
     if (confirmReload !== null) {
       if (userInputText.toLowerCase() === "y" || userInputText.toLowerCase() === "yes") {
@@ -424,7 +416,21 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
       chatRef.current.append("user", userInputText);
       setMessages(previousMessages => [
         ...previousMessages,
-        { type: "user", content: userInputText },
+        {
+          type: "user",
+          content: userInputState.segments.map(s => {
+            if (s.type === "largePaste") {
+              if (s.content.length > 50) {
+                return {
+                  type: "largePaste",
+                  text: `[Pasted ${s.content.slice(0, 50)}...]`,
+                };
+              }
+              return { type: s.type, text: s.content };
+            }
+            return { type: s.type, text: s.content };
+          }),
+        },
       ]);
       const result = await llmRef.current.respond(chatRef.current, {
         onPredictionFragment(fragment) {
@@ -500,7 +506,14 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
         return (
           <Box flexDirection="row">
             <Text color="cyan">You: </Text>
-            <Text>{trimNewlines(message.content)}</Text>
+            {message.content.map((part, partIndex) => (
+              <Text
+                key={partIndex}
+                color={part.type === "largePaste" && part.text.length > 50 ? "blue" : undefined}
+              >
+                {trimNewlines(part.text)}
+              </Text>
+            ))}
           </Box>
         );
 
@@ -577,19 +590,6 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
 
   return (
     <Box flexDirection="column">
-      <Box>
-        <Text>
-          Debug:{" "}
-          {JSON.stringify({
-            ...userInputState,
-            segments: userInputState.segments.map(segment =>
-              segment.type === "largePaste"
-                ? { type: "largePaste", content: "[content hidden]" }
-                : segment,
-            ),
-          })}
-        </Text>
-      </Box>
       {messages.map((message, index) => (
         <Box key={index}>{renderMessage(message)}</Box>
       ))}

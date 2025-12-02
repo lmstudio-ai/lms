@@ -120,7 +120,10 @@ export const countMessageLines = (message: InkChatMessage): number => {
   const type = message.type;
   switch (type) {
     case "user":
-      return countWrappedLines(message.content, 5); // "You: " prefix
+      return countWrappedLines(
+        message.content.reduce((acc, a) => acc + a.text, ""),
+        5,
+      ); // "You: " prefix
     case "assistant": {
       let lines = 1; // displayName line
       message.content.forEach(part => {

@@ -131,8 +131,11 @@ export const ChatInput = ({
       if (segmentInWhichCursorIsLocated.type === "largePaste") {
         setUserInputState(
           produce(draft => {
-            draft.segments.pop();
-            draft.cursorOnSegmentIndex = draft.segments.length - 1;
+            draft.segments.splice(draft.cursorOnSegmentIndex, 1);
+            draft.cursorOnSegmentIndex = Math.min(
+              draft.cursorOnSegmentIndex,
+              draft.segments.length - 1,
+            );
             draft.cursorInSegmentOffset = 0;
           }),
         );
@@ -152,14 +155,13 @@ export const ChatInput = ({
                 draft.cursorOnSegmentIndex = previousSegmentIndex;
                 draft.cursorInSegmentOffset = 0;
               } else {
+                const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+                const newCursorOffset = previousSegment.content.length - 1;
                 previousSegment.content =
-                  previousSegment.content.slice(0, -1) +
-                  draft.segments[draft.cursorOnSegmentIndex].content;
+                  previousSegment.content.slice(0, -1) + currentSegment.content;
                 draft.segments.splice(draft.cursorOnSegmentIndex, 1);
                 draft.cursorOnSegmentIndex = previousSegmentIndex;
-                draft.cursorInSegmentOffset =
-                  previousSegment.content.length -
-                  draft.segments[draft.cursorOnSegmentIndex].content.length;
+                draft.cursorInSegmentOffset = newCursorOffset;
               }
               return;
             }
@@ -324,6 +326,7 @@ export const ChatInput = ({
     terminalWidth: number,
     fullText: string,
     cursorPosition: number,
+    pasteRanges: Array<{ start: number; end: number }>,
   ) => {
     const inputBeforeCursor = fullText.slice(0, cursorPosition);
     const cursorLineIndex =
@@ -345,11 +348,15 @@ export const ChatInput = ({
       const paddingLength = Math.max(0, terminalWidth - visiblePrefixLength - lineContentLength);
       const padding = " ".repeat(paddingLength);
 
+      const lineStartPos =
+        fullText.split("\n").slice(0, lineIndex).join("\n").length + (lineIndex > 0 ? 1 : 0);
+      const textParts = renderTextWithPasteColor(lineText, lineStartPos, pasteRanges);
+
       return (
         <Box key={lineIndex}>
           {shouldShowConfirmReloadPrefix === true && <Text color="cyan">(yes/no) </Text>}
           <Text color="cyan">{promptPrefix}</Text>
-          <Text>{lineText}</Text>
+          {textParts}
           <Text>{padding}</Text>
         </Box>
       );
@@ -367,26 +374,77 @@ export const ChatInput = ({
     const paddingLength = Math.max(0, terminalWidth - visiblePrefixLength - lineContentLength);
     const padding = " ".repeat(paddingLength);
 
+    const lineStartPos =
+      fullText.split("\n").slice(0, lineIndex).join("\n").length + (lineIndex > 0 ? 1 : 0);
+    const beforeParts = renderTextWithPasteColor(beforeCursorText, lineStartPos, pasteRanges);
+    const afterParts = renderTextWithPasteColor(
+      afterCursorText,
+      lineStartPos + cursorColumnIndex + 1,
+      pasteRanges,
+    );
+
     return (
       <Box key={lineIndex}>
         {shouldShowConfirmReloadPrefix === true && <Text color="cyan">(yes/no) </Text>}
         <Text color="cyan">{promptPrefix}</Text>
-        <Text>{beforeCursorText}</Text>
+        {beforeParts}
         <Text inverse>{cursorCharacter}</Text>
-        <Text>{afterCursorText}</Text>
+        {afterParts}
         <Text>{padding}</Text>
       </Box>
     );
   };
 
+  const renderTextWithPasteColor = (
+    text: string,
+    startPos: number,
+    pasteRanges: Array<{ start: number; end: number }>,
+  ) => {
+    if (text.length === 0) {
+      return null;
+    }
+
+    const parts: JSX.Element[] = [];
+    let currentPos = 0;
+
+    while (currentPos < text.length) {
+      const absolutePos = startPos + currentPos;
+      const inPaste = pasteRanges.find(
+        range => absolutePos >= range.start && absolutePos < range.end,
+      );
+
+      if (inPaste !== undefined) {
+        const relativeEnd = Math.min(inPaste.end - startPos, text.length);
+        const pasteText = text.slice(currentPos, relativeEnd);
+        parts.push(
+          <Text key={currentPos} color="blue">
+            {pasteText}
+          </Text>,
+        );
+        currentPos = relativeEnd;
+      } else {
+        const nextPaste = pasteRanges.find(range => range.start > absolutePos);
+        const endPos =
+          nextPaste !== undefined ? Math.min(nextPaste.start - startPos, text.length) : text.length;
+        const normalText = text.slice(currentPos, endPos);
+        parts.push(<Text key={currentPos}>{normalText}</Text>);
+        currentPos = endPos;
+      }
+    }
+
+    return parts;
+  };
+
   let fullText = "";
   let cursorPosition = 0;
+  const pasteRanges: Array<{ start: number; end: number }> = [];
 
   for (let index = 0; index < inputState.segments.length; index++) {
     const segment = inputState.segments[index];
 
     if (segment.type === "largePaste") {
       const placeholder = `[Pasted ${segment.content.length} characters]`;
+      const startPos = fullText.length;
 
       if (index < inputState.cursorOnSegmentIndex) {
         cursorPosition += placeholder.length;
@@ -395,6 +453,7 @@ export const ChatInput = ({
       }
 
       fullText += placeholder;
+      pasteRanges.push({ start: startPos, end: fullText.length });
     } else {
       if (index < inputState.cursorOnSegmentIndex) {
         cursorPosition += segment.content.length;
@@ -412,7 +471,7 @@ export const ChatInput = ({
   return (
     <Box flexDirection="column">
       {inputLines.map((lineText, lineIndex) =>
-        renderInputLine(lineText, lineIndex, terminalWidth, fullText, cursorPosition),
+        renderInputLine(lineText, lineIndex, terminalWidth, fullText, cursorPosition, pasteRanges),
       )}
     </Box>
   );

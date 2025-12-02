@@ -3,7 +3,10 @@ import { type SlashCommand } from "./SlashCommandHandler.js";
 export type InkChatMessage =
   | {
       type: "user";
-      content: string;
+      content: Array<{
+        type: "text" | "largePaste";
+        text: string;
+      }>;
     }
   | {
       type: "assistant";
