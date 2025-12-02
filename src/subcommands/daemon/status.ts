@@ -35,7 +35,7 @@ status.action(async (options: DaemonStatusCommandOptions) => {
       );
     } else {
       const processName = daemonInfo.isDaemon === true ? "llmster" : "LM Studio";
-      console.info(`${processName} is running (PID: ${daemonInfo.pid})`);
+      console.info(`${processName} v${daemonInfo.version} is running (PID: ${daemonInfo.pid})`);
     }
   }
 });
