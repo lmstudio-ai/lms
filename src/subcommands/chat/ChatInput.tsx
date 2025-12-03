@@ -169,15 +169,13 @@ export const ChatInput = ({
   }
 
   const inputLines = fullText.split("\n");
-  const terminalWidth = process.stdout.columns ?? 80;
 
   return (
-    <Box flexDirection="column">
+    <Box flexWrap="wrap" flexDirection="column" width={"100%"}>
       {inputLines.map((lineText, lineIndex) =>
         renderInputLine({
           lineText,
           lineIndex,
-          terminalWidth,
           fullText,
           cursorPosition,
           pasteRanges,

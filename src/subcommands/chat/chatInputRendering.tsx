@@ -9,7 +9,6 @@ interface PasteRange {
 interface RenderInputLineOpts {
   lineText: string;
   lineIndex: number;
-  terminalWidth: number;
   fullText: string;
   cursorPosition: number;
   pasteRanges: PasteRange[];
@@ -19,7 +18,6 @@ interface RenderInputLineOpts {
 export function renderInputLine({
   lineText,
   lineIndex,
-  terminalWidth,
   fullText,
   cursorPosition,
   pasteRanges,
@@ -37,14 +35,8 @@ export function renderInputLine({
   const isCursorLine = lineIndex === cursorLineIndex;
   const shouldShowConfirmReloadPrefix = isConfirmReloadActive === true && lineIndex === 0;
   const promptPrefix = lineIndex === 0 ? "› " : "  ";
-  const confirmReloadPrefix = shouldShowConfirmReloadPrefix === true ? "(yes/no) " : "";
-  const visiblePrefixLength = (confirmReloadPrefix + promptPrefix).length;
 
   if (isCursorLine === false) {
-    const lineContentLength = lineText.length;
-    const paddingLength = Math.max(0, terminalWidth - visiblePrefixLength - lineContentLength);
-    const padding = " ".repeat(paddingLength);
-
     const lineStartPos =
       fullText.split("\n").slice(0, lineIndex).join("\n").length + (lineIndex > 0 ? 1 : 0);
     const textParts = renderTextWithPasteColor({
@@ -54,11 +46,10 @@ export function renderInputLine({
     });
 
     return (
-      <Box key={lineIndex}>
+      <Box key={lineIndex} width={"100%"} flexWrap="wrap">
         {shouldShowConfirmReloadPrefix === true && <Text color="cyan">(yes/no) </Text>}
         <Text color="cyan">{promptPrefix}</Text>
         {textParts}
-        <Text>{padding}</Text>
       </Box>
     );
   }
@@ -71,10 +62,6 @@ export function renderInputLine({
     hasCharacterAtCursor && cursorColumnIndex + 1 <= lineText.length
       ? lineText.slice(cursorColumnIndex + 1)
       : "";
-  const lineContentLength = beforeCursorText.length + 1 + afterCursorText.length;
-  const paddingLength = Math.max(0, terminalWidth - visiblePrefixLength - lineContentLength);
-  const padding = " ".repeat(paddingLength);
-
   const lineStartPos =
     fullText.split("\n").slice(0, lineIndex).join("\n").length + (lineIndex > 0 ? 1 : 0);
   const beforeParts = renderTextWithPasteColor({
@@ -89,13 +76,12 @@ export function renderInputLine({
   });
 
   return (
-    <Box key={lineIndex}>
+    <Box key={lineIndex} width={"90%"} flexWrap="wrap">
       {shouldShowConfirmReloadPrefix === true && <Text color="cyan">(yes/no) </Text>}
       <Text color="cyan">{promptPrefix}</Text>
       {beforeParts}
       <Text inverse>{cursorCharacter}</Text>
       {afterParts}
-      <Text>{padding}</Text>
     </Box>
   );
 }

@@ -554,8 +554,8 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
   }
 
   return (
-    <Box flexDirection="column">
-      <Box>
+    <Box flexDirection="column" width={"90%"} flexWrap="wrap">
+      {/*<Box>
         <Text>
           Debug:{" "}
           {JSON.stringify({
@@ -568,7 +568,7 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
             }),
           })}
         </Text>
-      </Box>
+      </Box>*/}
       {messages.map((message, index) => (
         <Box key={index}>{renderMessage(message)}</Box>
       ))}
