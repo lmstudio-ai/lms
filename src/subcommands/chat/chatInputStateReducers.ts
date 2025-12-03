@@ -15,13 +15,11 @@ interface InsertPasteAtCursorOpts {
 interface MoveCursorToPreviousSegmentOpts {
   state: ChatUserInputState;
   startIndex: number;
-  skipLargePastesWhenPossible: boolean;
 }
 
 interface MoveCursorToNextSegmentOpts {
   state: ChatUserInputState;
   startIndex: number;
-  skipLargePastesWhenPossible: boolean;
 }
 
 type ChatUserInputStateMutator = (draft: ChatUserInputState) => void;
@@ -39,11 +37,7 @@ function produceSanitizedState(
   });
 }
 
-function moveCursorToPreviousSegment({
-  state,
-  startIndex,
-  skipLargePastesWhenPossible,
-}: MoveCursorToPreviousSegmentOpts): void {
+function moveCursorToPreviousSegment({ state, startIndex }: MoveCursorToPreviousSegmentOpts): void {
   if (startIndex < 0) {
     return;
   }
@@ -56,9 +50,6 @@ function moveCursorToPreviousSegment({
     if (segment.type === "largePaste") {
       if (fallbackLargePasteIndex === undefined) {
         fallbackLargePasteIndex = segmentIndex;
-      }
-      if (skipLargePastesWhenPossible === true) {
-        continue;
       }
       state.cursorOnSegmentIndex = segmentIndex;
       state.cursorInSegmentOffset = 0;
@@ -74,11 +65,7 @@ function moveCursorToPreviousSegment({
   }
 }
 
-function moveCursorToNextSegment({
-  state,
-  startIndex,
-  skipLargePastesWhenPossible,
-}: MoveCursorToNextSegmentOpts): void {
+function moveCursorToNextSegment({ state, startIndex }: MoveCursorToNextSegmentOpts): void {
   if (startIndex >= state.segments.length) {
     return;
   }
@@ -92,11 +79,9 @@ function moveCursorToNextSegment({
       if (fallbackLargePasteIndex === undefined) {
         fallbackLargePasteIndex = segmentIndex;
       }
-      if (skipLargePastesWhenPossible === true) {
-        continue;
-      }
-      state.cursorOnSegmentIndex = segmentIndex;
-      state.cursorInSegmentOffset = 1;
+
+      state.cursorOnSegmentIndex = segmentIndex + 1;
+      state.cursorInSegmentOffset = 0;
       return;
     }
     state.cursorOnSegmentIndex = segmentIndex;
@@ -126,7 +111,6 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
     const previousSegment = state.segments[segmentIndex - 1];
     const isTrailingPlaceholder = isLastSegment === true && previousSegment?.type === "largePaste";
     if (isTrailingPlaceholder === true) {
-      console.log("Skipping removal of trailing placeholder segment");
       continue;
     }
     if (isCursorOnSegment === true && segmentIndex > 0) {
@@ -146,15 +130,6 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
     state.cursorOnSegmentIndex = 0;
     state.cursorInSegmentOffset = 0;
     return;
-  }
-  const lastIndex = state.segments.length - 1;
-  const lastSegment = state.segments[lastIndex];
-  if (lastSegment !== undefined && lastSegment.type === "largePaste") {
-    state.segments.push({ type: "text", content: "" });
-    if (state.cursorOnSegmentIndex === lastIndex) {
-      state.cursorOnSegmentIndex = lastIndex + 1;
-      state.cursorInSegmentOffset = 0;
-    }
   }
   if (state.cursorOnSegmentIndex >= state.segments.length) {
     state.cursorOnSegmentIndex = state.segments.length - 1;
@@ -246,6 +221,10 @@ export function moveCursorLeft(state: ChatUserInputState): ChatUserInputState {
       if (draft.cursorOnSegmentIndex === 0) {
         return;
       }
+      if (state.cursorInSegmentOffset > 0) {
+        draft.cursorInSegmentOffset = 0;
+        return;
+      }
       const previousSegmentIndex = draft.cursorOnSegmentIndex - 1;
       const previousSegment = draft.segments[previousSegmentIndex];
       if (previousSegment === undefined) {
@@ -257,17 +236,14 @@ export function moveCursorLeft(state: ChatUserInputState): ChatUserInputState {
         return;
       }
       draft.cursorOnSegmentIndex = previousSegmentIndex;
-      draft.cursorInSegmentOffset = previousSegment.content.length;
+      draft.cursorInSegmentOffset = previousSegment.content.length - 1;
       return;
     }
     const cursorPosition = draft.cursorInSegmentOffset;
     if (cursorPosition === 0) {
-      const shouldSkipLargeSegments =
-        currentSegment.type === "text" && currentSegment.content.length > 0;
       moveCursorToPreviousSegment({
         state: draft,
         startIndex: draft.cursorOnSegmentIndex - 1,
-        skipLargePastesWhenPossible: shouldSkipLargeSegments,
       });
       return;
     }
@@ -303,11 +279,9 @@ export function moveCursorRight(state: ChatUserInputState): ChatUserInputState {
     const cursorPosition = draft.cursorInSegmentOffset;
     const segmentLength = currentSegment.content.length;
     if (cursorPosition >= segmentLength) {
-      const shouldSkipLargeSegments = segmentLength > 0;
       moveCursorToNextSegment({
         state: draft,
         startIndex: draft.cursorOnSegmentIndex + 1,
-        skipLargePastesWhenPossible: shouldSkipLargeSegments,
       });
       return;
     }
@@ -343,6 +317,13 @@ export function insertTextAtCursor({ state, text }: InsertTextAtCursorOpts): Cha
     if (currentSegment.type === "largePaste") {
       const largePasteIndex = draft.cursorOnSegmentIndex;
       if (draft.cursorInSegmentOffset === 0) {
+        const previousSegment = draft.segments[largePasteIndex - 1];
+        if (previousSegment !== undefined && previousSegment.type === "text") {
+          previousSegment.content += text;
+          draft.cursorOnSegmentIndex = largePasteIndex - 1;
+          draft.cursorInSegmentOffset = previousSegment.content.length;
+          return;
+        }
         draft.segments.splice(largePasteIndex, 0, { type: "text", content: text });
         draft.cursorOnSegmentIndex = largePasteIndex;
       } else {
@@ -397,8 +378,32 @@ export function insertPasteAtCursor({
     const cursorPosition = draft.cursorInSegmentOffset;
     if (isLargePaste === true) {
       const textBeforeCursor = currentSegment.content.slice(0, cursorPosition);
+      const textAfterCursor = currentSegment.content.slice(cursorPosition);
       currentSegment.content = textBeforeCursor;
-      draft.segments.splice(draft.cursorOnSegmentIndex + 1, 0, { type: "largePaste", content });
+      const insertIndex = draft.cursorOnSegmentIndex + 1;
+      if (textAfterCursor.length > 0) {
+        draft.segments.splice(
+          insertIndex,
+          0,
+          { type: "largePaste", content },
+          {
+            type: "text",
+            content: textAfterCursor,
+          },
+        );
+      } else {
+        draft.segments.splice(
+          insertIndex,
+          0,
+          { type: "largePaste", content },
+          {
+            type: "text",
+            content: "",
+          },
+        );
+      }
+      draft.cursorOnSegmentIndex = insertIndex + 1;
+      draft.cursorInSegmentOffset = 0;
       return;
     }
     currentSegment.content =
