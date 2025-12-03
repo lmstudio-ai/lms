@@ -35,7 +35,7 @@ addLogLevelOptions(stream);
 
 stream.action(async options => {
   const logger = createLogger(options);
-  await using client = await createClient(logger, options);
+  const client = await createClient(logger, options);
   const { json = false, stats = false, source = "model", filter } = options;
 
   // Don't allow stats with non-model sources
@@ -84,7 +84,7 @@ stream.action(async options => {
   }
 
   logger.info("Streaming logs from LM Studio\n");
-  client.diagnostics.unstable_streamLogs(log => {
+  const unsubscribe = client.diagnostics.unstable_streamLogs(log => {
     // Here we consume the same stream for both model and server logs and filter based on user input
     if (!shouldShowLogEvent(log, source, filterTypes)) {
       return;
@@ -95,6 +95,13 @@ stream.action(async options => {
     } else {
       printFormattedLog(log, stats);
     }
+  });
+
+  // Handle cleanup on exit
+  process.on("SIGINT", () => {
+    unsubscribe();
+    client[Symbol.asyncDispose]();
+    process.exit(0);
   });
 });
 
