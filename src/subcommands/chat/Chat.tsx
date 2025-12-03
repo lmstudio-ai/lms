@@ -8,7 +8,7 @@ import type { ChatInputSegment, ChatUserInputState, InkChatMessage, Suggestion }
 import { DEFAULT_SYSTEM_PROMPT } from "./index.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
-import { produce } from "@lmstudio/immer-with-plugins";
+import { insertPasteAtCursor } from "./chatInputStateReducers.js";
 
 interface ChatComponentProps {
   client: LMStudioClient;
@@ -293,47 +293,12 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
     }
 
     const LARGE_PASTE_THRESHOLD = 200;
-    const isLargePaste = normalizedContent.length >= LARGE_PASTE_THRESHOLD;
 
-    setUserInputState(
-      produce(draft => {
-        const segment = draft.segments[draft.cursorOnSegmentIndex];
-
-        if (segment.type === "largePaste") {
-          const largePasteIndex = draft.cursorOnSegmentIndex;
-          const insertIndex =
-            draft.cursorInSegmentOffset === 0 ? largePasteIndex : largePasteIndex + 1;
-
-          draft.segments.splice(insertIndex, 0, {
-            type: isLargePaste === true ? "largePaste" : "text",
-            content: normalizedContent,
-          });
-          draft.cursorOnSegmentIndex = insertIndex;
-          draft.cursorInSegmentOffset = normalizedContent.length;
-        } else if (segment.type === "text") {
-          if (isLargePaste === true) {
-            const cursorPos = draft.cursorInSegmentOffset;
-            const before = segment.content.slice(0, cursorPos);
-            const after = segment.content.slice(cursorPos);
-
-            segment.content = before;
-            draft.segments.splice(
-              draft.cursorOnSegmentIndex + 1,
-              0,
-              { type: "largePaste", content: normalizedContent },
-              { type: "text", content: after },
-            );
-            draft.cursorOnSegmentIndex = draft.cursorOnSegmentIndex + 1;
-            draft.cursorInSegmentOffset = normalizedContent.length;
-          } else {
-            const cursorPos = draft.cursorInSegmentOffset;
-            segment.content =
-              segment.content.slice(0, cursorPos) +
-              normalizedContent +
-              segment.content.slice(cursorPos);
-            draft.cursorInSegmentOffset = cursorPos + normalizedContent.length;
-          }
-        }
+    setUserInputState(previousState =>
+      insertPasteAtCursor({
+        state: previousState,
+        content: normalizedContent,
+        largePasteThreshold: LARGE_PASTE_THRESHOLD,
       }),
     );
   };
@@ -590,6 +555,20 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
 
   return (
     <Box flexDirection="column">
+      <Box>
+        <Text>
+          Debug:{" "}
+          {JSON.stringify({
+            ...userInputState,
+            segments: userInputState.segments.map(s => {
+              if (s.type === "largePaste") {
+                return { ...s, content: `[Pasted ${s.content.length} characters]` };
+              }
+              return s;
+            }),
+          })}
+        </Text>
+      </Box>
       {messages.map((message, index) => (
         <Box key={index}>{renderMessage(message)}</Box>
       ))}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type InkChatMessage, type ModelState, type Suggestion } from "./types.js";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { countMessageLines } from "./util.js";
@@ -79,4 +79,60 @@ export function useSuggestionsPerPage(messages: InkChatMessage[]): number {
   }, []);
 
   return suggestionPerPage;
+}
+
+interface UseBufferedPasteDetectionOpts {
+  stdin: NodeJS.ReadStream | undefined;
+  onPaste: (content: string) => void;
+  pasteDelayMs?: number;
+}
+
+export function useBufferedPasteDetection({
+  stdin,
+  onPaste,
+  pasteDelayMs = 100,
+}: UseBufferedPasteDetectionOpts) {
+  const skipUseInputRef = useRef(false);
+  const pasteBufferRef = useRef("");
+  const pasteTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  useEffect(() => {
+    if (stdin === undefined) {
+      return;
+    }
+
+    const handleData = (data: Buffer) => {
+      const inputText = data.toString("utf8");
+      const isEscapeSequence = inputText.startsWith("\x1b");
+      if ((inputText.length > 1 || inputText.includes("\n")) && isEscapeSequence === false) {
+        skipUseInputRef.current = true;
+        pasteBufferRef.current += inputText;
+        if (pasteTimeoutRef.current !== undefined) {
+          clearTimeout(pasteTimeoutRef.current);
+        }
+        pasteTimeoutRef.current = setTimeout(() => {
+          const normalizedContent = pasteBufferRef.current
+            .replace(/\r\n/g, "\n")
+            .replace(/\r/g, "\n");
+          if (normalizedContent.length > 0) {
+            onPaste(normalizedContent);
+          }
+          pasteBufferRef.current = "";
+          skipUseInputRef.current = false;
+          pasteTimeoutRef.current = undefined;
+        }, pasteDelayMs);
+      }
+    };
+
+    stdin.on("data", handleData);
+
+    return () => {
+      stdin.off("data", handleData);
+      if (pasteTimeoutRef.current !== undefined) {
+        clearTimeout(pasteTimeoutRef.current);
+      }
+    };
+  }, [stdin, onPaste, pasteDelayMs]);
+
+  return skipUseInputRef;
 }
