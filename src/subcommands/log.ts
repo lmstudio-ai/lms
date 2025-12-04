@@ -103,6 +103,11 @@ stream.action(async options => {
     await client[Symbol.asyncDispose]();
     process.exit(0);
   });
+  process.on("SIGTERM", async () => {
+    unsubscribe();
+    await client[Symbol.asyncDispose]();
+    process.exit(0);
+  });
 });
 
 function shouldShowLogEvent(
