@@ -98,9 +98,9 @@ stream.action(async options => {
   });
 
   // Handle cleanup on exit
-  process.on("SIGINT", () => {
+  process.on("SIGINT", async () => {
     unsubscribe();
-    client[Symbol.asyncDispose]();
+    await client[Symbol.asyncDispose]();
     process.exit(0);
   });
 });
