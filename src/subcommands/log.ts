@@ -35,6 +35,8 @@ addLogLevelOptions(stream);
 
 stream.action(async options => {
   const logger = createLogger(options);
+  // We don't want to dispose the client immediately, instead of using 'using'
+  // we'll dispose it when the process exits.
   const client = await createClient(logger, options);
   const { json = false, stats = false, source = "model", filter } = options;
 
