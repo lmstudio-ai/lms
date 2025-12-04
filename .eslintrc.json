@@ -36,7 +36,8 @@
     ],
     "tsdoc/syntax": "warn",
     "@typescript-eslint/strict-boolean-expressions": "error",
-    "eqeqeq": "error"
+    "eqeqeq": "error",
+    "@typescript-eslint/no-var-requires": "off"
   },
   "overrides": [
     {
