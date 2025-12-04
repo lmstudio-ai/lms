@@ -146,7 +146,7 @@ function applyHelpConfigurationRecursively(
 }
 
 program.name("lms");
-program.helpCommand(false);
+program.helpCommand(true);
 
 // Add a hidden global version option (-v/--version) that prints and exits without cluttering help
 program.addOption(new Option("-v, --version", "Print the version of the CLI").hideHelp());
