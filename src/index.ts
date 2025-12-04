@@ -122,6 +122,7 @@ function createHelpConfiguration(maxWidth: number, helpMessageGap: number): Help
       return `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${paddedName}`;
     },
     argumentDescription: (argument: { description?: string }) => argument.description ?? "",
+    visibleCommands: command => command.commands.filter(cmd => cmd.name() !== "help"),
   };
 }
 
