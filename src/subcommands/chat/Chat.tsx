@@ -4,15 +4,15 @@ import { type LLM, type LMStudioClient, Chat } from "@lmstudio/sdk";
 import { SlashCommandHandler } from "./SlashCommandHandler.js";
 import { useModels, useSortedSuggestions, useSuggestionsPerPage } from "./hooks.js";
 import { displayVerboseStats, trimNewlines } from "./util.js";
-import type { ChatInputSegment, ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
+import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
 import { DEFAULT_SYSTEM_PROMPT } from "./index.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
-import { insertPasteAtCursor } from "./chatInputStateReducers.js";
+import { insertPasteAtCursor, insertSuggestionAtCursor } from "./chatInputStateReducers.js";
 
 interface ChatComponentProps {
   client: LMStudioClient;
-  llm: LLM;
+  llm?: LLM;
   chat: Chat;
   onExit: () => void;
   opts?: {
@@ -51,12 +51,12 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
   const reasoningStreamingContentRef = useRef("");
   const abortControllerRef = useRef<AbortController | null>(opts?.abortController ?? null);
   const chatRef = useRef<Chat>(chat);
-  const llmRef = useRef<LLM>(llm);
-  const models = useModels(client, llmRef.current.identifier);
+  const llmRef = useRef<LLM | null>(llm ?? null);
+  const models = useModels(client, llmRef.current !== null ? llmRef.current.identifier : null);
   const sortedSuggestions = useSortedSuggestions(suggestions);
   const suggestionsPerPage = useSuggestionsPerPage(messages);
   const areSuggestionsVisible = sortedSuggestions.length > 0;
-  const modelName = llmRef.current.displayName;
+  const modelName = llmRef.current?.displayName ?? null;
   const lastSegment = [...userInputState.segments]
     .reverse()
     .find(segment => segment.type === "text");
@@ -106,7 +106,7 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
 
         const modelKey = args.join(" ");
 
-        if (modelKey === llmRef.current.modelKey) {
+        if (llmRef.current !== null && modelKey === llmRef.current.modelKey) {
           return;
         }
 
@@ -233,53 +233,17 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
     }
     if (selectedSuggestion.type === "model") {
       const suggestionText = `/model ${selectedSuggestion.data.modelKey}`;
-      setUserInputState(previousState => {
-        const newSegments: ChatInputSegment[] = [...previousState.segments];
-        const lastSegmentIndex = newSegments.length - 1;
-        const lastSegment = newSegments[lastSegmentIndex];
-        if (lastSegment.type === "text") {
-          newSegments[lastSegmentIndex] = {
-            type: "text",
-            content: suggestionText,
-          };
-        } else {
-          newSegments.push({
-            type: "text",
-            content: suggestionText,
-          });
-        }
-        return {
-          segments: newSegments,
-          cursorOnSegmentIndex: newSegments.length - 1,
-          cursorInSegmentOffset: suggestionText.length,
-        };
-      });
+      setUserInputState(previousState =>
+        insertSuggestionAtCursor({ state: previousState, suggestionText }),
+      );
       setSuggestions([]);
       return;
     }
     if (selectedSuggestion.type === "command") {
       const suggestionText = `/${selectedSuggestion.data.name} `;
-      setUserInputState(previousState => {
-        const newSegments: ChatInputSegment[] = [...previousState.segments];
-        const lastSegmentIndex = newSegments.length - 1;
-        const lastSegment = newSegments[lastSegmentIndex];
-        if (lastSegment.type === "text") {
-          newSegments[lastSegmentIndex] = {
-            type: "text",
-            content: suggestionText,
-          };
-        } else {
-          newSegments.push({
-            type: "text",
-            content: suggestionText,
-          });
-        }
-        return {
-          segments: newSegments,
-          cursorOnSegmentIndex: newSegments.length - 1,
-          cursorInSegmentOffset: suggestionText.length,
-        };
-      });
+      setUserInputState(previousState =>
+        insertSuggestionAtCursor({ state: previousState, suggestionText }),
+      );
       setSuggestions([]);
       return;
     }
@@ -369,6 +333,12 @@ export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponent
       return;
     }
 
+    if (llmRef.current === null || modelName === null) {
+      logErrorInChat("No model loaded. Please load a model using /model [model_key]");
+      return;
+    }
+
+    // If nothing else, proceed with normal message submission
     setIsPredicting(true);
     streamingContentRef.current = "";
     reasoningStreamingContentRef.current = "";

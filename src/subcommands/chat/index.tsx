@@ -153,9 +153,9 @@ export async function handleNonInteractiveChat(
  */
 export async function startInteractiveChat(
   client: LMStudioClient,
-  llm: LLM,
   chat: Chat,
   opts: StartPredictionOpts,
+  llm?: LLM,
 ): Promise<void> {
   return new Promise<void>(resolve => {
     render(<ChatComponent client={client} llm={llm} chat={chat} opts={opts} onExit={resolve} />);
@@ -200,7 +200,28 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     logger.error("Invalid TTL value, must be a non-negative integer.");
     process.exit(1);
   }
-  let llm: LLM;
+  const abortController = new AbortController();
+  const chat = Chat.empty();
+  chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
+  let llm: LLM | undefined = undefined;
+  if (process.stdin.isTTY && providedPrompt.length === 0) {
+    try {
+      llm = await client.llm.model();
+    } catch (e) {
+      // Ignore error here, as we will handle no loaded model case inside
+      // the interactive chat flow below
+    }
+    await startInteractiveChat(
+      client,
+      chat,
+      {
+        stats: options.stats,
+        ttl,
+        controller: abortController,
+      },
+      llm,
+    );
+  }
   if (model !== undefined && model !== "") {
     try {
       llm = await loadModelWithProgress(client, model, ttl, logger);
@@ -333,17 +354,8 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     }
   }
 
-  const chat = Chat.empty();
-  chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
-  const abortController = new AbortController();
   if (providedPrompt.length !== 0) {
     await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
-      stats: options.stats,
-      ttl,
-      controller: abortController,
-    });
-  } else if (process.stdin.isTTY) {
-    await startInteractiveChat(client, llm, chat, {
       stats: options.stats,
       ttl,
       controller: abortController,

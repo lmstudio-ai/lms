@@ -27,7 +27,7 @@ export function useSortedSuggestions(suggestions: Suggestion[]): Suggestion[] {
 
 export function useModels(
   client: LMStudioClient,
-  currentModelIdentifier: string,
+  currentModelIdentifier: string | null,
 ): Array<ModelState> {
   const [downloadedModels, setDownloadedModels] = useState<Array<ModelState>>([]);
   useEffect(() => {

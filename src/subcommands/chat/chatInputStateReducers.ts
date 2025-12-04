@@ -12,6 +12,11 @@ interface InsertPasteAtCursorOpts {
   largePasteThreshold: number;
 }
 
+interface InsertSuggestionAtCursorOpts {
+  state: ChatUserInputState;
+  suggestionText: string;
+}
+
 interface MoveCursorToPreviousSegmentOpts {
   state: ChatUserInputState;
   startIndex: number;
@@ -411,5 +416,28 @@ export function insertPasteAtCursor({
       content +
       currentSegment.content.slice(cursorPosition);
     draft.cursorInSegmentOffset = cursorPosition + content.length;
+  });
+}
+
+export function insertSuggestionAtCursor({
+  state,
+  suggestionText,
+}: InsertSuggestionAtCursorOpts): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const lastSegmentIndex = draft.segments.length - 1;
+    const lastSegment = draft.segments[lastSegmentIndex];
+    if (lastSegment === undefined) {
+      return;
+    }
+    if (lastSegment.type === "text") {
+      lastSegment.content = suggestionText;
+    } else {
+      draft.segments.push({
+        type: "text",
+        content: suggestionText,
+      });
+    }
+    draft.cursorOnSegmentIndex = draft.segments.length - 1;
+    draft.cursorInSegmentOffset = suggestionText.length;
   });
 }

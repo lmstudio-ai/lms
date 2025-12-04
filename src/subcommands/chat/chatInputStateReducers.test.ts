@@ -1,6 +1,7 @@
 import {
   deleteCharacterBeforeCursor,
   insertPasteAtCursor,
+  insertSuggestionAtCursor,
   insertTextAtCursor,
   moveCursorLeft,
   moveCursorRight,
@@ -591,6 +592,68 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorOnSegmentIndex).toBe(4);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
+  });
 
+  describe("insertSuggestionAtCursor", () => {
+    it("replaces last text segment content with suggestion text", () => {
+      const initialState = createChatUserInputState([{ type: "text", content: "/mod" }], 0, 4);
+
+      const result = insertSuggestionAtCursor({
+        state: initialState,
+        suggestionText: "/model mymodel",
+      });
+
+      expect(result.segments).toHaveLength(1);
+      expect(result.segments[0]).toEqual({ type: "text", content: "/model mymodel" });
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(14);
+    });
+
+    it("creates new text segment when last segment is largePaste", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "hello" },
+          { type: "largePaste", content: "x".repeat(1000) },
+        ],
+        1,
+        0,
+      );
+
+      const result = insertSuggestionAtCursor({
+        state: initialState,
+        suggestionText: "/help ",
+      });
+
+      expect(result.segments).toHaveLength(3);
+      expect(result.segments[0]).toEqual({ type: "text", content: "hello" });
+      expect(result.segments[1]).toEqual({ type: "largePaste", content: "x".repeat(1000) });
+      expect(result.segments[2]).toEqual({ type: "text", content: "/help " });
+      expect(result.cursorOnSegmentIndex).toBe(2);
+      expect(result.cursorInSegmentOffset).toBe(6);
+    });
+
+    it("replaces last text segment even when there are multiple segments", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "hello" },
+          { type: "largePaste", content: "x".repeat(1000) },
+          { type: "text", content: "/co" },
+        ],
+        2,
+        3,
+      );
+
+      const result = insertSuggestionAtCursor({
+        state: initialState,
+        suggestionText: "/context ",
+      });
+
+      expect(result.segments).toHaveLength(3);
+      expect(result.segments[0]).toEqual({ type: "text", content: "hello" });
+      expect(result.segments[1]).toEqual({ type: "largePaste", content: "x".repeat(1000) });
+      expect(result.segments[2]).toEqual({ type: "text", content: "/context " });
+      expect(result.cursorOnSegmentIndex).toBe(2);
+      expect(result.cursorInSegmentOffset).toBe(9);
+    });
   });
 });
