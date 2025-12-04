@@ -1,4 +1,5 @@
 import { Command } from "@commander-js/extra-typings";
+import { input as promptInput, search } from "@inquirer/prompts";
 import { filteredArray, text, type SimpleLogger } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
@@ -7,10 +8,8 @@ import fg from "fast-glob";
 import { existsSync } from "fs";
 import { mkdir, readFile, rename, rm, unlink, writeFile } from "fs/promises";
 import fuzzy from "fuzzy";
-import { input as promptInput, search } from "@inquirer/prompts";
 import { tmpdir } from "os";
 import { join } from "path";
-import * as tar from "tar";
 import util from "util";
 import { z } from "zod";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
@@ -289,6 +288,14 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
   logger.info("Extracting files...");
 
   await mkdir(projectName, { recursive: true });
+
+  // Bun bug workaround: https://github.com/oven-sh/bun/issues/12696
+  const needTarWorkaround =
+    typeof (globalThis as any).Bun !== "undefined" && process.platform === "win32";
+  if (needTarWorkaround) process.env.__FAKE_PLATFORM__ = "linux";
+  const tar = require("tar");
+  if (needTarWorkaround) delete process.env.__FAKE_PLATFORM__;
+
   await tar.extract({
     file: `${tempDir}/${tarballName}`,
     cwd: projectName,
