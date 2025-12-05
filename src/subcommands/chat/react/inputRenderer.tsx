@@ -12,7 +12,7 @@ interface RenderInputLineOpts {
   fullText: string;
   cursorPosition: number;
   pasteRanges: PasteRange[];
-  isConfirmReloadActive: boolean;
+  isConfirmationActive: boolean;
 }
 
 export function renderInputLine({
@@ -21,7 +21,7 @@ export function renderInputLine({
   fullText,
   cursorPosition,
   pasteRanges,
-  isConfirmReloadActive,
+  isConfirmationActive,
 }: RenderInputLineOpts): JSX.Element {
   const inputBeforeCursor = fullText.slice(0, cursorPosition);
   const cursorLineIndex =
@@ -33,7 +33,7 @@ export function renderInputLine({
       : inputBeforeCursor.length - lastNewlineIndex - 1;
 
   const isCursorLine = lineIndex === cursorLineIndex;
-  const shouldShowConfirmReloadPrefix = isConfirmReloadActive === true && lineIndex === 0;
+  const shouldShowConfirmationPrefix = isConfirmationActive === true && lineIndex === 0;
   const promptPrefix = lineIndex === 0 ? "› " : "  ";
 
   if (isCursorLine === false) {
@@ -47,7 +47,7 @@ export function renderInputLine({
 
     return (
       <Box key={lineIndex} width={"100%"} flexWrap="wrap">
-        {shouldShowConfirmReloadPrefix === true && <Text color="cyan">(yes/no) </Text>}
+        {shouldShowConfirmationPrefix === true && <Text color="cyan">(yes/no) </Text>}
         <Text color="cyan">{promptPrefix}</Text>
         {textParts}
       </Box>
@@ -77,7 +77,7 @@ export function renderInputLine({
 
   return (
     <Box key={lineIndex} width={"95%"} flexWrap="wrap">
-      {shouldShowConfirmReloadPrefix === true && <Text color="cyan">(yes/no) </Text>}
+      {shouldShowConfirmationPrefix === true && <Text color="cyan">(yes/no) </Text>}
       <Text color="cyan">{promptPrefix}</Text>
       {beforeParts}
       <Text inverse>{cursorCharacter}</Text>

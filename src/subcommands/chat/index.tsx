@@ -23,6 +23,7 @@ import {
 import { runPromptWithExitHandling } from "../../prompt.js";
 import { render } from "ink";
 import { ChatComponent } from "./react/Chat.js";
+import { fetchModelCatalog } from "./catalogHelpers.js";
 
 interface StartPredictionOpts {
   stats?: true;
@@ -155,12 +156,23 @@ export async function startInteractiveChat(
   client: LMStudioClient,
   chat: Chat,
   opts: StartPredictionOpts,
-  llm?: LLM,
+  llm: LLM | undefined,
+  shouldFetchModelCatalog: boolean,
 ): Promise<void> {
   return new Promise<void>(resolve => {
-    render(<ChatComponent client={client} llm={llm} chat={chat} opts={opts} onExit={resolve} />, {
-      exitOnCtrlC: false,
-    });
+    render(
+      <ChatComponent
+        client={client}
+        llm={llm}
+        chat={chat}
+        opts={opts}
+        onExit={resolve}
+        shouldFetchModelCatalog={shouldFetchModelCatalog}
+      />,
+      {
+        exitOnCtrlC: false,
+      },
+    );
   });
 }
 
@@ -206,6 +218,19 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
   const chat = Chat.empty();
   chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
   let llm: LLM | undefined = undefined;
+
+  const cliPref = await getCliPref(logger);
+  const shouldFetchModelCatalog = await getOrAskShouldFetchModelCatalog(
+    dontFetchCatalog,
+    cliPref,
+    logger,
+  );
+
+  if (shouldFetchModelCatalog) {
+    // Pre-fetch model catalog to speed up later model selection
+    await fetchModelCatalog(client);
+  }
+
   if (process.stdin.isTTY && providedPrompt.length === 0) {
     try {
       llm = await client.llm.model();
@@ -222,6 +247,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
         controller: abortController,
       },
       llm,
+      shouldFetchModelCatalog,
     );
     return;
   }
@@ -248,30 +274,11 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       }
       // No model loaded, offer to download a model from the catalog or use existing downloaded
       // model
-      const cliPref = await getCliPref(logger);
-
       let modelCatalogModels: HubModel[] = [];
-      const shouldFetchModelCatalog = await getOrAskShouldFetchModelCatalog(
-        dontFetchCatalog,
-        cliPref,
-        logger,
-      );
 
       if (shouldFetchModelCatalog) {
-        try {
-          modelCatalogModels = await client.repository.unstable.getModelCatalog();
-        } catch (err) {
-          // If error says network connection failed, then we are offline, so just use empty the
-          // empty model catalog
-          if (err instanceof Error && err.message.toLowerCase().includes("network") === true) {
-            logger.warn("Offline, unable to fetch model catalog");
-          } else {
-            logger.error("Error fetching model catalog:", err);
-          }
-          modelCatalogModels = [];
-        }
+        modelCatalogModels = await fetchModelCatalog(client, logger);
       }
-
       const modelCatalogModelNames = modelCatalogModels.map(m => m.owner + "/" + m.name);
 
       const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];

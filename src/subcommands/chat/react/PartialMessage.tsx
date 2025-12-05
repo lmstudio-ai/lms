@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Box, Text } from "ink";
 import { trimNewlines } from "../util.js";
+import { Spinner } from "./Spinner.js";
 
 interface PartialMessageProps {
   modelName: string;
@@ -17,12 +18,10 @@ export const PartialMessage = memo(
     promptProcessingProgress,
   }: PartialMessageProps) => {
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" marginBottom={1} width={"95%"}>
         <Box>
           <Text color="magenta">{modelName}:</Text>
-          {promptProcessingProgress > 0 && (
-            <Text color="gray">{(promptProcessingProgress * 100).toFixed(2)}%</Text>
-          )}
+          {promptProcessingProgress > 0 && <Spinner />}
         </Box>
         <Box key={"reasoningContent"}>
           <Text color="gray">{trimNewlines(reasoningContent)}</Text>

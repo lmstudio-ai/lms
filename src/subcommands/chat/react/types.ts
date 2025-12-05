@@ -15,6 +15,7 @@ export type InkChatMessage =
         text: string;
       }>;
       displayName: string;
+      stoppedByUser: boolean;
     }
   | {
       type: "help";

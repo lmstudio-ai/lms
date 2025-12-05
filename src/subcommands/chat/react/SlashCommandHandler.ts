@@ -9,7 +9,7 @@ export interface SlashCommandSuggestionBuilderArgs {
 export interface SlashCommandSuggestionsOpts {
   input: string;
   isPredicting: boolean;
-  isConfirmReloadActive: boolean;
+  isConfirmationActive: boolean;
   models: ModelState[];
   fetchDownloadableModels: (filterText: string) => Promise<Suggestion[]>;
 }
@@ -71,7 +71,7 @@ export class SlashCommandHandler {
     if (
       inputWithTrimmedStart.startsWith("/") === false ||
       opts.isPredicting === true ||
-      opts.isConfirmReloadActive === true
+      opts.isConfirmationActive === true
     ) {
       return [];
     }

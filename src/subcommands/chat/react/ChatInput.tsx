@@ -15,7 +15,7 @@ import { type ChatUserInputState } from "./types.js";
 interface ChatInputProps {
   inputState: ChatUserInputState;
   isPredicting: boolean;
-  isConfirmReloadActive: boolean;
+  isConfirmationActive: boolean;
   areSuggestionsVisible: boolean;
   setUserInputState: Dispatch<SetStateAction<ChatUserInputState>>;
   onSubmit: () => void;
@@ -32,7 +32,7 @@ interface ChatInputProps {
 export const ChatInput = ({
   inputState,
   isPredicting,
-  isConfirmReloadActive,
+  isConfirmationActive,
   areSuggestionsVisible,
   setUserInputState,
   onSubmit,
@@ -184,7 +184,7 @@ export const ChatInput = ({
           fullText,
           cursorPosition,
           pasteRanges,
-          isConfirmReloadActive,
+          isConfirmationActive,
         }),
       )}
     </Box>

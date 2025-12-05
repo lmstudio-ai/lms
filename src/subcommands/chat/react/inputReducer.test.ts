@@ -7,7 +7,7 @@ import {
   moveCursorRight,
   removeCurrentLargePasteSegment,
   splitLargePasteSegmentAtCursor,
-} from "./chatInputStateReducers.js";
+} from "./inputReducer.js";
 import { type ChatInputSegment, type ChatUserInputState } from "./types.js";
 
 function createChatUserInputState(

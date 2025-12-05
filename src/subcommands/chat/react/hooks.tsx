@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { type InkChatMessage, type ModelState, type Suggestion } from "./types.js";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ChatUserInputState,
+  type InkChatMessage,
+  type ModelState,
+  type Suggestion,
+} from "./types.js";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { countMessageLines } from "../util.js";
 import { useStdin } from "ink";
+import { downloadModelWithProgress, getDownloadSize } from "../downloadHelpers.js";
+import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
+import { fetchModelCatalog, findModelInCatalog, parseModelIdentifier } from "../catalogHelpers.js";
 
 export function useSortedSuggestions(suggestions: Suggestion[]): Suggestion[] {
   return useMemo(() => {
@@ -87,6 +95,8 @@ interface UseBufferedPasteDetectionOpts {
   pasteDelayMs?: number;
 }
 
+export const LARGE_PASTE_THRESHOLD = 512; // Minimum characters to consider input as a paste
+
 /**
  * This hook listens to raw stdin data and uses debouncing to distinguish between normal typing and
  * paste operations. When a paste is detected, it buffers the content and calls the onPaste callback
@@ -103,7 +113,6 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
 
   const BASE_DELAY = 20; // Minimum debounce delay in milliseconds
   const MAX_DELAY = 1000; // Maximum delay to prevent excessive waiting
-  const LARGE_PASTE_THRESHOLD = 1000; // Minimum characters to consider input as a paste
 
   useEffect(() => {
     // We scale because larger pastes may lead to slower data arrival rates
@@ -177,4 +186,287 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
   }, [stdin, onPaste, setRawMode]);
 
   return skipUseInputRef;
+}
+
+export type ConfirmationResponseStatus = "handled" | "invalid" | "ignored";
+
+export interface ConfirmationRequest<TPayload> {
+  payload: TPayload;
+  onConfirm: (payload: TPayload) => void | Promise<void>;
+  onCancel?: (payload: TPayload) => void | Promise<void>;
+}
+
+export function useConfirmationPrompt<TPayload>() {
+  const [confirmationRequest, setConfirmationRequest] =
+    useState<ConfirmationRequest<TPayload> | null>(null);
+
+  const requestConfirmation = useCallback((request: ConfirmationRequest<TPayload>) => {
+    setConfirmationRequest(request);
+  }, []);
+
+  const clearConfirmation = useCallback(() => {
+    setConfirmationRequest(null);
+  }, []);
+
+  const handleConfirmationResponse = useCallback(
+    async (userInputText: string): Promise<ConfirmationResponseStatus> => {
+      if (confirmationRequest === null) {
+        return "ignored";
+      }
+      const normalizedResponse = userInputText.trim().toLowerCase();
+      if (normalizedResponse === "y" || normalizedResponse === "yes") {
+        setConfirmationRequest(null);
+        await confirmationRequest.onConfirm(confirmationRequest.payload);
+        return "handled";
+      }
+      if (normalizedResponse === "n" || normalizedResponse === "no") {
+        setConfirmationRequest(null);
+        if (confirmationRequest.onCancel !== undefined) {
+          await confirmationRequest.onCancel(confirmationRequest.payload);
+        }
+        return "handled";
+      }
+      return "invalid";
+    },
+    [confirmationRequest],
+  );
+
+  return {
+    confirmationRequest,
+    isConfirmationActive: confirmationRequest !== null,
+    requestConfirmation,
+    clearConfirmation,
+    handleConfirmationResponse,
+  };
+}
+
+export interface UseDownloadCommandOpts {
+  client: LMStudioClient;
+  onLog: (message: string) => void;
+  onError: (message: string) => void;
+  requestConfirmation: (request: ConfirmationRequest<any>) => void;
+  shouldFetchModelCatalog: boolean;
+}
+
+export function useDownloadCommand({
+  client,
+  onLog,
+  onError,
+  requestConfirmation,
+  shouldFetchModelCatalog,
+}: UseDownloadCommandOpts) {
+  const [isDownloadInProgress, setIsDownloadInProgress] = useState(false);
+
+  const handleDownloadCommand = useCallback(
+    async (commandArguments: string[]) => {
+      if (commandArguments.length === 0) {
+        onLog("Please specify a model to download using owner/name. Type /model to see the list.");
+        return;
+      }
+      if (isDownloadInProgress === true) {
+        onLog("A download is already in progress. Please wait for it to finish.");
+        return;
+      }
+      const identifierInput = commandArguments.join(" ").trim();
+      if (identifierInput.length === 0) {
+        onLog("Please specify a model to download using owner/name. Type /model to see the list.");
+        return;
+      }
+
+      const parsedIdentifier = parseModelIdentifier(identifierInput);
+      if (parsedIdentifier === null) {
+        onLog("Please use the owner/name format, for example meta/llama-3-8b.");
+        return;
+      }
+
+      const { owner, name } = parsedIdentifier;
+
+      if (shouldFetchModelCatalog !== true) {
+        onError("Model catalog fetching is disabled. Enable it to use /download command.");
+        return;
+      }
+
+      onLog(`Fetching model details for ${owner}/${name}...`);
+
+      const catalogModels = await fetchModelCatalog(client);
+      if (catalogModels.length === 0) {
+        onError("Failed to fetch model catalog. Please check your internet connection.");
+        return;
+      }
+
+      const matchingModel = findModelInCatalog(catalogModels, `${owner}/${name}`);
+
+      if (matchingModel === undefined) {
+        onError(
+          "Model not found in the catalog. /download currently supports catalog models only.",
+        );
+        return;
+      }
+
+      let downloadSizeBytes: number;
+      try {
+        downloadSizeBytes = await getDownloadSize(client, matchingModel.owner, matchingModel.name);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error && error.message !== undefined ? error.message : String(error);
+        onError(`Failed to resolve download plan: ${errorMessage}`);
+        return;
+      }
+
+      if (downloadSizeBytes === 0) {
+        onLog(`${matchingModel.owner}/${matchingModel.name} is already available locally.`);
+        return;
+      }
+
+      const formattedSize = formatSizeBytes1000(downloadSizeBytes);
+      onLog(
+        `Download ${matchingModel.owner}/${matchingModel.name}? This will download approximately ${formattedSize}. Type yes to continue or no to cancel.`,
+      );
+      requestConfirmation({
+        payload: {
+          type: "downloadModel",
+          owner: matchingModel.owner,
+          name: matchingModel.name,
+        },
+        onConfirm: async payload => {
+          if (payload.type !== "downloadModel") return;
+          onLog(`Downloading ${payload.owner}/${payload.name} in the background...`);
+
+          downloadModelWithProgress(client, payload.owner, payload.name, {
+            onComplete: (owner, name) => {
+              onLog(`Download completed: ${owner}/${name}`);
+              setIsDownloadInProgress(false);
+            },
+            onError: error => {
+              const errorMessage =
+                error instanceof Error && error.message !== undefined
+                  ? error.message
+                  : String(error);
+              onError(`Download failed for ${owner}/${name}: ${errorMessage}`);
+              setIsDownloadInProgress(false);
+            },
+          }).catch(() => {
+            // Error already handled in callback
+          });
+        },
+        onCancel: () => {
+          onLog(`Download canceled for ${owner}/${name}.`);
+        },
+      });
+    },
+    [
+      client,
+      onLog,
+      onError,
+      requestConfirmation,
+      isDownloadInProgress,
+      shouldFetchModelCatalog,
+      setIsDownloadInProgress,
+    ],
+  );
+
+  return { handleDownloadCommand, isDownloadInProgress };
+}
+
+export interface UseSuggestionHandlersOpts {
+  selectedSuggestionIndex: number;
+  setSelectedSuggestionIndex: (value: number | ((prev: number) => number)) => void;
+  sortedSuggestions: Suggestion[];
+  suggestionsPerPage: number;
+  setUserInputState: (
+    value: ChatUserInputState | ((prev: ChatUserInputState) => ChatUserInputState),
+  ) => void;
+  setSuggestions: (value: Suggestion[]) => void;
+}
+
+export function useSuggestionHandlers({
+  selectedSuggestionIndex,
+  setSelectedSuggestionIndex,
+  sortedSuggestions,
+  suggestionsPerPage,
+  setUserInputState,
+  setSuggestions,
+}: UseSuggestionHandlersOpts) {
+  const handleSuggestionsUp = useCallback(() => {
+    setSelectedSuggestionIndex(previousIndex => Math.max(0, previousIndex - 1));
+  }, [setSelectedSuggestionIndex]);
+
+  const handleSuggestionsDown = useCallback(() => {
+    setSelectedSuggestionIndex(previousIndex =>
+      Math.min(sortedSuggestions.length - 1, previousIndex + 1),
+    );
+  }, [sortedSuggestions.length, setSelectedSuggestionIndex]);
+
+  const handleSuggestionsPageLeft = useCallback(() => {
+    const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
+    if (currentPage > 0) {
+      const newIndex = (currentPage - 1) * suggestionsPerPage;
+      setSelectedSuggestionIndex(newIndex);
+    }
+  }, [selectedSuggestionIndex, suggestionsPerPage, setSelectedSuggestionIndex]);
+
+  const handleSuggestionsPageRight = useCallback(() => {
+    const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
+    const totalPages = Math.ceil(sortedSuggestions.length / suggestionsPerPage);
+    if (currentPage < totalPages - 1) {
+      const newIndex = (currentPage + 1) * suggestionsPerPage;
+      setSelectedSuggestionIndex(newIndex);
+    }
+  }, [
+    selectedSuggestionIndex,
+    suggestionsPerPage,
+    sortedSuggestions.length,
+    setSelectedSuggestionIndex,
+  ]);
+
+  const handleSuggestionAccept = useCallback(async () => {
+    if (selectedSuggestionIndex === -1) {
+      return;
+    }
+    const selectedSuggestion = sortedSuggestions[selectedSuggestionIndex];
+    if (selectedSuggestion === undefined) {
+      return;
+    }
+
+    const { insertSuggestionAtCursor } = await import("./inputReducer.js");
+
+    switch (selectedSuggestion.type) {
+      case "model": {
+        const suggestionText = `/model ${selectedSuggestion.data.modelKey}`;
+        setUserInputState((previousState: ChatUserInputState) =>
+          insertSuggestionAtCursor({ state: previousState, suggestionText }),
+        );
+        setSuggestions([]);
+        return;
+      }
+      case "command": {
+        const suggestionText = `/${selectedSuggestion.data.name} `;
+        setUserInputState((previousState: ChatUserInputState) =>
+          insertSuggestionAtCursor({ state: previousState, suggestionText }),
+        );
+        setSuggestions([]);
+        return;
+      }
+      case "downloadableModel": {
+        const suggestionText = `/download ${selectedSuggestion.data.owner}/${selectedSuggestion.data.name}`;
+        setUserInputState((previousState: ChatUserInputState) =>
+          insertSuggestionAtCursor({ state: previousState, suggestionText }),
+        );
+        setSuggestions([]);
+        return;
+      }
+      default: {
+        const _exhaustiveCheck: never = selectedSuggestion;
+        return _exhaustiveCheck;
+      }
+    }
+  }, [selectedSuggestionIndex, sortedSuggestions, setUserInputState, setSuggestions]);
+
+  return {
+    handleSuggestionsUp,
+    handleSuggestionsDown,
+    handleSuggestionsPageLeft,
+    handleSuggestionsPageRight,
+    handleSuggestionAccept,
+  };
 }
