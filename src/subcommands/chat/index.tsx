@@ -231,6 +231,8 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     await fetchModelCatalog(client);
   }
 
+  // We intentionally do not check for a model being loaded here, as that is handled
+  // inside startInteractiveChat to allow model selection inside the interactive chat flow
   if (process.stdin.isTTY && providedPrompt.length === 0) {
     try {
       llm = await client.llm.model();
