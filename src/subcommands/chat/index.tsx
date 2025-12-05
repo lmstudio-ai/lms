@@ -7,9 +7,7 @@ import chalk from "chalk";
 import columnify from "columnify";
 import fuzzy from "fuzzy";
 import { confirm, search } from "@inquirer/prompts";
-import * as readline from "readline/promises";
 import { getCliPref, type CliPref } from "../../cliPref.js";
-import { askQuestion } from "../../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
 import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
@@ -23,11 +21,14 @@ import {
   readStdin,
 } from "./util.js";
 import { runPromptWithExitHandling } from "../../prompt.js";
+import { render } from "ink";
+import { ChatComponent } from "./react/Chat.js";
+import { fetchModelCatalog } from "./catalogHelpers.js";
 
 interface StartPredictionOpts {
   stats?: true;
   ttl: number;
-  signal?: AbortSignal;
+  controller?: AbortController;
 }
 
 type ChatCommandOptions = OptionValues &
@@ -41,7 +42,7 @@ type ChatCommandOptions = OptionValues &
     yes?: boolean;
   };
 
-const DEFAULT_SYSTEM_PROMPT =
+export const DEFAULT_SYSTEM_PROMPT =
   "You are an AI assistant running in the user's terminal. Provide helpful and concise responses.";
 
 const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
@@ -134,7 +135,7 @@ export async function handleNonInteractiveChat(
     const { result, lastFragment } = await executePrediction(llm, chat, prompt);
 
     if (opts.stats !== undefined) {
-      displayVerboseStats(result.stats, logger);
+      displayVerboseStats(result.stats, logger.info.bind(logger));
     }
 
     if (lastFragment.endsWith("\n") !== true) {
@@ -149,112 +150,29 @@ export async function handleNonInteractiveChat(
 }
 
 /**
- * Runs a single prediction in an interactive chat session. Pauses readline during prediction and
- * resumes for next input.
- */
-async function runInteractivePrediction(
-  llm: LLM,
-  chat: Chat,
-  input: string,
-  logger: SimpleLogger,
-  rl: readline.Interface,
-  opts: StartPredictionOpts,
-): Promise<void> {
-  process.stdout.write("\n● ");
-
-  const { result } = await executePrediction(llm, chat, input, opts.signal);
-
-  if (opts.stats !== undefined) {
-    displayVerboseStats(result.stats, logger);
-  }
-
-  process.stdout.write("\n\n");
-  rl.prompt();
-}
-
-/**
  * Starts an interactive chat session in the terminal.
  */
 export async function startInteractiveChat(
   client: LMStudioClient,
-  llm: LLM,
   chat: Chat,
-  logger: SimpleLogger,
-  modelName: string,
   opts: StartPredictionOpts,
+  llm: LLM | undefined,
+  shouldFetchModelCatalog: boolean,
 ): Promise<void> {
   return new Promise<void>(resolve => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      prompt: "› ",
-    });
-
-    process.stdout.write("\n");
-    rl.prompt();
-    let isPredicting = false;
-    let abortController: AbortController;
-    rl.addListener("SIGINT", () => {
-      if (isPredicting) {
-        abortController.abort();
-        isPredicting = false;
-      } else {
-        process.exit(0);
-      }
-    });
-    rl.on("line", async (line: string) => {
-      abortController = new AbortController();
-      opts.signal = abortController.signal;
-      const input = line.trim();
-      if (input === "exit" || input === "quit") {
-        rl.close();
-        return;
-      }
-
-      // Skip empty input
-      if (input.length === 0) {
-        rl.prompt();
-        return;
-      }
-
-      try {
-        isPredicting = true;
-        await runInteractivePrediction(llm, chat, input, logger, rl, opts);
-      } catch (err) {
-        isPredicting = false;
-        if (err instanceof Error && err.message.toLowerCase().includes("unloaded") === true) {
-          const shouldReload = await askQuestion("Looks like the model unloaded. Reload?", {
-            rl,
-          });
-          if (shouldReload) {
-            try {
-              llm = await loadModelWithProgress(client, modelName, opts.ttl, logger);
-              process.stdout.write("\n");
-              isPredicting = true;
-              await runInteractivePrediction(llm, chat, input, logger, rl, opts);
-              return;
-            } catch (reloadErr) {
-              logger.error("Error reloading model:", reloadErr);
-              rl.prompt();
-            } finally {
-              isPredicting = false;
-            }
-          } else {
-            // User chose not to reload, exit
-            process.exit(0);
-          }
-        } else {
-          logger.error("Error during chat:", err);
-          rl.prompt();
-        }
-      } finally {
-        isPredicting = false;
-      }
-    });
-
-    rl.on("close", () => {
-      resolve();
-    });
+    render(
+      <ChatComponent
+        client={client}
+        llm={llm}
+        chat={chat}
+        opts={opts}
+        onExit={resolve}
+        shouldFetchModelCatalog={shouldFetchModelCatalog}
+      />,
+      {
+        exitOnCtrlC: false,
+      },
+    );
   });
 }
 
@@ -296,7 +214,43 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     logger.error("Invalid TTL value, must be a non-negative integer.");
     process.exit(1);
   }
-  let llm: LLM;
+  const abortController = new AbortController();
+  const chat = Chat.empty();
+  chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
+  let llm: LLM | undefined = undefined;
+
+  const cliPref = await getCliPref(logger);
+  const shouldFetchModelCatalog = await getOrAskShouldFetchModelCatalog(
+    dontFetchCatalog,
+    cliPref,
+    logger,
+  );
+
+  if (shouldFetchModelCatalog) {
+    // Pre-fetch model catalog to speed up later model selection
+    await fetchModelCatalog(client);
+  }
+
+  if (process.stdin.isTTY && providedPrompt.length === 0) {
+    try {
+      llm = await client.llm.model();
+    } catch (e) {
+      // Ignore error here, as we will handle no loaded model case inside
+      // the interactive chat flow below
+    }
+    await startInteractiveChat(
+      client,
+      chat,
+      {
+        stats: options.stats,
+        ttl,
+        controller: abortController,
+      },
+      llm,
+      shouldFetchModelCatalog,
+    );
+    return;
+  }
   if (model !== undefined && model !== "") {
     try {
       llm = await loadModelWithProgress(client, model, ttl, logger);
@@ -320,30 +274,11 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       }
       // No model loaded, offer to download a model from the catalog or use existing downloaded
       // model
-      const cliPref = await getCliPref(logger);
-
       let modelCatalogModels: HubModel[] = [];
-      const shouldFetchModelCatalog = await getOrAskShouldFetchModelCatalog(
-        dontFetchCatalog,
-        cliPref,
-        logger,
-      );
 
       if (shouldFetchModelCatalog) {
-        try {
-          modelCatalogModels = await client.repository.unstable.getModelCatalog();
-        } catch (err) {
-          // If error says network connection failed, then we are offline, so just use empty the
-          // empty model catalog
-          if (err instanceof Error && err.message.toLowerCase().includes("network") === true) {
-            logger.warn("Offline, unable to fetch model catalog");
-          } else {
-            logger.error("Error fetching model catalog:", err);
-          }
-          modelCatalogModels = [];
-        }
+        modelCatalogModels = await fetchModelCatalog(client, logger);
       }
-
       const modelCatalogModelNames = modelCatalogModels.map(m => m.owner + "/" + m.name);
 
       const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];
@@ -428,22 +363,12 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       llm = await loadModelWithProgress(client, selectedModel.name, ttl, logger);
     }
   }
-  if (providedPrompt.length === 0) {
-    logger.info(`Chatting with ${llm.identifier}.  Type 'exit', 'quit' or Ctrl+C to quit`);
-  }
-
-  const chat = Chat.empty();
-  chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
 
   if (providedPrompt.length !== 0) {
     await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
       stats: options.stats,
       ttl,
-    });
-  } else if (process.stdin.isTTY) {
-    await startInteractiveChat(client, llm, chat, logger, (await llm.getModelInfo()).modelKey, {
-      stats: options.stats,
-      ttl,
+      controller: abortController,
     });
   } else {
     logger.error("No prompt provided for non-interactive chat.");
