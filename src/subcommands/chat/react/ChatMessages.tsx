@@ -13,22 +13,24 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
   switch (type) {
     case "user":
       return (
-        <Box flexDirection="row">
+        <Box flexDirection="row" marginBottom={1} width={"95%"}>
           <Text color="cyan">You: </Text>
-          {message.content.map((part, partIndex) => (
-            <Text
-              key={partIndex}
-              color={part.type === "largePaste" && part.text.length > 50 ? "blue" : undefined}
-            >
-              {trimNewlines(part.text)}
-            </Text>
-          ))}
+          <Box flexDirection="row" flexWrap="wrap">
+            {message.content.map((part, partIndex) => (
+              <Text
+                key={partIndex}
+                color={part.type === "largePaste" && part.text.length > 50 ? "blue" : undefined}
+              >
+                {trimNewlines(part.text)}
+              </Text>
+            ))}
+          </Box>
         </Box>
       );
 
     case "assistant":
       return (
-        <Box marginBottom={1} flexDirection="column">
+        <Box marginBottom={1} flexDirection="column" width={"95%"}>
           <Text color="magenta">{message.displayName}:</Text>
           {message.content.map((part, partIndex) => (
             <Text key={partIndex} color={part.type === "reasoning" ? "gray" : undefined}>
@@ -40,26 +42,26 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
 
     case "help":
       return (
-        <Box marginBottom={1} flexDirection="column">
+        <Box marginBottom={1} flexDirection="column" width={"95%"}>
           <Text color="green">Help:</Text>
           <Text>{trimNewlines(message.content)}</Text>
         </Box>
       );
     case "log":
       return (
-        <Box marginBottom={1} flexDirection="column">
+        <Box marginBottom={1} flexDirection="column" width={"95%"}>
           <Text color="yellow">{trimNewlines(message.content)}</Text>
         </Box>
       );
     case "error":
       return (
-        <Box marginBottom={1} flexDirection="column">
+        <Box marginBottom={1} flexDirection="column" width={"95%"}>
           <Text color="red">{trimNewlines(message.content)}</Text>
         </Box>
       );
     case "welcome":
       return (
-        <Box marginBottom={1} marginLeft={1} flexDirection="column">
+        <Box marginBottom={1} marginLeft={1} flexDirection="column" minWidth={"50%"}>
           <Box paddingX={1} borderStyle={"round"} borderColor={"magenta"} flexDirection="column">
             <Text color={"gray"}>👾 lms chat v0.42 </Text>
             <Text>

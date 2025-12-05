@@ -76,7 +76,7 @@ export function renderInputLine({
   });
 
   return (
-    <Box key={lineIndex} width={"90%"} flexWrap="wrap">
+    <Box key={lineIndex} width={"95%"} flexWrap="wrap">
       {shouldShowConfirmReloadPrefix === true && <Text color="cyan">(yes/no) </Text>}
       <Text color="cyan">{promptPrefix}</Text>
       {beforeParts}

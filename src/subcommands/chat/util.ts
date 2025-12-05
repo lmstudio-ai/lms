@@ -2,7 +2,7 @@ import type { SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { ProgressBar } from "../../ProgressBar.js";
 import chalk from "chalk";
-import { type InkChatMessage } from "./types.js";
+import { type InkChatMessage } from "./react/types.js";
 
 export async function loadModelWithProgress(
   client: LMStudioClient,

@@ -42,6 +42,16 @@ export const ChatSuggestions = React.memo(
               </Box>
             );
           }
+          case "downloadableModel": {
+            const model = suggestion.data;
+            return (
+              <Box key={`${model.owner}/${model.name}`}>
+                <Text inverse={selectedSuggestionIndex === globalIndex}>
+                  {model.owner}/{model.name}
+                </Text>
+              </Box>
+            );
+          }
           default: {
             const exhaustiveCheck: never = suggestionType;
             throw new Error(`Unhandled suggestion type: ${exhaustiveCheck}`);

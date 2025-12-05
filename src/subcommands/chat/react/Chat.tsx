@@ -4,9 +4,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
-import { SlashCommandHandler } from "./SlashCommandHandler.js";
+import { SlashCommandHandler, type SlashCommand } from "./SlashCommandHandler.js";
 import { insertPasteAtCursor, insertSuggestionAtCursor } from "./inputReducer.js";
-import { useModels, useSortedSuggestions, useSuggestionsPerPage } from "./hooks.js";
+import { useDownloadedModels, useSortedSuggestions, useSuggestionsPerPage } from "./hooks.js";
 import { DEFAULT_SYSTEM_PROMPT } from "../index.js";
 import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
 import { displayVerboseStats } from "../util.js";
@@ -57,13 +57,13 @@ export const ChatComponent = React.memo(
     const abortControllerRef = useRef<AbortController | null>(opts?.abortController ?? null);
     const chatRef = useRef<Chat>(chat);
     const llmRef = useRef<LLM | null>(llm ?? null);
-    const models = useModels(client, llmRef.current !== null ? llmRef.current.identifier : null);
+    const downloadedModels = useDownloadedModels(
+      client,
+      llmRef.current !== null ? llmRef.current.identifier : null,
+    );
     const sortedSuggestions = useSortedSuggestions(suggestions);
     const suggestionsPerPage = useSuggestionsPerPage(messages);
     const areSuggestionsVisible = useMemo(() => sortedSuggestions.length > 0, [sortedSuggestions]);
-
-    // const reRenderCounter = useRef(0);
-
     const lastSegmentInputSegment = useMemo(() => {
       const lastSegment = [...userInputState.segments]
         .reverse()
@@ -79,135 +79,136 @@ export const ChatComponent = React.memo(
       setMessages(previousMessages => [...previousMessages, { type: "error", content: errorText }]);
     }, []);
 
-    useEffect(() => {
-      // Setup slash command handler
-      commandHandler.register({
-        name: "help",
-        description: "Show help information",
-        handler: async () => {
-          const helpText = `Available commands:
-/exit - Exit the chat
-/model [model_key] - Load a model (type /model to see list)
-/clear - Clear the chat history
-/system-prompt [prompt] - Set the system prompt
-/help - Show this help information
-`;
-          setMessages(previousMessages => [
-            ...previousMessages,
-            { type: "help", content: helpText },
-          ]);
+    const slashCommands = useMemo<SlashCommand[]>(() => {
+      return [
+        {
+          name: "help",
+          description: "Show help information",
+          handler: async () => {
+            const helpText = commandHandler.generateHelpText();
+            setMessages(previousMessages => [
+              ...previousMessages,
+              { type: "help", content: helpText },
+            ]);
+          },
         },
-      });
-
-      commandHandler.register({
-        name: "exit",
-        description: "Exit the chat",
-        handler: async () => {
-          onExit();
-          exit();
+        {
+          name: "exit",
+          description: "Exit the chat",
+          handler: async () => {
+            onExit();
+            exit();
+          },
         },
-      });
+        {
+          name: "model",
+          description: "Load a model (type /model to see list)",
+          handler: async commandArguments => {
+            if (commandArguments.length === 0) {
+              logInChat("Please specify a model to load. Type /model to see the list.");
+              return;
+            }
 
-      commandHandler.register({
-        name: "model",
-        description: "Load a model (type /model to see list)",
-        handler: async args => {
-          if (args.length === 0) {
-            logInChat("Please specify a model to load. Type /model to see the list.");
-            return;
-          }
+            const modelKey = commandArguments.join(" ");
 
-          const modelKey = args.join(" ");
+            if (llmRef.current !== null && modelKey === llmRef.current.modelKey) {
+              return;
+            }
 
-          if (llmRef.current !== null && modelKey === llmRef.current.modelKey) {
-            return;
-          }
-
-          setModelLoadingProgress(0);
-          try {
-            llmRef.current = await client.llm.model(modelKey, {
-              verbose: false,
-              ttl: opts?.ttl,
-              onProgress(progress) {
-                setModelLoadingProgress(progress);
-              },
-            });
-            logInChat(`Model loaded: ${llmRef.current.displayName}`);
-          } catch (error) {
-            console.error(`Failed to load model: ${(error as Error).message}`);
-          } finally {
-            setModelLoadingProgress(null);
-          }
+            setModelLoadingProgress(0);
+            try {
+              llmRef.current = await client.llm.model(modelKey, {
+                verbose: false,
+                ttl: opts?.ttl,
+                onProgress(progress) {
+                  setModelLoadingProgress(progress);
+                },
+              });
+              logInChat(`Model loaded: ${llmRef.current.displayName}`);
+            } catch (error) {
+              logErrorInChat(`Failed to load model: ${(error as Error).message}`);
+            } finally {
+              setModelLoadingProgress(null);
+            }
+          },
+          buildSuggestions: ({ argsInput, models }) => {
+            const normalizedFilter = argsInput.trim().toLowerCase();
+            const filteredModels = models.filter(model =>
+              model.modelKey.toLowerCase().includes(normalizedFilter),
+            );
+            return filteredModels.map(model => ({ type: "model", data: model }));
+          },
         },
-      });
-
-      commandHandler.register({
-        name: "clear",
-        description: "Clear the chat history",
-        handler: async () => {
-          setMessages([]);
-          setUserInputState(emptyChatInputState);
-          // We clear the entire chat and just use the default system prompt
-          chatRef.current = Chat.empty();
-          chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
+        {
+          name: "clear",
+          description: "Clear the chat history",
+          handler: async () => {
+            setMessages([]);
+            setUserInputState(emptyChatInputState);
+            chatRef.current = Chat.empty();
+            chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
+          },
         },
-      });
+        {
+          name: "system-prompt",
+          description: "Set the system prompt",
+          handler: async commandArguments => {
+            const prompt = commandArguments.join(" ");
+            if (prompt.length === 0) {
+              logInChat("Please provide a system prompt.");
+              return;
+            }
 
-      commandHandler.register({
-        name: "system-prompt",
-        description: "Set the system prompt",
-        handler: async args => {
-          const prompt = args.join(" ");
-          if (prompt.length === 0) {
-            logInChat("Please provide a system prompt.");
-            return;
-          }
-
-          const newChat = chatRef.current.asMutableCopy();
-          newChat.append("system", prompt);
-          logInChat("System prompt updated to: " + prompt);
-          chatRef.current = newChat;
+            const newChat = chatRef.current.asMutableCopy();
+            newChat.append("system", prompt);
+            logInChat("System prompt updated to: " + prompt);
+            chatRef.current = newChat;
+          },
         },
-      });
-
-      commandHandler.register({
-        name: "download",
-        description: "Download a model",
-        handler: async args => {
-          if (args.length === 0) {
-            logInChat("Please specify a model to download. Type /model to see the list.");
-            return;
-          }
-          // Implement model downloading logic here
+        {
+          name: "download",
+          description: "Download a model",
+          handler: async commandArguments => {
+            if (commandArguments.length === 0) {
+              logInChat("Please specify a model to download. Type /model to see the list.");
+              return;
+            }
+          },
+          buildSuggestions: async ({ argsInput, fetchDownloadableModels }) => {
+            const trimmedFilter = argsInput.trim();
+            if (trimmedFilter.length === 0) {
+              return [];
+            }
+            return await fetchDownloadableModels(trimmedFilter);
+          },
         },
-      });
-    }, [exit, onExit, client, opts?.ttl, logInChat]);
+      ];
+    }, [client.llm, commandHandler, exit, logErrorInChat, logInChat, onExit, opts?.ttl]);
 
-    useEffect(() => {
-      const input = lastSegmentInputSegment;
-      if (input.startsWith("/") && !isPredicting && confirmReload === null) {
-        const commandPart = input.slice(1).toLowerCase();
-
-        // Check if typing /model with space - show model list
-        // only show models if input is exactly "/model " or starts with "/model " and has more text
-        if (input.startsWith("/model ") && input.split(" ").length === 2) {
-          const modelFilter = input.slice(6).trim().toLowerCase();
-          const filtered = models.filter(model =>
-            model.modelKey.toLowerCase().includes(modelFilter),
-          );
-          setSuggestions(filtered.map(model => ({ type: "model", data: model })));
-          setSelectedSuggestionIndex(0);
-        } else {
-          const filtered = commandHandler
-            .list()
-            .filter(cmd => cmd.name.toLowerCase().startsWith(commandPart));
-          setSuggestions(filtered.map(cmd => ({ type: "command", data: cmd })));
-          setSelectedSuggestionIndex(0);
+    const fetchDownloadableModelSuggestions = useCallback(
+      async (filterText: string) => {
+        const trimmedFilter = filterText.trim();
+        if (trimmedFilter.length === 0) {
+          return [];
         }
-      } else {
-        setSuggestions([]);
-      }
-    }, [lastSegmentInputSegment, isPredicting, client, models, confirmReload]);
+        const availableModels = await client.repository.unstable.getModelCatalog();
+        const lowercaseFilter = trimmedFilter.toLowerCase();
+        const filteredModels = availableModels.filter(model =>
+          `${model.owner}/${model.name}`.toLowerCase().includes(lowercaseFilter),
+        );
+        return filteredModels.map(model => ({
+          type: "downloadableModel" as const,
+          data: {
+            owner: model.owner,
+            name: model.name,
+            downloads: model.downloads,
+            likeCount: model.likeCount,
+            staffPickedAt: model.staffPickedAt,
+          },
+        }));
+      },
+      [client],
+    );
 
     // Input handling and rendering is delegated to ChatInput.
 
@@ -258,21 +259,35 @@ export const ChatComponent = React.memo(
       if (selectedSuggestion === undefined) {
         return;
       }
-      if (selectedSuggestion.type === "model") {
-        const suggestionText = `/model ${selectedSuggestion.data.modelKey}`;
-        setUserInputState(previousState =>
-          insertSuggestionAtCursor({ state: previousState, suggestionText }),
-        );
-        setSuggestions([]);
-        return;
-      }
-      if (selectedSuggestion.type === "command") {
-        const suggestionText = `/${selectedSuggestion.data.name} `;
-        setUserInputState(previousState =>
-          insertSuggestionAtCursor({ state: previousState, suggestionText }),
-        );
-        setSuggestions([]);
-        return;
+      switch (selectedSuggestion.type) {
+        case "model": {
+          const suggestionText = `/model ${selectedSuggestion.data.modelKey}`;
+          setUserInputState(previousState =>
+            insertSuggestionAtCursor({ state: previousState, suggestionText }),
+          );
+          setSuggestions([]);
+          return;
+        }
+        case "command": {
+          const suggestionText = `/${selectedSuggestion.data.name} `;
+          setUserInputState(previousState =>
+            insertSuggestionAtCursor({ state: previousState, suggestionText }),
+          );
+          setSuggestions([]);
+          return;
+        }
+        case "downloadableModel": {
+          const suggestionText = `/download ${selectedSuggestion.data.owner}/${selectedSuggestion.data.name}`;
+          setUserInputState(previousState =>
+            insertSuggestionAtCursor({ state: previousState, suggestionText }),
+          );
+          setSuggestions([]);
+          return;
+        }
+        default: {
+          const _exhaustiveCheck: never = selectedSuggestion;
+          return _exhaustiveCheck;
+        }
       }
     }, [selectedSuggestionIndex, sortedSuggestions]);
 
@@ -341,15 +356,15 @@ export const ChatComponent = React.memo(
       }
 
       if (userInputText.startsWith("/")) {
-        const { command, args } = SlashCommandHandler.parseSlashCommand(
+        const { command, argumentsText } = SlashCommandHandler.parseSlashCommand(
           userInputText,
           sortedSuggestions[selectedSuggestionIndex],
         );
         if (command === null) {
           return;
         }
-        const result = await commandHandler.execute(command, args);
-        if (result === false) {
+        const wasCommandHandled = await commandHandler.execute(command, argumentsText);
+        if (wasCommandHandled === false) {
           logInChat(`Unknown command: ${userInputText}`);
         }
         return;
@@ -471,6 +486,7 @@ export const ChatComponent = React.memo(
       }
     }, [
       client,
+      commandHandler,
       confirmReload,
       handleExit,
       logErrorInChat,
@@ -496,8 +512,44 @@ export const ChatComponent = React.memo(
       );
     }, [sortedSuggestions, selectedSuggestionIndex, suggestionsPerPage]);
 
+    useEffect(() => {
+      commandHandler.setCommands(slashCommands);
+    }, [commandHandler, slashCommands]);
+
+    useEffect(() => {
+      let isCancelled = false;
+      const updateSuggestions = async () => {
+        const nextSuggestions = await commandHandler.getSuggestions({
+          input: lastSegmentInputSegment,
+          isPredicting,
+          isConfirmReloadActive: confirmReload !== null,
+          models: downloadedModels,
+          fetchDownloadableModels: fetchDownloadableModelSuggestions,
+        });
+
+        if (isCancelled === true) {
+          return;
+        }
+        setSuggestions(nextSuggestions);
+        setSelectedSuggestionIndex(nextSuggestions.length > 0 ? 0 : -1);
+      };
+
+      updateSuggestions();
+
+      return () => {
+        isCancelled = true;
+      };
+    }, [
+      commandHandler,
+      confirmReload,
+      fetchDownloadableModelSuggestions,
+      isPredicting,
+      lastSegmentInputSegment,
+      downloadedModels,
+    ]);
+
     return (
-      <Box flexDirection="column" width={"90%"} flexWrap="wrap">
+      <Box flexDirection="column" width={"95%"} flexWrap="wrap">
         <ChatMessagesList messages={messages} modelName={llmRef.current?.displayName ?? null} />
         {isPredicting &&
           llmRef.current !== undefined &&

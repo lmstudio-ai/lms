@@ -40,7 +40,17 @@ export type ModelState = {
 
 export type Suggestion =
   | { type: "command"; data: SlashCommand }
-  | { type: "model"; data: ModelState };
+  | { type: "model"; data: ModelState }
+  | {
+      type: "downloadableModel";
+      data: {
+        owner: string;
+        name: string;
+        downloads: number;
+        likeCount: number;
+        staffPickedAt: number | undefined;
+      };
+    };
 
 export type ChatInputSegment =
   | {

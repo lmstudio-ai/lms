@@ -12,7 +12,7 @@ export const ChatMessagesList = memo(({ messages, modelName }: ChatMessagesListP
   return (
     <>
       {messages.map((message, index) => (
-        <Box key={index}>
+        <Box key={index} width={"95%"} flexDirection="column" flexWrap="wrap">
           <ChatMessage message={message} modelName={modelName} />
         </Box>
       ))}
