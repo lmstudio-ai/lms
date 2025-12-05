@@ -5,11 +5,11 @@ import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
 import { SlashCommandHandler } from "./SlashCommandHandler.js";
-import { insertPasteAtCursor, insertSuggestionAtCursor } from "./chatInputStateReducers.js";
+import { insertPasteAtCursor, insertSuggestionAtCursor } from "./inputReducer.js";
 import { useModels, useSortedSuggestions, useSuggestionsPerPage } from "./hooks.js";
-import { DEFAULT_SYSTEM_PROMPT } from "./index.js";
+import { DEFAULT_SYSTEM_PROMPT } from "../index.js";
 import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
-import { displayVerboseStats } from "./util.js";
+import { displayVerboseStats } from "../util.js";
 import { PartialMessage } from "./PartialMessage.js";
 
 interface ChatComponentProps {

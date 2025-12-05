@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type InkChatMessage, type ModelState, type Suggestion } from "./types.js";
 import { type LMStudioClient } from "@lmstudio/sdk";
-import { countMessageLines } from "./util.js";
+import { countMessageLines } from "../util.js";
 import { useStdin } from "ink";
 
 export function useSortedSuggestions(suggestions: Suggestion[]): Suggestion[] {

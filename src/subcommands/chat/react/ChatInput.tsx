@@ -1,6 +1,6 @@
 import { Box, useInput } from "ink";
 import { type Dispatch, type SetStateAction, useMemo } from "react";
-import { renderInputLine } from "./chatInputRendering.js";
+import { renderInputLine } from "./inputRenderer.js";
 import {
   deleteCharacterBeforeCursor,
   insertTextAtCursor,
@@ -8,7 +8,7 @@ import {
   moveCursorRight,
   removeCurrentLargePasteSegment,
   splitLargePasteSegmentAtCursor,
-} from "./chatInputStateReducers.js";
+} from "./inputReducer.js";
 import { useBufferedPasteDetection } from "./hooks.js";
 import { type ChatUserInputState } from "./types.js";
 

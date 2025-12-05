@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Box, Text } from "ink";
-import { trimNewlines } from "./util.js";
+import { trimNewlines } from "../util.js";
 
 interface PartialMessageProps {
   modelName: string;

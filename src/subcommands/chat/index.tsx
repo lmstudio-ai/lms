@@ -22,7 +22,7 @@ import {
 } from "./util.js";
 import { runPromptWithExitHandling } from "../../prompt.js";
 import { render } from "ink";
-import { ChatComponent } from "./Chat.js";
+import { ChatComponent } from "./react/Chat.js";
 
 interface StartPredictionOpts {
   stats?: true;
