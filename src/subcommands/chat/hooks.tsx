@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { type InkChatMessage, type ModelState, type Suggestion } from "./types.js";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { countMessageLines } from "./util.js";
+import { useStdin } from "ink";
 
 export function useSortedSuggestions(suggestions: Suggestion[]): Suggestion[] {
   return useMemo(() => {
@@ -82,16 +83,15 @@ export function useSuggestionsPerPage(messages: InkChatMessage[]): number {
 }
 
 interface UseBufferedPasteDetectionOpts {
-  stdin: NodeJS.ReadStream | undefined;
   onPaste: (content: string) => void;
   pasteDelayMs?: number;
 }
 
 export function useBufferedPasteDetection({
-  stdin,
   onPaste,
-  pasteDelayMs = 100,
+  pasteDelayMs = 500,
 }: UseBufferedPasteDetectionOpts) {
+  const { stdin, setRawMode } = useStdin();
   const skipUseInputRef = useRef(false);
   const pasteBufferRef = useRef("");
   const pasteTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -100,17 +100,29 @@ export function useBufferedPasteDetection({
     if (stdin === undefined) {
       return;
     }
+    const wasRaw = stdin.isRaw;
+    if (wasRaw === false) {
+      setRawMode(true);
+    }
+    process.stdin.setEncoding("utf8"); // Make data events emit strings
 
     const handleData = (data: Buffer) => {
       const inputText = data.toString("utf8");
+      // Escape sequences (starting with \x1b) are terminal control codes for arrow keys,
+      // function keys, and mouse events - these are real-time user interactions, not pastes
       const isEscapeSequence = inputText.startsWith("\x1b");
-      if ((inputText.length > 1 || inputText.includes("\n")) && isEscapeSequence === false) {
+      // Heuristic: if the input is large or contains newlines, consider it a paste and buffer it
+      // We buffer pastes to handle them atomically after the paste operation completes
+      // Once paste starts, continue buffering all chunks (even small ones) until timeout
+      if ((inputText.length > 1000 || pasteBufferRef.current.length > 0) && !isEscapeSequence) {
         skipUseInputRef.current = true;
         pasteBufferRef.current += inputText;
         if (pasteTimeoutRef.current !== undefined) {
           clearTimeout(pasteTimeoutRef.current);
         }
         pasteTimeoutRef.current = setTimeout(() => {
+          // Normalize line endings to \n for consistent processing across platforms
+          // (Windows uses \r\n, old Mac uses \r, Unix uses \n)
           const normalizedContent = pasteBufferRef.current
             .replace(/\r\n/g, "\n")
             .replace(/\r/g, "\n");
@@ -128,11 +140,14 @@ export function useBufferedPasteDetection({
 
     return () => {
       stdin.off("data", handleData);
+      if (wasRaw === false) {
+        setRawMode(false);
+      }
       if (pasteTimeoutRef.current !== undefined) {
         clearTimeout(pasteTimeoutRef.current);
       }
     };
-  }, [stdin, onPaste, pasteDelayMs]);
+  }, [stdin, onPaste, pasteDelayMs, setRawMode]);
 
   return skipUseInputRef;
 }

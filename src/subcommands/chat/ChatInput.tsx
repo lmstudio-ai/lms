@@ -1,6 +1,6 @@
-import { Box, useInput, useStdin } from "ink";
-import { type ChatUserInputState } from "./types.js";
-import { type Dispatch, type SetStateAction } from "react";
+import { Box, useInput } from "ink";
+import { type Dispatch, type SetStateAction, useMemo } from "react";
+import { renderInputLine } from "./chatInputRendering.js";
 import {
   deleteCharacterBeforeCursor,
   insertTextAtCursor,
@@ -10,7 +10,7 @@ import {
   splitLargePasteSegmentAtCursor,
 } from "./chatInputStateReducers.js";
 import { useBufferedPasteDetection } from "./hooks.js";
-import { renderInputLine } from "./chatInputRendering.js";
+import { type ChatUserInputState } from "./types.js";
 
 interface ChatInputProps {
   inputState: ChatUserInputState;
@@ -46,8 +46,7 @@ export const ChatInput = ({
   onPaste,
 }: ChatInputProps) => {
   const segmentInWhichCursorIsLocated = inputState.segments[inputState.cursorOnSegmentIndex];
-  const { stdin } = useStdin();
-  const skipUseInputRef = useBufferedPasteDetection({ stdin, onPaste });
+  const skipUseInputRef = useBufferedPasteDetection({ onPaste });
 
   useInput((inputCharacter, key) => {
     if (skipUseInputRef.current === true) {
@@ -91,6 +90,9 @@ export const ChatInput = ({
     }
 
     if (key.backspace === true || key.delete === true) {
+      if (inputState.cursorOnSegmentIndex === 0 && inputState.cursorInSegmentOffset === 0) {
+        return;
+      }
       if (segmentInWhichCursorIsLocated.type === "largePaste") {
         setUserInputState(previousState => removeCurrentLargePasteSegment(previousState));
       } else {
@@ -138,38 +140,41 @@ export const ChatInput = ({
     }
   });
 
-  let fullText = "";
-  let cursorPosition = 0;
-  const pasteRanges: Array<{ start: number; end: number }> = [];
+  const { fullText, cursorPosition, pasteRanges } = useMemo(() => {
+    let fullText = "";
+    let cursorPosition = 0;
+    const pasteRanges: Array<{ start: number; end: number }> = [];
 
-  for (let index = 0; index < inputState.segments.length; index++) {
-    const segment = inputState.segments[index];
+    for (let index = 0; index < inputState.segments.length; index++) {
+      const segment = inputState.segments[index];
 
-    if (segment.type === "largePaste") {
-      const placeholder = `[Pasted ${segment.content.length} characters]`;
-      const startPos = fullText.length;
+      if (segment.type === "largePaste") {
+        const placeholder = `[Pasted ${segment.content.length} characters]`;
+        const startPos = fullText.length;
 
-      if (index < inputState.cursorOnSegmentIndex) {
-        cursorPosition += placeholder.length;
-      } else if (index === inputState.cursorOnSegmentIndex) {
-        cursorPosition += inputState.cursorInSegmentOffset === 0 ? 0 : placeholder.length;
+        if (index < inputState.cursorOnSegmentIndex) {
+          cursorPosition += placeholder.length;
+        } else if (index === inputState.cursorOnSegmentIndex) {
+          cursorPosition += inputState.cursorInSegmentOffset === 0 ? 0 : placeholder.length;
+        }
+
+        fullText += placeholder;
+        pasteRanges.push({ start: startPos, end: fullText.length });
+      } else {
+        if (index < inputState.cursorOnSegmentIndex) {
+          cursorPosition += segment.content.length;
+        } else if (index === inputState.cursorOnSegmentIndex) {
+          cursorPosition += inputState.cursorInSegmentOffset;
+        }
+
+        fullText += segment.content;
       }
-
-      fullText += placeholder;
-      pasteRanges.push({ start: startPos, end: fullText.length });
-    } else {
-      if (index < inputState.cursorOnSegmentIndex) {
-        cursorPosition += segment.content.length;
-      } else if (index === inputState.cursorOnSegmentIndex) {
-        cursorPosition += inputState.cursorInSegmentOffset;
-      }
-
-      fullText += segment.content;
     }
-  }
 
-  const inputLines = fullText.split("\n");
+    return { fullText, cursorPosition, pasteRanges };
+  }, [inputState]);
 
+  const inputLines = useMemo(() => fullText.split("\n"), [fullText]);
   return (
     <Box flexWrap="wrap" flexDirection="column" width={"100%"}>
       {inputLines.map((lineText, lineIndex) =>

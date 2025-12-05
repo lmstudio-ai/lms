@@ -1,14 +1,16 @@
-import { useState, useRef, useEffect } from "react";
-import { Box, Text, useApp } from "ink";
 import { type LLM, type LMStudioClient, Chat } from "@lmstudio/sdk";
-import { SlashCommandHandler } from "./SlashCommandHandler.js";
-import { useModels, useSortedSuggestions, useSuggestionsPerPage } from "./hooks.js";
-import { displayVerboseStats, trimNewlines } from "./util.js";
-import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
-import { DEFAULT_SYSTEM_PROMPT } from "./index.js";
+import { Box, Text, useApp } from "ink";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatInput } from "./ChatInput.js";
+import { ChatMessagesList } from "./ChatMessagesList.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
+import { SlashCommandHandler } from "./SlashCommandHandler.js";
 import { insertPasteAtCursor, insertSuggestionAtCursor } from "./chatInputStateReducers.js";
+import { useModels, useSortedSuggestions, useSuggestionsPerPage } from "./hooks.js";
+import { DEFAULT_SYSTEM_PROMPT } from "./index.js";
+import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
+import { displayVerboseStats } from "./util.js";
+import { PartialMessage } from "./PartialMessage.js";
 
 interface ChatComponentProps {
   client: LMStudioClient;
@@ -30,551 +32,506 @@ const emptyChatInputState: ChatUserInputState = {
   cursorInSegmentOffset: 0,
 };
 
-export const ChatComponent = ({ client, llm, chat, onExit, opts }: ChatComponentProps) => {
-  const { exit } = useApp();
-  const [messages, setMessages] = useState<InkChatMessage[]>([
-    {
-      type: "welcome",
-    },
-  ]);
-  const [userInputState, setUserInputState] = useState<ChatUserInputState>(emptyChatInputState);
-  const [isPredicting, setIsPredicting] = useState(false);
-  const [, setRenderTrigger] = useState(0);
-  const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [confirmReload, setConfirmReload] = useState<{
-    userInput: ChatUserInputState;
-    modelKey: string;
-  } | null>(null);
-  const streamingContentRef = useRef("");
-  const reasoningStreamingContentRef = useRef("");
-  const abortControllerRef = useRef<AbortController | null>(opts?.abortController ?? null);
-  const chatRef = useRef<Chat>(chat);
-  const llmRef = useRef<LLM | null>(llm ?? null);
-  const models = useModels(client, llmRef.current !== null ? llmRef.current.identifier : null);
-  const sortedSuggestions = useSortedSuggestions(suggestions);
-  const suggestionsPerPage = useSuggestionsPerPage(messages);
-  const areSuggestionsVisible = sortedSuggestions.length > 0;
-  const modelName = llmRef.current?.displayName ?? null;
-  const lastSegment = [...userInputState.segments]
-    .reverse()
-    .find(segment => segment.type === "text");
+export const ChatComponent = React.memo(
+  ({ client, llm, chat, onExit, opts }: ChatComponentProps) => {
+    const { exit } = useApp();
+    const [messages, setMessages] = useState<InkChatMessage[]>([
+      {
+        type: "welcome",
+      },
+    ]);
 
-  const lastSegmentInputSegment = lastSegment?.content ?? "";
-  const logInChat = (logText: string) => {
-    setMessages(previousMessages => [...previousMessages, { type: "log", content: logText }]);
-  };
-  const logErrorInChat = (errorText: string) => {
-    setMessages(previousMessages => [...previousMessages, { type: "error", content: errorText }]);
-  };
+    const [userInputState, setUserInputState] = useState<ChatUserInputState>(emptyChatInputState);
+    const [isPredicting, setIsPredicting] = useState(false);
+    const [, setRenderTrigger] = useState(0);
+    const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
+    const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+    const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+    const [confirmReload, setConfirmReload] = useState<{
+      userInput: ChatUserInputState;
+      modelKey: string;
+    } | null>(null);
+    const streamingContentRef = useRef("");
+    const reasoningStreamingContentRef = useRef("");
+    const promptProcessingProgressRef = useRef(-1);
+    const abortControllerRef = useRef<AbortController | null>(opts?.abortController ?? null);
+    const chatRef = useRef<Chat>(chat);
+    const llmRef = useRef<LLM | null>(llm ?? null);
+    const models = useModels(client, llmRef.current !== null ? llmRef.current.identifier : null);
+    const sortedSuggestions = useSortedSuggestions(suggestions);
+    const suggestionsPerPage = useSuggestionsPerPage(messages);
+    const areSuggestionsVisible = useMemo(() => sortedSuggestions.length > 0, [sortedSuggestions]);
 
-  useEffect(() => {
-    // Setup slash command handler
-    commandHandler.register({
-      name: "help",
-      description: "Show help information",
-      handler: async () => {
-        const helpText = `Available commands:
+    // const reRenderCounter = useRef(0);
+
+    const lastSegmentInputSegment = useMemo(() => {
+      const lastSegment = [...userInputState.segments]
+        .reverse()
+        .find(segment => segment.type === "text");
+      return lastSegment?.content ?? "";
+    }, [userInputState.segments]);
+
+    const logInChat = useCallback((logText: string) => {
+      setMessages(previousMessages => [...previousMessages, { type: "log", content: logText }]);
+    }, []);
+
+    const logErrorInChat = useCallback((errorText: string) => {
+      setMessages(previousMessages => [...previousMessages, { type: "error", content: errorText }]);
+    }, []);
+
+    useEffect(() => {
+      // Setup slash command handler
+      commandHandler.register({
+        name: "help",
+        description: "Show help information",
+        handler: async () => {
+          const helpText = `Available commands:
 /exit - Exit the chat
 /model [model_key] - Load a model (type /model to see list)
 /clear - Clear the chat history
 /system-prompt [prompt] - Set the system prompt
 /help - Show this help information
 `;
-        setMessages(previousMessages => [...previousMessages, { type: "help", content: helpText }]);
-      },
-    });
-
-    commandHandler.register({
-      name: "exit",
-      description: "Exit the chat",
-      handler: async () => {
-        onExit();
-        exit();
-      },
-    });
-
-    commandHandler.register({
-      name: "model",
-      description: "Load a model (type /model to see list)",
-      handler: async args => {
-        if (args.length === 0) {
-          logInChat("Please specify a model to load. Type /model to see the list.");
-          return;
-        }
-
-        const modelKey = args.join(" ");
-
-        if (llmRef.current !== null && modelKey === llmRef.current.modelKey) {
-          return;
-        }
-
-        setModelLoadingProgress(0);
-        try {
-          llmRef.current = await client.llm.model(modelKey, {
-            verbose: false,
-            ttl: opts?.ttl,
-            onProgress(progress) {
-              setModelLoadingProgress(progress);
-            },
-          });
-          logInChat(`Model loaded: ${llmRef.current.displayName}`);
-        } catch (error) {
-          console.error(`Failed to load model: ${(error as Error).message}`);
-        } finally {
-          setModelLoadingProgress(null);
-        }
-      },
-    });
-
-    commandHandler.register({
-      name: "clear",
-      description: "Clear the chat history",
-      handler: async () => {
-        setMessages([]);
-        setUserInputState(emptyChatInputState);
-        // We clear the entire chat and just use the default system prompt
-        chatRef.current = Chat.empty();
-        chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
-      },
-    });
-
-    commandHandler.register({
-      name: "system-prompt",
-      description: "Set the system prompt",
-      handler: async args => {
-        const prompt = args.join(" ");
-        if (prompt.length === 0) {
-          logInChat("Please provide a system prompt.");
-          return;
-        }
-
-        const newChat = chatRef.current.asMutableCopy();
-        newChat.append("system", prompt);
-        logInChat("System prompt updated to: " + prompt);
-        chatRef.current = newChat;
-      },
-    });
-  }, [exit, onExit, client, opts?.ttl]);
-
-  useEffect(() => {
-    const input = lastSegmentInputSegment;
-    if (input.startsWith("/") && !isPredicting && confirmReload === null) {
-      const commandPart = input.slice(1).toLowerCase();
-
-      // Check if typing /model with space - show model list
-      // only show models if input is exactly "/model " or starts with "/model " and has more text
-      if (input.startsWith("/model ") && input.split(" ").length === 2) {
-        const modelFilter = input.slice(6).trim().toLowerCase();
-        const filtered = models.filter(model => model.modelKey.toLowerCase().includes(modelFilter));
-        setSuggestions(filtered.map(model => ({ type: "model", data: model })));
-        setSelectedSuggestionIndex(0);
-      } else {
-        const filtered = commandHandler
-          .list()
-          .filter(cmd => cmd.name.toLowerCase().startsWith(commandPart));
-        setSuggestions(filtered.map(cmd => ({ type: "command", data: cmd })));
-        setSelectedSuggestionIndex(0);
-      }
-    } else {
-      setSuggestions([]);
-    }
-  }, [lastSegmentInputSegment, isPredicting, client, models, confirmReload]);
-
-  // Input handling and rendering is delegated to ChatInput.
-
-  const handleAbortPrediction = () => {
-    if (abortControllerRef.current !== null) {
-      abortControllerRef.current.abort();
-    }
-    setIsPredicting(false);
-  };
-
-  const handleExit = () => {
-    onExit();
-    exit();
-  };
-
-  const handleSuggestionsUp = () => {
-    setSelectedSuggestionIndex(previousIndex => Math.max(0, previousIndex - 1));
-  };
-
-  const handleSuggestionsDown = () => {
-    setSelectedSuggestionIndex(previousIndex =>
-      Math.min(sortedSuggestions.length - 1, previousIndex + 1),
-    );
-  };
-
-  const handleSuggestionsPageLeft = () => {
-    const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
-    if (currentPage > 0) {
-      const newIndex = (currentPage - 1) * suggestionsPerPage;
-      setSelectedSuggestionIndex(newIndex);
-    }
-  };
-
-  const handleSuggestionsPageRight = () => {
-    const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
-    const totalPages = Math.ceil(sortedSuggestions.length / suggestionsPerPage);
-    if (currentPage < totalPages - 1) {
-      const newIndex = (currentPage + 1) * suggestionsPerPage;
-      setSelectedSuggestionIndex(newIndex);
-    }
-  };
-
-  const handleSuggestionAccept = () => {
-    if (selectedSuggestionIndex === -1) {
-      return;
-    }
-    const selectedSuggestion = sortedSuggestions[selectedSuggestionIndex];
-    if (selectedSuggestion === undefined) {
-      return;
-    }
-    if (selectedSuggestion.type === "model") {
-      const suggestionText = `/model ${selectedSuggestion.data.modelKey}`;
-      setUserInputState(previousState =>
-        insertSuggestionAtCursor({ state: previousState, suggestionText }),
-      );
-      setSuggestions([]);
-      return;
-    }
-    if (selectedSuggestion.type === "command") {
-      const suggestionText = `/${selectedSuggestion.data.name} `;
-      setUserInputState(previousState =>
-        insertSuggestionAtCursor({ state: previousState, suggestionText }),
-      );
-      setSuggestions([]);
-      return;
-    }
-  };
-
-  const handlePaste = (content: string) => {
-    const normalizedContent = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-
-    if (normalizedContent.length === 0) {
-      return;
-    }
-
-    const LARGE_PASTE_THRESHOLD = 200;
-
-    setUserInputState(previousState =>
-      insertPasteAtCursor({
-        state: previousState,
-        content: normalizedContent,
-        largePasteThreshold: LARGE_PASTE_THRESHOLD,
-      }),
-    );
-  };
-
-  const handleSubmit = async () => {
-    // Collect the full text input from the userInputState
-    const userInputText = userInputState.segments
-      .map(segment => segment.content)
-      .join("")
-      .trim();
-    // Clear the input state
-    setUserInputState(emptyChatInputState);
-    if (confirmReload !== null) {
-      if (userInputText.toLowerCase() === "y" || userInputText.toLowerCase() === "yes") {
-        const { userInput: originalInput, modelKey } = confirmReload;
-        setConfirmReload(null);
-        logInChat("Reloading model...");
-        setModelLoadingProgress(0);
-        try {
-          llmRef.current = await client.llm.model(modelKey, {
-            verbose: false,
-            ttl: opts?.ttl,
-            onProgress(progress) {
-              setModelLoadingProgress(progress);
-            },
-          });
-          logInChat(`Model reloaded: ${llmRef.current.displayName}`);
-          setModelLoadingProgress(null);
-          setUserInputState(originalInput);
-          return;
-        } catch (error) {
-          setModelLoadingProgress(null);
-          logErrorInChat(`Failed to reload model: ${(error as Error).message}`);
-          return;
-        }
-      } else if (userInputText.toLowerCase() === "n" || userInputText.toLowerCase() === "no") {
-        setConfirmReload(null);
-        logInChat("Model reload cancelled.");
-        handleExit();
-        return;
-      } else {
-        logInChat("Please answer 'yes' or 'no'");
-        return;
-      }
-    }
-
-    if (userInputText.length === 0) {
-      return;
-    }
-
-    if (userInputText.startsWith("/")) {
-      const { command, args } = SlashCommandHandler.parseSlashCommand(
-        userInputText,
-        sortedSuggestions[selectedSuggestionIndex],
-      );
-      if (command === null) {
-        return;
-      }
-      const result = await commandHandler.execute(command, args);
-      if (result === false) {
-        logInChat(`Unknown command: ${userInputText}`);
-      }
-      return;
-    }
-
-    if (userInputText === "exit" || userInputText === "quit") {
-      handleExit();
-      return;
-    }
-
-    if (llmRef.current === null || modelName === null) {
-      logErrorInChat("No model loaded. Please load a model using /model [model_key]");
-      return;
-    }
-
-    // If nothing else, proceed with normal message submission
-    setIsPredicting(true);
-    streamingContentRef.current = "";
-    reasoningStreamingContentRef.current = "";
-    if (abortControllerRef.current === null || abortControllerRef.current.signal.aborted === true) {
-      abortControllerRef.current = new AbortController();
-    }
-    const signal = abortControllerRef.current.signal;
-
-    try {
-      chatRef.current.append("user", userInputText);
-      setMessages(previousMessages => [
-        ...previousMessages,
-        {
-          type: "user",
-          content: userInputState.segments.map(s => {
-            if (s.type === "largePaste") {
-              if (s.content.length > 50) {
-                return {
-                  type: "largePaste",
-                  text: `[Pasted ${s.content.slice(0, 50)}...]`,
-                };
-              }
-              return { type: s.type, text: s.content };
-            }
-            return { type: s.type, text: s.content };
-          }),
+          setMessages(previousMessages => [
+            ...previousMessages,
+            { type: "help", content: helpText },
+          ]);
         },
-      ]);
-      const result = await llmRef.current.respond(chatRef.current, {
-        onPredictionFragment(fragment) {
-          if (fragment.isStructural) {
+      });
+
+      commandHandler.register({
+        name: "exit",
+        description: "Exit the chat",
+        handler: async () => {
+          onExit();
+          exit();
+        },
+      });
+
+      commandHandler.register({
+        name: "model",
+        description: "Load a model (type /model to see list)",
+        handler: async args => {
+          if (args.length === 0) {
+            logInChat("Please specify a model to load. Type /model to see the list.");
             return;
           }
-          if (fragment.reasoningType === "none") {
-            streamingContentRef.current += fragment.content;
-            setRenderTrigger(previousTrigger => previousTrigger + 1);
-          } else if (
-            fragment.reasoningType === "reasoningStartTag" ||
-            fragment.reasoningType === "reasoningEndTag"
-          ) {
-            // Ignore reasoning tags
-          } else {
-            reasoningStreamingContentRef.current += fragment.content;
-            setRenderTrigger(previousTrigger => previousTrigger + 1);
-          }
-        },
 
-        onMessage(message) {
-          const assistantMessage: InkChatMessage = {
-            type: "assistant",
-            content: [],
-            displayName: modelName,
-          };
-          if (reasoningStreamingContentRef.current.length > 0) {
-            assistantMessage.content.push({
-              type: "reasoning",
-              text: reasoningStreamingContentRef.current,
-            });
+          const modelKey = args.join(" ");
+
+          if (llmRef.current !== null && modelKey === llmRef.current.modelKey) {
+            return;
           }
-          if (streamingContentRef.current.length > 0) {
-            assistantMessage.content.push({
-              type: "response",
-              text: streamingContentRef.current,
+
+          setModelLoadingProgress(0);
+          try {
+            llmRef.current = await client.llm.model(modelKey, {
+              verbose: false,
+              ttl: opts?.ttl,
+              onProgress(progress) {
+                setModelLoadingProgress(progress);
+              },
             });
+            logInChat(`Model loaded: ${llmRef.current.displayName}`);
+          } catch (error) {
+            console.error(`Failed to load model: ${(error as Error).message}`);
+          } finally {
+            setModelLoadingProgress(null);
           }
-          setMessages(previousMessages => [...previousMessages, assistantMessage]);
-          streamingContentRef.current = "";
-          reasoningStreamingContentRef.current = "";
-          chatRef.current.append(message);
         },
-        signal,
       });
-      if (opts?.stats === true) {
-        displayVerboseStats(result.stats, logInChat);
-      }
-    } catch (error) {
-      if (error instanceof Error) {
-        const errorMessage = error.message.toLowerCase();
-        if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
-          const currentModelKey = llmRef.current.modelKey;
-          logErrorInChat(`${error.message}`);
-          logInChat(`Would you like to reload the model?`);
-          setConfirmReload({ userInput: userInputState, modelKey: currentModelKey });
+
+      commandHandler.register({
+        name: "clear",
+        description: "Clear the chat history",
+        handler: async () => {
+          setMessages([]);
+          setUserInputState(emptyChatInputState);
+          // We clear the entire chat and just use the default system prompt
+          chatRef.current = Chat.empty();
+          chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
+        },
+      });
+
+      commandHandler.register({
+        name: "system-prompt",
+        description: "Set the system prompt",
+        handler: async args => {
+          const prompt = args.join(" ");
+          if (prompt.length === 0) {
+            logInChat("Please provide a system prompt.");
+            return;
+          }
+
+          const newChat = chatRef.current.asMutableCopy();
+          newChat.append("system", prompt);
+          logInChat("System prompt updated to: " + prompt);
+          chatRef.current = newChat;
+        },
+      });
+
+      commandHandler.register({
+        name: "download",
+        description: "Download a model",
+        handler: async args => {
+          if (args.length === 0) {
+            logInChat("Please specify a model to download. Type /model to see the list.");
+            return;
+          }
+          // Implement model downloading logic here
+        },
+      });
+    }, [exit, onExit, client, opts?.ttl, logInChat]);
+
+    useEffect(() => {
+      const input = lastSegmentInputSegment;
+      if (input.startsWith("/") && !isPredicting && confirmReload === null) {
+        const commandPart = input.slice(1).toLowerCase();
+
+        // Check if typing /model with space - show model list
+        // only show models if input is exactly "/model " or starts with "/model " and has more text
+        if (input.startsWith("/model ") && input.split(" ").length === 2) {
+          const modelFilter = input.slice(6).trim().toLowerCase();
+          const filtered = models.filter(model =>
+            model.modelKey.toLowerCase().includes(modelFilter),
+          );
+          setSuggestions(filtered.map(model => ({ type: "model", data: model })));
+          setSelectedSuggestionIndex(0);
         } else {
-          logErrorInChat(`Prediction error: ${error.message}`);
+          const filtered = commandHandler
+            .list()
+            .filter(cmd => cmd.name.toLowerCase().startsWith(commandPart));
+          setSuggestions(filtered.map(cmd => ({ type: "command", data: cmd })));
+          setSelectedSuggestionIndex(0);
+        }
+      } else {
+        setSuggestions([]);
+      }
+    }, [lastSegmentInputSegment, isPredicting, client, models, confirmReload]);
+
+    // Input handling and rendering is delegated to ChatInput.
+
+    const handleAbortPrediction = useCallback(() => {
+      if (abortControllerRef.current !== null) {
+        abortControllerRef.current.abort();
+      }
+      setIsPredicting(false);
+    }, []);
+
+    const handleExit = useCallback(() => {
+      onExit();
+      exit();
+    }, [onExit, exit]);
+
+    const handleSuggestionsUp = useCallback(() => {
+      setSelectedSuggestionIndex(previousIndex => Math.max(0, previousIndex - 1));
+    }, []);
+
+    const handleSuggestionsDown = useCallback(() => {
+      setSelectedSuggestionIndex(previousIndex =>
+        Math.min(sortedSuggestions.length - 1, previousIndex + 1),
+      );
+    }, [sortedSuggestions.length]);
+
+    const handleSuggestionsPageLeft = useCallback(() => {
+      const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
+      if (currentPage > 0) {
+        const newIndex = (currentPage - 1) * suggestionsPerPage;
+        setSelectedSuggestionIndex(newIndex);
+      }
+    }, [selectedSuggestionIndex, suggestionsPerPage]);
+
+    const handleSuggestionsPageRight = useCallback(() => {
+      const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
+      const totalPages = Math.ceil(sortedSuggestions.length / suggestionsPerPage);
+      if (currentPage < totalPages - 1) {
+        const newIndex = (currentPage + 1) * suggestionsPerPage;
+        setSelectedSuggestionIndex(newIndex);
+      }
+    }, [selectedSuggestionIndex, suggestionsPerPage, sortedSuggestions.length]);
+
+    const handleSuggestionAccept = useCallback(() => {
+      if (selectedSuggestionIndex === -1) {
+        return;
+      }
+      const selectedSuggestion = sortedSuggestions[selectedSuggestionIndex];
+      if (selectedSuggestion === undefined) {
+        return;
+      }
+      if (selectedSuggestion.type === "model") {
+        const suggestionText = `/model ${selectedSuggestion.data.modelKey}`;
+        setUserInputState(previousState =>
+          insertSuggestionAtCursor({ state: previousState, suggestionText }),
+        );
+        setSuggestions([]);
+        return;
+      }
+      if (selectedSuggestion.type === "command") {
+        const suggestionText = `/${selectedSuggestion.data.name} `;
+        setUserInputState(previousState =>
+          insertSuggestionAtCursor({ state: previousState, suggestionText }),
+        );
+        setSuggestions([]);
+        return;
+      }
+    }, [selectedSuggestionIndex, sortedSuggestions]);
+
+    const handlePaste = useCallback((content: string) => {
+      const normalizedContent = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+      if (normalizedContent.length === 0) {
+        return;
+      }
+
+      const LARGE_PASTE_THRESHOLD = 200;
+
+      setUserInputState(previousState =>
+        insertPasteAtCursor({
+          state: previousState,
+          content: normalizedContent,
+          largePasteThreshold: LARGE_PASTE_THRESHOLD,
+        }),
+      );
+    }, []);
+
+    const handleSubmit = useCallback(async () => {
+      // Collect the full text input from the userInputState
+      const userInputText = userInputState.segments
+        .map(segment => segment.content)
+        .join("")
+        .trim();
+      // Clear the input state
+      setUserInputState(emptyChatInputState);
+      if (confirmReload !== null) {
+        if (userInputText.toLowerCase() === "y" || userInputText.toLowerCase() === "yes") {
+          const { userInput: originalInput, modelKey } = confirmReload;
+          setConfirmReload(null);
+          logInChat("Reloading model...");
+          setModelLoadingProgress(0);
+          try {
+            llmRef.current = await client.llm.model(modelKey, {
+              verbose: false,
+              ttl: opts?.ttl,
+              onProgress(progress) {
+                setModelLoadingProgress(progress);
+              },
+            });
+            logInChat(`Model reloaded: ${llmRef.current.displayName}`);
+            setModelLoadingProgress(null);
+            setUserInputState(originalInput);
+            return;
+          } catch (error) {
+            setModelLoadingProgress(null);
+            logErrorInChat(`Failed to reload model: ${(error as Error).message}`);
+            return;
+          }
+        } else if (userInputText.toLowerCase() === "n" || userInputText.toLowerCase() === "no") {
+          setConfirmReload(null);
+          logInChat("Model reload cancelled.");
+          handleExit();
+          return;
+        } else {
+          logInChat("Please answer 'yes' or 'no'");
+          return;
         }
       }
-    } finally {
-      setIsPredicting(false);
-      abortControllerRef.current = null;
-      reasoningStreamingContentRef.current = "";
-      streamingContentRef.current = "";
-    }
-  };
 
-  function renderMessage(message: InkChatMessage) {
-    const type = message.type;
-    switch (type) {
-      case "user":
-        return (
-          <Box flexDirection="row">
-            <Text color="cyan">You: </Text>
-            {message.content.map((part, partIndex) => (
-              <Text
-                key={partIndex}
-                color={part.type === "largePaste" && part.text.length > 50 ? "blue" : undefined}
-              >
-                {trimNewlines(part.text)}
-              </Text>
-            ))}
-          </Box>
-        );
-
-      case "assistant":
-        return (
-          <Box marginBottom={1} flexDirection="column">
-            <Text color="magenta">{message.displayName}:</Text>
-            {message.content.map((part, partIndex) => (
-              <Text key={partIndex} color={part.type === "reasoning" ? "gray" : undefined}>
-                {trimNewlines(part.text)}
-              </Text>
-            ))}
-          </Box>
-        );
-
-      case "help":
-        return (
-          <Box marginBottom={1} flexDirection="column">
-            <Text color="green">Help:</Text>
-            <Text>{trimNewlines(message.content)}</Text>
-          </Box>
-        );
-      case "log":
-        return (
-          <Box marginBottom={1} flexDirection="column">
-            <Text color="yellow">{trimNewlines(message.content)}</Text>
-          </Box>
-        );
-      case "error":
-        return (
-          <Box marginBottom={1} flexDirection="column">
-            <Text color="red">{trimNewlines(message.content)}</Text>
-          </Box>
-        );
-      case "welcome":
-        return (
-          <Box marginBottom={1} marginLeft={1} flexDirection="column">
-            <Box paddingX={1} borderStyle={"round"} borderColor={"magenta"} flexDirection="column">
-              <Text color={"gray"}>👾 lms chat v0.42 </Text>
-              <Text>
-                Chatting with {modelName}. Type <Text bold>exit</Text> or Ctrl+C to quit.
-              </Text>
-              <Box marginTop={1} flexDirection="column">
-                <Text color={"gray"}>Try one of the following commands:</Text>
-                <Text color="gray">/help - Show help information</Text>
-                <Text color={"gray"}>
-                  /model [model_key] - Load a model (type /model to see list)
-                </Text>
-                <Text color="gray">/clear - Clear the chat history</Text>
-              </Box>
-            </Box>
-          </Box>
-        );
-      default: {
-        const exhaustiveCheck: never = type;
-        throw new Error(`Unhandled message type: ${exhaustiveCheck}`);
+      if (userInputText.length === 0) {
+        return;
       }
-    }
-  }
 
-  function renderSuggestions() {
-    if (sortedSuggestions.length === 0) {
-      return null;
-    }
+      if (userInputText.startsWith("/")) {
+        const { command, args } = SlashCommandHandler.parseSlashCommand(
+          userInputText,
+          sortedSuggestions[selectedSuggestionIndex],
+        );
+        if (command === null) {
+          return;
+        }
+        const result = await commandHandler.execute(command, args);
+        if (result === false) {
+          logInChat(`Unknown command: ${userInputText}`);
+        }
+        return;
+      }
+
+      if (userInputText === "exit" || userInputText === "quit") {
+        handleExit();
+        return;
+      }
+
+      if (llmRef.current === null) {
+        logErrorInChat("No model loaded. Please load a model using /model [model_key]");
+        return;
+      }
+
+      // If nothing else, proceed with normal message submission
+      setIsPredicting(true);
+      streamingContentRef.current = "";
+      reasoningStreamingContentRef.current = "";
+      if (
+        abortControllerRef.current === null ||
+        abortControllerRef.current.signal.aborted === true
+      ) {
+        abortControllerRef.current = new AbortController();
+      }
+      const signal = abortControllerRef.current.signal;
+
+      try {
+        chatRef.current.append("user", userInputText);
+        setMessages(previousMessages => [
+          ...previousMessages,
+          {
+            type: "user",
+            content: userInputState.segments.map(s => {
+              if (s.type === "largePaste") {
+                if (s.content.length > 50) {
+                  return {
+                    type: "largePaste",
+                    text: `[Pasted ${s.content.slice(0, 50)}...]`,
+                  };
+                }
+                return { type: s.type, text: s.content };
+              }
+              return { type: s.type, text: s.content };
+            }),
+          },
+        ]);
+        const result = await llmRef.current.respond(chatRef.current, {
+          onPromptProcessingProgress(progress) {
+            if (progress === 1) {
+              promptProcessingProgressRef.current = -1;
+            } else if (progress !== promptProcessingProgressRef.current) {
+              promptProcessingProgressRef.current = progress;
+            }
+          },
+          onPredictionFragment(fragment) {
+            if (fragment.isStructural) {
+              return;
+            }
+            if (fragment.reasoningType === "none") {
+              streamingContentRef.current += fragment.content;
+              setRenderTrigger(previousTrigger => previousTrigger + 1);
+            } else if (
+              fragment.reasoningType === "reasoningStartTag" ||
+              fragment.reasoningType === "reasoningEndTag"
+            ) {
+              // Ignore reasoning tags
+            } else {
+              reasoningStreamingContentRef.current += fragment.content;
+              setRenderTrigger(previousTrigger => previousTrigger + 1);
+            }
+          },
+
+          onMessage(message) {
+            const assistantMessage: InkChatMessage = {
+              type: "assistant",
+              content: [],
+              displayName: llmRef.current?.displayName ?? "Assistant",
+            };
+            if (reasoningStreamingContentRef.current.length > 0) {
+              assistantMessage.content.push({
+                type: "reasoning",
+                text: reasoningStreamingContentRef.current,
+              });
+            }
+            if (streamingContentRef.current.length > 0) {
+              assistantMessage.content.push({
+                type: "response",
+                text: streamingContentRef.current,
+              });
+            }
+            setMessages(previousMessages => [...previousMessages, assistantMessage]);
+            streamingContentRef.current = "";
+            reasoningStreamingContentRef.current = "";
+            chatRef.current.append(message);
+          },
+          signal,
+        });
+        if (opts?.stats === true) {
+          displayVerboseStats(result.stats, logInChat);
+        }
+      } catch (error) {
+        if (error instanceof Error) {
+          const errorMessage = error.message.toLowerCase();
+          if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
+            const currentModelKey = llmRef.current.modelKey;
+            logErrorInChat(`${error.message}`);
+            logInChat(`Would you like to reload the model?`);
+            setConfirmReload({ userInput: userInputState, modelKey: currentModelKey });
+          } else {
+            logErrorInChat(`Prediction error: ${error.message}`);
+          }
+        }
+      } finally {
+        setIsPredicting(false);
+        abortControllerRef.current = null;
+        reasoningStreamingContentRef.current = "";
+        streamingContentRef.current = "";
+      }
+    }, [
+      client,
+      confirmReload,
+      handleExit,
+      logErrorInChat,
+      logInChat,
+      opts?.stats,
+      opts?.ttl,
+      selectedSuggestionIndex,
+      sortedSuggestions,
+      userInputState,
+    ]);
+
+    const renderSuggestions = useCallback(() => {
+      if (sortedSuggestions.length === 0) {
+        return null;
+      }
+
+      return (
+        <ChatSuggestions
+          suggestions={sortedSuggestions}
+          selectedSuggestionIndex={selectedSuggestionIndex}
+          suggestionsPerPage={suggestionsPerPage}
+        />
+      );
+    }, [sortedSuggestions, selectedSuggestionIndex, suggestionsPerPage]);
 
     return (
-      <ChatSuggestions
-        suggestions={sortedSuggestions}
-        selectedSuggestionIndex={selectedSuggestionIndex}
-        suggestionsPerPage={suggestionsPerPage}
-      />
+      <Box flexDirection="column" width={"90%"} flexWrap="wrap">
+        <ChatMessagesList messages={messages} modelName={llmRef.current?.displayName ?? null} />
+        {isPredicting &&
+          llmRef.current !== undefined &&
+          llmRef.current?.displayName !== undefined && (
+            <PartialMessage
+              modelName={llmRef.current?.displayName}
+              reasoningContent={reasoningStreamingContentRef.current}
+              streamingContent={streamingContentRef.current}
+              promptProcessingProgress={promptProcessingProgressRef.current}
+            />
+          )}
+        {modelLoadingProgress !== null && (
+          <Box marginBottom={1}>
+            <Text color="yellow">Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
+          </Box>
+        )}
+        <ChatInput
+          inputState={userInputState}
+          isPredicting={isPredicting}
+          isConfirmReloadActive={confirmReload !== null}
+          areSuggestionsVisible={areSuggestionsVisible}
+          setUserInputState={setUserInputState}
+          onSubmit={handleSubmit}
+          onAbortPrediction={handleAbortPrediction}
+          onExit={handleExit}
+          onSuggestionsUp={handleSuggestionsUp}
+          onSuggestionsDown={handleSuggestionsDown}
+          onSuggestionsPageLeft={handleSuggestionsPageLeft}
+          onSuggestionsPageRight={handleSuggestionsPageRight}
+          onSuggestionAccept={handleSuggestionAccept}
+          onPaste={handlePaste}
+        />
+        {renderSuggestions()}
+      </Box>
     );
-  }
-
-  return (
-    <Box flexDirection="column" width={"90%"} flexWrap="wrap">
-      {/*<Box>
-        <Text>
-          Debug:{" "}
-          {JSON.stringify({
-            ...userInputState,
-            segments: userInputState.segments.map(s => {
-              if (s.type === "largePaste") {
-                return { ...s, content: `[Pasted ${s.content.length} characters]` };
-              }
-              return s;
-            }),
-          })}
-        </Text>
-      </Box>*/}
-      {messages.map((message, index) => (
-        <Box key={index}>{renderMessage(message)}</Box>
-      ))}
-      {isPredicting && (
-        <Box marginBottom={1} flexDirection="column">
-          <Text color="magenta">{modelName}:</Text>
-          {reasoningStreamingContentRef.current.length > 0 && (
-            <Text color="gray">{trimNewlines(reasoningStreamingContentRef.current)}</Text>
-          )}
-          {streamingContentRef.current.length > 0 && (
-            <Text>{trimNewlines(streamingContentRef.current)}</Text>
-          )}
-        </Box>
-      )}
-      {modelLoadingProgress !== null && (
-        <Box marginBottom={1}>
-          <Text color="yellow">Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
-        </Box>
-      )}
-      <ChatInput
-        inputState={userInputState}
-        isPredicting={isPredicting}
-        isConfirmReloadActive={confirmReload !== null}
-        areSuggestionsVisible={areSuggestionsVisible}
-        setUserInputState={setUserInputState}
-        onSubmit={handleSubmit}
-        onAbortPrediction={handleAbortPrediction}
-        onExit={handleExit}
-        onSuggestionsUp={handleSuggestionsUp}
-        onSuggestionsDown={handleSuggestionsDown}
-        onSuggestionsPageLeft={handleSuggestionsPageLeft}
-        onSuggestionsPageRight={handleSuggestionsPageRight}
-        onSuggestionAccept={handleSuggestionAccept}
-        onPaste={handlePaste}
-      />
-      {renderSuggestions()}
-    </Box>
-  );
-};
+  },
+);

@@ -158,7 +158,9 @@ export async function startInteractiveChat(
   llm?: LLM,
 ): Promise<void> {
   return new Promise<void>(resolve => {
-    render(<ChatComponent client={client} llm={llm} chat={chat} opts={opts} onExit={resolve} />);
+    render(<ChatComponent client={client} llm={llm} chat={chat} opts={opts} onExit={resolve} />, {
+      exitOnCtrlC: false,
+    });
   });
 }
 
@@ -221,6 +223,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       },
       llm,
     );
+    return;
   }
   if (model !== undefined && model !== "") {
     try {
