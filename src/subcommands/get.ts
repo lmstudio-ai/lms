@@ -597,32 +597,18 @@ async function artifactDownloadPlanToString(
   switch (nodeType) {
     case "artifact": {
       // Logic to print artifact node.
-      let message: string;
+      let message: string = "";
       const nodeState = node.state;
       const artifactName = `${node.owner}/${node.name}`;
       switch (nodeState) {
-        case "pending": {
-          message = `⧗ ${artifactName} - Pending...`;
-          break;
-        }
-        case "fetching": {
-          message = `${spinnerFrames[(spinnerFrame + currentNodeIndex) % spinnerFrames.length]} ${artifactName} ${chalk.gray("- Resolving...")}`;
-          break;
-        }
-        case "satisfied": {
-          message = `${chalk.green("✓ Satisfied")} ${artifactName}`;
-          break;
-        }
         case "completed": {
           message =
             `${toDownloadText} ` +
-            `${node.artifactType} ${artifactName} - ` +
-            `${formatSizeBytesWithColor1000(node.sizeBytes ?? 0)}`;
+            `${node.artifactType === "model" ? "model.yaml" : node.artifactType} ${artifactName}` +
+            (node.artifactType !== "model"
+              ? ` - ${formatSizeBytesWithColor1000(node.sizeBytes ?? 0)}`
+              : "");
           break;
-        }
-        default: {
-          const exhaustiveCheck: never = nodeState;
-          throw new Error(`Unexpected node state: ${exhaustiveCheck}`);
         }
       }
       lines.push(selfPrefix + message);
@@ -642,26 +628,9 @@ async function artifactDownloadPlanToString(
       break;
     }
     case "model": {
-      let message: string;
+      let message: string = "";
       const nodeState = node.state;
       switch (nodeState) {
-        case "pending": {
-          message = `⧗ Concrete Model - Pending...`;
-          break;
-        }
-        case "fetching": {
-          message = `${spinnerFrames[(spinnerFrame + currentNodeIndex) % spinnerFrames.length]} ${chalk.gray(`Finding options based on your system... (${node.resolvedSources}/${node.totalSources})`)}`;
-          break;
-        }
-        case "satisfied": {
-          const owned = node.alreadyOwned;
-          if (owned === undefined) {
-            message = `${chalk.green("✓ Satisfied")} Unknown`;
-          } else {
-            message = `${chalk.green("✓ Satisfied")} ${modelToString(owned)}`;
-          }
-          break;
-        }
         case "completed": {
           const selected = node.selected;
           if (selected === undefined) {
@@ -673,10 +642,6 @@ async function artifactDownloadPlanToString(
               `${formatSizeBytesWithColor1000(selected.sizeBytes)}`;
           }
           break;
-        }
-        default: {
-          const exhaustiveCheck: never = nodeState;
-          throw new Error(`Unexpected node state: ${exhaustiveCheck}`);
         }
       }
       lines.push(selfPrefix + message);
@@ -717,10 +682,10 @@ export async function downloadArtifact(
     }
     const lines: Array<string> = [];
     const spinnerFrame = Math.floor(Date.now() / 100) % spinnerFrames.length;
-    artifactDownloadPlanToString(downloadPlan, lines, spinnerFrame, 0, "   ", "  ");
-    lines.push("");
 
     if (isFinished) {
+      artifactDownloadPlanToString(downloadPlan, lines, spinnerFrame, 0, "   ", "  ");
+      lines.push("");
       if (downloadPlan.downloadSizeBytes !== 0) {
         if (yes) {
           lines.push(
@@ -737,21 +702,10 @@ export async function downloadArtifact(
         }
       }
     } else {
-      if (downloadPlan.downloadSizeBytes > 0) {
-        lines.push(
-          chalk.gray(
-            spinnerFrames[spinnerFrame] +
-              ` Resolving download plan... (${formatSizeBytes1000(downloadPlan.downloadSizeBytes)})`,
-          ),
-        );
-      } else {
-        lines.push(
-          chalk.gray(
-            spinnerFrames[(spinnerFrame + 5) % spinnerFrames.length] +
-              " Resolving download plan...",
-          ),
-        );
-      }
+      lines.push(
+        `   ${spinnerFrames[spinnerFrame % spinnerFrames.length]} ${owner}/${name} ${chalk.gray("- Resolving...")}`,
+      );
+      lines.push("");
     }
 
     linesToClear = Math.max(lines.length, linesToClear);
