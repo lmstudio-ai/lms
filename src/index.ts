@@ -122,6 +122,10 @@ function createHelpConfiguration(maxWidth: number, helpMessageGap: number): Help
       return `${" ".repeat(HELP_MESSAGE_PADDING_LEFT)}${paddedName}`;
     },
     argumentDescription: (argument: { description?: string }) => argument.description ?? "",
+    visibleCommands(cmd) {
+      // @ts-expect-error - Commander.js types don't include the _hidden property, but it exists at runtime
+      return cmd.commands.filter(command => command._hidden !== true);
+    },
   };
 }
 
@@ -146,7 +150,7 @@ function applyHelpConfigurationRecursively(
 }
 
 program.name("lms");
-program.helpCommand(false);
+program.helpCommand(true);
 
 // Add a hidden global version option (-v/--version) that prints and exits without cluttering help
 program.addOption(new Option("-v, --version", "Print the version of the CLI").hideHelp());
