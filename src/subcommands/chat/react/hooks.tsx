@@ -262,7 +262,6 @@ export function useDownloadCommand({
   onError,
   requestConfirmation,
   shouldFetchModelCatalog,
-  refreshDownloadedModels,
 }: UseDownloadCommandOpts) {
   const handleDownloadCommand = useCallback(
     async (commandArguments: string[]) => {
@@ -289,7 +288,6 @@ export function useDownloadCommand({
         onError("Model catalog fetching is disabled. Enable it to use /download command.");
         return;
       }
-
       onLog(`Fetching model details for ${owner}/${name}...`);
 
       const catalogModels = await fetchModelCatalog(client);
@@ -339,9 +337,6 @@ export function useDownloadCommand({
           downloadModelWithProgress(client, payload.owner, payload.name, {
             onComplete: (owner, name) => {
               onLog(`Download completed: ${owner}/${name}`);
-              if (refreshDownloadedModels !== undefined) {
-                refreshDownloadedModels();
-              }
             },
             onError: error => {
               const errorMessage =
@@ -359,7 +354,7 @@ export function useDownloadCommand({
         },
       });
     },
-    [client, onLog, onError, requestConfirmation, shouldFetchModelCatalog, refreshDownloadedModels],
+    [client, onLog, onError, requestConfirmation, shouldFetchModelCatalog],
   );
 
   return { handleDownloadCommand };

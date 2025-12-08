@@ -50,20 +50,20 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
       );
     case "help":
       return (
-        <Box paddingTop={1} flexDirection="column" width={"95%"}>
+        <Box paddingTop={1} flexDirection="column">
           <Text color="green">Help:</Text>
           <Text>{trimNewlines(message.content)}</Text>
         </Box>
       );
     case "log":
       return (
-        <Box paddingTop={1} flexDirection="column" width={"95%"}>
+        <Box paddingTop={1} flexDirection="column">
           <Text color="yellow">{trimNewlines(message.content)}</Text>
         </Box>
       );
     case "error":
       return (
-        <Box paddingTop={1} flexDirection="column" width={"95%"}>
+        <Box paddingTop={1} flexDirection="column">
           <Text color="red">{trimNewlines(message.content)}</Text>
         </Box>
       );
