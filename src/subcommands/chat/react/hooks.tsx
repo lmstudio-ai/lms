@@ -47,7 +47,9 @@ export function useDownloadedModels(
 
   useEffect(() => {
     const fetchModels = async () => {
-      const downloadedModels = await client.system.listDownloadedModels();
+      const downloadedModels = (await client.system.listDownloadedModels()).filter(
+        model => model.type === "llm",
+      );
       const loadedModels = await client.llm.listLoaded();
       const models = downloadedModels.map(model => {
         const loadedCount = loadedModels.filter(
@@ -262,6 +264,7 @@ export function useDownloadCommand({
   onError,
   requestConfirmation,
   shouldFetchModelCatalog,
+  refreshDownloadedModels,
 }: UseDownloadCommandOpts) {
   const handleDownloadCommand = useCallback(
     async (commandArguments: string[]) => {
@@ -337,6 +340,9 @@ export function useDownloadCommand({
           downloadModelWithProgress(client, payload.owner, payload.name, {
             onComplete: (owner, name) => {
               onLog(`Download completed: ${owner}/${name}`);
+              if (refreshDownloadedModels !== undefined) {
+                refreshDownloadedModels();
+              }
             },
             onError: error => {
               const errorMessage =

@@ -74,7 +74,9 @@ export const ChatComponent = React.memo(
     const streamingContentRef = useRef("");
     const reasoningStreamingContentRef = useRef("");
     const promptProcessingProgressRef = useRef(-1);
-    const abortControllerRef = useRef<AbortController | null>(opts?.abortController ?? null);
+    const abortControllerRef = useRef<AbortController | null>(
+      opts?.abortController ?? new AbortController(),
+    );
     const chatRef = useRef<Chat>(chat);
     const llmRef = useRef<LLM | null>(llm ?? null);
     const { downloadedModels, refreshDownloadedModels } = useDownloadedModels(
@@ -178,6 +180,7 @@ export const ChatComponent = React.memo(
                 onProgress(progress) {
                   setModelLoadingProgress(progress);
                 },
+                signal: abortControllerRef.current?.signal,
               });
               logInChat(`Model Selected: ${llmRef.current.displayName}`);
             } catch (error) {
@@ -312,17 +315,20 @@ export const ChatComponent = React.memo(
         addMessage(assistantMessage);
         streamingContentRef.current = "";
         reasoningStreamingContentRef.current = "";
+      } else {
+        logInChat("Prediction aborted by user.");
       }
 
       if (abortControllerRef.current !== null) {
         abortControllerRef.current.abort();
       }
       setIsPredicting(false);
-    }, [addMessage]);
+    }, [addMessage, logInChat]);
 
     const handleExit = useCallback(() => {
       onExit();
       exit();
+      process.exit(0);
     }, [onExit, exit]);
 
     const handlePaste = useCallback((content: string) => {
@@ -418,6 +424,9 @@ export const ChatComponent = React.memo(
         });
         const result = await llmRef.current.respond(chatRef.current, {
           onPromptProcessingProgress(progress) {
+            if (signal.aborted) {
+              return;
+            }
             if (progress === 1) {
               promptProcessingProgressRef.current = -1;
             } else if (progress !== promptProcessingProgressRef.current) {

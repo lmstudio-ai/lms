@@ -170,8 +170,14 @@ export const ChatInput = ({
       {fullText.length === 0 && !isConfirmationActive ? (
         <Box>
           <Text color="cyan">› </Text>
-          <Text inverse>T</Text>
-          <Text>ype a message or use / to use commands</Text>
+          {isPredicting ? (
+            <Text color="gray">Generating response...</Text>
+          ) : (
+            <>
+              <Text inverse>T</Text>
+              <Text>ype a message or use / to use commands</Text>
+            </>
+          )}
         </Box>
       ) : (
         lines.map((lineText, lineIndex) => {

@@ -166,7 +166,10 @@ export async function startInteractiveChat(
         llm={llm}
         chat={chat}
         opts={opts}
-        onExit={resolve}
+        onExit={() => {
+          opts.abortController?.abort();
+          resolve();
+        }}
         shouldFetchModelCatalog={shouldFetchModelCatalog}
       />,
       {
