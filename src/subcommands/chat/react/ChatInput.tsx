@@ -167,23 +167,32 @@ export const ChatInput = ({
 
   return (
     <Box flexDirection="column" width="100%" paddingTop={1}>
-      {lines.map((lineText, lineIndex) => {
-        const lineStartPos = lines.slice(0, lineIndex).join("\n").length + (lineIndex > 0 ? 1 : 0);
-        const isCursorLine = lineIndex === cursorLineIndex;
+      {fullText.length === 0 && !isConfirmationActive ? (
+        <Box>
+          <Text color="cyan">› </Text>
+          <Text inverse>T</Text>
+          <Text>ype a message or use / to use commands</Text>
+        </Box>
+      ) : (
+        lines.map((lineText, lineIndex) => {
+          const lineStartPos =
+            lines.slice(0, lineIndex).join("\n").length + (lineIndex > 0 ? 1 : 0);
+          const isCursorLine = lineIndex === cursorLineIndex;
 
-        return (
-          <Box key={lineIndex} flexWrap="wrap" width="100%">
-            {lineIndex === 0 && isConfirmationActive && <Text color="cyan">(yes/no) </Text>}
-            <Text color="cyan">{lineIndex === 0 ? "› " : "  "}</Text>
-            {renderInputWithCursor({
-              fullText: lineText,
-              cursorPosition: isCursorLine ? cursorColumnIndex : -1,
-              pasteRanges,
-              lineStartPos,
-            })}
-          </Box>
-        );
-      })}
+          return (
+            <Box key={lineIndex} flexWrap="wrap" width="100%">
+              {lineIndex === 0 && isConfirmationActive && <Text color="cyan">(yes/no) </Text>}
+              <Text color="cyan">{lineIndex === 0 ? "› " : "  "}</Text>
+              {renderInputWithCursor({
+                fullText: lineText,
+                cursorPosition: isCursorLine ? cursorColumnIndex : -1,
+                pasteRanges,
+                lineStartPos,
+              })}
+            </Box>
+          );
+        })
+      )}
     </Box>
   );
 };
