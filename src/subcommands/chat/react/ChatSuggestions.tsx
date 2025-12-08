@@ -71,7 +71,7 @@ export const ChatSuggestions = React.memo(
           renderSuggestion(suggestion, visibleSuggestionIndex),
         )}
         {totalPages > 1 && (
-          <Box marginTop={1}>
+          <Box>
             <Text color="gray">
               {Array.from({ length: totalPages }, (_unused, pageIndex) =>
                 pageIndex === currentPage ? "●" : "○",

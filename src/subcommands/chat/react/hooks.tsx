@@ -6,7 +6,7 @@ import {
   type Suggestion,
 } from "./types.js";
 import { type LMStudioClient } from "@lmstudio/sdk";
-import { countMessageLines } from "../util.js";
+import { estimateMessageLinesCount } from "../util.js";
 import { useStdin } from "ink";
 import { downloadModelWithProgress, getDownloadSize } from "../downloadHelpers.js";
 import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
@@ -80,7 +80,7 @@ export function useSuggestionsPerPage(messages: InkChatMessage[]): number {
   });
   const suggestionPerPage = useMemo(() => {
     const reservedLines = messages.reduce((acc, message) => {
-      return acc + countMessageLines(message);
+      return acc + estimateMessageLinesCount(message);
     }, 8); // +6 for input prompt and padding
     return Math.max(5, terminalSize.rows - reservedLines);
   }, [messages, terminalSize.rows]);

@@ -108,13 +108,23 @@ export function trimNewlines(input: string): string {
   return input.replace(/^[\r\n]+|[\r\n]+$/g, "");
 }
 
-export const countMessageLines = (message: InkChatMessage): number => {
+export const estimateMessageLinesCount = (message: InkChatMessage): number => {
   const terminalWidth = process.stdout.columns ?? 80;
 
   const countWrappedLines = (text: string, prefixLength: number = 0): number => {
     const effectiveWidth = terminalWidth - prefixLength;
     if (effectiveWidth <= 0) return 1;
-    return Math.max(1, Math.ceil(text.length / effectiveWidth));
+
+    // Split by newlines first
+    const textLines = text.split("\n");
+    let totalLines = 0;
+
+    for (const line of textLines) {
+      // Each line wraps based on its length
+      totalLines += Math.max(1, Math.ceil(line.length / effectiveWidth));
+    }
+
+    return Math.max(1, totalLines);
   };
 
   const type = message.type;
