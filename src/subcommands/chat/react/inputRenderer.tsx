@@ -1,4 +1,4 @@
-import { Box, Text } from "ink";
+import { Text } from "ink";
 import { type JSX } from "react";
 
 interface PasteRange {
@@ -6,99 +6,80 @@ interface PasteRange {
   end: number;
 }
 
-interface RenderInputLineOpts {
-  lineText: string;
-  lineIndex: number;
+interface RenderInputWithCursorOpts {
   fullText: string;
   cursorPosition: number;
   pasteRanges: PasteRange[];
-  isConfirmationActive: boolean;
+  lineStartPos: number;
 }
 
-export function renderInputLine({
-  lineText,
-  lineIndex,
+export function renderInputWithCursor({
   fullText,
   cursorPosition,
   pasteRanges,
-  isConfirmationActive,
-}: RenderInputLineOpts): JSX.Element {
-  const inputBeforeCursor = fullText.slice(0, cursorPosition);
-  const cursorLineIndex =
-    inputBeforeCursor.length === 0 ? 0 : inputBeforeCursor.split("\n").length - 1;
-  const lastNewlineIndex = inputBeforeCursor.lastIndexOf("\n");
-  const cursorColumnIndex =
-    lastNewlineIndex === -1
-      ? inputBeforeCursor.length
-      : inputBeforeCursor.length - lastNewlineIndex - 1;
+  lineStartPos,
+}: RenderInputWithCursorOpts): JSX.Element {
+  const parts: JSX.Element[] = [];
 
-  const isCursorLine = lineIndex === cursorLineIndex;
-  const shouldShowConfirmationPrefix = isConfirmationActive === true && lineIndex === 0;
-  const promptPrefix = lineIndex === 0 ? "› " : "  ";
-
-  if (isCursorLine === false) {
-    const lineStartPos =
-      fullText.split("\n").slice(0, lineIndex).join("\n").length + (lineIndex > 0 ? 1 : 0);
+  if (cursorPosition === -1) {
+    // No cursor on this line
     const textParts = renderTextWithPasteColor({
-      text: lineText,
+      text: fullText,
       startPos: lineStartPos,
       pasteRanges,
+      keyPrefix: "line",
     });
-
-    return (
-      <Box key={lineIndex} width={"100%"} flexWrap="wrap">
-        {shouldShowConfirmationPrefix === true && <Text color="cyan">(yes/no) </Text>}
-        <Text color="cyan">{promptPrefix}</Text>
-        {textParts}
-      </Box>
-    );
+    parts.push(...textParts);
+    return <>{parts}</>;
   }
 
-  const hasCharacterAtCursor =
-    cursorPosition < fullText.length && cursorColumnIndex < lineText.length;
-  const cursorCharacter = hasCharacterAtCursor ? lineText[cursorColumnIndex] : " ";
-  const beforeCursorText = lineText.slice(0, cursorColumnIndex);
-  const afterCursorText =
-    hasCharacterAtCursor && cursorColumnIndex + 1 <= lineText.length
-      ? lineText.slice(cursorColumnIndex + 1)
-      : "";
-  const lineStartPos =
-    fullText.split("\n").slice(0, lineIndex).join("\n").length + (lineIndex > 0 ? 1 : 0);
-  const beforeParts = renderTextWithPasteColor({
-    text: beforeCursorText,
-    startPos: lineStartPos,
-    pasteRanges,
-  });
-  const afterParts = renderTextWithPasteColor({
-    text: afterCursorText,
-    startPos: lineStartPos + cursorColumnIndex + 1,
-    pasteRanges,
-  });
+  if (cursorPosition > 0) {
+    const beforeText = fullText.slice(0, cursorPosition);
+    const beforeParts = renderTextWithPasteColor({
+      text: beforeText,
+      startPos: lineStartPos,
+      pasteRanges,
+      keyPrefix: "before",
+    });
+    parts.push(...beforeParts);
+  }
 
-  return (
-    <Box key={lineIndex} width={"95%"} flexWrap="wrap">
-      {shouldShowConfirmationPrefix === true && <Text color="cyan">(yes/no) </Text>}
-      <Text color="cyan">{promptPrefix}</Text>
-      {beforeParts}
-      <Text inverse>{cursorCharacter}</Text>
-      {afterParts}
-    </Box>
+  const cursorChar = cursorPosition < fullText.length ? fullText[cursorPosition] : " ";
+  parts.push(
+    <Text key="cursor" inverse>
+      {cursorChar}
+    </Text>,
   );
+
+  if (cursorPosition + 1 < fullText.length) {
+    const afterText = fullText.slice(cursorPosition + 1);
+    const afterParts = renderTextWithPasteColor({
+      text: afterText,
+      startPos: lineStartPos + cursorPosition + 1,
+      pasteRanges,
+      keyPrefix: "after",
+    });
+    parts.push(...afterParts);
+  }
+
+  return <>{parts}</>;
 }
 
 interface RenderTextWithPasteColorOpts {
   text: string;
   startPos: number;
   pasteRanges: PasteRange[];
+  keyPrefix: string;
 }
 
 function renderTextWithPasteColor({
   text,
   startPos,
   pasteRanges,
-}: RenderTextWithPasteColorOpts): JSX.Element | null {
+  keyPrefix,
+}: RenderTextWithPasteColorOpts): JSX.Element[] {
   if (text.length === 0) {
-    return null;
+    return [];
   }
 
   const parts: JSX.Element[] = [];
@@ -114,7 +95,7 @@ function renderTextWithPasteColor({
       const relativeEnd = Math.min(pasteRange.end - startPos, text.length);
       const pasteText = text.slice(currentPos, relativeEnd);
       parts.push(
-        <Text key={currentPos} color="blue">
+        <Text key={`${keyPrefix}-${currentPos}`} color="blue">
           {pasteText}
         </Text>,
       );
@@ -124,10 +105,10 @@ function renderTextWithPasteColor({
       const endPos =
         nextPaste !== undefined ? Math.min(nextPaste.start - startPos, text.length) : text.length;
       const normalText = text.slice(currentPos, endPos);
-      parts.push(<Text key={currentPos}>{normalText}</Text>);
+      parts.push(<Text key={`${keyPrefix}-${currentPos}`}>{normalText}</Text>);
       currentPos = endPos;
     }
   }
 
-  return <>{parts}</>;
+  return parts;
 }

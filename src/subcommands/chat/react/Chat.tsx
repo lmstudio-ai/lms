@@ -179,9 +179,13 @@ export const ChatComponent = React.memo(
                   setModelLoadingProgress(progress);
                 },
               });
-              logInChat(`Model loaded: ${llmRef.current.displayName}`);
+              logInChat(`Model Selected: ${llmRef.current.displayName}`);
             } catch (error) {
-              logErrorInChat(`Failed to load model: ${(error as Error).message}`);
+              const errorMessage =
+                error instanceof Error && error.message !== undefined
+                  ? error.message
+                  : String(error);
+              logErrorInChat(`Failed to load model: ${errorMessage}`);
             } finally {
               setModelLoadingProgress(null);
             }
@@ -200,6 +204,7 @@ export const ChatComponent = React.memo(
           handler: async () => {
             setMessages([]);
             setUserInputState(emptyChatInputState);
+            console.clear();
             chatRef.current = Chat.empty();
             chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
           },
@@ -604,7 +609,7 @@ export const ChatComponent = React.memo(
             />
           )}
         {modelLoadingProgress !== null && (
-          <Box marginBottom={1}>
+          <Box paddingTop={1}>
             <Text color="yellow">Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
           </Box>
         )}

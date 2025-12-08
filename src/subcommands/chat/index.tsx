@@ -56,7 +56,7 @@ export async function getOrAskShouldFetchModelCatalog(
 ): Promise<boolean> {
   const fetchModelCatalogPreference = cliPref.get().fetchModelCatalog;
   let shouldFetchModelCatalog = false;
-  if (dontFetchCatalog !== true && fetchModelCatalogPreference !== false) {
+  if (dontFetchCatalog !== true && fetchModelCatalogPreference !== false && process.stdin.isTTY) {
     if (fetchModelCatalogPreference === undefined) {
       const fetchAnswer = await runPromptWithExitHandling(() =>
         confirm(

@@ -1,6 +1,6 @@
-import { Box, useInput } from "ink";
+import { Box, Text, useInput } from "ink";
 import { type Dispatch, type SetStateAction, useMemo } from "react";
-import { renderInputLine } from "./inputRenderer.js";
+import { renderInputWithCursor } from "./inputRenderer.js";
 import {
   deleteBeforeCursor,
   insertTextAtCursor,
@@ -158,19 +158,32 @@ export const ChatInput = ({
     return { fullText, cursorPosition, pasteRanges };
   }, [inputState]);
 
-  const inputLines = useMemo(() => fullText.split("\n"), [fullText]);
+  const lines = fullText.split("\n");
+  const beforeCursor = fullText.slice(0, cursorPosition);
+  const cursorLineIndex = beforeCursor.split("\n").length - 1;
+  const lastNewlineBeforeCursor = beforeCursor.lastIndexOf("\n");
+  const cursorColumnIndex =
+    lastNewlineBeforeCursor === -1 ? cursorPosition : cursorPosition - lastNewlineBeforeCursor - 1;
+
   return (
-    <Box flexWrap="wrap" flexDirection="column" width={"100%"}>
-      {inputLines.map((lineText, lineIndex) =>
-        renderInputLine({
-          lineText,
-          lineIndex,
-          fullText,
-          cursorPosition,
-          pasteRanges,
-          isConfirmationActive,
-        }),
-      )}
+    <Box flexDirection="column" width="100%" paddingTop={1}>
+      {lines.map((lineText, lineIndex) => {
+        const lineStartPos = lines.slice(0, lineIndex).join("\n").length + (lineIndex > 0 ? 1 : 0);
+        const isCursorLine = lineIndex === cursorLineIndex;
+
+        return (
+          <Box key={lineIndex} flexWrap="wrap" width="100%">
+            {lineIndex === 0 && isConfirmationActive && <Text color="cyan">(yes/no) </Text>}
+            <Text color="cyan">{lineIndex === 0 ? "› " : "  "}</Text>
+            {renderInputWithCursor({
+              fullText: lineText,
+              cursorPosition: isCursorLine ? cursorColumnIndex : -1,
+              pasteRanges,
+              lineStartPos,
+            })}
+          </Box>
+        );
+      })}
     </Box>
   );
 };

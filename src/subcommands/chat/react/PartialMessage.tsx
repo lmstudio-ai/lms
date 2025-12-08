@@ -18,7 +18,7 @@ export const PartialMessage = memo(
     promptProcessingProgress,
   }: PartialMessageProps) => {
     return (
-      <Box flexDirection="column" marginBottom={1} width={"95%"}>
+      <Box flexDirection="column" width={"98%"}>
         <Box>
           <Text color="magenta">{modelName}:</Text>
           {promptProcessingProgress > 0 && <Spinner />}

@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Box } from "ink";
+import { Box, Static } from "ink";
 import type { InkChatMessage } from "./types.js";
 import { ChatMessage } from "./ChatMessages.js";
 
@@ -10,13 +10,11 @@ interface ChatMessagesListProps {
 
 export const ChatMessagesList = memo(({ messages, modelName }: ChatMessagesListProps) => {
   return (
-    <>
-      {messages.map((message, index) => (
-        <Box key={index} width={"95%"} flexDirection="column" flexWrap="wrap">
-          <ChatMessage message={message} modelName={modelName} />
-        </Box>
-      ))}
-    </>
+    <Box width={"98%"} flexDirection="column" flexWrap="wrap">
+      <Static items={messages}>
+        {(message, index) => <ChatMessage key={index} message={message} modelName={modelName} />}
+      </Static>
+    </Box>
   );
 });
 

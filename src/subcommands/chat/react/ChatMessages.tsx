@@ -21,8 +21,8 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
         .join("");
 
       return (
-        <Box marginBottom={1} flexDirection="column" width={"95%"}>
-          <Text>{chalk.cyan("You: ")}</Text>
+        <Box paddingTop={1} flexDirection="row" flexWrap="nowrap" width={"100%"}>
+          <Text color={"cyan"}>You: </Text>
           <Text wrap="wrap">{formattedContent}</Text>
         </Box>
       );
@@ -30,7 +30,7 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
 
     case "assistant":
       return (
-        <Box marginBottom={1} flexDirection="column" width={"100%"}>
+        <Box flexDirection="column" width={"100%"}>
           <Text color="magenta">{message.displayName}:</Text>
           {message.content.map((part, partIndex) => (
             <Box key={partIndex}>
@@ -39,38 +39,44 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
               </Text>
             </Box>
           ))}
-          <Box>{message.stoppedByUser && <Text color="red">[Response stopped by user]</Text>}</Box>
+          {message.stoppedByUser && (
+            <Box>
+              <Text color="red" wrap="truncate">
+                [Response stopped by user]
+              </Text>
+            </Box>
+          )}
         </Box>
       );
     case "help":
       return (
-        <Box marginBottom={1} flexDirection="column" width={"95%"}>
+        <Box paddingTop={1} flexDirection="column" width={"95%"}>
           <Text color="green">Help:</Text>
           <Text>{trimNewlines(message.content)}</Text>
         </Box>
       );
     case "log":
       return (
-        <Box marginBottom={1} flexDirection="column" width={"95%"}>
+        <Box paddingTop={1} flexDirection="column" width={"95%"}>
           <Text color="yellow">{trimNewlines(message.content)}</Text>
         </Box>
       );
     case "error":
       return (
-        <Box marginBottom={1} flexDirection="column" width={"95%"}>
+        <Box paddingTop={1} flexDirection="column" width={"95%"}>
           <Text color="red">{trimNewlines(message.content)}</Text>
         </Box>
       );
     case "welcome":
       return (
-        <Box marginBottom={1} marginLeft={1} flexDirection="column" minWidth={"50%"}>
+        <Box paddingTop={1} marginLeft={1} flexDirection="column" minWidth={"50%"}>
           <Box paddingX={1} borderStyle={"round"} borderColor={"magenta"} flexDirection="column">
             <Text color={"gray"}>👾 lms chat v0.42 </Text>
             <Text>
               {modelName === null ? "Load a model using /model. " : `Chatting with ${modelName}. `}
               Type <Text bold>exit</Text> or Ctrl+C to quit.
             </Text>
-            <Box marginTop={1} flexDirection="column">
+            <Box paddingTop={1} flexDirection="column">
               <Text color={"gray"}>Try one of the following commands:</Text>
               <Text color="gray">/help - Show help information</Text>
               {modelName === null ? (
