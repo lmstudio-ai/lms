@@ -592,25 +592,6 @@ export const ChatComponent = React.memo(
 
     return (
       <Box flexDirection="column" width={"95%"} flexWrap="wrap">
-        <Box>
-          <Text color="green">
-            {JSON.stringify({
-              ...userInputState,
-              segments: userInputState.segments.map(segment => {
-                if (segment.type === "text") {
-                  return { ...segment, content: segment.content };
-                } else if (segment.type === "largePaste") {
-                  return {
-                    ...segment,
-                    content: "[large paste content]" + " " + segment.content.length,
-                  };
-                } else {
-                  return segment;
-                }
-              }),
-            })}
-          </Text>
-        </Box>
         <ChatMessagesList messages={messages} modelName={llmRef.current?.displayName ?? null} />
         {isPredicting &&
           llmRef.current !== undefined &&
