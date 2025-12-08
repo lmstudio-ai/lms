@@ -1,5 +1,5 @@
 import { type LLM, type LMStudioClient, Chat } from "@lmstudio/sdk";
-import { Box, Text, useApp } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
@@ -155,6 +155,7 @@ export const ChatComponent = React.memo(
           handler: async () => {
             onExit();
             exit();
+            process.exit(0);
           },
         },
         {
@@ -222,10 +223,8 @@ export const ChatComponent = React.memo(
               return;
             }
 
-            const newChat = chatRef.current.asMutableCopy();
-            newChat.append("system", prompt);
+            chatRef.current.append("system", prompt);
             logInChat("System prompt updated to: " + prompt);
-            chatRef.current = newChat;
           },
         },
         {
@@ -368,7 +367,7 @@ export const ChatComponent = React.memo(
         return;
       }
 
-      if (userInputText.startsWith("/")) {
+      if (userInputText.startsWith("/") && userInputState.segments.length === 1) {
         const { command, argumentsText } = SlashCommandHandler.parseSlashCommand(
           userInputText,
           sortedSuggestions[selectedSuggestionIndex],
@@ -575,10 +574,16 @@ export const ChatComponent = React.memo(
 
     // Whenever a user inputs something which could be a command, we fetch suggestions.
     useEffect(() => {
+      if (userInputState.segments.length === 0) {
+        if (suggestions.length > 0) {
+          setSuggestions([]);
+        }
+        return;
+      }
       let isCancelled = false;
       const updateSuggestions = async () => {
         const nextSuggestions = await commandHandler.getSuggestions({
-          input: lastSegmentInputSegment,
+          input: userInputState.segments[0].content,
           isPredicting,
           isConfirmationActive,
           models: downloadedModels,
@@ -601,8 +606,9 @@ export const ChatComponent = React.memo(
       fetchDownloadableModelSuggestions,
       isConfirmationActive,
       isPredicting,
-      lastSegmentInputSegment,
+      userInputState,
       downloadedModels,
+      suggestions.length,
     ]);
 
     return (

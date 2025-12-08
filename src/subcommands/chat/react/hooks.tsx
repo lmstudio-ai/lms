@@ -360,7 +360,7 @@ export function useDownloadCommand({
         },
       });
     },
-    [client, onLog, onError, requestConfirmation, shouldFetchModelCatalog],
+    [shouldFetchModelCatalog, onLog, client, requestConfirmation, onError, refreshDownloadedModels],
   );
 
   return { handleDownloadCommand };
