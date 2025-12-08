@@ -86,12 +86,6 @@ export const ChatComponent = React.memo(
     const sortedSuggestions = useSortedSuggestions(suggestions);
     const suggestionsPerPage = useSuggestionsPerPage(messages);
     const areSuggestionsVisible = useMemo(() => sortedSuggestions.length > 0, [sortedSuggestions]);
-    const lastSegmentInputSegment = useMemo(() => {
-      const lastSegment = [...userInputState.segments]
-        .reverse()
-        .find(segment => segment.type === "text");
-      return lastSegment?.content ?? "";
-    }, [userInputState.segments]);
 
     const addMessage = useCallback((message: InkChatMessage) => {
       let index = -1;
