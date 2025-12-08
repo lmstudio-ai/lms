@@ -423,6 +423,9 @@ export const ChatComponent = React.memo(
           }),
         });
         const result = await llmRef.current.respond(chatRef.current, {
+          onFirstToken() {
+            chatRef.current.append("assistant", "");
+          },
           onPromptProcessingProgress(progress) {
             if (signal.aborted) {
               return;
@@ -453,36 +456,34 @@ export const ChatComponent = React.memo(
               reasoningStreamingContentRef.current += fragment.content;
               setRenderTrigger(previousTrigger => previousTrigger + 1);
             }
-          },
-          onMessage(message) {
-            const assistantMessage: InkChatMessage = {
-              type: "assistant",
-              content: [],
-              displayName: llmRef.current?.displayName ?? "Assistant",
-              stoppedByUser: signal.aborted,
-            };
-            if (signal.aborted) {
-              return;
-            }
-            if (reasoningStreamingContentRef.current.length > 0) {
-              assistantMessage.content.push({
-                type: "reasoning",
-                text: reasoningStreamingContentRef.current,
-              });
-            }
-            if (streamingContentRef.current.length > 0) {
-              assistantMessage.content.push({
-                type: "response",
-                text: streamingContentRef.current,
-              });
-            }
-            addMessage(assistantMessage);
-            streamingContentRef.current = "";
-            reasoningStreamingContentRef.current = "";
-            chatRef.current.append(message);
+            chatRef.current.at(-1).appendText(fragment.content);
           },
           signal,
         });
+        const assistantMessage: InkChatMessage = {
+          type: "assistant",
+          content: [],
+          displayName: llmRef.current?.displayName ?? llmRef.current?.modelKey ?? "Assistant",
+          stoppedByUser: signal.aborted,
+        };
+        if (signal.aborted) {
+          return;
+        }
+        if (reasoningStreamingContentRef.current.length > 0) {
+          assistantMessage.content.push({
+            type: "reasoning",
+            text: reasoningStreamingContentRef.current,
+          });
+        }
+        if (streamingContentRef.current.length > 0) {
+          assistantMessage.content.push({
+            type: "response",
+            text: streamingContentRef.current,
+          });
+        }
+        addMessage(assistantMessage);
+        streamingContentRef.current = "";
+        reasoningStreamingContentRef.current = "";
         if (opts?.stats === true) {
           displayVerboseStats(result.stats, logInChat);
         }

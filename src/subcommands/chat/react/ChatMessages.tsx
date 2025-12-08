@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import chalk from "chalk";
 import type { InkChatMessage } from "./types.js";
 import { trimNewlines } from "../util.js";
+import { getVersion } from "../../version.js";
 
 interface ChatMessageProps {
   message: InkChatMessage;
@@ -71,7 +72,7 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
       return (
         <Box paddingTop={1} marginLeft={1} flexDirection="column" minWidth={"50%"}>
           <Box paddingX={1} borderStyle={"round"} borderColor={"magenta"} flexDirection="column">
-            <Text color={"gray"}>👾 lms chat v0.42 </Text>
+            <Text color={"gray"}>👾 lms chat {getVersion()} </Text>
             <Text>
               {modelName === null ? "Load a model using /model. " : `Chatting with ${modelName}. `}
               Type <Text bold>exit</Text> or Ctrl+C to quit.
