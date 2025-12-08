@@ -77,7 +77,7 @@ export const ChatComponent = React.memo(
     const abortControllerRef = useRef<AbortController | null>(opts?.abortController ?? null);
     const chatRef = useRef<Chat>(chat);
     const llmRef = useRef<LLM | null>(llm ?? null);
-    const downloadedModels = useDownloadedModels(
+    const { downloadedModels, refreshDownloadedModels } = useDownloadedModels(
       client,
       llmRef.current !== null ? llmRef.current.identifier : null,
     );
@@ -118,6 +118,7 @@ export const ChatComponent = React.memo(
       client,
       onLog: logInChat,
       onError: logErrorInChat,
+      refreshDownloadedModels,
       requestConfirmation,
       shouldFetchModelCatalog: shouldFetchModelCatalog ?? false,
     });
@@ -242,6 +243,9 @@ export const ChatComponent = React.memo(
 
     const fetchDownloadableModelSuggestions = useCallback(
       async (filterText: string) => {
+        if (shouldFetchModelCatalog !== true) {
+          return [];
+        }
         const trimmedFilter = filterText.trim();
         const availableModels = await fetchModelCatalog(client);
         const lowercaseFilter = trimmedFilter.toLowerCase();
@@ -271,7 +275,7 @@ export const ChatComponent = React.memo(
           },
         }));
       },
-      [client],
+      [client, shouldFetchModelCatalog],
     );
 
     // Input handling and rendering is delegated to ChatInput.
@@ -588,6 +592,25 @@ export const ChatComponent = React.memo(
 
     return (
       <Box flexDirection="column" width={"95%"} flexWrap="wrap">
+        <Box>
+          <Text color="green">
+            {JSON.stringify({
+              ...userInputState,
+              segments: userInputState.segments.map(segment => {
+                if (segment.type === "text") {
+                  return { ...segment, content: segment.content };
+                } else if (segment.type === "largePaste") {
+                  return {
+                    ...segment,
+                    content: "[large paste content]" + " " + segment.content.length,
+                  };
+                } else {
+                  return segment;
+                }
+              }),
+            })}
+          </Text>
+        </Box>
         <ChatMessagesList messages={messages} modelName={llmRef.current?.displayName ?? null} />
         {isPredicting &&
           llmRef.current !== undefined &&

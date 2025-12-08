@@ -28,7 +28,7 @@ import { fetchModelCatalog } from "./catalogHelpers.js";
 interface StartPredictionOpts {
   stats?: true;
   ttl: number;
-  controller?: AbortController;
+  abortController?: AbortController;
 }
 
 type ChatCommandOptions = OptionValues &
@@ -246,7 +246,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       {
         stats: options.stats,
         ttl,
-        controller: abortController,
+        abortController,
       },
       llm,
       shouldFetchModelCatalog,
@@ -370,7 +370,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
       stats: options.stats,
       ttl,
-      controller: abortController,
+      abortController: abortController,
     });
   } else {
     logger.error("No prompt provided for non-interactive chat.");

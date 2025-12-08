@@ -37,8 +37,14 @@ export function useSortedSuggestions(suggestions: Suggestion[]): Suggestion[] {
 export function useDownloadedModels(
   client: LMStudioClient,
   currentModelIdentifier: string | null,
-): Array<ModelState> {
+): { downloadedModels: Array<ModelState>; refreshDownloadedModels: () => void } {
   const [downloadedModels, setDownloadedModels] = useState<Array<ModelState>>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const refreshDownloadedModels = useCallback(() => {
+    setRefreshTrigger(previous => previous + 1);
+  }, []);
+
   useEffect(() => {
     const fetchModels = async () => {
       const downloadedModels = await client.system.listDownloadedModels();
@@ -61,8 +67,9 @@ export function useDownloadedModels(
     };
 
     fetchModels();
-  }, [client, currentModelIdentifier]);
-  return downloadedModels;
+  }, [client, currentModelIdentifier, refreshTrigger]);
+
+  return { downloadedModels, refreshDownloadedModels };
 }
 
 export function useSuggestionsPerPage(messages: InkChatMessage[]): number {
@@ -246,6 +253,7 @@ export interface UseDownloadCommandOpts {
   onError: (message: string) => void;
   requestConfirmation: (request: ConfirmationRequest<any>) => void;
   shouldFetchModelCatalog: boolean;
+  refreshDownloadedModels?: () => void;
 }
 
 export function useDownloadCommand({
@@ -254,19 +262,15 @@ export function useDownloadCommand({
   onError,
   requestConfirmation,
   shouldFetchModelCatalog,
+  refreshDownloadedModels,
 }: UseDownloadCommandOpts) {
-  const [isDownloadInProgress, setIsDownloadInProgress] = useState(false);
-
   const handleDownloadCommand = useCallback(
     async (commandArguments: string[]) => {
       if (commandArguments.length === 0) {
         onLog("Please specify a model to download using owner/name. Type /model to see the list.");
         return;
       }
-      if (isDownloadInProgress === true) {
-        onLog("A download is already in progress. Please wait for it to finish.");
-        return;
-      }
+
       const identifierInput = commandArguments.join(" ").trim();
       if (identifierInput.length === 0) {
         onLog("Please specify a model to download using owner/name. Type /model to see the list.");
@@ -335,7 +339,9 @@ export function useDownloadCommand({
           downloadModelWithProgress(client, payload.owner, payload.name, {
             onComplete: (owner, name) => {
               onLog(`Download completed: ${owner}/${name}`);
-              setIsDownloadInProgress(false);
+              if (refreshDownloadedModels !== undefined) {
+                refreshDownloadedModels();
+              }
             },
             onError: error => {
               const errorMessage =
@@ -343,7 +349,6 @@ export function useDownloadCommand({
                   ? error.message
                   : String(error);
               onError(`Download failed for ${owner}/${name}: ${errorMessage}`);
-              setIsDownloadInProgress(false);
             },
           }).catch(() => {
             // Error already handled in callback
@@ -354,18 +359,10 @@ export function useDownloadCommand({
         },
       });
     },
-    [
-      client,
-      onLog,
-      onError,
-      requestConfirmation,
-      isDownloadInProgress,
-      shouldFetchModelCatalog,
-      setIsDownloadInProgress,
-    ],
+    [client, onLog, onError, requestConfirmation, shouldFetchModelCatalog, refreshDownloadedModels],
   );
 
-  return { handleDownloadCommand, isDownloadInProgress };
+  return { handleDownloadCommand };
 }
 
 export interface UseSuggestionHandlersOpts {

@@ -2,12 +2,10 @@ import { Box, useInput } from "ink";
 import { type Dispatch, type SetStateAction, useMemo } from "react";
 import { renderInputLine } from "./inputRenderer.js";
 import {
-  deleteCharacterBeforeCursor,
+  deleteBeforeCursor,
   insertTextAtCursor,
   moveCursorLeft,
   moveCursorRight,
-  removeCurrentLargePasteSegment,
-  splitLargePasteSegmentAtCursor,
 } from "./inputReducer.js";
 import { useBufferedPasteDetection } from "./hooks.js";
 import { type ChatUserInputState } from "./types.js";
@@ -45,7 +43,6 @@ export const ChatInput = ({
   onSuggestionAccept,
   onPaste,
 }: ChatInputProps) => {
-  const segmentInWhichCursorIsLocated = inputState.segments[inputState.cursorOnSegmentIndex];
   const skipUseInputRef = useBufferedPasteDetection({ onPaste });
 
   useInput((inputCharacter, key) => {
@@ -90,14 +87,7 @@ export const ChatInput = ({
     }
 
     if (key.backspace === true || key.delete === true) {
-      if (inputState.cursorOnSegmentIndex === 0 && inputState.cursorInSegmentOffset === 0) {
-        return;
-      }
-      if (segmentInWhichCursorIsLocated.type === "largePaste") {
-        setUserInputState(previousState => removeCurrentLargePasteSegment(previousState));
-      } else {
-        setUserInputState(previousState => deleteCharacterBeforeCursor(previousState));
-      }
+      setUserInputState(previousState => deleteBeforeCursor(previousState));
       return;
     }
 
@@ -109,12 +99,6 @@ export const ChatInput = ({
     if (key.rightArrow === true && areSuggestionsVisible === false) {
       setUserInputState(previousState => moveCursorRight(previousState));
       return;
-    }
-
-    if (key.return === true && key.shift === true) {
-      if (segmentInWhichCursorIsLocated.type === "largePaste") {
-        setUserInputState(previousState => splitLargePasteSegmentAtCursor(previousState));
-      }
     }
 
     if (key.return === true) {

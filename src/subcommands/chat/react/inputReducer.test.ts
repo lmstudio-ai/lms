@@ -1,12 +1,11 @@
 import {
-  deleteCharacterBeforeCursor,
+  deleteBeforeCursor,
   insertPasteAtCursor,
   insertSuggestionAtCursor,
   insertTextAtCursor,
   moveCursorLeft,
   moveCursorRight,
   removeCurrentLargePasteSegment,
-  splitLargePasteSegmentAtCursor,
 } from "./inputReducer.js";
 import { type ChatInputSegment, type ChatUserInputState } from "./types.js";
 
@@ -34,10 +33,45 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
+
+    it("merges consecutive text segments and keeps cursor position when cursor was on later segment", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "first" },
+          { type: "text", content: "second" },
+        ],
+        0,
+        5,
+      );
+
+      const result = moveCursorRight(initialState);
+
+      expect(result.segments).toEqual([{ type: "text", content: "firstsecond" }]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(5);
+    });
+
+    it("merges chains of text segments and repositions cursor when it was on the final segment", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "first" },
+          { type: "text", content: "second" },
+          { type: "text", content: "third" },
+        ],
+        2,
+        1,
+      );
+
+      const result = moveCursorLeft(initialState);
+
+      expect(result.segments).toEqual([{ type: "text", content: "firstsecondthird" }]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(11);
+    });
   });
 
   describe("removeCurrentLargePasteSegment", () => {
-    it("removes current largePaste between text segments and moves cursor to following segment", () => {
+    it("removes current largePaste between text segments and moves cursor to previous segment", () => {
       const initialState = createChatUserInputState(
         [
           { type: "text", content: "before" },
@@ -50,11 +84,8 @@ describe("chatInputStateReducers", () => {
 
       const result = removeCurrentLargePasteSegment(initialState);
 
-      expect(result.segments).toEqual([
-        { type: "text", content: "before" },
-        { type: "text", content: "-after" },
-      ]);
-      expect(result.cursorOnSegmentIndex).toBe(1);
+      expect(result.segments).toEqual([{ type: "text", content: "before-after" }]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
 
@@ -92,11 +123,11 @@ describe("chatInputStateReducers", () => {
     });
   });
 
-  describe("deleteCharacterBeforeCursor", () => {
+  describe("deleteBeforeCursor (legacy tests)", () => {
     it("deletes character within a text segment", () => {
       const initialState = createChatUserInputState([{ type: "text", content: "abcd" }], 0, 2);
 
-      const result = deleteCharacterBeforeCursor(initialState);
+      const result = deleteBeforeCursor(initialState);
 
       expect(result.segments).toEqual([{ type: "text", content: "acd" }]);
       expect(result.cursorOnSegmentIndex).toBe(0);
@@ -106,7 +137,7 @@ describe("chatInputStateReducers", () => {
     it("does nothing at start of first text segment", () => {
       const initialState = createChatUserInputState([{ type: "text", content: "abcd" }], 0, 0);
 
-      const result = deleteCharacterBeforeCursor(initialState);
+      const result = deleteBeforeCursor(initialState);
 
       expect(result.segments).toEqual(initialState.segments);
       expect(result.cursorOnSegmentIndex).toBe(0);
@@ -123,7 +154,7 @@ describe("chatInputStateReducers", () => {
         0,
       );
 
-      const result = deleteCharacterBeforeCursor(initialState);
+      const result = deleteBeforeCursor(initialState);
 
       expect(result.segments).toEqual([{ type: "text", content: "hellworld" }]);
       expect(result.cursorOnSegmentIndex).toBe(0);
@@ -140,9 +171,133 @@ describe("chatInputStateReducers", () => {
         0,
       );
 
-      const result = deleteCharacterBeforeCursor(initialState);
+      const result = deleteBeforeCursor(initialState);
 
       expect(result.segments).toEqual([{ type: "text", content: "text" }]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+  });
+
+  describe("deleteBeforeCursor", () => {
+    it("deletes previous largePaste when cursor is at start of largePaste (offset 0)", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "largePaste", content: "paste1" },
+          { type: "largePaste", content: "paste2" },
+          { type: "text", content: "text" },
+        ],
+        1,
+        0,
+      );
+
+      const result = deleteBeforeCursor(initialState);
+
+      expect(result.segments).toEqual([
+        { type: "largePaste", content: "paste2" },
+        { type: "text", content: "text" },
+      ]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("deletes current largePaste when cursor is inside largePaste (offset > 0)", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "largePaste", content: "paste1" },
+          { type: "largePaste", content: "paste2" },
+          { type: "text", content: "text" },
+        ],
+        1,
+        1,
+      );
+
+      const result = deleteBeforeCursor(initialState);
+
+      expect(result.segments).toEqual([
+        { type: "largePaste", content: "paste1" },
+        { type: "text", content: "text" },
+      ]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("deletes last character of previous text when cursor is at start of largePaste", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "before" },
+          { type: "largePaste", content: "pasted" },
+          { type: "text", content: "after" },
+        ],
+        1,
+        0,
+      );
+
+      const result = deleteBeforeCursor(initialState);
+
+      expect(result.segments).toEqual([
+        { type: "text", content: "befor" },
+        { type: "largePaste", content: "pasted" },
+        { type: "text", content: "after" },
+      ]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(5);
+    });
+
+    it("deletes empty previous text segment when cursor is at start of largePaste", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "" },
+          { type: "largePaste", content: "pasted" },
+          { type: "text", content: "after" },
+        ],
+        1,
+        0,
+      );
+
+      const result = deleteBeforeCursor(initialState);
+
+      expect(result.segments).toEqual([
+        { type: "largePaste", content: "pasted" },
+        { type: "text", content: "after" },
+      ]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("deletes last character of single-character previous text at start of largePaste", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "a" },
+          { type: "largePaste", content: "pasted" },
+        ],
+        1,
+        0,
+      );
+
+      const result = deleteBeforeCursor(initialState);
+
+      expect(result.segments).toEqual([{ type: "largePaste", content: "pasted" }]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("does nothing when cursor is at very start (segment 0, offset 0)", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "largePaste", content: "paste1" },
+          { type: "text", content: "text" },
+        ],
+        0,
+        0,
+      );
+
+      const result = deleteBeforeCursor(initialState);
+
+      expect(result.segments).toEqual([
+        { type: "largePaste", content: "paste1" },
+        { type: "text", content: "text" },
+      ]);
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
@@ -171,7 +326,7 @@ describe("chatInputStateReducers", () => {
       const result = moveCursorLeft(initialState);
 
       expect(result.cursorOnSegmentIndex).toBe(0);
-      expect(result.cursorInSegmentOffset).toBe(5);
+      expect(result.cursorInSegmentOffset).toBe(4);
     });
 
     it("moves from start of text segment to previous largePaste segment", () => {
@@ -208,14 +363,31 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe(0);
     });
 
+    it("moves from start of largePaste to end of previous text segment", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "hello" },
+          { type: "largePaste", content: "pasted" },
+          { type: "text", content: "tail" },
+        ],
+        1,
+        0,
+      );
+
+      const result = moveCursorLeft(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(4);
+    });
+
     it("moves to start of current largePaste segment when cursor offset is greater than zero", () => {
       const initialState = createChatUserInputState(
         [
-          { type: "text", content: "head" },
+          { type: "text", content: "text" },
           { type: "largePaste", content: "pasted" },
         ],
         1,
-        2,
+        1,
       );
 
       const result = moveCursorLeft(initialState);
@@ -263,8 +435,8 @@ describe("chatInputStateReducers", () => {
 
       const result = moveCursorRight(initialState);
 
-      expect(result.cursorOnSegmentIndex).toBe(1);
-      expect(result.cursorInSegmentOffset).toBe(0);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(5);
     });
 
     it("skips over a single largePaste segment when moving right from text", () => {
@@ -334,6 +506,29 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe(0);
     });
 
+    it("preserves all segments when moving right between back-to-back largePaste segments", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "largePaste", content: "Paste1" },
+          { type: "largePaste", content: "Paste2" },
+          { type: "largePaste", content: "Paste3" },
+          { type: "text", content: "trailing" },
+        ],
+        0,
+        0,
+      );
+
+      const result = moveCursorRight(initialState);
+
+      expect(result.segments.length).toBe(4);
+      expect(result.segments[0]).toEqual({ type: "largePaste", content: "Paste1" });
+      expect(result.segments[1]).toEqual({ type: "largePaste", content: "Paste2" });
+      expect(result.segments[2]).toEqual({ type: "largePaste", content: "Paste3" });
+      expect(result.segments[3]).toEqual({ type: "text", content: "trailing" });
+      expect(result.cursorOnSegmentIndex).toBe(1);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
     it("does nothing when moving right from last largePaste segment", () => {
       const initialState = createChatUserInputState(
         [
@@ -346,49 +541,6 @@ describe("chatInputStateReducers", () => {
 
       const result = moveCursorRight(initialState);
 
-      expect(result.cursorOnSegmentIndex).toBe(1);
-      expect(result.cursorInSegmentOffset).toBe(0);
-    });
-  });
-
-  describe("splitLargePasteSegmentAtCursor", () => {
-    it("does nothing when current segment is not largePaste", () => {
-      const initialState = createChatUserInputState([{ type: "text", content: "abcd" }], 0, 2);
-
-      const result = splitLargePasteSegmentAtCursor(initialState);
-
-      expect(result).toEqual(initialState);
-    });
-
-    it("creates trailing empty text segment placeholder when splitting inside a largePaste", () => {
-      const initialState = createChatUserInputState(
-        [{ type: "largePaste", content: "pasted content" }],
-        0,
-        5,
-      );
-
-      const result = splitLargePasteSegmentAtCursor(initialState);
-
-      expect(result.segments.length).toBe(2);
-      expect(result.segments[0]).toEqual({ type: "largePaste", content: "pasted content" });
-      expect(result.segments[1]).toEqual({ type: "text", content: "" });
-      expect(result.cursorOnSegmentIndex).toBe(1);
-      expect(result.cursorInSegmentOffset).toBe(0);
-    });
-
-    it("keeps existing structure when splitting at the very start of a largePaste with preceding text", () => {
-      const initialState = createChatUserInputState(
-        [
-          { type: "text", content: "before" },
-          { type: "largePaste", content: "pasted" },
-        ],
-        1,
-        0,
-      );
-
-      const result = splitLargePasteSegmentAtCursor(initialState);
-
-      expect(result.segments).toEqual(initialState.segments);
       expect(result.cursorOnSegmentIndex).toBe(1);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
