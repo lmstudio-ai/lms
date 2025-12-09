@@ -1,5 +1,5 @@
 import { type Chat, type LLM, type LMStudioClient } from "@lmstudio/sdk";
-import { Box, Text, useApp } from "ink";
+import { Box, useApp } from "ink";
 import React, { useCallback, useRef, useState } from "react";
 import { displayVerboseStats } from "../util.js";
 import { ChatInput } from "./ChatInput.js";
@@ -29,18 +29,6 @@ const emptyChatInputState: ChatUserInputState = {
   cursorInSegmentOffset: 0,
 };
 
-type ChatConfirmationPayload =
-  | {
-      type: "reloadModel";
-      originalInput: ChatUserInputState;
-      modelKey: string;
-    }
-  | {
-      type: "downloadModel";
-      owner: string;
-      name: string;
-    };
-
 export const ChatComponent = React.memo(
   ({ client, llm, chat, onExit, opts }: ChatComponentProps) => {
     const { exit } = useApp();
@@ -53,9 +41,6 @@ export const ChatComponent = React.memo(
     const [userInputState, setUserInputState] = useState<ChatUserInputState>(emptyChatInputState);
     const [isPredicting, setIsPredicting] = useState(false);
     const [, setRenderTrigger] = useState(0);
-    const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
-    const { isConfirmationActive, requestConfirmation, handleConfirmationResponse } =
-      useConfirmationPrompt<ChatConfirmationPayload>();
     const streamingContentRef = useRef("");
     const reasoningStreamingContentRef = useRef("");
     const promptProcessingProgressRef = useRef(-1);
@@ -157,15 +142,6 @@ export const ChatComponent = React.memo(
         .trim();
       // Clear the input state
       setUserInputState(emptyChatInputState);
-      const confirmationResponse = await handleConfirmationResponse(userInputText);
-      if (confirmationResponse === "handled") {
-        return;
-      }
-      if (confirmationResponse === "invalid") {
-        logInChat("Please answer 'yes' or 'no'");
-        return;
-      }
-
       if (userInputText.length === 0) {
         return;
       }
@@ -176,7 +152,7 @@ export const ChatComponent = React.memo(
       }
 
       if (llmRef.current === null) {
-        logErrorInChat("No model loaded. Please load a model using /model [model_key]");
+        logErrorInChat("No model loaded");
         return;
       }
 
@@ -278,44 +254,8 @@ export const ChatComponent = React.memo(
         if (error instanceof Error) {
           const errorMessage = error.message.toLowerCase();
           if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
-            const currentModelKey = llmRef.current.modelKey;
             logErrorInChat(`${error.message}`);
-            logInChat(`Would you like to reload the model?`);
-            requestConfirmation({
-              payload: {
-                type: "reloadModel",
-                originalInput: userInputState,
-                modelKey: currentModelKey,
-              },
-              onConfirm: async payload => {
-                if (payload.type !== "reloadModel") return;
-                logInChat("Reloading model...");
-                setModelLoadingProgress(0);
-                try {
-                  llmRef.current = await client.llm.model(payload.modelKey, {
-                    verbose: false,
-                    ttl: opts?.ttl,
-                    onProgress(progress) {
-                      setModelLoadingProgress(progress);
-                    },
-                  });
-                  logInChat(`Model reloaded: ${llmRef.current.displayName}`);
-                  setModelLoadingProgress(null);
-                  setUserInputState(payload.originalInput);
-                } catch (reloadError) {
-                  setModelLoadingProgress(null);
-                  const reloadErrorMessage =
-                    reloadError instanceof Error && reloadError.message !== undefined
-                      ? reloadError.message
-                      : String(reloadError);
-                  logErrorInChat(`Failed to reload model: ${reloadErrorMessage}`);
-                }
-              },
-              onCancel: () => {
-                logInChat("Model reload cancelled.");
-                handleExit();
-              },
-            });
+            logInChat(`No model is currently loaded. Please load a model to continue.`);
           } else {
             logErrorInChat(`Prediction error: ${error.message}`);
           }
@@ -326,18 +266,7 @@ export const ChatComponent = React.memo(
         reasoningStreamingContentRef.current = "";
         streamingContentRef.current = "";
       }
-    }, [
-      addMessage,
-      client.llm,
-      handleConfirmationResponse,
-      handleExit,
-      logErrorInChat,
-      logInChat,
-      opts?.stats,
-      opts?.ttl,
-      requestConfirmation,
-      userInputState,
-    ]);
+    }, [addMessage, handleExit, logErrorInChat, logInChat, opts?.stats, userInputState]);
 
     return (
       <Box flexDirection="column" width={"95%"} flexWrap="wrap">
@@ -352,15 +281,10 @@ export const ChatComponent = React.memo(
               promptProcessingProgress={promptProcessingProgressRef.current}
             />
           )}
-        {modelLoadingProgress !== null && (
-          <Box paddingTop={1}>
-            <Text color="yellow">Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
-          </Box>
-        )}
+
         <ChatInput
           inputState={userInputState}
           isPredicting={isPredicting}
-          isConfirmationActive={isConfirmationActive}
           setUserInputState={setUserInputState}
           onSubmit={handleSubmit}
           onAbortPrediction={handleAbortPrediction}

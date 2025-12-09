@@ -1,16 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  type ChatUserInputState,
-  type InkChatMessage,
-  type ModelState,
-  type Suggestion,
-} from "./types.js";
-import { type LMStudioClient } from "@lmstudio/sdk";
-import { estimateMessageLinesCount } from "../util.js";
 import { useStdin } from "ink";
-import { downloadModelWithProgress, getDownloadSize } from "../downloadHelpers.js";
-import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
-import { fetchModelCatalog, findModelInCatalog, parseModelIdentifier } from "../catalogHelpers.js";
+import { useEffect, useRef } from "react";
+import { LARGE_PASTE_THRESHOLD } from "./Chat.js";
 
 interface UseBufferedPasteDetectionOpts {
   onPaste: (content: string) => void;

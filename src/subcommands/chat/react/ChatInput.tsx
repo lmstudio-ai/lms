@@ -13,19 +13,16 @@ import { type ChatUserInputState } from "./types.js";
 interface ChatInputProps {
   inputState: ChatUserInputState;
   isPredicting: boolean;
-  isConfirmationActive: boolean;
   setUserInputState: Dispatch<SetStateAction<ChatUserInputState>>;
   onSubmit: () => void;
   onAbortPrediction: () => void;
   onExit: () => void;
-;
   onPaste: (content: string) => void;
 }
 
 export const ChatInput = ({
   inputState,
   isPredicting,
-  isConfirmationActive,
   setUserInputState,
   onSubmit,
   onAbortPrediction,
@@ -52,14 +49,12 @@ export const ChatInput = ({
       return;
     }
 
-
-
     if (key.backspace === true || key.delete === true) {
       setUserInputState(previousState => deleteBeforeCursor(previousState));
       return;
     }
 
-    if (key.leftArrow === true ) {
+    if (key.leftArrow === true) {
       setUserInputState(previousState => moveCursorLeft(previousState));
       return;
     }
@@ -135,7 +130,7 @@ export const ChatInput = ({
 
   return (
     <Box flexDirection="column" width="100%" paddingTop={1}>
-      {fullText.length === 0 && !isConfirmationActive ? (
+      {fullText.length === 0 ? (
         <Box>
           <Text color="cyan">› </Text>
           {isPredicting ? (
@@ -143,7 +138,7 @@ export const ChatInput = ({
           ) : (
             <>
               <Text inverse>T</Text>
-              <Text>ype a message or use / to use commands</Text>
+              <Text>ype a message</Text>
             </>
           )}
         </Box>
@@ -155,7 +150,6 @@ export const ChatInput = ({
 
           return (
             <Box key={lineIndex} flexWrap="wrap" width="100%">
-              {lineIndex === 0 && isConfirmationActive && <Text color="cyan">(yes/no) </Text>}
               <Text color="cyan">{lineIndex === 0 ? "› " : "  "}</Text>
               {renderInputWithCursor({
                 fullText: lineText,

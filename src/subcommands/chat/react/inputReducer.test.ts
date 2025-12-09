@@ -744,3 +744,4 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe(0);
     });
   });
+});
