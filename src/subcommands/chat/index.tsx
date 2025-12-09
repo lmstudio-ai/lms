@@ -242,28 +242,6 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     }
   }
 
-  // We intentionally do not check for a model being loaded here, as that is handled
-  // inside startInteractiveChat to allow model selection inside the interactive chat flow
-  if (process.stdin.isTTY && providedPrompt.length === 0) {
-    try {
-      llm = await client.llm.model();
-    } catch (e) {
-      // Ignore error here, as we will handle no loaded model case inside
-      // the interactive chat flow below
-    }
-    await startInteractiveChat(
-      client,
-      chat,
-      {
-        stats: options.stats,
-        ttl,
-        abortController,
-      },
-      llm,
-      shouldFetchModelCatalog,
-    );
-    return;
-  }
   try {
     llm = await client.llm.model();
   } catch (e) {
@@ -372,9 +350,21 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       ttl,
       abortController: abortController,
     });
+  } else if (process.stdin.isTTY) {
+    await startInteractiveChat(
+      client,
+      chat,
+      {
+        stats: options.stats,
+        ttl,
+        abortController,
+      },
+      llm,
+      shouldFetchModelCatalog,
+    );
   } else {
     logger.error("No prompt provided for non-interactive chat.");
-    process.exit(0);
+    process.exit(1);
   }
 });
 
