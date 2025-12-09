@@ -3,6 +3,7 @@ import { get } from "./get.js";
 import { ls } from "./list.js";
 import { remove } from "./remove.js";
 import { select } from "./select.js";
+import { survey } from "./survey.js";
 import { update } from "./update.js";
 
 // Create the runtime command
@@ -16,5 +17,6 @@ runtimeCommand.addCommand(select);
 runtimeCommand.addCommand(remove);
 runtimeCommand.addCommand(update);
 runtimeCommand.addCommand(get);
+runtimeCommand.addCommand(survey);
 
 export const runtime = runtimeCommand;
