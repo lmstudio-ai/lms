@@ -126,8 +126,11 @@ function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | 
 
 function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine, logger: SimpleLogger) {
   const gpuTable = renderGpuTable(survey);
+  const gpuFramework = survey.hardwareSurvey.gpuSurveyResult.gpuInfo.find(
+    gpu => gpu.detectionPlatform,
+  )?.detectionPlatform;
   logger.info(
-    chalk.gray(`Survey by ${survey.engine} [${survey.gpuFramework}] (${survey.version}):`),
+    chalk.gray(`Survey by ${survey.engine} [${gpuFramework ?? "Unknown"}] (${survey.version}):`),
   );
   if (gpuTable === undefined) {
     logger.info("No accelerators detected.");
