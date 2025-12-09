@@ -11,6 +11,7 @@ import { type SimpleLogger } from "@lmstudio/lms-common";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
+import chalk from "chalk";
 
 interface RuntimeSurveyCommandOptions {
   all: boolean;
@@ -87,9 +88,9 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
   return columnify(rows, {
     columns: ["device", "vram", "driver"],
     config: {
-      device: { headingTransform: () => "DEVICE", align: "left" },
-      vram: { headingTransform: () => "Total VRAM", align: "left" },
-      driver: { headingTransform: () => "DRIVER", align: "left" },
+      device: { headingTransform: () => chalk.grey("GPU/ACCELERATORS"), align: "left" },
+      vram: { headingTransform: () => chalk.grey("Total VRAM"), align: "left" },
+      driver: { headingTransform: () => chalk.grey("DRIVER"), align: "left" },
     },
     columnSplitter: "   ",
   });
@@ -108,8 +109,7 @@ function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
 }
 
 function renderRamLine(survey: RuntimeHardwareSurveyEngine): string {
-  const ramCapacityText =
-    formatBytes(survey.memoryInfo.ramCapacity) + " / " + formatBytes(survey.memoryInfo.totalMemory);
+  const ramCapacityText = formatBytes(survey.memoryInfo.totalMemory);
 
   return `RAM: ${ramCapacityText}`;
 }
@@ -126,22 +126,21 @@ function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | 
 
 function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine, logger: SimpleLogger) {
   const gpuTable = renderGpuTable(survey);
+  logger.info(
+    chalk.gray(`Survey by ${survey.engine} [${survey.gpuFramework}] (${survey.version}):`),
+  );
   if (gpuTable === undefined) {
-    logger.info("GPU/ACCELERATOR SURVEY");
     logger.info("No accelerators detected.");
   } else {
-    logger.info("GPU/ACCELERATOR SURVEY");
     logger.info(gpuTable);
   }
-  logger.info(renderCpuLine(survey));
+  logger.info("\n" + renderCpuLine(survey));
   logger.info(renderRamLine(survey));
 
   const compatibilityLine = renderCompatibilityLine(survey);
   if (compatibilityLine !== undefined) {
     logger.info(compatibilityLine);
   }
-
-  logger.info(`Survey using ${survey.name}@${survey.version} (${survey.platform})`);
 }
 
 async function runSurvey(
@@ -152,43 +151,44 @@ async function runSurvey(
   return await client.runtime.surveyHardware(scope);
 }
 
-export const survey = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("survey")
-      .description("Survey hardware available to runtime engines")
-      .option("--all", "Force a full resurvey of every installed runtime")
-      .option("--refresh", "Resurvey selected and new runtimes")
-      .option("--json", "Output the raw JSON response")
-      .action(async function (commandOptions) {
-        const parentOptions = this.parent?.opts() ?? {};
-        const logger = createLogger(parentOptions);
-        const client = await createClient(logger, parentOptions);
+const surveyCommand = new Command()
+  .name("survey")
+  .description("Survey hardware available to runtime engines")
+  .option("--all", "Force a full resurvey of every installed runtime")
+  .option("--refresh", "Resurvey selected and new runtimes")
+  .option("--json", "Output the raw JSON response")
+  .action(async function (commandOptions) {
+    const parentOptions = this.parent?.opts() ?? {};
+    const logger = createLogger(parentOptions);
+    const client = await createClient(logger, parentOptions);
 
-        const runtimeSurveyOptions: RuntimeSurveyCommandOptions = {
-          all: commandOptions.all ?? false,
-          refresh: commandOptions.refresh ?? false,
-          json: commandOptions.json ?? false,
-        };
+    const runtimeSurveyOptions: RuntimeSurveyCommandOptions = {
+      all: commandOptions.all ?? false,
+      refresh: commandOptions.refresh ?? false,
+      json: commandOptions.json ?? false,
+    };
 
-        const surveyResult = await runSurvey(client, runtimeSurveyOptions);
-        if (runtimeSurveyOptions.json === true) {
-          logger.info(JSON.stringify(surveyResult, null, 2));
-          return;
-        }
+    const surveyResult = await runSurvey(client, runtimeSurveyOptions);
+    if (runtimeSurveyOptions.json === true) {
+      logger.info(JSON.stringify(surveyResult, null, 2));
+      return;
+    }
 
-        if (surveyResult.engines.length === 0) {
-          logger.info("No runtime survey results.");
-          return;
-        }
+    if (surveyResult.engines.length === 0) {
+      logger.info("No runtime survey results.");
+      return;
+    }
 
-        surveyResult.engines.forEach((engineSurvey, engineIndex) => {
-          renderEngineSurvey(engineSurvey, logger);
-          const isLast = engineIndex === surveyResult.engines.length - 1;
-          if (!isLast) {
-            logger.info();
-          }
-        });
-      }),
-  ),
-);
+    surveyResult.engines.forEach((engineSurvey, engineIndex) => {
+      renderEngineSurvey(engineSurvey, logger);
+      const isLast = engineIndex === surveyResult.engines.length - 1;
+      if (!isLast) {
+        logger.info();
+      }
+    });
+  });
+
+addCreateClientOptions(surveyCommand);
+addLogLevelOptions(surveyCommand);
+
+export const survey = surveyCommand;
