@@ -1,13 +1,5 @@
 import { Box, Text, useInput } from "ink";
-import { type Dispatch, type SetStateAction, useMemo } from "react";
-import { renderInputWithCursor } from "./inputRenderer.js";
-import {
-  deleteBeforeCursor,
-  insertTextAtCursor,
-  moveCursorLeft,
-  moveCursorRight,
-} from "./inputReducer.js";
-import { useBufferedPasteDetection } from "./hooks.js";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { type ChatUserInputState } from "./types.js";
 
 interface ChatInputProps {
@@ -17,7 +9,6 @@ interface ChatInputProps {
   onSubmit: () => void;
   onAbortPrediction: () => void;
   onExit: () => void;
-  onPaste: (content: string) => void;
 }
 
 export const ChatInput = ({
@@ -27,15 +18,16 @@ export const ChatInput = ({
   onSubmit,
   onAbortPrediction,
   onExit,
-  onPaste,
 }: ChatInputProps) => {
-  const skipUseInputRef = useBufferedPasteDetection({ onPaste });
+  const [cursorPosition, setCursorPosition] = useState(0);
+
+  useEffect(() => {
+    if (cursorPosition > inputState.length) {
+      setCursorPosition(inputState.length);
+    }
+  }, [inputState.length, cursorPosition]);
 
   useInput((inputCharacter, key) => {
-    if (skipUseInputRef.current === true) {
-      return;
-    }
-
     if (key.ctrl === true && inputCharacter === "c") {
       if (isPredicting) {
         onAbortPrediction();
@@ -50,22 +42,32 @@ export const ChatInput = ({
     }
 
     if (key.backspace === true || key.delete === true) {
-      setUserInputState(previousState => deleteBeforeCursor(previousState));
+      if (cursorPosition > 0) {
+        const before = inputState.slice(0, cursorPosition - 1);
+        const after = inputState.slice(cursorPosition);
+        setUserInputState(before + after);
+        setCursorPosition(cursorPosition - 1);
+      }
       return;
     }
 
     if (key.leftArrow === true) {
-      setUserInputState(previousState => moveCursorLeft(previousState));
+      if (cursorPosition > 0) {
+        setCursorPosition(cursorPosition - 1);
+      }
       return;
     }
 
     if (key.rightArrow === true) {
-      setUserInputState(previousState => moveCursorRight(previousState));
+      if (cursorPosition < inputState.length) {
+        setCursorPosition(cursorPosition + 1);
+      }
       return;
     }
 
     if (key.return === true) {
       onSubmit();
+      setCursorPosition(0);
       return;
     }
 
@@ -75,92 +77,42 @@ export const ChatInput = ({
       inputCharacter !== undefined &&
       inputCharacter.length > 0
     ) {
-      const normalizedInputChunk = inputCharacter.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-
-      if (normalizedInputChunk.length === 0) {
-        return;
-      }
-
-      setUserInputState(previousState =>
-        insertTextAtCursor({ state: previousState, text: normalizedInputChunk }),
-      );
+      const before = inputState.slice(0, cursorPosition);
+      const after = inputState.slice(cursorPosition);
+      setUserInputState(before + inputCharacter + after);
+      setCursorPosition(cursorPosition + inputCharacter.length);
     }
   });
 
-  const { fullText, cursorPosition, pasteRanges } = useMemo(() => {
-    let fullText = "";
-    let cursorPosition = 0;
-    const pasteRanges: Array<{ start: number; end: number }> = [];
-
-    for (let index = 0; index < inputState.segments.length; index++) {
-      const segment = inputState.segments[index];
-
-      if (segment.type === "largePaste") {
-        const placeholder = `[Pasted ${segment.content.length} characters]`;
-        const startPos = fullText.length;
-
-        if (index < inputState.cursorOnSegmentIndex) {
-          cursorPosition += placeholder.length;
-        } else if (index === inputState.cursorOnSegmentIndex) {
-          cursorPosition += inputState.cursorInSegmentOffset === 0 ? 0 : placeholder.length;
-        }
-
-        fullText += placeholder;
-        pasteRanges.push({ start: startPos, end: fullText.length });
-      } else {
-        if (index < inputState.cursorOnSegmentIndex) {
-          cursorPosition += segment.content.length;
-        } else if (index === inputState.cursorOnSegmentIndex) {
-          cursorPosition += inputState.cursorInSegmentOffset;
-        }
-
-        fullText += segment.content;
-      }
+  const renderInputWithCursor = () => {
+    if (inputState.length === 0) {
+      return (
+        <>
+          <Text inverse>T</Text>
+          <Text>ype a message</Text>
+        </>
+      );
     }
 
-    return { fullText, cursorPosition, pasteRanges };
-  }, [inputState]);
+    const before = inputState.slice(0, cursorPosition);
+    const cursorChar = cursorPosition < inputState.length ? inputState[cursorPosition] : " ";
+    const after = inputState.slice(cursorPosition + 1);
 
-  const lines = fullText.split("\n");
-  const beforeCursor = fullText.slice(0, cursorPosition);
-  const cursorLineIndex = beforeCursor.split("\n").length - 1;
-  const lastNewlineBeforeCursor = beforeCursor.lastIndexOf("\n");
-  const cursorColumnIndex =
-    lastNewlineBeforeCursor === -1 ? cursorPosition : cursorPosition - lastNewlineBeforeCursor - 1;
+    return (
+      <>
+        {before.length > 0 && <Text>{before}</Text>}
+        <Text inverse>{cursorChar}</Text>
+        {after.length > 0 && <Text>{after}</Text>}
+      </>
+    );
+  };
 
   return (
     <Box flexDirection="column" width="100%" paddingTop={1}>
-      {fullText.length === 0 ? (
-        <Box>
-          <Text color="cyan">› </Text>
-          {isPredicting ? (
-            <Text color="gray">Generating response...</Text>
-          ) : (
-            <>
-              <Text inverse>T</Text>
-              <Text>ype a message</Text>
-            </>
-          )}
-        </Box>
-      ) : (
-        lines.map((lineText, lineIndex) => {
-          const lineStartPos =
-            lines.slice(0, lineIndex).join("\n").length + (lineIndex > 0 ? 1 : 0);
-          const isCursorLine = lineIndex === cursorLineIndex;
-
-          return (
-            <Box key={lineIndex} flexWrap="wrap" width="100%">
-              <Text color="cyan">{lineIndex === 0 ? "› " : "  "}</Text>
-              {renderInputWithCursor({
-                fullText: lineText,
-                cursorPosition: isCursorLine ? cursorColumnIndex : -1,
-                pasteRanges,
-                lineStartPos,
-              })}
-            </Box>
-          );
-        })
-      )}
+      <Box>
+        <Text color="cyan">› </Text>
+        {isPredicting ? <Text color="gray">Generating response...</Text> : renderInputWithCursor()}
+      </Box>
     </Box>
   );
 };

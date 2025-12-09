@@ -5,10 +5,7 @@ import { displayVerboseStats } from "../util.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
 import { PartialMessage } from "./PartialMessage.js";
-import { insertPasteAtCursor } from "./inputReducer.js";
 import type { ChatUserInputState, InkChatMessage } from "./types.js";
-
-export const LARGE_PASTE_THRESHOLD = 512; // Minimum characters to consider input as a paste
 
 interface ChatComponentProps {
   client: LMStudioClient;
@@ -23,11 +20,7 @@ interface ChatComponentProps {
   shouldFetchModelCatalog?: boolean;
 }
 
-const emptyChatInputState: ChatUserInputState = {
-  segments: [{ type: "text", content: "" }],
-  cursorOnSegmentIndex: 0,
-  cursorInSegmentOffset: 0,
-};
+const emptyChatInputState: ChatUserInputState = "";
 
 export const ChatComponent = React.memo(
   ({ client, llm, chat, onExit, opts }: ChatComponentProps) => {
@@ -118,28 +111,9 @@ export const ChatComponent = React.memo(
       process.exit(0);
     }, [onExit, exit]);
 
-    const handlePaste = useCallback((content: string) => {
-      const normalizedContent = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-
-      if (normalizedContent.length === 0) {
-        return;
-      }
-
-      setUserInputState(previousState =>
-        insertPasteAtCursor({
-          state: previousState,
-          content: normalizedContent,
-          largePasteThreshold: LARGE_PASTE_THRESHOLD,
-        }),
-      );
-    }, []);
-
     const handleSubmit = useCallback(async () => {
       // Collect the full text input from the userInputState
-      const userInputText = userInputState.segments
-        .map(segment => segment.content)
-        .join("")
-        .trim();
+      const userInputText = userInputState.trim();
       // Clear the input state
       setUserInputState(emptyChatInputState);
       if (userInputText.length === 0) {
@@ -172,18 +146,7 @@ export const ChatComponent = React.memo(
         chatRef.current.append("user", userInputText);
         addMessage({
           type: "user",
-          content: userInputState.segments.map(s => {
-            if (s.type === "largePaste") {
-              if (s.content.length > 50) {
-                return {
-                  type: "largePaste",
-                  text: `[Pasted ${s.content.replace(/\r\n|\r|\n/g, "").slice(0, 50)}...]`,
-                };
-              }
-              return { type: s.type, text: s.content };
-            }
-            return { type: s.type, text: s.content };
-          }),
+          content: [{ type: "text", text: userInputText }],
         });
         const result = await llmRef.current.respond(chatRef.current, {
           onFirstToken() {
@@ -289,7 +252,6 @@ export const ChatComponent = React.memo(
           onSubmit={handleSubmit}
           onAbortPrediction={handleAbortPrediction}
           onExit={handleExit}
-          onPaste={handlePaste}
         />
       </Box>
     );

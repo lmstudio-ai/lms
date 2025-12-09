@@ -37,18 +37,4 @@ export type ModelState = {
   isCurrent: boolean;
 };
 
-export type ChatInputSegment =
-  | {
-      type: "text";
-      content: string;
-    }
-  | {
-      type: "largePaste";
-      content: string;
-    };
-
-export interface ChatUserInputState {
-  segments: ChatInputSegment[];
-  cursorOnSegmentIndex: number;
-  cursorInSegmentOffset: number;
-}
+export type ChatUserInputState = string;
