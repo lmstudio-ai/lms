@@ -1,5 +1,3 @@
-import { type SlashCommand } from "./SlashCommandHandler.js";
-
 export type InkChatMessage =
   | {
       type: "user";
