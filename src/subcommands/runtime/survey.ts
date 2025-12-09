@@ -19,8 +19,6 @@ interface RuntimeSurveyCommandOptions {
 }
 
 interface GpuMemoryMetrics {
-  usedBytes?: number;
-  freeBytes?: number;
   totalBytes: number;
 }
 
@@ -38,51 +36,24 @@ function formatBytes(bytes?: number): string {
   return `${currentValue.toFixed(1)} ${units[unitIndex]}`;
 }
 
-function parseMaybeNumber(value: string | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  const parsed = Number.parseFloat(value);
-  if (Number.isNaN(parsed)) {
-    return undefined;
-  }
-  return parsed;
-}
-
 function getGpuMemoryMetrics(gpuInfo: RuntimeHardwareGpuInfo): GpuMemoryMetrics {
   const totalBytes =
     gpuInfo.dedicatedMemoryCapacityBytes > 0
       ? gpuInfo.dedicatedMemoryCapacityBytes
       : gpuInfo.totalMemoryCapacityBytes;
-  const freeBytes =
-    parseMaybeNumber(gpuInfo.otherInfo["freeVramBytes"]) ??
-    parseMaybeNumber(gpuInfo.otherInfo["free_memory_bytes"]);
-  const usedBytesFromOtherInfo =
-    parseMaybeNumber(gpuInfo.otherInfo["usedVramBytes"]) ??
-    parseMaybeNumber(gpuInfo.otherInfo["occupiedVramBytes"]);
-  const usedBytes =
-    usedBytesFromOtherInfo !== undefined
-      ? usedBytesFromOtherInfo
-      : freeBytes !== undefined
-        ? Math.max(totalBytes - freeBytes, 0)
-        : undefined;
   return {
-    usedBytes,
-    freeBytes,
     totalBytes,
   };
 }
 
 function formatMemoryRatio(memoryMetrics: GpuMemoryMetrics): string {
-  const usedText =
-    memoryMetrics.usedBytes !== undefined ? formatBytes(memoryMetrics.usedBytes) : "--";
-  const freeText =
-    memoryMetrics.freeBytes !== undefined ? formatBytes(memoryMetrics.freeBytes) : "--";
   const totalText = formatBytes(memoryMetrics.totalBytes);
-  return `${usedText} / ${freeText} / ${totalText}`;
+  return ` ${totalText}`;
 }
 
-function resolveScope(options: RuntimeSurveyCommandOptions): RuntimeHardwareSurveyScope | undefined {
+function resolveScope(
+  options: RuntimeSurveyCommandOptions,
+): RuntimeHardwareSurveyScope | undefined {
   if (options.all === true && options.refresh === true) {
     throw new UserInputError("Flags --all and --refresh cannot be used together.");
   }
@@ -117,7 +88,7 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
     columns: ["device", "vram", "driver"],
     config: {
       device: { headingTransform: () => "DEVICE", align: "left" },
-      vram: { headingTransform: () => "VRAM (used/free/total)", align: "left" },
+      vram: { headingTransform: () => "Total VRAM", align: "left" },
       driver: { headingTransform: () => "DRIVER", align: "left" },
     },
     columnSplitter: "   ",
@@ -137,7 +108,9 @@ function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
 }
 
 function renderRamLine(survey: RuntimeHardwareSurveyEngine): string {
-  const ramCapacityText = formatBytes(survey.memoryInfo.ramCapacity);
+  const ramCapacityText =
+    formatBytes(survey.memoryInfo.ramCapacity) + " / " + formatBytes(survey.memoryInfo.totalMemory);
+
   return `RAM: ${ramCapacityText}`;
 }
 
@@ -151,10 +124,7 @@ function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | 
   return `Compatibility: ${survey.compatibility.status} — ${survey.compatibility.message}`;
 }
 
-function renderEngineSurvey(
-  survey: RuntimeHardwareSurveyEngine,
-  logger: SimpleLogger,
-) {
+function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine, logger: SimpleLogger) {
   const gpuTable = renderGpuTable(survey);
   if (gpuTable === undefined) {
     logger.info("GPU/ACCELERATOR SURVEY");
@@ -171,9 +141,7 @@ function renderEngineSurvey(
     logger.info(compatibilityLine);
   }
 
-  logger.info(
-    `Survey using ${survey.name}@${survey.version} (${survey.platform})`,
-  );
+  logger.info(`Survey using ${survey.name}@${survey.version} (${survey.platform})`);
 }
 
 async function runSurvey(
@@ -204,7 +172,6 @@ export const survey = addLogLevelOptions(
         };
 
         const surveyResult = await runSurvey(client, runtimeSurveyOptions);
-
         if (runtimeSurveyOptions.json === true) {
           logger.info(JSON.stringify(surveyResult, null, 2));
           return;
