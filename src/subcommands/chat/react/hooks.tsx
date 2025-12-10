@@ -54,37 +54,32 @@ export function useDownloadedModels(
   currentModelIdentifier: string | null,
 ): { downloadedModels: Array<ModelState>; refreshDownloadedModels: () => void } {
   const [downloadedModels, setDownloadedModels] = useState<Array<ModelState>>([]);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const refreshDownloadedModels = useCallback(() => {
-    setRefreshTrigger(previous => previous + 1);
-  }, []);
+  const refreshDownloadedModels = useCallback(async () => {
+    const downloadedModels = (await client.system.listDownloadedModels()).filter(
+      model => model.type === "llm",
+    );
+    const loadedModels = await client.llm.listLoaded();
+    const models = downloadedModels.map(model => {
+      const loadedCount = loadedModels.filter(
+        loadedModel => loadedModel.path === model.path,
+      ).length;
+      const isCurrent = loadedModels.some(
+        loadedModel =>
+          loadedModel.path === model.path && loadedModel.identifier === currentModelIdentifier,
+      );
+      return {
+        modelKey: model.modelKey,
+        isLoaded: loadedCount > 0,
+        isCurrent,
+      };
+    });
+    setDownloadedModels(models);
+  }, [client, currentModelIdentifier]);
 
   useEffect(() => {
-    const fetchModels = async () => {
-      const downloadedModels = (await client.system.listDownloadedModels()).filter(
-        model => model.type === "llm",
-      );
-      const loadedModels = await client.llm.listLoaded();
-      const models = downloadedModels.map(model => {
-        const loadedCount = loadedModels.filter(
-          loadedModel => loadedModel.path === model.path,
-        ).length;
-        const isCurrent = loadedModels.some(
-          loadedModel =>
-            loadedModel.path === model.path && loadedModel.identifier === currentModelIdentifier,
-        );
-        return {
-          modelKey: model.modelKey,
-          isLoaded: loadedCount > 0,
-          isCurrent,
-        };
-      });
-      setDownloadedModels(models);
-    };
-
-    fetchModels();
-  }, [client, currentModelIdentifier, refreshTrigger]);
+    refreshDownloadedModels();
+  }, [refreshDownloadedModels]);
 
   return { downloadedModels, refreshDownloadedModels };
 }
