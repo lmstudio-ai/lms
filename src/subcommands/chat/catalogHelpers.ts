@@ -28,7 +28,7 @@ export async function getCachedModelCatalogOrFetch(
 }
 
 /**
- * Finds a model in the catalog by owner/name identifier.
+ * Finds a model in the catalog by owner/name
  * The search is case-insensitive.
  */
 export function findModelInCatalog(catalog: HubModel[], modelKey: string): HubModel | undefined {
@@ -40,18 +40,18 @@ export function findModelInCatalog(catalog: HubModel[], modelKey: string): HubMo
 }
 
 /**
- * Parses a model identifier in the format "owner/name" and returns the components.
+ * Parses a modelKey  in the format "owner/name" and returns the components.
  * Returns null if the format is invalid.
  */
-export function parseModelIdentifier(identifier: string): { owner: string; name: string } | null {
-  const trimmedIdentifier = identifier.trim();
-  const separatorIndex = trimmedIdentifier.indexOf("/");
+export function parseModelKey(modelKey: string): { owner: string; name: string } | null {
+  const trimmedKey = modelKey.trim();
+  const separatorIndex = trimmedKey.indexOf("/");
 
   if (separatorIndex === -1) {
     return null;
   }
 
-  const parts = trimmedIdentifier.split("/").map(part => part.trim());
+  const parts = trimmedKey.split("/").map(part => part.trim());
 
   if (parts.length !== 2) {
     return null;

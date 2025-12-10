@@ -216,7 +216,6 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     logger.error("Invalid TTL value, must be a non-negative integer.");
     process.exit(1);
   }
-  const abortController = new AbortController();
   const chat = Chat.empty();
   chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
   let llm: LLM | undefined = undefined;
