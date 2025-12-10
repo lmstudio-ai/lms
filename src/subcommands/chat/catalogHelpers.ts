@@ -2,22 +2,21 @@ import { type SimpleLogger } from "@lmstudio/lms-common";
 import type { HubModel } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 
-let fetchedModelCatalogCache: HubModel[] | null = null;
+let cachedCatalogPromise: Promise<HubModel[]> | null = null;
 /**
  * Fetches the model catalog from the repository. Returns an empty array if offline
  * or if the fetch fails.
  */
-export async function fetchModelCatalog(
+export async function getCachedModelCatalogOrFetch(
   client: LMStudioClient,
   logger?: SimpleLogger,
 ): Promise<HubModel[]> {
   try {
-    if (fetchedModelCatalogCache !== null) {
-      return fetchedModelCatalogCache;
+    if (cachedCatalogPromise !== null) {
+      return cachedCatalogPromise;
     }
-    const modeCatalog = await client.repository.unstable.getModelCatalog();
-    fetchedModelCatalogCache = modeCatalog;
-    return modeCatalog;
+    cachedCatalogPromise = client.repository.unstable.getModelCatalog();
+    return await cachedCatalogPromise;
   } catch (error) {
     if (error instanceof Error && error.message.toLowerCase().includes("network") === true) {
       logger?.warn("Offline, unable to fetch model catalog");
@@ -32,11 +31,11 @@ export async function fetchModelCatalog(
  * Finds a model in the catalog by owner/name identifier.
  * The search is case-insensitive.
  */
-export function findModelInCatalog(catalog: HubModel[], identifier: string): HubModel | undefined {
-  const normalizedIdentifier = identifier.toLowerCase();
+export function findModelInCatalog(catalog: HubModel[], modelKey: string): HubModel | undefined {
+  const normalizedModelKey = modelKey.toLowerCase();
   return catalog.find(
     catalogModel =>
-      `${catalogModel.owner}/${catalogModel.name}`.toLowerCase() === normalizedIdentifier,
+      `${catalogModel.owner}/${catalogModel.name}`.toLowerCase() === normalizedModelKey,
   );
 }
 
@@ -52,8 +51,13 @@ export function parseModelIdentifier(identifier: string): { owner: string; name:
     return null;
   }
 
-  const owner = trimmedIdentifier.slice(0, separatorIndex).trim();
-  const name = trimmedIdentifier.slice(separatorIndex + 1).trim();
+  const parts = trimmedIdentifier.split("/").map(part => part.trim());
+
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const [owner, name] = parts;
 
   if (owner.length === 0 || name.length === 0) {
     return null;

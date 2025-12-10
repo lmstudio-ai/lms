@@ -12,18 +12,15 @@ interface ChatComponentProps {
   llm?: LLM;
   chat: Chat;
   onExit: () => void;
-  opts?: {
-    stats?: true;
-    ttl: number;
-    abortController?: AbortController;
-  };
+  stats?: true;
+  ttl?: number;
   shouldFetchModelCatalog?: boolean;
 }
 
 const emptyChatInputState: ChatUserInputState = "";
 
 export const ChatComponent = React.memo(
-  ({ client, llm, chat, onExit, opts }: ChatComponentProps) => {
+  ({ client, llm, chat, onExit, stats, ttl }: ChatComponentProps) => {
     const { exit } = useApp();
     const [messages, setMessages] = useState<InkChatMessage[]>([
       {
@@ -37,9 +34,7 @@ export const ChatComponent = React.memo(
     const streamingContentRef = useRef("");
     const reasoningStreamingContentRef = useRef("");
     const promptProcessingProgressRef = useRef(-1);
-    const abortControllerRef = useRef<AbortController | null>(
-      opts?.abortController ?? new AbortController(),
-    );
+    const abortControllerRef = useRef<AbortController | null>(new AbortController());
     const chatRef = useRef<Chat>(chat);
     const llmRef = useRef<LLM | null>(llm ?? null);
 
@@ -65,8 +60,6 @@ export const ChatComponent = React.memo(
       },
       [addMessage],
     );
-
-    // Input handling and rendering is delegated to ChatInput.
 
     const handleAbortPrediction = useCallback(() => {
       // Add finalized message before clearing refs to prevent flicker
@@ -106,6 +99,7 @@ export const ChatComponent = React.memo(
     }, [addMessage, logInChat]);
 
     const handleExit = useCallback(() => {
+      abortControllerRef.current?.abort();
       onExit();
       exit();
       process.exit(0);
@@ -210,7 +204,7 @@ export const ChatComponent = React.memo(
         addMessage(assistantMessage);
         streamingContentRef.current = "";
         reasoningStreamingContentRef.current = "";
-        if (opts?.stats === true) {
+        if (stats === true) {
           displayVerboseStats(result.stats, logInChat);
         }
       } catch (error) {
@@ -229,7 +223,7 @@ export const ChatComponent = React.memo(
         reasoningStreamingContentRef.current = "";
         streamingContentRef.current = "";
       }
-    }, [addMessage, handleExit, logErrorInChat, logInChat, opts?.stats, userInputState]);
+    }, [addMessage, handleExit, logErrorInChat, logInChat, stats, userInputState]);
 
     return (
       <Box flexDirection="column" width={"95%"} flexWrap="wrap">

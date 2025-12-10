@@ -23,12 +23,11 @@ import {
 import { runPromptWithExitHandling } from "../../prompt.js";
 import { render } from "ink";
 import { ChatComponent } from "./react/Chat.js";
-import { fetchModelCatalog } from "./catalogHelpers.js";
+import { getCachedModelCatalogOrFetch } from "./catalogHelpers.js";
 
 interface StartPredictionOpts {
   stats?: true;
   ttl: number;
-  abortController?: AbortController;
 }
 
 type ChatCommandOptions = OptionValues &
@@ -56,7 +55,7 @@ export async function getOrAskShouldFetchModelCatalog(
 ): Promise<boolean> {
   const fetchModelCatalogPreference = cliPref.get().fetchModelCatalog;
   let shouldFetchModelCatalog = false;
-  if (dontFetchCatalog !== true && fetchModelCatalogPreference !== false && process.stdin.isTTY) {
+  if (dontFetchCatalog === false && fetchModelCatalogPreference !== false && process.stdin.isTTY) {
     if (fetchModelCatalogPreference === undefined) {
       const fetchAnswer = await runPromptWithExitHandling(() =>
         confirm(
@@ -165,12 +164,12 @@ export async function startInteractiveChat(
         client={client}
         llm={llm}
         chat={chat}
-        opts={opts}
         onExit={() => {
-          opts.abortController?.abort();
           resolve();
         }}
         shouldFetchModelCatalog={shouldFetchModelCatalog}
+        stats={opts.stats}
+        ttl={opts.ttl}
       />,
       {
         exitOnCtrlC: false,
@@ -231,7 +230,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
 
   if (shouldFetchModelCatalog) {
     // Pre-fetch model catalog to speed up later model selection
-    await fetchModelCatalog(client);
+    await getCachedModelCatalogOrFetch(client);
   }
   if (model !== undefined && model !== "") {
     try {
@@ -260,7 +259,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     let modelCatalogModels: HubModel[] = [];
 
     if (shouldFetchModelCatalog) {
-      modelCatalogModels = await fetchModelCatalog(client, logger);
+      modelCatalogModels = await getCachedModelCatalogOrFetch(client, logger);
     }
     const modelCatalogModelNames = modelCatalogModels.map(m => m.owner + "/" + m.name);
 
@@ -348,7 +347,6 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
       stats: options.stats,
       ttl,
-      abortController: abortController,
     });
   } else if (process.stdin.isTTY) {
     await startInteractiveChat(
@@ -357,7 +355,6 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       {
         stats: options.stats,
         ttl,
-        abortController,
       },
       llm,
       shouldFetchModelCatalog,
