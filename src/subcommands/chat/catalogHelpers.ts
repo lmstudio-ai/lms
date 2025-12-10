@@ -13,11 +13,13 @@ export async function getCachedModelCatalogOrFetch(
 ): Promise<HubModel[]> {
   try {
     if (cachedCatalogPromise !== null) {
-      return cachedCatalogPromise;
+      return await cachedCatalogPromise;
     }
     cachedCatalogPromise = client.repository.unstable.getModelCatalog();
     return await cachedCatalogPromise;
   } catch (error) {
+    // Clear the cached promise on failure so that subsequent calls will retry
+    cachedCatalogPromise = null;
     if (error instanceof Error && error.message.toLowerCase().includes("network") === true) {
       logger?.warn("Offline, unable to fetch model catalog");
     } else {
