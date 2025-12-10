@@ -1,5 +1,6 @@
 import { Command } from "@commander-js/extra-typings";
 import {
+  type RuntimeHardwareGpuDetectionPlatform,
   type RuntimeHardwareGpuInfo,
   type RuntimeHardwareSurveyEngine,
   type RuntimeHardwareSurveyResult,
@@ -67,28 +68,32 @@ function resolveScope(
   return undefined;
 }
 
-function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined {
-  const gpus = survey.hardwareSurvey.gpuSurveyResult.gpuInfo;
-  if (gpus.length === 0) {
+function renderGpuTable(gpuInfos: RuntimeHardwareGpuInfo[]): string | undefined {
+  if (gpuInfos.length === 0) {
     return undefined;
   }
 
-  const rows = gpus.map(gpuInfo => {
+  const rows = gpuInfos.map(gpuInfo => {
     const memoryMetrics = getGpuMemoryMetrics(gpuInfo);
-    const deviceDescriptor = `${gpuInfo.name} (${gpuInfo.detectionPlatform}, ${gpuInfo.integrationType})`;
+    const deviceDescriptor = `${gpuInfo.name} (${gpuInfo.integrationType})`;
     const driverVersion =
       gpuInfo.detectionPlatformVersion !== "" ? gpuInfo.detectionPlatformVersion : "Unknown";
     return {
       device: deviceDescriptor,
+      detectionPlatform: gpuInfo.detectionPlatform,
       vram: formatMemoryRatio(memoryMetrics),
       driver: driverVersion,
     };
   });
 
   return columnify(rows, {
-    columns: ["device", "vram", "driver"],
+    columns: ["device", "detectionPlatform", "vram", "driver"],
     config: {
       device: { headingTransform: () => chalk.grey("GPU/ACCELERATORS"), align: "left" },
+      detectionPlatform: {
+        headingTransform: () => chalk.grey("DETECTION PLATFORM"),
+        align: "left",
+      },
       vram: { headingTransform: () => chalk.grey("Total VRAM"), align: "left" },
       driver: { headingTransform: () => chalk.grey("DRIVER"), align: "left" },
     },
@@ -124,23 +129,44 @@ function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | 
   return `Compatibility: ${survey.compatibility.status} — ${survey.compatibility.message}`;
 }
 
-function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine, logger: SimpleLogger) {
-  const gpuTable = renderGpuTable(survey);
-  const gpuFramework = survey.hardwareSurvey.gpuSurveyResult.gpuInfo.find(
-    gpu => gpu.detectionPlatform,
-  )?.detectionPlatform;
-  logger.info(
-    chalk.gray(`Survey by ${survey.engine} [${gpuFramework ?? "Unknown"}] (${survey.version}):`),
-  );
+function renderEngineSurvey(surveyResult: RuntimeHardwareSurveyResult, logger: SimpleLogger): void {
+  const aggregatedGpuInfos: RuntimeHardwareGpuInfo[] = [];
+  const usedDetectionPlatforms = new Set<RuntimeHardwareGpuDetectionPlatform>();
+
+  for (const engineSurvey of surveyResult.engines) {
+    const gpuInfosByPlatform = new Map<
+      RuntimeHardwareGpuDetectionPlatform,
+      RuntimeHardwareGpuInfo[]
+    >();
+
+    for (const gpuInfo of engineSurvey.hardwareSurvey.gpuSurveyResult.gpuInfo) {
+      const platformGpuInfos = gpuInfosByPlatform.get(gpuInfo.detectionPlatform) ?? [];
+      platformGpuInfos.push(gpuInfo);
+      gpuInfosByPlatform.set(gpuInfo.detectionPlatform, platformGpuInfos);
+    }
+
+    for (const [detectionPlatform, platformGpuInfos] of gpuInfosByPlatform) {
+      if (usedDetectionPlatforms.has(detectionPlatform) === true) {
+        continue;
+      }
+      usedDetectionPlatforms.add(detectionPlatform);
+      for (const platformGpuInfo of platformGpuInfos) {
+        aggregatedGpuInfos.push(platformGpuInfo);
+      }
+    }
+  }
+
+  const gpuTable = renderGpuTable(aggregatedGpuInfos);
   if (gpuTable === undefined) {
     logger.info("No accelerators detected.");
   } else {
     logger.info(gpuTable);
   }
-  logger.info("\n" + renderCpuLine(survey));
-  logger.info(renderRamLine(survey));
+  const firstEngineSurvey = surveyResult.engines[0];
+  logger.info("\n" + renderCpuLine(firstEngineSurvey));
+  logger.info(renderRamLine(firstEngineSurvey));
 
-  const compatibilityLine = renderCompatibilityLine(survey);
+  const compatibilityLine = renderCompatibilityLine(firstEngineSurvey);
   if (compatibilityLine !== undefined) {
     logger.info(compatibilityLine);
   }
@@ -181,14 +207,10 @@ const surveyCommand = new Command()
       logger.info("No runtime survey results.");
       return;
     }
-
-    surveyResult.engines.forEach((engineSurvey, engineIndex) => {
-      renderEngineSurvey(engineSurvey, logger);
-      const isLast = engineIndex === surveyResult.engines.length - 1;
-      if (!isLast) {
-        logger.info();
-      }
-    });
+    // Aggregate GPU information across all engines so that GPUs detected
+    // via different platforms are shown together in a single table.
+    // For CPU, RAM, and compatibility we use the first engine survey..
+    renderEngineSurvey(surveyResult, logger);
   });
 
 addCreateClientOptions(surveyCommand);
