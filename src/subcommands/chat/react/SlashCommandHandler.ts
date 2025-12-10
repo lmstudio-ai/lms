@@ -1,26 +1,20 @@
-import { type ModelState, type Suggestion } from "./types.js";
+import { type Suggestion } from "./types.js";
 
 export interface SlashCommandSuggestionBuilderArgs {
   argsInput: string;
-  models: ModelState[];
-  fetchDownloadableModels: (filterText: string) => Promise<Suggestion[]>;
 }
 
 export interface SlashCommandSuggestionsOpts {
   input: string;
   isPredicting: boolean;
   isConfirmationActive: boolean;
-  models: ModelState[];
-  fetchDownloadableModels: (filterText: string) => Promise<Suggestion[]>;
 }
 
 export interface SlashCommand {
   name: string;
   description: string;
   handler: (commandArguments: string[]) => void | Promise<void>;
-  buildSuggestions?: (
-    builderArgs: SlashCommandSuggestionBuilderArgs,
-  ) => Suggestion[] | Promise<Suggestion[]>;
+  buildSuggestions?: (builderArgs: SlashCommandSuggestionBuilderArgs) => Suggestion[];
 }
 
 export class SlashCommandHandler {
@@ -66,7 +60,7 @@ export class SlashCommandHandler {
     return `Available commands:\n${commandsText}\n`;
   }
 
-  async getSuggestions(opts: SlashCommandSuggestionsOpts): Promise<Suggestion[]> {
+  getSuggestions(opts: SlashCommandSuggestionsOpts): Suggestion[] {
     const inputWithTrimmedStart = opts.input.trimStart();
     if (
       inputWithTrimmedStart.startsWith("/") === false ||
@@ -84,9 +78,10 @@ export class SlashCommandHandler {
     const normalizedCommandPortion = commandPortion.toLowerCase();
 
     if (hasArguments === false) {
-      return this.list()
+      const matchingCommands = this.list()
         .filter(command => command.name.toLowerCase().startsWith(normalizedCommandPortion))
-        .map(command => ({ type: "command", data: command }));
+        .map(command => ({ type: "command", data: command }) as Suggestion);
+      return SlashCommandHandler.sortSuggestions(matchingCommands);
     }
 
     const command = this.commands.get(normalizedCommandPortion);
@@ -95,11 +90,10 @@ export class SlashCommandHandler {
     }
 
     const argumentsInput = inputWithTrimmedStart.slice(firstWhitespaceIndex + 1);
-    return await command.buildSuggestions({
+    const rawSuggestions = command.buildSuggestions({
       argsInput: argumentsInput,
-      models: opts.models,
-      fetchDownloadableModels: opts.fetchDownloadableModels,
     });
+    return SlashCommandHandler.sortSuggestions(rawSuggestions);
   }
 
   public static parseSlashCommand(
@@ -147,5 +141,36 @@ export class SlashCommandHandler {
       }
     }
     return { command, argumentsText };
+  }
+  static sortSuggestions(suggestions: Suggestion[]): Suggestion[] {
+    const suggestionsCopy = [...suggestions];
+    suggestionsCopy.sort((leftSuggestion, rightSuggestion) => {
+      if (leftSuggestion.type === "model" && rightSuggestion.type === "model") {
+        if (leftSuggestion.data.isCurrent === true && rightSuggestion.data.isCurrent !== true) {
+          return -1;
+        }
+        if (leftSuggestion.data.isCurrent !== true && rightSuggestion.data.isCurrent === true) {
+          return 1;
+        }
+        if (leftSuggestion.data.isLoaded === true && rightSuggestion.data.isLoaded !== true) {
+          return -1;
+        }
+        if (leftSuggestion.data.isLoaded !== true && rightSuggestion.data.isLoaded === true) {
+          return 1;
+        }
+        return leftSuggestion.data.modelKey.localeCompare(rightSuggestion.data.modelKey);
+      }
+      if (leftSuggestion.type === "command" && rightSuggestion.type === "command") {
+        return leftSuggestion.data.name.localeCompare(rightSuggestion.data.name);
+      }
+      if (leftSuggestion.type === "model" && rightSuggestion.type === "command") {
+        return -1;
+      }
+      if (leftSuggestion.type === "command" && rightSuggestion.type === "model") {
+        return 1;
+      }
+      return 0;
+    });
+    return suggestionsCopy;
   }
 }

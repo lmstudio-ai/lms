@@ -1,5 +1,6 @@
-import { type LLM, type LMStudioClient, Chat } from "@lmstudio/sdk";
-import { Box, Text, useApp, useInput } from "ink";
+import { type LLM, type LMStudioClient, type Chat } from "@lmstudio/sdk";
+import { produce } from "@lmstudio/immer-with-plugins";
+import { Box, Text, useApp } from "ink";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
@@ -11,26 +12,21 @@ import {
   useConfirmationPrompt,
   useDownloadCommand,
   useDownloadedModels,
-  useSortedSuggestions,
+  useModelCatalog,
   useSuggestionHandlers,
   useSuggestionsPerPage,
 } from "./hooks.js";
-import { DEFAULT_SYSTEM_PROMPT } from "../index.js";
 import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
 import { displayVerboseStats } from "../util.js";
-import { PartialMessage } from "./PartialMessage.js";
-import { fetchModelCatalog } from "../catalogHelpers.js";
+import { createSlashCommands } from "./slashCommands.js";
 
 interface ChatComponentProps {
   client: LMStudioClient;
   llm?: LLM;
   chat: Chat;
   onExit: () => void;
-  opts?: {
-    stats?: true;
-    ttl: number;
-    abortController?: AbortController;
-  };
+  stats?: true;
+  ttl?: number;
   shouldFetchModelCatalog?: boolean;
 }
 
@@ -55,7 +51,7 @@ type ChatConfirmationPayload =
     };
 
 export const ChatComponent = React.memo(
-  ({ client, llm, chat, onExit, opts, shouldFetchModelCatalog }: ChatComponentProps) => {
+  ({ client, llm, chat, onExit, stats, ttl, shouldFetchModelCatalog }: ChatComponentProps) => {
     const { exit } = useApp();
     const [messages, setMessages] = useState<InkChatMessage[]>([
       {
@@ -65,35 +61,38 @@ export const ChatComponent = React.memo(
 
     const [userInputState, setUserInputState] = useState<ChatUserInputState>(emptyChatInputState);
     const [isPredicting, setIsPredicting] = useState(false);
-    const [, setRenderTrigger] = useState(0);
     const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
     const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
-    const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const { isConfirmationActive, requestConfirmation, handleConfirmationResponse } =
       useConfirmationPrompt<ChatConfirmationPayload>();
-    const streamingContentRef = useRef("");
-    const reasoningStreamingContentRef = useRef("");
-    const promptProcessingProgressRef = useRef(-1);
-    const abortControllerRef = useRef<AbortController | null>(
-      opts?.abortController ?? new AbortController(),
-    );
+    const [promptProcessingProgress, setPromptProcessingProgress] = useState(-1);
+    const abortControllerRef = useRef<AbortController | null>(new AbortController());
     const chatRef = useRef<Chat>(chat);
     const llmRef = useRef<LLM | null>(llm ?? null);
     const { downloadedModels, refreshDownloadedModels } = useDownloadedModels(
       client,
       llmRef.current !== null ? llmRef.current.identifier : null,
     );
-    const sortedSuggestions = useSortedSuggestions(suggestions);
+    const modelCatalog = useModelCatalog(client, shouldFetchModelCatalog);
+    const suggestions = useMemo<Suggestion[]>(() => {
+      if (userInputState.segments.length === 0) {
+        return [];
+      }
+      const firstSegment = userInputState.segments[0];
+      const inputText = firstSegment.content;
+      return commandHandler.getSuggestions({
+        input: inputText,
+        isPredicting,
+        isConfirmationActive,
+      });
+    }, [isConfirmationActive, isPredicting, userInputState]);
     const suggestionsPerPage = useSuggestionsPerPage(messages);
-    const areSuggestionsVisible = useMemo(() => sortedSuggestions.length > 0, [sortedSuggestions]);
+    const areSuggestionsVisible = useMemo(() => suggestions.length > 0, [suggestions]);
 
     const addMessage = useCallback((message: InkChatMessage) => {
-      let index = -1;
       setMessages(previousMessages => {
-        index = previousMessages.length;
         return [...previousMessages, message];
       });
-      return index;
     }, []);
 
     const logInChat = useCallback(
@@ -128,201 +127,80 @@ export const ChatComponent = React.memo(
     } = useSuggestionHandlers({
       selectedSuggestionIndex,
       setSelectedSuggestionIndex,
-      sortedSuggestions,
+      sortedSuggestions: suggestions,
       suggestionsPerPage,
       setUserInputState,
-      setSuggestions,
     });
-    const slashCommands = useMemo<SlashCommand[]>(() => {
-      return [
-        {
-          name: "help",
-          description: "Show help information",
-          handler: async () => {
-            const helpText = commandHandler.generateHelpText();
-            addMessage({ type: "help", content: helpText });
-          },
-        },
-        {
-          name: "exit",
-          description: "Exit the chat",
-          handler: async () => {
-            onExit();
-            exit();
-            process.exit(0);
-          },
-        },
-        {
-          name: "model",
-          description: "Load a model (type /model to see list)",
-          handler: async commandArguments => {
-            if (commandArguments.length === 0) {
-              logInChat("Please specify a model to load. Type /model to see the list.");
-              return;
-            }
-
-            const modelKey = commandArguments.join(" ");
-
-            if (llmRef.current !== null && modelKey === llmRef.current.modelKey) {
-              return;
-            }
-
-            setModelLoadingProgress(0);
-            try {
-              llmRef.current = await client.llm.model(modelKey, {
-                verbose: false,
-                ttl: opts?.ttl,
-                onProgress(progress) {
-                  setModelLoadingProgress(progress);
-                },
-                signal: abortControllerRef.current?.signal,
-              });
-              logInChat(`Model Selected: ${llmRef.current.displayName}`);
-            } catch (error) {
-              const errorMessage =
-                error instanceof Error && error.message !== undefined
-                  ? error.message
-                  : String(error);
-              logErrorInChat(`Failed to load model: ${errorMessage}`);
-            } finally {
-              setModelLoadingProgress(null);
-            }
-          },
-          buildSuggestions: ({ argsInput, models }) => {
-            const normalizedFilter = argsInput.trim().toLowerCase();
-            const filteredModels = models.filter(model =>
-              model.modelKey.toLowerCase().includes(normalizedFilter),
-            );
-            return filteredModels.map(model => ({ type: "model", data: model }));
-          },
-        },
-        {
-          name: "clear",
-          description: "Clear the chat history",
-          handler: async () => {
-            setMessages([]);
-            setUserInputState(emptyChatInputState);
-            console.clear();
-            chatRef.current = Chat.empty();
-            chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
-          },
-        },
-        {
-          name: "system-prompt",
-          description: "Set the system prompt",
-          handler: async commandArguments => {
-            const prompt = commandArguments.join(" ");
-            if (prompt.length === 0) {
-              logInChat("Please provide a system prompt.");
-              return;
-            }
-
-            chatRef.current.append("system", prompt);
-            logInChat("System prompt updated to: " + prompt);
-          },
-        },
-        {
-          name: "download",
-          description: "Download a model",
-          handler: handleDownloadCommand,
-          buildSuggestions: async ({ argsInput, fetchDownloadableModels }) => {
-            const trimmedFilter = argsInput.trim();
-            return await fetchDownloadableModels(trimmedFilter);
-          },
-        },
-      ];
-    }, [
-      addMessage,
-      client.llm,
-      exit,
-      handleDownloadCommand,
-      logErrorInChat,
-      logInChat,
-      onExit,
-      opts?.ttl,
-    ]);
-
-    const fetchDownloadableModelSuggestions = useCallback(
-      async (filterText: string) => {
-        if (shouldFetchModelCatalog !== true) {
-          return [];
-        }
-        const trimmedFilter = filterText.trim();
-        const availableModels = await fetchModelCatalog(client);
-        const lowercaseFilter = trimmedFilter.toLowerCase();
-        if (lowercaseFilter.length === 0) {
-          return availableModels.map(model => ({
-            type: "downloadableModel" as const,
-            data: {
-              owner: model.owner,
-              name: model.name,
-              downloads: model.downloads,
-              likeCount: model.likeCount,
-              staffPickedAt: model.staffPickedAt,
-            },
-          }));
-        }
-        const filteredModels = availableModels.filter(model =>
-          `${model.owner}/${model.name}`.toLowerCase().includes(lowercaseFilter),
-        );
-        return filteredModels.map(model => ({
-          type: "downloadableModel" as const,
-          data: {
-            owner: model.owner,
-            name: model.name,
-            downloads: model.downloads,
-            likeCount: model.likeCount,
-            staffPickedAt: model.staffPickedAt,
-          },
-        }));
-      },
-      [client, shouldFetchModelCatalog],
-    );
-
-    // Input handling and rendering is delegated to ChatInput.
-
-    const handleAbortPrediction = useCallback(() => {
-      // Add finalized message before clearing refs to prevent flicker
-      if (
-        streamingContentRef.current.length > 0 ||
-        reasoningStreamingContentRef.current.length > 0
-      ) {
-        const assistantMessage: InkChatMessage = {
-          type: "assistant",
-          content: [],
-          displayName: llmRef.current?.displayName ?? "Assistant",
-          stoppedByUser: true,
-        };
-        if (reasoningStreamingContentRef.current.length > 0) {
-          assistantMessage.content.push({
-            type: "reasoning",
-            text: reasoningStreamingContentRef.current,
-          });
-        }
-        if (streamingContentRef.current.length > 0) {
-          assistantMessage.content.push({
-            type: "response",
-            text: streamingContentRef.current,
-          });
-        }
-        addMessage(assistantMessage);
-        streamingContentRef.current = "";
-        reasoningStreamingContentRef.current = "";
-      } else {
-        logInChat("Prediction aborted by user.");
-      }
-
-      if (abortControllerRef.current !== null) {
-        abortControllerRef.current.abort();
-      }
-      setIsPredicting(false);
-    }, [addMessage, logInChat]);
 
     const handleExit = useCallback(() => {
+      abortControllerRef.current?.abort();
       onExit();
       exit();
       process.exit(0);
     }, [onExit, exit]);
+
+    const slashCommands = useMemo<SlashCommand[]>(() => {
+      return createSlashCommands({
+        client,
+        llmRef,
+        chatRef,
+        exitApp: handleExit,
+        ttl,
+        abortControllerRef,
+        addMessage,
+        setMessages,
+        setUserInputState,
+        downloadedModels,
+        modelCatalog,
+        handleDownloadCommand,
+        logInChat,
+        logErrorInChat,
+        shouldFetchModelCatalog,
+        commandHandler,
+        setModelLoadingProgress,
+      });
+    }, [
+      client,
+      handleExit,
+      ttl,
+      addMessage,
+      downloadedModels,
+      modelCatalog,
+      handleDownloadCommand,
+      logInChat,
+      logErrorInChat,
+      shouldFetchModelCatalog,
+    ]);
+
+    const handleAbortPrediction = useCallback(() => {
+      const hasAssistantMessage =
+        messages.length > 0 && messages[messages.length - 1]?.type === "assistant";
+
+      if (hasAssistantMessage === true) {
+        setMessages(previousMessages =>
+          produce(previousMessages, draftMessages => {
+            if (draftMessages.length === 0) {
+              return;
+            }
+            const lastMessageIndex = draftMessages.length - 1;
+            const lastMessage = draftMessages[lastMessageIndex];
+            if (lastMessage === undefined || lastMessage.type !== "assistant") {
+              return;
+            }
+            if (lastMessage.content.length === 0) {
+              return;
+            }
+            lastMessage.stoppedByUser = true;
+          }),
+        );
+      } else {
+        logInChat("Prediction aborted by user.");
+      }
+      if (abortControllerRef.current !== null) {
+        abortControllerRef.current.abort();
+      }
+      setIsPredicting(false);
+    }, [logInChat, messages]);
 
     const handlePaste = useCallback((content: string) => {
       const normalizedContent = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -364,7 +242,7 @@ export const ChatComponent = React.memo(
       if (userInputText.startsWith("/") && userInputState.segments.length === 1) {
         const { command, argumentsText } = SlashCommandHandler.parseSlashCommand(
           userInputText,
-          sortedSuggestions[selectedSuggestionIndex],
+          suggestions[selectedSuggestionIndex],
         );
         if (command === null) {
           return;
@@ -388,8 +266,6 @@ export const ChatComponent = React.memo(
 
       // If nothing else, proceed with normal message submission
       setIsPredicting(true);
-      streamingContentRef.current = "";
-      reasoningStreamingContentRef.current = "";
       if (
         abortControllerRef.current === null ||
         abortControllerRef.current.signal.aborted === true
@@ -402,33 +278,44 @@ export const ChatComponent = React.memo(
         chatRef.current.append("user", userInputText);
         addMessage({
           type: "user",
-          content: userInputState.segments.map(s => {
-            if (s.type === "largePaste") {
-              if (s.content.length > 50) {
+          content: userInputState.segments.map(segment => {
+            if (segment.type === "largePaste") {
+              if (segment.content.length > 50) {
                 return {
                   type: "largePaste",
-                  text: `[Pasted ${s.content.replace(/\r\n|\r|\n/g, "").slice(0, 50)}...]`,
+                  text: `[Pasted ${segment.content.replace(/\r\n|\r|\n/g, "").slice(0, 50)}...]`,
                 };
               }
-              return { type: s.type, text: s.content };
+              return { type: segment.type, text: segment.content };
             }
-            return { type: s.type, text: s.content };
+            return { type: segment.type, text: segment.content };
           }),
         });
         const result = await llmRef.current.respond(chatRef.current, {
           onFirstToken() {
             chatRef.current.append("assistant", "");
+            const displayName =
+              llmRef.current?.displayName ?? llmRef.current?.modelKey ?? "Assistant";
+            setMessages(previousMessages =>
+              produce(previousMessages, draftMessages => {
+                draftMessages.push({
+                  type: "assistant",
+                  content: [],
+                  displayName,
+                  stoppedByUser: false,
+                });
+              }),
+            );
           },
           onPromptProcessingProgress(progress) {
             if (signal.aborted) {
               return;
             }
             if (progress === 1) {
-              promptProcessingProgressRef.current = -1;
-            } else if (progress !== promptProcessingProgressRef.current) {
-              promptProcessingProgressRef.current = progress;
+              setPromptProcessingProgress(-1);
+            } else if (progress !== promptProcessingProgress) {
+              setPromptProcessingProgress(progress);
             }
-            setRenderTrigger(previousTrigger => previousTrigger + 1);
           },
           onPredictionFragment(fragment) {
             if (fragment.isStructural) {
@@ -437,47 +324,40 @@ export const ChatComponent = React.memo(
             if (signal.aborted) {
               return;
             }
-            if (fragment.reasoningType === "none") {
-              streamingContentRef.current += fragment.content;
-              setRenderTrigger(previousTrigger => previousTrigger + 1);
-            } else if (
+            chatRef.current.at(-1).appendText(fragment.content);
+            if (
               fragment.reasoningType === "reasoningStartTag" ||
               fragment.reasoningType === "reasoningEndTag"
             ) {
-              // Ignore reasoning tags
-            } else {
-              reasoningStreamingContentRef.current += fragment.content;
-              setRenderTrigger(previousTrigger => previousTrigger + 1);
+              return;
             }
-            chatRef.current.at(-1).appendText(fragment.content);
+            setMessages(previousMessages =>
+              produce(previousMessages, draftMessages => {
+                if (draftMessages.length === 0) {
+                  return;
+                }
+                const lastMessageIndex = draftMessages.length - 1;
+                const lastMessage = draftMessages[lastMessageIndex];
+                if (lastMessage === undefined || lastMessage.type !== "assistant") {
+                  return;
+                }
+                const targetPartType = fragment.reasoningType === "none" ? "response" : "reasoning";
+                const parts = lastMessage.content;
+                const lastPart = parts.length > 0 ? parts[parts.length - 1] : undefined;
+                if (lastPart !== undefined && lastPart.type === targetPartType) {
+                  lastPart.text += fragment.content;
+                } else {
+                  parts.push({
+                    type: targetPartType,
+                    text: fragment.content,
+                  });
+                }
+              }),
+            );
           },
           signal,
         });
-        const assistantMessage: InkChatMessage = {
-          type: "assistant",
-          content: [],
-          displayName: llmRef.current?.displayName ?? llmRef.current?.modelKey ?? "Assistant",
-          stoppedByUser: signal.aborted,
-        };
-        if (signal.aborted) {
-          return;
-        }
-        if (reasoningStreamingContentRef.current.length > 0) {
-          assistantMessage.content.push({
-            type: "reasoning",
-            text: reasoningStreamingContentRef.current,
-          });
-        }
-        if (streamingContentRef.current.length > 0) {
-          assistantMessage.content.push({
-            type: "response",
-            text: streamingContentRef.current,
-          });
-        }
-        addMessage(assistantMessage);
-        streamingContentRef.current = "";
-        reasoningStreamingContentRef.current = "";
-        if (opts?.stats === true) {
+        if (stats === true) {
           displayVerboseStats(result.stats, logInChat);
         }
       } catch (error) {
@@ -500,7 +380,7 @@ export const ChatComponent = React.memo(
                 try {
                   llmRef.current = await client.llm.model(payload.modelKey, {
                     verbose: false,
-                    ttl: opts?.ttl,
+                    ttl,
                     onProgress(progress) {
                       setModelLoadingProgress(progress);
                     },
@@ -529,8 +409,6 @@ export const ChatComponent = React.memo(
       } finally {
         setIsPredicting(false);
         abortControllerRef.current = null;
-        reasoningStreamingContentRef.current = "";
-        streamingContentRef.current = "";
       }
     }, [
       addMessage,
@@ -539,85 +417,42 @@ export const ChatComponent = React.memo(
       handleExit,
       logErrorInChat,
       logInChat,
-      opts?.stats,
-      opts?.ttl,
+      promptProcessingProgress,
       requestConfirmation,
       selectedSuggestionIndex,
-      sortedSuggestions,
+      stats,
+      suggestions,
+      ttl,
       userInputState,
     ]);
 
     const renderSuggestions = useCallback(() => {
-      if (sortedSuggestions.length === 0) {
+      if (suggestions.length === 0) {
         return null;
       }
 
       return (
         <ChatSuggestions
-          suggestions={sortedSuggestions}
+          suggestions={suggestions}
           selectedSuggestionIndex={selectedSuggestionIndex}
           suggestionsPerPage={suggestionsPerPage}
         />
       );
-    }, [sortedSuggestions, selectedSuggestionIndex, suggestionsPerPage]);
+    }, [selectedSuggestionIndex, suggestions, suggestionsPerPage]);
 
     // We register slash commands once on mount and whenever they change.
     useEffect(() => {
       commandHandler.setCommands(slashCommands);
     }, [slashCommands]);
 
-    // Whenever a user inputs something which could be a command, we fetch suggestions.
-    useEffect(() => {
-      if (userInputState.segments.length === 0) {
-        if (suggestions.length > 0) {
-          setSuggestions([]);
-        }
-        return;
-      }
-      let isCancelled = false;
-      const updateSuggestions = async () => {
-        const nextSuggestions = await commandHandler.getSuggestions({
-          input: userInputState.segments[0].content,
-          isPredicting,
-          isConfirmationActive,
-          models: downloadedModels,
-          fetchDownloadableModels: fetchDownloadableModelSuggestions,
-        });
-
-        if (isCancelled === true) {
-          return;
-        }
-        setSuggestions(nextSuggestions);
-        setSelectedSuggestionIndex(nextSuggestions.length > 0 ? 0 : -1);
-      };
-
-      updateSuggestions();
-
-      return () => {
-        isCancelled = true;
-      };
-    }, [
-      fetchDownloadableModelSuggestions,
-      isConfirmationActive,
-      isPredicting,
-      userInputState,
-      downloadedModels,
-      suggestions.length,
-    ]);
-
     return (
       <Box flexDirection="column" width={"95%"} flexWrap="wrap">
-        <ChatMessagesList messages={messages} modelName={llmRef.current?.displayName ?? null} />
-        {isPredicting &&
-          llmRef.current !== undefined &&
-          llmRef.current?.displayName !== undefined && (
-            <PartialMessage
-              modelName={llmRef.current?.displayName}
-              reasoningContent={reasoningStreamingContentRef.current}
-              streamingContent={streamingContentRef.current}
-              promptProcessingProgress={promptProcessingProgressRef.current}
-            />
-          )}
+        <ChatMessagesList
+          messages={messages}
+          modelName={llmRef.current?.displayName ?? null}
+          isPredicting={isPredicting}
+          promptProcessingProgress={promptProcessingProgress}
+        />
         {modelLoadingProgress !== null && (
           <Box paddingTop={1}>
             <Text color="yellow">Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>

@@ -2,22 +2,21 @@ import { type SimpleLogger } from "@lmstudio/lms-common";
 import type { HubModel } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 
-let fetchedModelCatalogCache: HubModel[] | null = null;
+let cachedCatalogPromise: Promise<HubModel[]> | null = null;
 /**
  * Fetches the model catalog from the repository. Returns an empty array if offline
  * or if the fetch fails.
  */
-export async function fetchModelCatalog(
+export async function getCachedModelCatalogOrFetch(
   client: LMStudioClient,
   logger?: SimpleLogger,
 ): Promise<HubModel[]> {
   try {
-    if (fetchedModelCatalogCache !== null) {
-      return fetchedModelCatalogCache;
+    if (cachedCatalogPromise !== null) {
+      return cachedCatalogPromise;
     }
-    const modeCatalog = await client.repository.unstable.getModelCatalog();
-    fetchedModelCatalogCache = modeCatalog;
-    return modeCatalog;
+    cachedCatalogPromise = client.repository.unstable.getModelCatalog();
+    return await cachedCatalogPromise;
   } catch (error) {
     if (error instanceof Error && error.message.toLowerCase().includes("network") === true) {
       logger?.warn("Offline, unable to fetch model catalog");
@@ -29,31 +28,31 @@ export async function fetchModelCatalog(
 }
 
 /**
- * Finds a model in the catalog by owner/name identifier.
+ * Finds a model in the catalog by owner/name
  * The search is case-insensitive.
  */
-export function findModelInCatalog(catalog: HubModel[], identifier: string): HubModel | undefined {
-  const normalizedIdentifier = identifier.toLowerCase();
+export function findModelInCatalog(catalog: HubModel[], modelKey: string): HubModel | undefined {
+  const normalizedModelKey = modelKey.toLowerCase();
   return catalog.find(
     catalogModel =>
-      `${catalogModel.owner}/${catalogModel.name}`.toLowerCase() === normalizedIdentifier,
+      `${catalogModel.owner}/${catalogModel.name}`.toLowerCase() === normalizedModelKey,
   );
 }
 
 /**
- * Parses a model identifier in the format "owner/name" and returns the components.
+ * Parses a modelKey in the format "owner/name" and returns the components.
  * Returns null if the format is invalid.
  */
-export function parseModelIdentifier(identifier: string): { owner: string; name: string } | null {
-  const trimmedIdentifier = identifier.trim();
-  const separatorIndex = trimmedIdentifier.indexOf("/");
+export function parseModelKey(modelKey: string): { owner: string; name: string } | null {
+  const trimmedModelKey = modelKey.trim();
+  const separatorIndex = trimmedModelKey.indexOf("/");
 
   if (separatorIndex === -1) {
     return null;
   }
 
-  const owner = trimmedIdentifier.slice(0, separatorIndex).trim();
-  const name = trimmedIdentifier.slice(separatorIndex + 1).trim();
+  const owner = trimmedModelKey.slice(0, separatorIndex).trim();
+  const name = trimmedModelKey.slice(separatorIndex + 1).trim();
 
   if (owner.length === 0 || name.length === 0) {
     return null;

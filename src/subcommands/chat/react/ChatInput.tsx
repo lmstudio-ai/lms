@@ -175,7 +175,7 @@ export const ChatInput = ({
           ) : (
             <>
               <Text inverse>T</Text>
-              <Text>ype a message or use / to use commands</Text>
+              <Text color="gray">ype a message or use / to use commands</Text>
             </>
           )}
         </Box>

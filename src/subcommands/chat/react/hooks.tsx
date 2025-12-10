@@ -10,28 +10,43 @@ import { estimateMessageLinesCount } from "../util.js";
 import { useStdin } from "ink";
 import { downloadModelWithProgress, getDownloadSize } from "../downloadHelpers.js";
 import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
-import { fetchModelCatalog, findModelInCatalog, parseModelIdentifier } from "../catalogHelpers.js";
+import {
+  getCachedModelCatalogOrFetch,
+  findModelInCatalog,
+  parseModelKey,
+} from "../catalogHelpers.js";
+import type { HubModel } from "@lmstudio/lms-shared-types";
 
-export function useSortedSuggestions(suggestions: Suggestion[]): Suggestion[] {
-  return useMemo(() => {
-    return [...suggestions].sort((a, b) => {
-      if (a.type === "model" && b.type === "model") {
-        if (a.data.isCurrent && !b.data.isCurrent) return -1;
-        if (!a.data.isCurrent && b.data.isCurrent) return 1;
-        if (a.data.isLoaded && !b.data.isLoaded) return -1;
-        if (!a.data.isLoaded && b.data.isLoaded) return 1;
-        return a.data.modelKey.localeCompare(b.data.modelKey);
+export function useModelCatalog(
+  client: LMStudioClient,
+  shouldFetchModelCatalog: boolean | undefined,
+): HubModel[] | null {
+  const [modelCatalog, setModelCatalog] = useState<HubModel[] | null>(null);
+
+  useEffect(() => {
+    if (shouldFetchModelCatalog !== true) {
+      setModelCatalog([]);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadModelCatalog = async () => {
+      const availableModels = await getCachedModelCatalogOrFetch(client);
+      if (isCancelled === true) {
+        return;
       }
-      if (a.type === "command" && b.type === "command") {
-        return a.data.name.localeCompare(b.data.name);
-      }
-      // We should not have mixed types here, but just in case
-      // prioritize model suggestions
-      if (a.type === "model" && b.type === "command") return -1;
-      if (a.type === "command" && b.type === "model") return 1;
-      return 0;
-    });
-  }, [suggestions]);
+      setModelCatalog(availableModels);
+    };
+
+    void loadModelCatalog();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [client, shouldFetchModelCatalog]);
+
+  return modelCatalog;
 }
 
 export function useDownloadedModels(
@@ -279,7 +294,7 @@ export function useDownloadCommand({
         return;
       }
 
-      const parsedIdentifier = parseModelIdentifier(identifierInput);
+      const parsedIdentifier = parseModelKey(identifierInput);
       if (parsedIdentifier === null) {
         onLog("Please use the owner/name format, for example meta/llama-3-8b.");
         return;
@@ -293,7 +308,7 @@ export function useDownloadCommand({
       }
       onLog(`Fetching model details for ${owner}/${name}...`);
 
-      const catalogModels = await fetchModelCatalog(client);
+      const catalogModels = await getCachedModelCatalogOrFetch(client);
       if (catalogModels.length === 0) {
         onError("Failed to fetch model catalog. Please check your internet connection.");
         return;
@@ -374,7 +389,6 @@ export interface UseSuggestionHandlersOpts {
   setUserInputState: (
     value: ChatUserInputState | ((prev: ChatUserInputState) => ChatUserInputState),
   ) => void;
-  setSuggestions: (value: Suggestion[]) => void;
 }
 
 export function useSuggestionHandlers({
@@ -383,7 +397,6 @@ export function useSuggestionHandlers({
   sortedSuggestions,
   suggestionsPerPage,
   setUserInputState,
-  setSuggestions,
 }: UseSuggestionHandlersOpts) {
   const handleSuggestionsUp = useCallback(() => {
     setSelectedSuggestionIndex(previousIndex => Math.max(0, previousIndex - 1));
@@ -434,7 +447,6 @@ export function useSuggestionHandlers({
         setUserInputState((previousState: ChatUserInputState) =>
           insertSuggestionAtCursor({ state: previousState, suggestionText }),
         );
-        setSuggestions([]);
         return;
       }
       case "command": {
@@ -442,7 +454,6 @@ export function useSuggestionHandlers({
         setUserInputState((previousState: ChatUserInputState) =>
           insertSuggestionAtCursor({ state: previousState, suggestionText }),
         );
-        setSuggestions([]);
         return;
       }
       case "downloadableModel": {
@@ -450,7 +461,6 @@ export function useSuggestionHandlers({
         setUserInputState((previousState: ChatUserInputState) =>
           insertSuggestionAtCursor({ state: previousState, suggestionText }),
         );
-        setSuggestions([]);
         return;
       }
       default: {
@@ -458,7 +468,17 @@ export function useSuggestionHandlers({
         return _exhaustiveCheck;
       }
     }
-  }, [selectedSuggestionIndex, sortedSuggestions, setUserInputState, setSuggestions]);
+  }, [selectedSuggestionIndex, sortedSuggestions, setUserInputState]);
+
+  useEffect(() => {
+    if (sortedSuggestions.length === 0) {
+      setSelectedSuggestionIndex(-1);
+      return;
+    }
+    if (selectedSuggestionIndex < 0 || selectedSuggestionIndex >= sortedSuggestions.length) {
+      setSelectedSuggestionIndex(0);
+    }
+  }, [selectedSuggestionIndex, setSelectedSuggestionIndex, sortedSuggestions.length]);
 
   return {
     handleSuggestionsUp,

@@ -23,12 +23,11 @@ import {
 import { runPromptWithExitHandling } from "../../prompt.js";
 import { render } from "ink";
 import { ChatComponent } from "./react/Chat.js";
-import { fetchModelCatalog } from "./catalogHelpers.js";
+import { getCachedModelCatalogOrFetch } from "./catalogHelpers.js";
 
 interface StartPredictionOpts {
   stats?: true;
   ttl: number;
-  abortController?: AbortController;
 }
 
 type ChatCommandOptions = OptionValues &
@@ -165,9 +164,9 @@ export async function startInteractiveChat(
         client={client}
         llm={llm}
         chat={chat}
-        opts={opts}
+        stats={opts.stats}
+        ttl={opts.ttl}
         onExit={() => {
-          opts.abortController?.abort();
           resolve();
         }}
         shouldFetchModelCatalog={shouldFetchModelCatalog}
@@ -217,7 +216,6 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     logger.error("Invalid TTL value, must be a non-negative integer.");
     process.exit(1);
   }
-  const abortController = new AbortController();
   const chat = Chat.empty();
   chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
   let llm: LLM | undefined = undefined;
@@ -231,7 +229,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
 
   if (shouldFetchModelCatalog) {
     // Pre-fetch model catalog to speed up later model selection
-    await fetchModelCatalog(client);
+    await getCachedModelCatalogOrFetch(client);
   }
   if (model !== undefined && model !== "") {
     try {
@@ -257,7 +255,6 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       {
         stats: options.stats,
         ttl,
-        abortController,
       },
       llm,
       shouldFetchModelCatalog,
@@ -282,7 +279,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     let modelCatalogModels: HubModel[] = [];
 
     if (shouldFetchModelCatalog) {
-      modelCatalogModels = await fetchModelCatalog(client, logger);
+      modelCatalogModels = await getCachedModelCatalogOrFetch(client, logger);
     }
     const modelCatalogModelNames = modelCatalogModels.map(m => m.owner + "/" + m.name);
 
@@ -370,7 +367,6 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
       stats: options.stats,
       ttl,
-      abortController: abortController,
     });
   } else {
     logger.error("No prompt provided for non-interactive chat.");
