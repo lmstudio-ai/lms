@@ -288,19 +288,19 @@ export function useDownloadCommand({
         return;
       }
 
-      const identifierInput = commandArguments.join(" ").trim();
-      if (identifierInput.length === 0) {
+      const modelKeyInput = commandArguments.join(" ").trim();
+      if (modelKeyInput.length === 0) {
         onLog("Please specify a model to download using owner/name. Type /model to see the list.");
         return;
       }
 
-      const parsedIdentifier = parseModelKey(identifierInput);
-      if (parsedIdentifier === null) {
+      const parsedModelKey = parseModelKey(modelKeyInput);
+      if (parsedModelKey === null) {
         onLog("Please use the owner/name format, for example meta/llama-3-8b.");
         return;
       }
 
-      const { owner, name } = parsedIdentifier;
+      const { owner, name } = parsedModelKey;
 
       if (shouldFetchModelCatalog !== true) {
         onError("Model catalog fetching is disabled. Enable it to use /download command.");
