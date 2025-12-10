@@ -422,7 +422,6 @@ export const ChatComponent = React.memo(
         }
       } finally {
         setIsPredicting(false);
-        abortControllerRef.current = null;
       }
     }, [
       addMessage,
