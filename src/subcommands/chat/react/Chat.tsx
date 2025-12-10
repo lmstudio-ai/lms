@@ -88,6 +88,20 @@ export const ChatComponent = React.memo(
     }, [isConfirmationActive, isPredicting, userInputState]);
     const suggestionsPerPage = useSuggestionsPerPage(messages);
     const areSuggestionsVisible = useMemo(() => suggestions.length > 0, [suggestions]);
+    // As selectedSuggestionIndex can be out of bounds due to changes in suggestions,
+    // we normalize it here.
+    const normalizedSelectedSuggestionIndex = useMemo(() => {
+      if (suggestions.length === 0) {
+        return -1;
+      }
+      if (selectedSuggestionIndex < 0) {
+        return 0;
+      }
+      if (selectedSuggestionIndex >= suggestions.length) {
+        return suggestions.length - 1;
+      }
+      return selectedSuggestionIndex;
+    }, [selectedSuggestionIndex, suggestions.length]);
 
     const addMessage = useCallback((message: InkChatMessage) => {
       setMessages(previousMessages => {
@@ -125,9 +139,9 @@ export const ChatComponent = React.memo(
       handleSuggestionsPageRight,
       handleSuggestionAccept,
     } = useSuggestionHandlers({
-      selectedSuggestionIndex,
+      selectedSuggestionIndex: normalizedSelectedSuggestionIndex,
       setSelectedSuggestionIndex,
-      sortedSuggestions: suggestions,
+      suggestions,
       suggestionsPerPage,
       setUserInputState,
     });
@@ -242,7 +256,7 @@ export const ChatComponent = React.memo(
       if (userInputText.startsWith("/") && userInputState.segments.length === 1) {
         const { command, argumentsText } = SlashCommandHandler.parseSlashCommand(
           userInputText,
-          suggestions[selectedSuggestionIndex],
+          suggestions[normalizedSelectedSuggestionIndex],
         );
         if (command === null) {
           return;
@@ -419,7 +433,7 @@ export const ChatComponent = React.memo(
       logInChat,
       promptProcessingProgress,
       requestConfirmation,
-      selectedSuggestionIndex,
+      normalizedSelectedSuggestionIndex,
       stats,
       suggestions,
       ttl,
@@ -434,11 +448,11 @@ export const ChatComponent = React.memo(
       return (
         <ChatSuggestions
           suggestions={suggestions}
-          selectedSuggestionIndex={selectedSuggestionIndex}
+          selectedSuggestionIndex={normalizedSelectedSuggestionIndex}
           suggestionsPerPage={suggestionsPerPage}
         />
       );
-    }, [selectedSuggestionIndex, suggestions, suggestionsPerPage]);
+    }, [normalizedSelectedSuggestionIndex, suggestions, suggestionsPerPage]);
 
     // We register slash commands once on mount and whenever they change.
     useEffect(() => {

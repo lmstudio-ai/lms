@@ -384,7 +384,7 @@ export function useDownloadCommand({
 export interface UseSuggestionHandlersOpts {
   selectedSuggestionIndex: number;
   setSelectedSuggestionIndex: (value: number | ((prev: number) => number)) => void;
-  sortedSuggestions: Suggestion[];
+  suggestions: Suggestion[];
   suggestionsPerPage: number;
   setUserInputState: (
     value: ChatUserInputState | ((prev: ChatUserInputState) => ChatUserInputState),
@@ -394,19 +394,19 @@ export interface UseSuggestionHandlersOpts {
 export function useSuggestionHandlers({
   selectedSuggestionIndex,
   setSelectedSuggestionIndex,
-  sortedSuggestions,
+  suggestions,
   suggestionsPerPage,
   setUserInputState,
 }: UseSuggestionHandlersOpts) {
   const handleSuggestionsUp = useCallback(() => {
-    setSelectedSuggestionIndex(previousIndex => Math.max(0, previousIndex - 1));
-  }, [setSelectedSuggestionIndex]);
+    const nextIndex = Math.max(0, selectedSuggestionIndex - 1);
+    setSelectedSuggestionIndex(nextIndex);
+  }, [selectedSuggestionIndex, setSelectedSuggestionIndex]);
 
   const handleSuggestionsDown = useCallback(() => {
-    setSelectedSuggestionIndex(previousIndex =>
-      Math.min(sortedSuggestions.length - 1, previousIndex + 1),
-    );
-  }, [sortedSuggestions.length, setSelectedSuggestionIndex]);
+    const nextIndex = Math.min(suggestions.length - 1, selectedSuggestionIndex + 1);
+    setSelectedSuggestionIndex(nextIndex);
+  }, [selectedSuggestionIndex, suggestions.length, setSelectedSuggestionIndex]);
 
   const handleSuggestionsPageLeft = useCallback(() => {
     const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
@@ -418,23 +418,18 @@ export function useSuggestionHandlers({
 
   const handleSuggestionsPageRight = useCallback(() => {
     const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
-    const totalPages = Math.ceil(sortedSuggestions.length / suggestionsPerPage);
+    const totalPages = Math.ceil(suggestions.length / suggestionsPerPage);
     if (currentPage < totalPages - 1) {
       const newIndex = (currentPage + 1) * suggestionsPerPage;
       setSelectedSuggestionIndex(newIndex);
     }
-  }, [
-    selectedSuggestionIndex,
-    suggestionsPerPage,
-    sortedSuggestions.length,
-    setSelectedSuggestionIndex,
-  ]);
+  }, [selectedSuggestionIndex, suggestionsPerPage, suggestions.length, setSelectedSuggestionIndex]);
 
   const handleSuggestionAccept = useCallback(async () => {
     if (selectedSuggestionIndex === -1) {
       return;
     }
-    const selectedSuggestion = sortedSuggestions[selectedSuggestionIndex];
+    const selectedSuggestion = suggestions[selectedSuggestionIndex];
     if (selectedSuggestion === undefined) {
       return;
     }
@@ -468,17 +463,7 @@ export function useSuggestionHandlers({
         return _exhaustiveCheck;
       }
     }
-  }, [selectedSuggestionIndex, sortedSuggestions, setUserInputState]);
-
-  useEffect(() => {
-    if (sortedSuggestions.length === 0) {
-      setSelectedSuggestionIndex(-1);
-      return;
-    }
-    if (selectedSuggestionIndex < 0 || selectedSuggestionIndex >= sortedSuggestions.length) {
-      setSelectedSuggestionIndex(0);
-    }
-  }, [selectedSuggestionIndex, setSelectedSuggestionIndex, sortedSuggestions.length]);
+  }, [selectedSuggestionIndex, suggestions, setUserInputState]);
 
   return {
     handleSuggestionsUp,

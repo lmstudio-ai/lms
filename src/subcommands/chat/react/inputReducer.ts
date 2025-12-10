@@ -11,7 +11,7 @@
  * - `largePaste`: Read-only paste segments for large content. Cursor can only be at
  *                 position 0 (start) and is typically used for navigation.
  *
- * There will often be a trailing empty text segment after a largePaste to allow typing
+ * There will be a trailing empty text segment after a largePaste to allow typing
  * after the paste.
  *
  * Cursor Semantics:
