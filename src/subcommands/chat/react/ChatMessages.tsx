@@ -10,7 +10,7 @@ interface ChatMessageProps {
   message: InkChatMessage;
   modelName: string | null;
   isStreaming?: boolean;
-  promptProcessingProgress?: number;
+  promptProcessingProgress?: number | null;
 }
 
 export const ChatMessage = memo(
@@ -39,6 +39,7 @@ export const ChatMessage = memo(
         const shouldShowSpinner =
           isStreaming === true &&
           promptProcessingProgress !== undefined &&
+          promptProcessingProgress !== null &&
           promptProcessingProgress > 0;
 
         return (

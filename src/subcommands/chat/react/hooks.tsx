@@ -16,6 +16,7 @@ import {
   parseModelKey,
 } from "../catalogHelpers.js";
 import type { HubModel } from "@lmstudio/lms-shared-types";
+import { type ChatConfirmationPayload } from "./Chat.js";
 
 export function useModelCatalog(
   client: LMStudioClient,
@@ -54,32 +55,37 @@ export function useDownloadedModels(
   currentModelIdentifier: string | null,
 ): { downloadedModels: Array<ModelState>; refreshDownloadedModels: () => void } {
   const [downloadedModels, setDownloadedModels] = useState<Array<ModelState>>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const refreshDownloadedModels = useCallback(async () => {
-    const downloadedModels = (await client.system.listDownloadedModels()).filter(
-      model => model.type === "llm",
-    );
-    const loadedModels = await client.llm.listLoaded();
-    const models = downloadedModels.map(model => {
-      const loadedCount = loadedModels.filter(
-        loadedModel => loadedModel.path === model.path,
-      ).length;
-      const isCurrent = loadedModels.some(
-        loadedModel =>
-          loadedModel.path === model.path && loadedModel.identifier === currentModelIdentifier,
-      );
-      return {
-        modelKey: model.modelKey,
-        isLoaded: loadedCount > 0,
-        isCurrent,
-      };
-    });
-    setDownloadedModels(models);
-  }, [client, currentModelIdentifier]);
+  const refreshDownloadedModels = useCallback(() => {
+    setRefreshTrigger(previous => previous + 1);
+  }, []);
 
   useEffect(() => {
-    refreshDownloadedModels();
-  }, [refreshDownloadedModels]);
+    const fetchModels = async () => {
+      const downloadedModels = (await client.system.listDownloadedModels()).filter(
+        model => model.type === "llm",
+      );
+      const loadedModels = await client.llm.listLoaded();
+      const models = downloadedModels.map(model => {
+        const loadedCount = loadedModels.filter(
+          loadedModel => loadedModel.path === model.path,
+        ).length;
+        const isCurrent = loadedModels.some(
+          loadedModel =>
+            loadedModel.path === model.path && loadedModel.identifier === currentModelIdentifier,
+        );
+        return {
+          modelKey: model.modelKey,
+          isLoaded: loadedCount > 0,
+          isCurrent,
+        };
+      });
+      setDownloadedModels(models);
+    };
+
+    fetchModels();
+  }, [client, currentModelIdentifier, refreshTrigger]);
 
   return { downloadedModels, refreshDownloadedModels };
 }
@@ -261,17 +267,17 @@ export function useConfirmationPrompt<TPayload>() {
 
 export interface UseDownloadCommandOpts {
   client: LMStudioClient;
-  onLog: (message: string) => void;
-  onError: (message: string) => void;
-  requestConfirmation: (request: ConfirmationRequest<any>) => void;
+  logInChat: (message: string) => void;
+  logErrorInChat: (message: string) => void;
+  requestConfirmation: (request: ConfirmationRequest<ChatConfirmationPayload>) => void;
   shouldFetchModelCatalog: boolean;
   refreshDownloadedModels?: () => void;
 }
 
 export function useDownloadCommand({
   client,
-  onLog,
-  onError,
+  logInChat,
+  logErrorInChat,
   requestConfirmation,
   shouldFetchModelCatalog,
   refreshDownloadedModels,
@@ -279,40 +285,44 @@ export function useDownloadCommand({
   const handleDownloadCommand = useCallback(
     async (commandArguments: string[]) => {
       if (commandArguments.length === 0) {
-        onLog("Please specify a model to download using owner/name. Type /model to see the list.");
+        logInChat(
+          "Please specify a model to download using owner/name. Type /model to see the list.",
+        );
         return;
       }
 
       const modelKeyInput = commandArguments.join(" ").trim();
       if (modelKeyInput.length === 0) {
-        onLog("Please specify a model to download using owner/name. Type /model to see the list.");
+        logInChat(
+          "Please specify a model to download using owner/name. Type /model to see the list.",
+        );
         return;
       }
 
       const parsedModelKey = parseModelKey(modelKeyInput);
       if (parsedModelKey === null) {
-        onLog("Please use the owner/name format, for example meta/llama-3-8b.");
+        logInChat("Please use the owner/name format, for example meta/llama-3-8b.");
         return;
       }
 
       const { owner, name } = parsedModelKey;
 
       if (shouldFetchModelCatalog !== true) {
-        onError("Model catalog fetching is disabled. Enable it to use /download command.");
+        logErrorInChat("Model catalog fetching is disabled. Enable it to use /download command.");
         return;
       }
-      onLog(`Fetching model details for ${owner}/${name}...`);
+      logInChat(`Fetching model details for ${owner}/${name}...`);
 
       const catalogModels = await getCachedModelCatalogOrFetch(client);
       if (catalogModels.length === 0) {
-        onError("Failed to fetch model catalog. Please check your internet connection.");
+        logErrorInChat("Failed to fetch model catalog. Please check your internet connection.");
         return;
       }
 
       const matchingModel = findModelInCatalog(catalogModels, `${owner}/${name}`);
 
       if (matchingModel === undefined) {
-        onError(
+        logErrorInChat(
           "Model not found in the catalog. /download currently supports catalog models only.",
         );
         return;
@@ -324,17 +334,17 @@ export function useDownloadCommand({
       } catch (error) {
         const errorMessage =
           error instanceof Error && error.message !== undefined ? error.message : String(error);
-        onError(`Failed to resolve download plan: ${errorMessage}`);
+        logErrorInChat(`Failed to resolve download plan: ${errorMessage}`);
         return;
       }
 
       if (downloadSizeBytes === 0) {
-        onLog(`${matchingModel.owner}/${matchingModel.name} is already available locally.`);
+        logInChat(`${matchingModel.owner}/${matchingModel.name} is already available locally.`);
         return;
       }
 
       const formattedSize = formatSizeBytes1000(downloadSizeBytes);
-      onLog(
+      logInChat(
         `Download ${matchingModel.owner}/${matchingModel.name}? This will download approximately ${formattedSize}. Type yes to continue or no to cancel.`,
       );
       requestConfirmation({
@@ -345,11 +355,11 @@ export function useDownloadCommand({
         },
         onConfirm: async payload => {
           if (payload.type !== "downloadModel") return;
-          onLog(`Downloading ${payload.owner}/${payload.name} in the background...`);
+          logInChat(`Downloading ${payload.owner}/${payload.name} in the background...`);
 
           downloadModelWithProgress(client, payload.owner, payload.name, {
             onComplete: (owner, name) => {
-              onLog(`Download completed: ${owner}/${name}`);
+              logInChat(`Download completed: ${owner}/${name}`);
               if (refreshDownloadedModels !== undefined) {
                 refreshDownloadedModels();
               }
@@ -359,26 +369,35 @@ export function useDownloadCommand({
                 error instanceof Error && error.message !== undefined
                   ? error.message
                   : String(error);
-              onError(`Download failed for ${owner}/${name}: ${errorMessage}`);
+              logErrorInChat(`Download failed for ${owner}/${name}: ${errorMessage}`);
             },
           }).catch(() => {
             // Error already handled in callback
           });
         },
         onCancel: () => {
-          onLog(`Download canceled for ${owner}/${name}.`);
+          logInChat(`Download canceled for ${owner}/${name}.`);
         },
       });
     },
-    [shouldFetchModelCatalog, onLog, client, requestConfirmation, onError, refreshDownloadedModels],
+    [
+      shouldFetchModelCatalog,
+      logInChat,
+      client,
+      requestConfirmation,
+      logErrorInChat,
+      refreshDownloadedModels,
+    ],
   );
 
   return { handleDownloadCommand };
 }
 
 export interface UseSuggestionHandlersOpts {
-  selectedSuggestionIndex: number;
-  setSelectedSuggestionIndex: (value: number | ((prev: number) => number)) => void;
+  selectedSuggestionIndex: number | null;
+  setSelectedSuggestionIndex: (
+    value: number | null | ((prev: number | null) => number | null),
+  ) => void;
   suggestions: Suggestion[];
   suggestionsPerPage: number;
   setUserInputState: (
@@ -394,16 +413,25 @@ export function useSuggestionHandlers({
   setUserInputState,
 }: UseSuggestionHandlersOpts) {
   const handleSuggestionsUp = useCallback(() => {
+    if (selectedSuggestionIndex === null) {
+      return;
+    }
     const nextIndex = Math.max(0, selectedSuggestionIndex - 1);
     setSelectedSuggestionIndex(nextIndex);
   }, [selectedSuggestionIndex, setSelectedSuggestionIndex]);
 
   const handleSuggestionsDown = useCallback(() => {
+    if (selectedSuggestionIndex === null) {
+      return;
+    }
     const nextIndex = Math.min(suggestions.length - 1, selectedSuggestionIndex + 1);
     setSelectedSuggestionIndex(nextIndex);
   }, [selectedSuggestionIndex, suggestions.length, setSelectedSuggestionIndex]);
 
   const handleSuggestionsPageLeft = useCallback(() => {
+    if (selectedSuggestionIndex === null) {
+      return;
+    }
     const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
     if (currentPage > 0) {
       const newIndex = (currentPage - 1) * suggestionsPerPage;
@@ -412,6 +440,9 @@ export function useSuggestionHandlers({
   }, [selectedSuggestionIndex, suggestionsPerPage, setSelectedSuggestionIndex]);
 
   const handleSuggestionsPageRight = useCallback(() => {
+    if (selectedSuggestionIndex === null) {
+      return;
+    }
     const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
     const totalPages = Math.ceil(suggestions.length / suggestionsPerPage);
     if (currentPage < totalPages - 1) {
@@ -421,7 +452,7 @@ export function useSuggestionHandlers({
   }, [selectedSuggestionIndex, suggestionsPerPage, suggestions.length, setSelectedSuggestionIndex]);
 
   const handleSuggestionAccept = useCallback(async () => {
-    if (selectedSuggestionIndex === -1) {
+    if (selectedSuggestionIndex === null) {
       return;
     }
     const selectedSuggestion = suggestions[selectedSuggestionIndex];

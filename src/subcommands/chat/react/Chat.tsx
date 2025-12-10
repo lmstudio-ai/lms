@@ -38,7 +38,7 @@ const emptyChatInputState: ChatUserInputState = {
   cursorInSegmentOffset: 0,
 };
 
-type ChatConfirmationPayload =
+export type ChatConfirmationPayload =
   | {
       type: "reloadModel";
       originalInput: ChatUserInputState;
@@ -62,10 +62,10 @@ export const ChatComponent = React.memo(
     const [userInputState, setUserInputState] = useState<ChatUserInputState>(emptyChatInputState);
     const [isPredicting, setIsPredicting] = useState(false);
     const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
-    const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+    const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
     const { isConfirmationActive, requestConfirmation, handleConfirmationResponse } =
       useConfirmationPrompt<ChatConfirmationPayload>();
-    const [promptProcessingProgress, setPromptProcessingProgress] = useState(-1);
+    const [promptProcessingProgress, setPromptProcessingProgress] = useState<number | null>(null);
     const abortControllerRef = useRef<AbortController | null>(new AbortController());
     const chatRef = useRef<Chat>(chat);
     const llmRef = useRef<LLM | null>(llm ?? null);
@@ -92,9 +92,9 @@ export const ChatComponent = React.memo(
     // we normalize it here.
     const normalizedSelectedSuggestionIndex = useMemo(() => {
       if (suggestions.length === 0) {
-        return -1;
+        return null;
       }
-      if (selectedSuggestionIndex < 0) {
+      if (selectedSuggestionIndex === null || selectedSuggestionIndex < 0) {
         return 0;
       }
       if (selectedSuggestionIndex >= suggestions.length) {
@@ -125,8 +125,8 @@ export const ChatComponent = React.memo(
 
     const { handleDownloadCommand } = useDownloadCommand({
       client,
-      onLog: logInChat,
-      onError: logErrorInChat,
+      logInChat,
+      logErrorInChat,
       refreshDownloadedModels,
       requestConfirmation,
       shouldFetchModelCatalog: shouldFetchModelCatalog ?? false,
@@ -187,12 +187,11 @@ export const ChatComponent = React.memo(
     ]);
 
     const handleAbortPrediction = useCallback(() => {
-      const hasAssistantMessage =
-        messages.length > 0 && messages[messages.length - 1]?.type === "assistant";
+      const hasAssistantMessage = messages.length > 0 && messages.at(-1)?.type === "assistant";
 
       if (hasAssistantMessage === true) {
-        setMessages(previousMessages =>
-          produce(previousMessages, draftMessages => {
+        setMessages(
+          produce(draftMessages => {
             if (draftMessages.length === 0) {
               return;
             }
@@ -217,7 +216,7 @@ export const ChatComponent = React.memo(
     }, [logInChat, messages]);
 
     const handlePaste = useCallback((content: string) => {
-      const normalizedContent = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const normalizedContent = content.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
 
       if (normalizedContent.length === 0) {
         return;
@@ -254,9 +253,13 @@ export const ChatComponent = React.memo(
       }
 
       if (userInputText.startsWith("/") && userInputState.segments.length === 1) {
+        const selectedSuggestion =
+          normalizedSelectedSuggestionIndex !== null
+            ? suggestions[normalizedSelectedSuggestionIndex]
+            : undefined;
         const { command, argumentsText } = SlashCommandHandler.parseSlashCommand(
           userInputText,
-          suggestions[normalizedSelectedSuggestionIndex],
+          selectedSuggestion,
         );
         if (command === null) {
           return;
@@ -326,7 +329,7 @@ export const ChatComponent = React.memo(
               return;
             }
             if (progress === 1) {
-              setPromptProcessingProgress(-1);
+              setPromptProcessingProgress(null);
             } else if (progress !== promptProcessingProgress) {
               setPromptProcessingProgress(progress);
             }

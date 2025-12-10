@@ -4,14 +4,17 @@ import type { Suggestion } from "./types.js";
 
 interface ChatSuggestionsProps {
   suggestions: Suggestion[];
-  selectedSuggestionIndex: number;
+  selectedSuggestionIndex: number | null;
   suggestionsPerPage: number;
 }
 
 export const ChatSuggestions = React.memo(
   ({ suggestions, selectedSuggestionIndex, suggestionsPerPage }: ChatSuggestionsProps) => {
     const totalPages = Math.ceil(suggestions.length / suggestionsPerPage);
-    const currentPage = Math.floor(selectedSuggestionIndex / suggestionsPerPage);
+    const currentPage =
+      selectedSuggestionIndex !== null
+        ? Math.floor(selectedSuggestionIndex / suggestionsPerPage)
+        : 0;
     const startIndex = currentPage * suggestionsPerPage;
     const endIndex = Math.min(startIndex + suggestionsPerPage, suggestions.length);
     const visibleSuggestions = suggestions.slice(startIndex, endIndex);

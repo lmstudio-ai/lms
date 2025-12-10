@@ -57,11 +57,8 @@ function produceSanitizedState(
   mutator: ChatUserInputStateMutator,
 ): ChatUserInputState {
   return produce(state, draft => {
-    try {
-      mutator(draft);
-    } finally {
-      sanitizeChatUserInputState(draft);
-    }
+    mutator(draft);
+    sanitizeChatUserInputState(draft);
   });
 }
 
@@ -74,14 +71,6 @@ function produceSanitizedState(
  * 5. Merging consecutive text segments to prevent navigation issues
  */
 function sanitizeChatUserInputState(state: ChatUserInputState): void {
-  // Ensure at least one segment exists
-  if (state.segments.length === 0) {
-    state.segments.push({ type: "text", content: "" });
-    state.cursorOnSegmentIndex = 0;
-    state.cursorInSegmentOffset = 0;
-    return;
-  }
-
   // Remove empty text segments, except "trailing placeholders"
   // A trailing placeholder is an empty text segment after a largePaste that allows typing
   for (let segmentIndex = state.segments.length - 1; segmentIndex >= 0; segmentIndex -= 1) {
@@ -90,19 +79,11 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
     if (segment === undefined || segment.type !== "text" || segment.content.length !== 0) {
       continue;
     }
-    const isCursorOnSegment = state.cursorOnSegmentIndex === segmentIndex;
     const isLastSegment = segmentIndex === state.segments.length - 1;
     const previousSegment = state.segments[segmentIndex - 1];
     const isTrailingPlaceholder = isLastSegment === true && previousSegment?.type === "largePaste";
     // Keep trailing placeholders - they allow typing after largePaste segments
     if (isTrailingPlaceholder === true) {
-      continue;
-    }
-    // Remove this empty text segment
-    if (isCursorOnSegment === true && segmentIndex > 0) {
-      // Cursor is on this segment - just remove it and continue
-      // The cursor adjustment logic below will handle repositioning
-      state.segments.splice(segmentIndex, 1);
       continue;
     }
     state.segments.splice(segmentIndex, 1);
@@ -175,29 +156,6 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
     // For largePaste segments, ensure offset is non-negative
     state.cursorInSegmentOffset = 0;
   }
-}
-
-/**
- * Removes the current segment if it's a largePaste, then moves cursor to the next segment.
- * This is typically triggered by a user action.
- */
-export function removeCurrentLargePasteSegment(state: ChatUserInputState): ChatUserInputState {
-  return produceSanitizedState(state, draft => {
-    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
-    if (currentSegment === undefined || currentSegment.type !== "largePaste") {
-      return;
-    }
-    draft.segments.splice(draft.cursorOnSegmentIndex, 1);
-    if (draft.segments.length === 0) {
-      draft.segments.push({ type: "text", content: "" });
-      draft.cursorOnSegmentIndex = 0;
-      draft.cursorInSegmentOffset = 0;
-      return;
-    }
-    // Move cursor to the previous segment (backspace behavior)
-    draft.cursorOnSegmentIndex = Math.max(0, draft.cursorOnSegmentIndex - 1);
-    draft.cursorInSegmentOffset = 0;
-  });
 }
 
 /**

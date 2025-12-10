@@ -1,7 +1,6 @@
 import { type LLM, type LMStudioClient, Chat } from "@lmstudio/sdk";
 import type { HubModel } from "@lmstudio/lms-shared-types";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { DEFAULT_SYSTEM_PROMPT } from "../index.js";
 import type { SlashCommand, SlashCommandHandler } from "./SlashCommandHandler.js";
 import type { ChatUserInputState, InkChatMessage, ModelState } from "./types.js";
 
@@ -113,8 +112,9 @@ export function createSlashCommands({
           cursorInSegmentOffset: 0,
         });
         console.clear();
+        const systemPrompt = chatRef.current.getSystemPrompt();
         chatRef.current = Chat.empty();
-        chatRef.current.append("system", DEFAULT_SYSTEM_PROMPT);
+        chatRef.current.append("system", systemPrompt);
       },
     },
     {
@@ -127,7 +127,7 @@ export function createSlashCommands({
           return;
         }
 
-        chatRef.current.append("system", prompt);
+        chatRef.current.replaceSystemPrompt(prompt);
         logInChat("System prompt updated to: " + prompt);
       },
     },

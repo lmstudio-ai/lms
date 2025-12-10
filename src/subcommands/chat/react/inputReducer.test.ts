@@ -5,7 +5,6 @@ import {
   insertTextAtCursor,
   moveCursorLeft,
   moveCursorRight,
-  removeCurrentLargePasteSegment,
 } from "./inputReducer.js";
 import { type ChatInputSegment, type ChatUserInputState } from "./types.js";
 
@@ -67,59 +66,6 @@ describe("chatInputStateReducers", () => {
       expect(result.segments).toEqual([{ type: "text", content: "firstsecondthird" }]);
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(11);
-    });
-  });
-
-  describe("removeCurrentLargePasteSegment", () => {
-    it("removes current largePaste between text segments and moves cursor to previous segment", () => {
-      const initialState = createChatUserInputState(
-        [
-          { type: "text", content: "before" },
-          { type: "largePaste", content: "pasted" },
-          { type: "text", content: "-after" },
-        ],
-        1,
-        0,
-      );
-
-      const result = removeCurrentLargePasteSegment(initialState);
-
-      expect(result.segments).toEqual([{ type: "text", content: "before-after" }]);
-      expect(result.cursorOnSegmentIndex).toBe(0);
-      expect(result.cursorInSegmentOffset).toBe(0);
-    });
-
-    it("replaces sole largePaste segment with empty text segment", () => {
-      const initialState = createChatUserInputState(
-        [{ type: "largePaste", content: "pasted" }],
-        0,
-        0,
-      );
-
-      const result = removeCurrentLargePasteSegment(initialState);
-
-      expect(result.segments.length).toBe(1);
-      expect(result.segments[0]).toEqual({ type: "text", content: "" });
-      expect(result.cursorOnSegmentIndex).toBe(0);
-      expect(result.cursorInSegmentOffset).toBe(0);
-    });
-
-    it("does nothing when current segment is not largePaste", () => {
-      const initialState = createChatUserInputState(
-        [
-          { type: "text", content: "before" },
-          { type: "largePaste", content: "pasted" },
-          { type: "text", content: "-after" },
-        ],
-        0,
-        3,
-      );
-
-      const result = removeCurrentLargePasteSegment(initialState);
-
-      expect(result.segments).toEqual(initialState.segments);
-      expect(result.cursorOnSegmentIndex).toBe(0);
-      expect(result.cursorInSegmentOffset).toBe(3);
     });
   });
 

@@ -2,8 +2,6 @@ import { type LMStudioClient } from "@lmstudio/sdk";
 import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
 
 export interface DownloadProgressCallbacks {
-  onProgress?: (percentage: number, downloadedBytes: number, totalBytes: number) => void;
-  onStartFinalizing?: () => void;
   onComplete?: (owner: string, name: string) => void;
   onError?: (error: Error | unknown) => void;
 }
@@ -52,11 +50,7 @@ export async function downloadModelWithProgress(
         const percentage = Math.floor((update.downloadedBytes / update.totalBytes) * 100);
         if (percentage === 100 || percentage - lastLoggedPercentage >= 10) {
           lastLoggedPercentage = percentage;
-          callbacks.onProgress?.(percentage, update.downloadedBytes, update.totalBytes);
         }
-      },
-      onStartFinalizing: () => {
-        callbacks.onStartFinalizing?.();
       },
     });
     callbacks.onComplete?.(owner, name);

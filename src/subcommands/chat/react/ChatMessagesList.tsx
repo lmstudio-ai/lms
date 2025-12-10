@@ -7,7 +7,7 @@ interface ChatMessagesListProps {
   messages: InkChatMessage[];
   modelName: string | null;
   isPredicting: boolean;
-  promptProcessingProgress: number;
+  promptProcessingProgress: number | null;
 }
 
 export const ChatMessagesList = memo(

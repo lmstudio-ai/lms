@@ -80,7 +80,7 @@ export class SlashCommandHandler {
     if (hasArguments === false) {
       const matchingCommands = this.list()
         .filter(command => command.name.toLowerCase().startsWith(normalizedCommandPortion))
-        .map(command => ({ type: "command", data: command }) as Suggestion);
+        .map<Suggestion>(command => ({ type: "command", data: command }));
       return SlashCommandHandler.sortSuggestions(matchingCommands);
     }
 
