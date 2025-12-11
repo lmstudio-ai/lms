@@ -177,82 +177,61 @@ export function deleteBeforeCursor(state: ChatUserInputState): ChatUserInputStat
       return;
     }
 
-    // On a largePaste segment
-    if (currentSegment.type === "largePaste") {
-      if (draft.cursorInSegmentOffset === 0) {
-        // At start of largePaste - delete from previous segment
-        if (draft.cursorOnSegmentIndex === 0) {
-          return; // Already at start, nothing before
-        }
-        const previousSegmentIndex = draft.cursorOnSegmentIndex - 1;
-        const previousSegment = draft.segments[previousSegmentIndex];
-        if (previousSegment === undefined) {
-          return;
-        }
-        if (previousSegment.type === "text") {
-          // Delete last character from previous text segment
-          if (previousSegment.content.length > 0) {
-            previousSegment.content = previousSegment.content.slice(0, -1);
-            draft.cursorOnSegmentIndex = previousSegmentIndex;
-            draft.cursorInSegmentOffset = previousSegment.content.length;
-            return;
-          }
-          // According to sanitation rules, empty text segments should not exist here,
-          // but we safeguard against it anyway by deleting the empty segment
-          draft.segments.splice(previousSegmentIndex, 1);
-          draft.cursorOnSegmentIndex = Math.max(0, previousSegmentIndex - 1);
-          draft.cursorInSegmentOffset = 0;
-          return;
-        } else {
-          // Previous is largePaste - delete the entire segment
-          draft.segments.splice(previousSegmentIndex, 1);
-          draft.cursorOnSegmentIndex = previousSegmentIndex;
-          draft.cursorInSegmentOffset = 0;
-          return;
-        }
-      } else {
-        // Inside largePaste (offset > 0) - delete the current largePaste
-        draft.segments.splice(draft.cursorOnSegmentIndex, 1);
-        if (draft.segments.length === 0) {
-          draft.segments.push({ type: "text", content: "" });
-          draft.cursorOnSegmentIndex = 0;
-          draft.cursorInSegmentOffset = 0;
-          return;
-        }
-        draft.cursorOnSegmentIndex = Math.max(0, draft.cursorOnSegmentIndex - 1);
-        draft.cursorInSegmentOffset = 0;
-        return;
-      }
-    }
-
-    // On a text segment
-    const cursorPosition = draft.cursorInSegmentOffset;
-    if (cursorPosition === 0) {
-      // At start of text segment - merge with or delete previous segment
-      if (draft.cursorOnSegmentIndex === 0) {
-        return; // Nothing before us
-      }
+    // At start of any segment (offset === 0) - delete from previous segment
+    if (draft.cursorInSegmentOffset === 0) {
       const previousSegmentIndex = draft.cursorOnSegmentIndex - 1;
       const previousSegment = draft.segments[previousSegmentIndex];
       if (previousSegment === undefined) {
         return;
       }
-      if (previousSegment.type === "largePaste") {
-        // Delete the entire largePaste segment
+
+      if (previousSegment.type === "text") {
+        // Delete last character from previous text segment
+        if (previousSegment.content.length > 0) {
+          const newCursorOffset = previousSegment.content.length - 1;
+          previousSegment.content = previousSegment.content.slice(0, -1);
+
+          // If current segment is text, merge it
+          if (currentSegment.type === "text") {
+            previousSegment.content += currentSegment.content;
+            draft.segments.splice(draft.cursorOnSegmentIndex, 1);
+          }
+
+          draft.cursorOnSegmentIndex = previousSegmentIndex;
+          draft.cursorInSegmentOffset = newCursorOffset;
+          return;
+        }
+        // Empty text segment (shouldn't exist per sanitation rules)
+        draft.segments.splice(previousSegmentIndex, 1);
+        draft.cursorOnSegmentIndex = Math.max(0, previousSegmentIndex - 1);
+        draft.cursorInSegmentOffset = 0;
+        return;
+      } else {
+        // Previous is largePaste - delete the entire segment
         draft.segments.splice(previousSegmentIndex, 1);
         draft.cursorOnSegmentIndex = previousSegmentIndex;
         draft.cursorInSegmentOffset = 0;
         return;
       }
-      // Merge with previous text segment: delete last char from previous, append current
-      const newCursorOffset = previousSegment.content.length - 1;
-      previousSegment.content = previousSegment.content.slice(0, -1) + currentSegment.content;
+    }
+
+    // offset > 0 - handle based on current segment type
+    if (currentSegment.type === "largePaste") {
+      // Inside largePaste - delete the current largePaste
       draft.segments.splice(draft.cursorOnSegmentIndex, 1);
-      draft.cursorOnSegmentIndex = previousSegmentIndex;
-      draft.cursorInSegmentOffset = newCursorOffset;
+      if (draft.segments.length === 0) {
+        draft.segments.push({ type: "text", content: "" });
+        draft.cursorOnSegmentIndex = 0;
+        draft.cursorInSegmentOffset = 0;
+        return;
+      }
+      draft.cursorOnSegmentIndex = Math.max(0, draft.cursorOnSegmentIndex - 1);
+      draft.cursorInSegmentOffset = 0;
       return;
     }
-    // Delete character before cursor within this text segment
+
+    // Delete character before cursor within text segment
+    const cursorPosition = draft.cursorInSegmentOffset;
     currentSegment.content =
       currentSegment.content.slice(0, cursorPosition - 1) +
       currentSegment.content.slice(cursorPosition);
