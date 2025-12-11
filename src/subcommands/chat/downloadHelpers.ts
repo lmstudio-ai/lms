@@ -41,6 +41,21 @@ export async function downloadModelWithProgress(
 
   let lastLoggedPercentage = 0;
 
+  // Check if we are indeed trying to download a model
+  const plan = downloadPlanner.getPlan();
+  if (plan.nodes.length === 0) {
+    throw new Error(`No downloadable content found for model ${owner}/${name}.`);
+  }
+
+  const rootNode = downloadPlanner.getPlan().nodes[0];
+  if (rootNode.type !== "artifact") {
+    throw new Error(`Expected root node to be an artifact for model ${owner}/${name}.`);
+  }
+  if (rootNode.artifactType !== "model") {
+    throw new Error(
+      `Expected artifact type to be 'model' but got '${rootNode.artifactType}' for model ${owner}/${name}.`,
+    );
+  }
   try {
     await downloadPlanner.download({
       onProgress: update => {

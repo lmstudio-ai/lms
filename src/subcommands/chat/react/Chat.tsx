@@ -93,7 +93,6 @@ export const ChatComponent = React.memo(
       logErrorInChat,
       refreshDownloadedModels,
       requestConfirmation,
-      shouldFetchModelCatalog: shouldFetchModelCatalog ?? false,
     });
 
     const commandHandler = useMemo(() => {

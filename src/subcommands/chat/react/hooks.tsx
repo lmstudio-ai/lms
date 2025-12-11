@@ -271,7 +271,6 @@ export interface UseDownloadCommandOpts {
   logInChat: (message: string) => void;
   logErrorInChat: (message: string) => void;
   requestConfirmation: (request: ConfirmationRequest) => void;
-  shouldFetchModelCatalog: boolean;
   refreshDownloadedModels?: () => void;
 }
 
@@ -280,7 +279,6 @@ export function useDownloadCommand({
   logInChat,
   logErrorInChat,
   requestConfirmation,
-  shouldFetchModelCatalog,
   refreshDownloadedModels,
 }: UseDownloadCommandOpts) {
   const handleDownloadCommand = useCallback(
@@ -308,30 +306,10 @@ export function useDownloadCommand({
 
       const { owner, name } = parsedModelKey;
 
-      if (shouldFetchModelCatalog !== true) {
-        logErrorInChat("Model catalog fetching is disabled. Enable it to use /download command.");
-        return;
-      }
       logInChat(`Fetching model details for ${owner}/${name}...`);
-
-      const catalogModels = await getCachedModelCatalogOrFetch(client);
-      if (catalogModels.length === 0) {
-        logErrorInChat("Failed to fetch model catalog. Please check your internet connection.");
-        return;
-      }
-
-      const matchingModel = findModelInCatalog(catalogModels, `${owner}/${name}`);
-
-      if (matchingModel === undefined) {
-        logErrorInChat(
-          "Model not found in the catalog. /download currently supports catalog models only.",
-        );
-        return;
-      }
-
       let downloadSizeBytes: number;
       try {
-        downloadSizeBytes = await getDownloadSize(client, matchingModel.owner, matchingModel.name);
+        downloadSizeBytes = await getDownloadSize(client, owner, name);
       } catch (error) {
         const errorMessage =
           error instanceof Error && error.message !== undefined ? error.message : String(error);
@@ -340,51 +318,47 @@ export function useDownloadCommand({
       }
 
       if (downloadSizeBytes === 0) {
-        logInChat(`${matchingModel.owner}/${matchingModel.name} is already available locally.`);
+        logInChat(`${owner}/${name} is already available locally.`);
         return;
       }
 
       const formattedSize = formatSizeBytes1000(downloadSizeBytes);
       logInChat(
-        `Download ${matchingModel.owner}/${matchingModel.name}? This will download approximately ${formattedSize}. Type yes to continue or no to cancel.`,
+        `Download ${owner}/${name}? This will download approximately ${formattedSize}. Type yes to continue or no to cancel.`,
       );
       requestConfirmation({
         onConfirm: async () => {
-          logInChat(
-            `Downloading ${matchingModel.owner}/${matchingModel.name} in the background...`,
-          );
-
-          downloadModelWithProgress(client, matchingModel.owner, matchingModel.name, {
-            onComplete: (owner, name) => {
-              logInChat(`Download completed: ${owner}/${name}`);
-              if (refreshDownloadedModels !== undefined) {
-                refreshDownloadedModels();
-              }
-            },
-            onError: error => {
-              const errorMessage =
-                error instanceof Error && error.message !== undefined
-                  ? error.message
-                  : String(error);
-              logErrorInChat(`Download failed for ${owner}/${name}: ${errorMessage}`);
-            },
-          }).catch(() => {
-            // Error already handled in callback
-          });
+          logInChat(`Downloading ${owner}/${name} in the background...`);
+          try {
+            downloadModelWithProgress(client, owner, name, {
+              onComplete: (owner, name) => {
+                logInChat(`Download completed: ${owner}/${name}`);
+                if (refreshDownloadedModels !== undefined) {
+                  refreshDownloadedModels();
+                }
+              },
+              onError: error => {
+                const errorMessage =
+                  error instanceof Error && error.message !== undefined
+                    ? error.message
+                    : String(error);
+                logErrorInChat(`Download failed for ${owner}/${name}: ${errorMessage}`);
+              },
+            }).catch(() => {
+              // Error already handled in callback
+            });
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error && error.message !== undefined ? error.message : String(error);
+            logErrorInChat(`Failed to start download: ${errorMessage}`);
+          }
         },
         onCancel: () => {
           logInChat(`Download canceled for ${owner}/${name}.`);
         },
       });
     },
-    [
-      shouldFetchModelCatalog,
-      logInChat,
-      client,
-      requestConfirmation,
-      logErrorInChat,
-      refreshDownloadedModels,
-    ],
+    [logInChat, client, requestConfirmation, logErrorInChat, refreshDownloadedModels],
   );
 
   return { handleDownloadCommand };
