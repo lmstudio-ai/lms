@@ -1,5 +1,3 @@
-import { type SlashCommand } from "./SlashCommandHandler.js";
-
 export type InkChatMessage =
   | {
       type: "user";
@@ -40,19 +38,11 @@ export type ModelState = {
   displayName: string;
 };
 
-export type Suggestion =
-  | { type: "command"; data: SlashCommand }
-  | { type: "model"; data: ModelState }
-  | {
-      type: "downloadableModel";
-      data: {
-        owner: string;
-        name: string;
-        downloads: number;
-        likeCount: number;
-        staffPickedAt: number | undefined;
-      };
-    };
+export interface Suggestion {
+  command: string;
+  args: string[];
+  priority: number;
+}
 
 export type ChatInputSegment =
   | {

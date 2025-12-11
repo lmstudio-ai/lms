@@ -459,33 +459,14 @@ export function useSuggestionHandlers({
 
     const { insertSuggestionAtCursor } = await import("./inputReducer.js");
 
-    switch (selectedSuggestion.type) {
-      case "model": {
-        const suggestionText = `/model ${selectedSuggestion.data.modelKey}`;
-        setUserInputState((previousState: ChatUserInputState) =>
-          insertSuggestionAtCursor({ state: previousState, suggestionText }),
-        );
-        return;
-      }
-      case "command": {
-        const suggestionText = `/${selectedSuggestion.data.name} `;
-        setUserInputState((previousState: ChatUserInputState) =>
-          insertSuggestionAtCursor({ state: previousState, suggestionText }),
-        );
-        return;
-      }
-      case "downloadableModel": {
-        const suggestionText = `/download ${selectedSuggestion.data.owner}/${selectedSuggestion.data.name}`;
-        setUserInputState((previousState: ChatUserInputState) =>
-          insertSuggestionAtCursor({ state: previousState, suggestionText }),
-        );
-        return;
-      }
-      default: {
-        const _exhaustiveCheck: never = selectedSuggestion;
-        return _exhaustiveCheck;
-      }
-    }
+    const hasArguments = selectedSuggestion.args.length > 0;
+    const argumentsText = selectedSuggestion.args.join(" ");
+    const suggestionText = hasArguments
+      ? `/${selectedSuggestion.command} ${argumentsText}`
+      : `/${selectedSuggestion.command} `;
+    setUserInputState((previousState: ChatUserInputState) =>
+      insertSuggestionAtCursor({ state: previousState, suggestionText }),
+    );
   }, [selectedSuggestionIndex, suggestions, setUserInputState]);
 
   return {

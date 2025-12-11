@@ -11,6 +11,9 @@
  * - `largePaste`: Read-only paste segments for large content. Cursor can only be at
  *                 position 0 (start) and is typically used for navigation.
  *
+ * We do not throw error if in largePaste segment cursorInSegmentOffset > 0, instead
+ * we sanitize it back to 0.
+ *
  * There will be a trailing empty text segment after a largePaste to allow typing
  * after the paste.
  *
@@ -169,8 +172,8 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
     if (state.cursorInSegmentOffset > activeSegment.content.length) {
       state.cursorInSegmentOffset = activeSegment.content.length;
     }
-  } else if (state.cursorInSegmentOffset < 0) {
-    // For largePaste segments, ensure offset is non-negative
+  } else if (state.cursorInSegmentOffset < 0 || state.cursorInSegmentOffset > 0) {
+    // For largePaste segments, ensure it is always 0
     state.cursorInSegmentOffset = 0;
   }
 }
@@ -274,7 +277,7 @@ export function moveCursorLeft(state: ChatUserInputState): ChatUserInputState {
         return; // Already at first segment
       }
       if (draft.cursorInSegmentOffset > 0) {
-        // Move to start of current largePaste
+        // Error: Not expected. Move to start of current largePaste
         draft.cursorInSegmentOffset = 0;
         return;
       }

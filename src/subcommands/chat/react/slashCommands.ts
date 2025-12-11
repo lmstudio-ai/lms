@@ -1,8 +1,12 @@
 import { type LLM, type LMStudioClient, Chat } from "@lmstudio/sdk";
 import type { HubModel } from "@lmstudio/lms-shared-types";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import type { SlashCommand, SlashCommandHandler } from "./SlashCommandHandler.js";
-import type { ChatUserInputState, InkChatMessage, ModelState } from "./types.js";
+import type {
+  SlashCommand,
+  SlashCommandHandler,
+  SlashCommandSuggestionBuilderArgs,
+} from "./SlashCommandHandler.js";
+import type { ChatUserInputState, InkChatMessage, ModelState, Suggestion } from "./types.js";
 
 export interface CreateSlashCommandsOpts {
   client: LMStudioClient;
@@ -93,7 +97,7 @@ export function createSlashCommands({
           setModelLoadingProgress(null);
         }
       },
-      buildSuggestions: ({ argsInput }) => {
+      buildSuggestions: ({ argsInput, registerSuggestionMetadata }) => {
         const normalizedFilter = argsInput.trim().toLowerCase();
         const filteredModels = downloadedModels.filter(modelState => {
           return (
@@ -101,7 +105,12 @@ export function createSlashCommands({
             modelState.displayName.toLowerCase().includes(normalizedFilter)
           );
         });
-        return filteredModels.map(modelState => ({ type: "model", data: modelState }));
+        return filteredModels.map(modelState =>
+          createModelSuggestion({
+            modelState,
+            registerSuggestionMetadata,
+          }),
+        );
       },
     },
     {
@@ -138,7 +147,7 @@ export function createSlashCommands({
       name: "download",
       description: "Download a model",
       handler: handleDownloadCommand,
-      buildSuggestions: ({ argsInput }) => {
+      buildSuggestions: ({ argsInput, registerSuggestionMetadata }) => {
         if (shouldFetchModelCatalog !== true) {
           return [];
         }
@@ -147,32 +156,46 @@ export function createSlashCommands({
         }
         const trimmedFilter = argsInput.trim();
         const lowercaseFilter = trimmedFilter.toLowerCase();
-        if (lowercaseFilter.length === 0) {
-          return modelCatalog.map(model => ({
-            type: "downloadableModel" as const,
-            data: {
-              owner: model.owner,
-              name: model.name,
-              downloads: model.downloads,
-              likeCount: model.likeCount,
-              staffPickedAt: model.staffPickedAt,
-            },
-          }));
-        }
-        const filteredModels = modelCatalog.filter(model => {
-          return `${model.owner}/${model.name}`.toLowerCase().includes(lowercaseFilter);
+        const filteredModels =
+          lowercaseFilter.length === 0
+            ? modelCatalog
+            : modelCatalog.filter(model => {
+                return `${model.owner}/${model.name}`.toLowerCase().includes(lowercaseFilter);
+              });
+        return filteredModels.map(model => {
+          const suggestion: Suggestion = {
+            command: "download",
+            args: [`${model.owner}/${model.name}`],
+            priority: model.staffPickedAt !== undefined ? 2 : 1,
+          };
+          registerSuggestionMetadata(suggestion, {
+            label: `${model.owner}/${model.name}`,
+          });
+          return suggestion;
         });
-        return filteredModels.map(model => ({
-          type: "downloadableModel" as const,
-          data: {
-            owner: model.owner,
-            name: model.name,
-            downloads: model.downloads,
-            likeCount: model.likeCount,
-            staffPickedAt: model.staffPickedAt,
-          },
-        }));
       },
     },
   ];
+}
+
+interface CreateModelSuggestionOpts {
+  modelState: ModelState;
+  registerSuggestionMetadata: SlashCommandSuggestionBuilderArgs["registerSuggestionMetadata"];
+}
+
+function createModelSuggestion({
+  modelState,
+  registerSuggestionMetadata,
+}: CreateModelSuggestionOpts): Suggestion {
+  const priority = modelState.isCurrent ? 3 : modelState.isLoaded ? 2 : 1;
+  const suggestion: Suggestion = {
+    command: "model",
+    args: [modelState.modelKey],
+    priority,
+  };
+  const statusLabel = modelState.isCurrent ? " (current)" : modelState.isLoaded ? " (loaded)" : "";
+  registerSuggestionMetadata(suggestion, {
+    label: `${modelState.modelKey}${statusLabel}`,
+  });
+  return suggestion;
 }

@@ -1,7 +1,7 @@
 import { produce } from "@lmstudio/immer-with-plugins";
 import { type Chat, type LLM, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, Text, useApp } from "ink";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { displayVerboseStats } from "../util.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
@@ -29,8 +29,6 @@ interface ChatComponentProps {
   ttl?: number;
   shouldFetchModelCatalog?: boolean;
 }
-
-const commandHandler = new SlashCommandHandler();
 
 export const emptyChatInputState: ChatUserInputState = {
   segments: [{ type: "text", content: "" }],
@@ -62,33 +60,12 @@ export const ChatComponent = React.memo(
       llmRef.current !== null ? llmRef.current.identifier : null,
     );
     const modelCatalog = useModelCatalog(client, shouldFetchModelCatalog);
-    const suggestions = useMemo<Suggestion[]>(() => {
-      if (userInputState.segments.length === 0) {
-        return [];
-      }
-      const firstSegment = userInputState.segments[0];
-      const inputText = firstSegment.content;
-      return commandHandler.getSuggestions({
-        input: inputText,
-        shouldShowSuggestions: !isConfirmationActive && !isPredicting && inputText.startsWith("/"),
-      });
-    }, [isConfirmationActive, isPredicting, userInputState]);
-    const suggestionsPerPage = useSuggestionsPerPage(messages);
-    const areSuggestionsVisible = useMemo(() => suggestions.length > 0, [suggestions]);
-    // As selectedSuggestionIndex can be out of bounds due to changes in suggestions,
-    // we normalize it here.
-    const normalizedSelectedSuggestionIndex = useMemo(() => {
-      if (suggestions.length === 0) {
-        return null;
-      }
-      if (selectedSuggestionIndex === null || selectedSuggestionIndex < 0) {
-        return 0;
-      }
-      if (selectedSuggestionIndex >= suggestions.length) {
-        return suggestions.length - 1;
-      }
-      return selectedSuggestionIndex;
-    }, [selectedSuggestionIndex, suggestions.length]);
+    const handleExit = useCallback(() => {
+      abortControllerRef.current?.abort();
+      onExit();
+      exit();
+      process.exit(0);
+    }, [onExit, exit]);
 
     const addMessage = useCallback((message: InkChatMessage) => {
       setMessages(previousMessages => {
@@ -119,6 +96,73 @@ export const ChatComponent = React.memo(
       shouldFetchModelCatalog: shouldFetchModelCatalog ?? false,
     });
 
+    const commandHandler = useMemo(() => {
+      const handler = new SlashCommandHandler();
+      handler.addToIgnoreList("think");
+      handler.addToIgnoreList("no_think");
+      const commands = createSlashCommands({
+        client,
+        llmRef,
+        chatRef,
+        exitApp: handleExit,
+        ttl,
+        abortControllerRef,
+        addMessage,
+        setMessages,
+        setUserInputState,
+        downloadedModels,
+        modelCatalog,
+        handleDownloadCommand,
+        logInChat,
+        logErrorInChat,
+        shouldFetchModelCatalog,
+        commandHandler: handler,
+        setModelLoadingProgress,
+      });
+      handler.setCommands(commands);
+      return handler;
+    }, [
+      client,
+      handleExit,
+      ttl,
+      addMessage,
+      downloadedModels,
+      modelCatalog,
+      handleDownloadCommand,
+      logInChat,
+      logErrorInChat,
+      shouldFetchModelCatalog,
+    ]);
+
+    const suggestions = useMemo<Suggestion[]>(() => {
+      if (userInputState.segments.length === 0) {
+        return [];
+      }
+      const firstSegment = userInputState.segments[0];
+      const inputText = firstSegment.content;
+      return commandHandler.getSuggestions({
+        input: inputText,
+        shouldShowSuggestions: !isConfirmationActive && !isPredicting && inputText.startsWith("/"),
+      });
+    }, [commandHandler, isConfirmationActive, isPredicting, userInputState.segments]);
+
+    const suggestionsPerPage = useSuggestionsPerPage(messages);
+    const areSuggestionsVisible = useMemo(() => suggestions.length > 0, [suggestions]);
+    // As selectedSuggestionIndex can be out of bounds due to changes in suggestions,
+    // we normalize it here.
+    const normalizedSelectedSuggestionIndex = useMemo(() => {
+      if (suggestions.length === 0) {
+        return null;
+      }
+      if (selectedSuggestionIndex === null || selectedSuggestionIndex < 0) {
+        return 0;
+      }
+      if (selectedSuggestionIndex >= suggestions.length) {
+        return suggestions.length - 1;
+      }
+      return selectedSuggestionIndex;
+    }, [selectedSuggestionIndex, suggestions.length]);
+
     const {
       handleSuggestionsUp,
       handleSuggestionsDown,
@@ -132,13 +176,6 @@ export const ChatComponent = React.memo(
       suggestionsPerPage,
       setUserInputState,
     });
-
-    const handleExit = useCallback(() => {
-      abortControllerRef.current?.abort();
-      onExit();
-      exit();
-      process.exit(0);
-    }, [onExit, exit]);
 
     const handleAbortPrediction = useCallback(() => {
       const hasAssistantMessage = messages.length > 0 && messages.at(-1)?.type === "assistant";
@@ -215,14 +252,20 @@ export const ChatComponent = React.memo(
           userInputText,
           selectedSuggestion,
         );
+
         if (command === null) {
           return;
         }
-        const wasCommandHandled = await commandHandler.execute(command, argumentsText);
-        if (wasCommandHandled === false) {
-          logInChat(`Unknown command: ${userInputText}`);
+
+        // Check if the command is in exception list, if not,
+        // execute it.
+        if (commandHandler.commandIsIgnored(command) === false) {
+          const wasCommandHandled = await commandHandler.execute(command, argumentsText);
+          if (wasCommandHandled === false) {
+            logInChat(`Unknown command: ${userInputText}`);
+          }
+          return;
         }
-        return;
       }
 
       if (userInputText === "exit" || userInputText === "quit") {
@@ -381,12 +424,13 @@ export const ChatComponent = React.memo(
         setIsPredicting(false);
       }
     }, [
-      userInputState,
+      userInputState.segments,
       handleConfirmationResponse,
       isPredicting,
       logInChat,
       normalizedSelectedSuggestionIndex,
       suggestions,
+      commandHandler,
       handleExit,
       logErrorInChat,
       addMessage,
@@ -397,70 +441,8 @@ export const ChatComponent = React.memo(
       ttl,
     ]);
 
-    const renderSuggestions = useCallback(() => {
-      if (suggestions.length === 0) {
-        return null;
-      }
-
-      return (
-        <ChatSuggestions
-          suggestions={suggestions}
-          selectedSuggestionIndex={normalizedSelectedSuggestionIndex}
-          suggestionsPerPage={suggestionsPerPage}
-        />
-      );
-    }, [normalizedSelectedSuggestionIndex, suggestions, suggestionsPerPage]);
-
-    useEffect(() => {
-      const commands = createSlashCommands({
-        client,
-        llmRef,
-        chatRef,
-        exitApp: handleExit,
-        ttl,
-        abortControllerRef,
-        addMessage,
-        setMessages,
-        setUserInputState,
-        downloadedModels,
-        modelCatalog,
-        handleDownloadCommand,
-        logInChat,
-        logErrorInChat,
-        shouldFetchModelCatalog,
-        commandHandler,
-        setModelLoadingProgress,
-      });
-      commandHandler.setCommands(commands);
-    }, [
-      client,
-      handleExit,
-      ttl,
-      addMessage,
-      downloadedModels,
-      modelCatalog,
-      handleDownloadCommand,
-      logInChat,
-      logErrorInChat,
-      shouldFetchModelCatalog,
-    ]);
-
     return (
       <Box flexDirection="column" width={"95%"} flexWrap="wrap">
-        <Box>
-          <Text>
-            {JSON.stringify({
-              ...userInputState,
-              segments: userInputState.segments.map(segment => ({
-                ...segment,
-                content:
-                  segment.type === "largePaste"
-                    ? `[large paste of ${segment.content.length} characters]`
-                    : segment.content,
-              })),
-            })}
-          </Text>
-        </Box>
         <ChatMessagesList
           messages={messages}
           modelName={llmRef.current?.displayName ?? null}
@@ -488,7 +470,14 @@ export const ChatComponent = React.memo(
           onSuggestionAccept={handleSuggestionAccept}
           onPaste={handlePaste}
         />
-        {renderSuggestions()}
+        {suggestions.length > 0 && (
+          <ChatSuggestions
+            suggestions={suggestions}
+            selectedSuggestionIndex={normalizedSelectedSuggestionIndex}
+            suggestionsPerPage={suggestionsPerPage}
+            getSuggestionLabel={suggestion => commandHandler.getSuggestionLabel(suggestion)}
+          />
+        )}
       </Box>
     );
   },

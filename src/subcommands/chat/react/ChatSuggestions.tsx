@@ -6,10 +6,16 @@ interface ChatSuggestionsProps {
   suggestions: Suggestion[];
   selectedSuggestionIndex: number | null;
   suggestionsPerPage: number;
+  getSuggestionLabel: (suggestion: Suggestion) => string;
 }
 
 export const ChatSuggestions = React.memo(
-  ({ suggestions, selectedSuggestionIndex, suggestionsPerPage }: ChatSuggestionsProps) => {
+  ({
+    suggestions,
+    selectedSuggestionIndex,
+    suggestionsPerPage,
+    getSuggestionLabel,
+  }: ChatSuggestionsProps) => {
     const totalPages = Math.ceil(suggestions.length / suggestionsPerPage);
     const currentPage =
       selectedSuggestionIndex !== null
@@ -22,46 +28,17 @@ export const ChatSuggestions = React.memo(
     const renderSuggestion = useCallback(
       (suggestion: Suggestion, visibleSuggestionIndex: number) => {
         const globalIndex = startIndex + visibleSuggestionIndex;
-        const suggestionType = suggestion.type;
-
-        switch (suggestionType) {
-          case "command": {
-            return (
-              <Box key={suggestion.data.name}>
-                <Text inverse={selectedSuggestionIndex === globalIndex}>
-                  /{suggestion.data.name} - {suggestion.data.description}
-                </Text>
-              </Box>
-            );
-          }
-          case "model": {
-            const model = suggestion.data;
-            return (
-              <Box key={model.modelKey}>
-                <Text bold={model.isCurrent} inverse={selectedSuggestionIndex === globalIndex}>
-                  {model.modelKey}
-                  {model.isLoaded ? " (loaded)" : model.isCurrent ? " (current)" : null}
-                </Text>
-              </Box>
-            );
-          }
-          case "downloadableModel": {
-            const model = suggestion.data;
-            return (
-              <Box key={`${model.owner}/${model.name}`}>
-                <Text inverse={selectedSuggestionIndex === globalIndex}>
-                  {model.owner}/{model.name}
-                </Text>
-              </Box>
-            );
-          }
-          default: {
-            const exhaustiveCheck: never = suggestionType;
-            throw new Error(`Unhandled suggestion type: ${exhaustiveCheck}`);
-          }
-        }
+        const label = getSuggestionLabel(suggestion);
+        const suggestionKey = `${suggestion.command}-${suggestion.args.join(":")}-${
+          suggestion.priority
+        }-${globalIndex}`;
+        return (
+          <Box key={suggestionKey}>
+            <Text inverse={selectedSuggestionIndex === globalIndex}>{label}</Text>
+          </Box>
+        );
       },
-      [startIndex, selectedSuggestionIndex],
+      [getSuggestionLabel, selectedSuggestionIndex, startIndex],
     );
 
     if (suggestions.length === 0) {

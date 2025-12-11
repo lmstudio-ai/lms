@@ -1,7 +1,15 @@
 import { type Suggestion } from "./types.js";
 
+export interface SlashCommandSuggestionMetadata {
+  label: string;
+}
+
 export interface SlashCommandSuggestionBuilderArgs {
   argsInput: string;
+  registerSuggestionMetadata: (
+    suggestion: Suggestion,
+    metadata: SlashCommandSuggestionMetadata,
+  ) => void;
 }
 
 export interface SlashCommandSuggestionsOpts {
@@ -17,7 +25,11 @@ export interface SlashCommand {
 }
 
 export class SlashCommandHandler {
+  private static readonly COMMAND_SUGGESTION_PRIORITY = 0;
+
   private commands = new Map<string, SlashCommand>();
+  private ignoreList = new Set<string>();
+  private suggestionMetadata: WeakMap<Suggestion, SlashCommandSuggestionMetadata> = new WeakMap();
 
   register(command: SlashCommand): void {
     const normalizedName = command.name.toLowerCase();
@@ -60,6 +72,7 @@ export class SlashCommandHandler {
   }
 
   getSuggestions(opts: SlashCommandSuggestionsOpts): Suggestion[] {
+    this.resetSuggestionMetadata();
     const inputWithTrimmedStart = opts.input.trimStart();
     if (opts.shouldShowSuggestions === false) {
       return [];
@@ -75,7 +88,7 @@ export class SlashCommandHandler {
     if (hasArguments === false) {
       const matchingCommands = this.list()
         .filter(command => command.name.toLowerCase().startsWith(normalizedCommandPortion))
-        .map<Suggestion>(command => ({ type: "command", data: command }));
+        .map<Suggestion>(command => this.createCommandSuggestion(command));
       return SlashCommandHandler.sortSuggestions(matchingCommands);
     }
 
@@ -87,6 +100,9 @@ export class SlashCommandHandler {
     const argumentsInput = inputWithTrimmedStart.slice(firstWhitespaceIndex + 1);
     const rawSuggestions = command.buildSuggestions({
       argsInput: argumentsInput,
+      registerSuggestionMetadata: (suggestion, metadata) => {
+        this.registerSuggestionMetadata(suggestion, metadata);
+      },
     });
     return SlashCommandHandler.sortSuggestions(rawSuggestions);
   }
@@ -109,52 +125,70 @@ export class SlashCommandHandler {
       : null;
 
     if (selectedSuggestion !== undefined) {
-      const suggestionType = selectedSuggestion.type;
-      switch (suggestionType) {
-        case "command": {
-          return {
-            command: selectedSuggestion.data.name,
-            argumentsText,
-          };
-        }
-        case "model": {
-          return {
-            command: "model",
-            argumentsText: selectedSuggestion.data.modelKey,
-          };
-        }
-        case "downloadableModel": {
-          return {
-            command: "download",
-            argumentsText: `${selectedSuggestion.data.owner}/${selectedSuggestion.data.name}`,
-          };
-        }
-        default: {
-          const exhaustiveCheck: never = suggestionType;
-          throw new Error(`Unhandled suggestion type: ${exhaustiveCheck}`);
-        }
-      }
+      const suggestionArgumentsText =
+        selectedSuggestion.args.length > 0 ? selectedSuggestion.args.join(" ") : argumentsText;
+      return {
+        command: selectedSuggestion.command,
+        argumentsText:
+          suggestionArgumentsText !== null && suggestionArgumentsText.length > 0
+            ? suggestionArgumentsText
+            : null,
+      };
     }
     return { command, argumentsText };
   }
   static sortSuggestions(suggestions: Suggestion[]): Suggestion[] {
     return [...suggestions].sort((left, right) => {
-      if (left.type !== right.type) {
-        return left.type === "model" ? -1 : 1;
+      if (left.priority !== right.priority) {
+        return right.priority - left.priority;
       }
-      if (left.type === "model" && right.type === "model") {
-        if (left.data.isCurrent !== right.data.isCurrent) {
-          return left.data.isCurrent ? -1 : 1;
-        }
-        if (left.data.isLoaded !== right.data.isLoaded) {
-          return left.data.isLoaded ? -1 : 1;
-        }
-        return left.data.modelKey.localeCompare(right.data.modelKey);
+      const commandComparison = left.command.localeCompare(right.command);
+      if (commandComparison !== 0) {
+        return commandComparison;
       }
-      if (left.type === "command" && right.type === "command") {
-        return left.data.name.localeCompare(right.data.name);
-      }
-      return 0;
+      const leftArgsText = left.args.join(" ");
+      const rightArgsText = right.args.join(" ");
+      return leftArgsText.localeCompare(rightArgsText);
     });
+  }
+
+  public addToIgnoreList(commandName: string): void {
+    this.ignoreList.add(commandName.toLowerCase());
+  }
+
+  public commandIsIgnored(commandName: string): boolean {
+    return this.ignoreList.has(commandName.toLowerCase());
+  }
+
+  public getSuggestionLabel(suggestion: Suggestion): string {
+    const metadata = this.suggestionMetadata.get(suggestion);
+    if (metadata !== undefined) {
+      return metadata.label;
+    }
+    const argsText = suggestion.args.length > 0 ? ` ${suggestion.args.join(" ")}` : "";
+    return `/${suggestion.command}${argsText}`;
+  }
+
+  private resetSuggestionMetadata(): void {
+    this.suggestionMetadata = new WeakMap<Suggestion, SlashCommandSuggestionMetadata>();
+  }
+
+  private createCommandSuggestion(command: SlashCommand): Suggestion {
+    const suggestion: Suggestion = {
+      command: command.name,
+      args: [],
+      priority: SlashCommandHandler.COMMAND_SUGGESTION_PRIORITY,
+    };
+    this.registerSuggestionMetadata(suggestion, {
+      label: `/${command.name} - ${command.description}`,
+    });
+    return suggestion;
+  }
+
+  private registerSuggestionMetadata(
+    suggestion: Suggestion,
+    metadata: SlashCommandSuggestionMetadata,
+  ): void {
+    this.suggestionMetadata.set(suggestion, metadata);
   }
 }

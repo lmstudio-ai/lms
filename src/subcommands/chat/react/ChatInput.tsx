@@ -86,7 +86,12 @@ export const ChatInput = ({
       }
     }
 
-    if (key.backspace === true || key.delete === true) {
+    if (key.delete === true && process.platform === "darwin") {
+      setUserInputState(previousState => deleteBeforeCursor(previousState));
+      return;
+    }
+
+    if (key.backspace === true) {
       setUserInputState(previousState => deleteBeforeCursor(previousState));
       return;
     }
