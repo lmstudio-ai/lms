@@ -6,8 +6,7 @@ export interface SlashCommandSuggestionBuilderArgs {
 
 export interface SlashCommandSuggestionsOpts {
   input: string;
-  isPredicting: boolean;
-  isConfirmationActive: boolean;
+  shouldShowSuggestions: boolean;
 }
 
 export interface SlashCommand {
@@ -62,11 +61,7 @@ export class SlashCommandHandler {
 
   getSuggestions(opts: SlashCommandSuggestionsOpts): Suggestion[] {
     const inputWithTrimmedStart = opts.input.trimStart();
-    if (
-      inputWithTrimmedStart.startsWith("/") === false ||
-      opts.isPredicting === true ||
-      opts.isConfirmationActive === true
-    ) {
+    if (opts.shouldShowSuggestions === false) {
       return [];
     }
 

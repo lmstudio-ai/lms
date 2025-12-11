@@ -82,8 +82,7 @@ export const ChatComponent = React.memo(
       const inputText = firstSegment.content;
       return commandHandler.getSuggestions({
         input: inputText,
-        isPredicting,
-        isConfirmationActive,
+        shouldShowSuggestions: !isConfirmationActive && !isPredicting && inputText.startsWith("/"),
       });
     }, [isConfirmationActive, isPredicting, userInputState]);
     const suggestionsPerPage = useSuggestionsPerPage(messages);
