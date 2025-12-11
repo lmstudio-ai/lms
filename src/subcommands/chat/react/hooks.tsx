@@ -1,22 +1,21 @@
+import type { HubModel } from "@lmstudio/lms-shared-types";
+import { type LMStudioClient } from "@lmstudio/sdk";
+import { useStdin } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
+import {
+  findModelInCatalog,
+  getCachedModelCatalogOrFetch,
+  parseModelKey,
+} from "../catalogHelpers.js";
+import { downloadModelWithProgress, getDownloadSize } from "../downloadHelpers.js";
+import { estimateMessageLinesCount } from "../util.js";
 import {
   type ChatUserInputState,
   type InkChatMessage,
   type ModelState,
   type Suggestion,
 } from "./types.js";
-import { type LMStudioClient } from "@lmstudio/sdk";
-import { estimateMessageLinesCount } from "../util.js";
-import { useStdin } from "ink";
-import { downloadModelWithProgress, getDownloadSize } from "../downloadHelpers.js";
-import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
-import {
-  getCachedModelCatalogOrFetch,
-  findModelInCatalog,
-  parseModelKey,
-} from "../catalogHelpers.js";
-import type { HubModel } from "@lmstudio/lms-shared-types";
-import { type ChatConfirmationPayload } from "./Chat.js";
 
 export function useModelCatalog(
   client: LMStudioClient,
@@ -127,6 +126,9 @@ export const LARGE_PASTE_THRESHOLD = 512; // Minimum characters to consider inpu
  * This hook listens to raw stdin data and uses debouncing to distinguish between normal typing and
  * paste operations. When a paste is detected, it buffers the content and calls the onPaste callback
  * once the paste operation completes.
+ *
+ * Returns a ref to signal whether normal input processing should be skipped (i.e., during paste).
+ * as true indicates that this hook is currently buffering all input as part of a paste operation.
  */
 export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetectionOpts) {
   const { stdin, setRawMode } = useStdin();
@@ -139,12 +141,12 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
 
   const BASE_DELAY = 20; // Minimum debounce delay in milliseconds
   const MAX_DELAY = 1000; // Maximum delay to prevent excessive waiting
+  // We scale because larger pastes may lead to slower data arrival rates
+  // and we want to adaptively wait longer for bigger pastes
+  // The scale adds additional time for each character in the last chunk
+  const SCALE = 0.1;
 
   useEffect(() => {
-    // We scale because larger pastes may lead to slower data arrival rates
-    // and we want to adaptively wait longer for bigger pastes
-    const SCALE = 0.1;
-
     if (stdin === undefined) return;
 
     // We enable raw mode to capture all input data directly
@@ -183,7 +185,7 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
       // Escape sequences start with ESC character (\x1b)
       const isEscapeSequence = inputText.startsWith("\x1b");
 
-      // Detect paste start: large input (>1000 chars) that's not an escape sequence
+      // Detect paste start: large input (>512 chars) that's not an escape sequence
       // and we're not already in a paste operation
       const isPasteStart =
         inputText.length > LARGE_PASTE_THRESHOLD &&
@@ -216,17 +218,15 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
 
 export type ConfirmationResponseStatus = "handled" | "invalid" | "ignored";
 
-export interface ConfirmationRequest<TPayload> {
-  payload: TPayload;
-  onConfirm: (payload: TPayload) => void | Promise<void>;
-  onCancel?: (payload: TPayload) => void | Promise<void>;
+export interface ConfirmationRequest {
+  onConfirm: () => void | Promise<void>;
+  onCancel?: () => void | Promise<void>;
 }
 
-export function useConfirmationPrompt<TPayload>() {
-  const [confirmationRequest, setConfirmationRequest] =
-    useState<ConfirmationRequest<TPayload> | null>(null);
+export function useConfirmationPrompt() {
+  const [confirmationRequest, setConfirmationRequest] = useState<ConfirmationRequest | null>(null);
 
-  const requestConfirmation = useCallback((request: ConfirmationRequest<TPayload>) => {
+  const requestConfirmation = useCallback((request: ConfirmationRequest) => {
     setConfirmationRequest(request);
   }, []);
 
@@ -242,13 +242,13 @@ export function useConfirmationPrompt<TPayload>() {
       const normalizedResponse = userInputText.trim().toLowerCase();
       if (normalizedResponse === "y" || normalizedResponse === "yes") {
         setConfirmationRequest(null);
-        await confirmationRequest.onConfirm(confirmationRequest.payload);
+        await confirmationRequest.onConfirm();
         return "handled";
       }
       if (normalizedResponse === "n" || normalizedResponse === "no") {
         setConfirmationRequest(null);
         if (confirmationRequest.onCancel !== undefined) {
-          await confirmationRequest.onCancel(confirmationRequest.payload);
+          await confirmationRequest.onCancel();
         }
         return "handled";
       }
@@ -270,7 +270,7 @@ export interface UseDownloadCommandOpts {
   client: LMStudioClient;
   logInChat: (message: string) => void;
   logErrorInChat: (message: string) => void;
-  requestConfirmation: (request: ConfirmationRequest<ChatConfirmationPayload>) => void;
+  requestConfirmation: (request: ConfirmationRequest) => void;
   shouldFetchModelCatalog: boolean;
   refreshDownloadedModels?: () => void;
 }
@@ -349,16 +349,12 @@ export function useDownloadCommand({
         `Download ${matchingModel.owner}/${matchingModel.name}? This will download approximately ${formattedSize}. Type yes to continue or no to cancel.`,
       );
       requestConfirmation({
-        payload: {
-          type: "downloadModel",
-          owner: matchingModel.owner,
-          name: matchingModel.name,
-        },
-        onConfirm: async payload => {
-          if (payload.type !== "downloadModel") return;
-          logInChat(`Downloading ${payload.owner}/${payload.name} in the background...`);
+        onConfirm: async () => {
+          logInChat(
+            `Downloading ${matchingModel.owner}/${matchingModel.name} in the background...`,
+          );
 
-          downloadModelWithProgress(client, payload.owner, payload.name, {
+          downloadModelWithProgress(client, matchingModel.owner, matchingModel.name, {
             onComplete: (owner, name) => {
               logInChat(`Download completed: ${owner}/${name}`);
               if (refreshDownloadedModels !== undefined) {

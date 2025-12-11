@@ -89,10 +89,27 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
     state.segments.splice(segmentIndex, 1);
     // Adjust cursor indices after removal
     if (state.cursorOnSegmentIndex > segmentIndex) {
-      state.cursorOnSegmentIndex -= 1;
+      state.cursorOnSegmentIndex = state.cursorOnSegmentIndex - 1;
     } else if (state.cursorOnSegmentIndex === segmentIndex) {
+      // Cursor was on the removed segment - move to previous segment
+      // end or start as appropriate
       state.cursorOnSegmentIndex = Math.max(0, segmentIndex - 1);
-      state.cursorInSegmentOffset = 0;
+      const newSegment = state.segments[state.cursorOnSegmentIndex];
+      // If there is a segment there, adjust offset accordingly
+      if (newSegment !== undefined) {
+        // If new segment is text, place cursor at end except
+        // if the first segment was removed
+        if (newSegment.type === "text" && segmentIndex !== 0) {
+          state.cursorInSegmentOffset = newSegment.content.length;
+        } else if (segmentIndex === 0) {
+          state.cursorInSegmentOffset = 0;
+        } else {
+          state.cursorOnSegmentIndex += 1;
+          state.cursorInSegmentOffset = 0;
+        }
+      } else {
+        state.cursorInSegmentOffset = 0;
+      }
     }
   }
 
@@ -163,7 +180,6 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
  * Handles all segment types and cursor positions:
  * - On text segment: deletes character or merges with previous segment
  * - On largePaste at offset 0: deletes the previous segment
- * - On largePaste at offset \> 0: deletes the current largePaste segment
  */
 export function deleteBeforeCursor(state: ChatUserInputState): ChatUserInputState {
   return produceSanitizedState(state, draft => {
@@ -209,24 +225,26 @@ export function deleteBeforeCursor(state: ChatUserInputState): ChatUserInputStat
       } else {
         // Previous is largePaste - delete the entire segment
         draft.segments.splice(previousSegmentIndex, 1);
-        draft.cursorOnSegmentIndex = previousSegmentIndex;
-        draft.cursorInSegmentOffset = 0;
+        draft.cursorOnSegmentIndex = Math.max(0, previousSegmentIndex - 1);
+
+        if (previousSegmentIndex > 0) {
+          // Cursor moves to segment before the deleted largePaste
+          const currentSegmentAfterDeletion = draft.segments[draft.cursorOnSegmentIndex];
+          if (currentSegmentAfterDeletion?.type === "text") {
+            draft.cursorInSegmentOffset = currentSegmentAfterDeletion.content.length;
+          } else {
+            draft.cursorInSegmentOffset = 0;
+          }
+        } else {
+          // Cursor stays on same segment (shifted to index 0)
+          draft.cursorInSegmentOffset = 0;
+        }
         return;
       }
     }
 
-    // offset > 0 - handle based on current segment type
     if (currentSegment.type === "largePaste") {
-      // Inside largePaste - delete the current largePaste
-      draft.segments.splice(draft.cursorOnSegmentIndex, 1);
-      if (draft.segments.length === 0) {
-        draft.segments.push({ type: "text", content: "" });
-        draft.cursorOnSegmentIndex = 0;
-        draft.cursorInSegmentOffset = 0;
-        return;
-      }
-      draft.cursorOnSegmentIndex = Math.max(0, draft.cursorOnSegmentIndex - 1);
-      draft.cursorInSegmentOffset = 0;
+      // Error: cursor should not be > 0 on largePaste segments
       return;
     }
 
@@ -344,8 +362,7 @@ export function moveCursorRight(state: ChatUserInputState): ChatUserInputState {
  * Inserts text at the cursor position.
  * - In text segment: inserts text at cursor position
  * - At start of largePaste: appends to previous text segment or creates new text segment
- * - Inside largePaste: creates new text segment after the largePaste as inside means index is 1
- *  (there is no real "inside" for largePaste, so we treat it as after the largePaste)
+ *  (there is no real "inside" for largePaste)
  */
 export function insertTextAtCursor({ state, text }: InsertTextAtCursorOpts): ChatUserInputState {
   return produceSanitizedState(state, draft => {
@@ -354,27 +371,22 @@ export function insertTextAtCursor({ state, text }: InsertTextAtCursorOpts): Cha
       return;
     }
     if (currentSegment.type === "largePaste") {
-      const largePasteIndex = draft.cursorOnSegmentIndex;
-      if (draft.cursorInSegmentOffset === 0) {
-        // At start of largePaste - try to append to previous text segment
-        const previousSegment = draft.segments[largePasteIndex - 1];
-        if (previousSegment !== undefined && previousSegment.type === "text") {
-          previousSegment.content += text;
-          draft.cursorOnSegmentIndex = largePasteIndex - 1;
-          draft.cursorInSegmentOffset = previousSegment.content.length;
-          return;
-        }
-        // No previous text segment - create a new one before the largePaste
-        draft.segments.splice(largePasteIndex, 0, { type: "text", content: text });
-        draft.cursorOnSegmentIndex = largePasteIndex;
-      } else {
-        // Inside largePaste - create new text segment after it
-        draft.segments.splice(largePasteIndex + 1, 0, {
-          type: "text",
-          content: text,
-        });
-        draft.cursorOnSegmentIndex = largePasteIndex + 1;
+      if (draft.cursorInSegmentOffset !== 0) {
+        // Something is wrong - we can only insert text at offset 0 of largePaste
+        return;
       }
+      const largePasteIndex = draft.cursorOnSegmentIndex;
+      // At start of largePaste - try to append to previous text segment
+      const previousSegment = draft.segments[largePasteIndex - 1];
+      if (previousSegment !== undefined && previousSegment.type === "text") {
+        previousSegment.content += text;
+        draft.cursorOnSegmentIndex = largePasteIndex - 1;
+        draft.cursorInSegmentOffset = previousSegment.content.length;
+        return;
+      }
+      // No previous text segment - create a new one before the largePaste
+      draft.segments.splice(largePasteIndex, 0, { type: "text", content: text });
+      draft.cursorOnSegmentIndex = largePasteIndex;
       draft.cursorInSegmentOffset = text.length;
       return;
     }
@@ -396,7 +408,7 @@ export function insertTextAtCursor({ state, text }: InsertTextAtCursorOpts): Cha
  * - Small paste: inserted as regular text
  * - Large paste: creates a largePaste segment with a trailing placeholder text segment
  *   - In text segment: splits the text, inserts largePaste, preserves text after cursor
- *   - On largePaste: inserts before or after based on cursor offset
+ *   - On largePaste at offset 0: inserts before the largePaste segment
  */
 export function insertPasteAtCursor({
   state,
@@ -414,14 +426,17 @@ export function insertPasteAtCursor({
     const isLargePaste = content.length >= largePasteThreshold;
     if (currentSegment.type === "largePaste") {
       // Inserting paste while on a largePaste segment
+      if (draft.cursorInSegmentOffset !== 0) {
+        // Error: cursor should only be at offset 0 on largePaste segments
+        return;
+      }
       const largePasteIndex = draft.cursorOnSegmentIndex;
-      // Insert before current largePaste if at start, otherwise insert after
-      const insertIndex = draft.cursorInSegmentOffset === 0 ? largePasteIndex : largePasteIndex + 1;
-      draft.segments.splice(insertIndex, 0, {
+      // Insert before current largePaste
+      draft.segments.splice(largePasteIndex, 0, {
         type: isLargePaste === true ? "largePaste" : "text",
         content,
       });
-      draft.cursorOnSegmentIndex = insertIndex;
+      draft.cursorOnSegmentIndex = largePasteIndex;
       draft.cursorInSegmentOffset = content.length;
       return;
     }

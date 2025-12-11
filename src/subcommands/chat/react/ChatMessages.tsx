@@ -29,7 +29,7 @@ export const ChatMessage = memo(
 
         return (
           <Box paddingTop={1} flexDirection="row" flexWrap="nowrap" width={"100%"}>
-            <Text color={"cyan"}>You: </Text>
+            <Text color="cyan">You: </Text>
             <Text wrap="wrap">{formattedContent}</Text>
           </Box>
         );

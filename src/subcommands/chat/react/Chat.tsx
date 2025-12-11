@@ -1,12 +1,12 @@
-import { type LLM, type LMStudioClient, type Chat } from "@lmstudio/sdk";
 import { produce } from "@lmstudio/immer-with-plugins";
+import { type Chat, type LLM, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, Text, useApp } from "ink";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { displayVerboseStats } from "../util.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
-import { SlashCommandHandler, type SlashCommand } from "./SlashCommandHandler.js";
-import { insertPasteAtCursor } from "./inputReducer.js";
+import { SlashCommandHandler } from "./SlashCommandHandler.js";
 import {
   LARGE_PASTE_THRESHOLD,
   useConfirmationPrompt,
@@ -16,9 +16,9 @@ import {
   useSuggestionHandlers,
   useSuggestionsPerPage,
 } from "./hooks.js";
-import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
-import { displayVerboseStats } from "../util.js";
+import { insertPasteAtCursor } from "./inputReducer.js";
 import { createSlashCommands } from "./slashCommands.js";
+import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
 
 interface ChatComponentProps {
   client: LMStudioClient;
@@ -32,23 +32,11 @@ interface ChatComponentProps {
 
 const commandHandler = new SlashCommandHandler();
 
-const emptyChatInputState: ChatUserInputState = {
+export const emptyChatInputState: ChatUserInputState = {
   segments: [{ type: "text", content: "" }],
   cursorOnSegmentIndex: 0,
   cursorInSegmentOffset: 0,
 };
-
-export type ChatConfirmationPayload =
-  | {
-      type: "reloadModel";
-      originalInput: ChatUserInputState;
-      modelKey: string;
-    }
-  | {
-      type: "downloadModel";
-      owner: string;
-      name: string;
-    };
 
 export const ChatComponent = React.memo(
   ({ client, llm, chat, onExit, stats, ttl, shouldFetchModelCatalog }: ChatComponentProps) => {
@@ -64,7 +52,7 @@ export const ChatComponent = React.memo(
     const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
     const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
     const { isConfirmationActive, requestConfirmation, handleConfirmationResponse } =
-      useConfirmationPrompt<ChatConfirmationPayload>();
+      useConfirmationPrompt();
     const [promptProcessingProgress, setPromptProcessingProgress] = useState<number | null>(null);
     const abortControllerRef = useRef<AbortController | null>(new AbortController());
     const chatRef = useRef<Chat>(chat);
@@ -151,39 +139,6 @@ export const ChatComponent = React.memo(
       exit();
       process.exit(0);
     }, [onExit, exit]);
-
-    const slashCommands = useMemo<SlashCommand[]>(() => {
-      return createSlashCommands({
-        client,
-        llmRef,
-        chatRef,
-        exitApp: handleExit,
-        ttl,
-        abortControllerRef,
-        addMessage,
-        setMessages,
-        setUserInputState,
-        downloadedModels,
-        modelCatalog,
-        handleDownloadCommand,
-        logInChat,
-        logErrorInChat,
-        shouldFetchModelCatalog,
-        commandHandler,
-        setModelLoadingProgress,
-      });
-    }, [
-      client,
-      handleExit,
-      ttl,
-      addMessage,
-      downloadedModels,
-      modelCatalog,
-      handleDownloadCommand,
-      logInChat,
-      logErrorInChat,
-      shouldFetchModelCatalog,
-    ]);
 
     const handleAbortPrediction = useCallback(() => {
       const hasAssistantMessage = messages.length > 0 && messages.at(-1)?.type === "assistant";
@@ -280,6 +235,13 @@ export const ChatComponent = React.memo(
         return;
       }
 
+      if (isPredicting) {
+        logInChat(
+          "A prediction is already in progress. Please wait for it to finish or press CTRL+C to abort it.",
+        );
+        return;
+      }
+
       // If nothing else, proceed with normal message submission
       setIsPredicting(true);
       if (
@@ -312,8 +274,8 @@ export const ChatComponent = React.memo(
             chatRef.current.append("assistant", "");
             const displayName =
               llmRef.current?.displayName ?? llmRef.current?.modelKey ?? "Assistant";
-            setMessages(previousMessages =>
-              produce(previousMessages, draftMessages => {
+            setMessages(
+              produce(draftMessages => {
                 draftMessages.push({
                   type: "assistant",
                   content: [],
@@ -334,9 +296,6 @@ export const ChatComponent = React.memo(
             }
           },
           onPredictionFragment(fragment) {
-            if (fragment.isStructural) {
-              return;
-            }
             if (signal.aborted) {
               return;
             }
@@ -347,8 +306,11 @@ export const ChatComponent = React.memo(
             ) {
               return;
             }
-            setMessages(previousMessages =>
-              produce(previousMessages, draftMessages => {
+            if (fragment.isStructural) {
+              return;
+            }
+            setMessages(
+              produce(draftMessages => {
                 if (draftMessages.length === 0) {
                   return;
                 }
@@ -384,17 +346,11 @@ export const ChatComponent = React.memo(
             logErrorInChat(`${error.message}`);
             logInChat(`Would you like to reload the model?`);
             requestConfirmation({
-              payload: {
-                type: "reloadModel",
-                originalInput: userInputState,
-                modelKey: currentModelKey,
-              },
-              onConfirm: async payload => {
-                if (payload.type !== "reloadModel") return;
+              onConfirm: async () => {
                 logInChat("Reloading model...");
                 setModelLoadingProgress(0);
                 try {
-                  llmRef.current = await client.llm.model(payload.modelKey, {
+                  llmRef.current = await client.llm.model(currentModelKey, {
                     verbose: false,
                     ttl,
                     onProgress(progress) {
@@ -403,7 +359,6 @@ export const ChatComponent = React.memo(
                   });
                   logInChat(`Model reloaded: ${llmRef.current.displayName}`);
                   setModelLoadingProgress(null);
-                  setUserInputState(payload.originalInput);
                 } catch (reloadError) {
                   setModelLoadingProgress(null);
                   const reloadErrorMessage =
@@ -426,19 +381,20 @@ export const ChatComponent = React.memo(
         setIsPredicting(false);
       }
     }, [
-      addMessage,
-      client.llm,
+      userInputState,
       handleConfirmationResponse,
+      isPredicting,
+      logInChat,
+      normalizedSelectedSuggestionIndex,
+      suggestions,
       handleExit,
       logErrorInChat,
-      logInChat,
+      addMessage,
+      stats,
       promptProcessingProgress,
       requestConfirmation,
-      normalizedSelectedSuggestionIndex,
-      stats,
-      suggestions,
+      client.llm,
       ttl,
-      userInputState,
     ]);
 
     const renderSuggestions = useCallback(() => {
@@ -455,13 +411,56 @@ export const ChatComponent = React.memo(
       );
     }, [normalizedSelectedSuggestionIndex, suggestions, suggestionsPerPage]);
 
-    // We register slash commands once on mount and whenever they change.
     useEffect(() => {
-      commandHandler.setCommands(slashCommands);
-    }, [slashCommands]);
+      const commands = createSlashCommands({
+        client,
+        llmRef,
+        chatRef,
+        exitApp: handleExit,
+        ttl,
+        abortControllerRef,
+        addMessage,
+        setMessages,
+        setUserInputState,
+        downloadedModels,
+        modelCatalog,
+        handleDownloadCommand,
+        logInChat,
+        logErrorInChat,
+        shouldFetchModelCatalog,
+        commandHandler,
+        setModelLoadingProgress,
+      });
+      commandHandler.setCommands(commands);
+    }, [
+      client,
+      handleExit,
+      ttl,
+      addMessage,
+      downloadedModels,
+      modelCatalog,
+      handleDownloadCommand,
+      logInChat,
+      logErrorInChat,
+      shouldFetchModelCatalog,
+    ]);
 
     return (
       <Box flexDirection="column" width={"95%"} flexWrap="wrap">
+        <Box>
+          <Text>
+            {JSON.stringify({
+              ...userInputState,
+              segments: userInputState.segments.map(segment => ({
+                ...segment,
+                content:
+                  segment.type === "largePaste"
+                    ? `[large paste of ${segment.content.length} characters]`
+                    : segment.content,
+              })),
+            })}
+          </Text>
+        </Box>
         <ChatMessagesList
           messages={messages}
           modelName={llmRef.current?.displayName ?? null}

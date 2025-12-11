@@ -1,13 +1,13 @@
 import { Box, Text, useInput } from "ink";
 import { type Dispatch, type SetStateAction, useMemo } from "react";
-import { renderInputWithCursor } from "./inputRenderer.js";
+import { useBufferedPasteDetection } from "./hooks.js";
 import {
   deleteBeforeCursor,
   insertTextAtCursor,
   moveCursorLeft,
   moveCursorRight,
 } from "./inputReducer.js";
-import { useBufferedPasteDetection } from "./hooks.js";
+import { renderInputWithCursor } from "./inputRenderer.js";
 import { type ChatUserInputState } from "./types.js";
 
 interface ChatInputProps {
