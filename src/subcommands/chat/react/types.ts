@@ -37,6 +37,7 @@ export type ModelState = {
   modelKey: string;
   isLoaded: boolean;
   isCurrent: boolean;
+  displayName: string;
 };
 
 export type Suggestion =

@@ -143,34 +143,23 @@ export class SlashCommandHandler {
     return { command, argumentsText };
   }
   static sortSuggestions(suggestions: Suggestion[]): Suggestion[] {
-    const suggestionsCopy = [...suggestions];
-    suggestionsCopy.sort((leftSuggestion, rightSuggestion) => {
-      if (leftSuggestion.type === "model" && rightSuggestion.type === "model") {
-        if (leftSuggestion.data.isCurrent === true && rightSuggestion.data.isCurrent !== true) {
-          return -1;
-        }
-        if (leftSuggestion.data.isCurrent !== true && rightSuggestion.data.isCurrent === true) {
-          return 1;
-        }
-        if (leftSuggestion.data.isLoaded === true && rightSuggestion.data.isLoaded !== true) {
-          return -1;
-        }
-        if (leftSuggestion.data.isLoaded !== true && rightSuggestion.data.isLoaded === true) {
-          return 1;
-        }
-        return leftSuggestion.data.modelKey.localeCompare(rightSuggestion.data.modelKey);
+    return [...suggestions].sort((left, right) => {
+      if (left.type !== right.type) {
+        return left.type === "model" ? -1 : 1;
       }
-      if (leftSuggestion.type === "command" && rightSuggestion.type === "command") {
-        return leftSuggestion.data.name.localeCompare(rightSuggestion.data.name);
+      if (left.type === "model" && right.type === "model") {
+        if (left.data.isCurrent !== right.data.isCurrent) {
+          return left.data.isCurrent ? -1 : 1;
+        }
+        if (left.data.isLoaded !== right.data.isLoaded) {
+          return left.data.isLoaded ? -1 : 1;
+        }
+        return left.data.modelKey.localeCompare(right.data.modelKey);
       }
-      if (leftSuggestion.type === "model" && rightSuggestion.type === "command") {
-        return -1;
-      }
-      if (leftSuggestion.type === "command" && rightSuggestion.type === "model") {
-        return 1;
+      if (left.type === "command" && right.type === "command") {
+        return left.data.name.localeCompare(right.data.name);
       }
       return 0;
     });
-    return suggestionsCopy;
   }
 }

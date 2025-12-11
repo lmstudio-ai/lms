@@ -79,6 +79,7 @@ export function useDownloadedModels(
           modelKey: model.modelKey,
           isLoaded: loadedCount > 0,
           isCurrent,
+          displayName: model.displayName,
         };
       });
       setDownloadedModels(models);

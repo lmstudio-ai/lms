@@ -96,7 +96,10 @@ export function createSlashCommands({
       buildSuggestions: ({ argsInput }) => {
         const normalizedFilter = argsInput.trim().toLowerCase();
         const filteredModels = downloadedModels.filter(modelState => {
-          return modelState.modelKey.toLowerCase().includes(normalizedFilter);
+          return (
+            modelState.modelKey.toLowerCase().includes(normalizedFilter) ||
+            modelState.displayName.toLowerCase().includes(normalizedFilter)
+          );
         });
         return filteredModels.map(modelState => ({ type: "model", data: modelState }));
       },
@@ -119,7 +122,7 @@ export function createSlashCommands({
     },
     {
       name: "system-prompt",
-      description: "Set the system prompt",
+      description: "Replace the system prompt",
       handler: async commandArguments => {
         const prompt = commandArguments.join(" ");
         if (prompt.length === 0) {
