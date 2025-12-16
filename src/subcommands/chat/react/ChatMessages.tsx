@@ -83,11 +83,9 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
               <Text color={"gray"}>Try one of the following commands:</Text>
               <Text color="gray">/help - Show help information</Text>
               {modelName === null ? (
-                <Text color={"gray"}>/download [model_name] - Download a model</Text>
+                <Text color={"gray"}>/download - Download a model</Text>
               ) : (
-                <Text color={"gray"}>
-                  /model [model_key] - Load a model (type /model to see list)
-                </Text>
+                <Text color={"gray"}>/model - Load a model (type /model to see list)</Text>
               )}
               <Text color="gray">/clear - Clear the chat history</Text>
             </Box>
