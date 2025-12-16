@@ -118,6 +118,7 @@ export const ChatInput = ({
 
     // Currently there is a bug in ink where backspace is detected as delete
     // so we handle both the same way for now.
+    // https://github.com/vadimdemedes/ink/issues/634
     if (key.delete === true) {
       setUserInputState(previousState => deleteBeforeCursor(previousState));
       return;
