@@ -76,16 +76,19 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
           <Box paddingX={1} borderStyle={"round"} borderColor={"magenta"} flexDirection="column">
             <Text color={"gray"}>👾 lms chat {getVersion()} </Text>
             <Text>
-              {modelName !== null && `Chatting with ${modelName}. `}
-              Type <Text bold>exit</Text> or Ctrl+C to quit.
+              Type <Text bold>exit</Text> or Ctrl+C to quit
             </Text>
+            {modelName !== null && (
+              <Box paddingTop={1}>
+                <Text bold>{`Chatting with ${modelName}`}</Text>
+              </Box>
+            )}
             <Box paddingTop={1} flexDirection="column">
-              <Text color={"gray"}>Try one of the following commands:</Text>
-              <Text color="gray">/help - Show help information</Text>
-
-              <Text color={"gray"}>/download - Download a model</Text>
-              <Text color={"gray"}>/model - Load a model (type /model to see list)</Text>
+              <Text color="gray">Try one of the following commands:</Text>
+              <Text color="gray">/model - Load a model (type /model to see list)</Text>
+              <Text color="gray">/download - Download a model</Text>
               <Text color="gray">/clear - Clear the chat history</Text>
+              <Text color="gray">/help - Show help information</Text>
             </Box>
           </Box>
         </Box>

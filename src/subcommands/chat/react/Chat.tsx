@@ -507,7 +507,7 @@ export const ChatComponent = React.memo(
       <Box flexDirection="column" width={"95%"} flexWrap="wrap">
         <ChatMessagesList
           messages={messages}
-          modelName={llmRef.current?.displayName ?? null}
+          modelName={llmRef.current?.identifier ?? null}
           isPredicting={isPredicting}
         />
         <ChatInput
