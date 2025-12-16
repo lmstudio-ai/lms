@@ -232,7 +232,6 @@ export const ChatComponent = React.memo(
       logInChat("Download interrupted. Continue download in background?");
       requestConfirmation({
         onConfirm: () => {
-          logInChat("Download continuing in background...");
           handleExit();
         },
         onCancel: () => {
