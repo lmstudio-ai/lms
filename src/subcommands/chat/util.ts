@@ -90,6 +90,17 @@ export async function executePrediction(
 
   let lastFragment = "";
   for await (const fragment of prediction) {
+    if (fragment.reasoningType === "reasoningStartTag") {
+      process.stdout.write("<think>\n");
+      continue;
+    }
+    if (fragment.reasoningType === "reasoningEndTag") {
+      process.stdout.write("\n</think>\n");
+      continue;
+    }
+    if (fragment.isStructural) {
+      continue;
+    }
     process.stdout.write(fragment.content);
     lastFragment = fragment.content;
   }

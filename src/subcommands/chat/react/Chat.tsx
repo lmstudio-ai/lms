@@ -47,6 +47,7 @@ export const ChatComponent = React.memo(
 
     const [userInputState, setUserInputState] = useState<ChatUserInputState>(emptyChatInputState);
     const [isPredicting, setIsPredicting] = useState(false);
+    const [showPredictionSpinner, setShowPredictionSpinner] = useState(false);
     const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
     const [fetchingModelDetails, setFetchingModelDetails] = useState<{
       owner: string;
@@ -222,6 +223,7 @@ export const ChatComponent = React.memo(
         abortControllerRef.current.abort();
       }
       setIsPredicting(false);
+      setShowPredictionSpinner(false);
     }, [logInChat, messages]);
 
     const handleAbortDownload = useCallback(() => {
@@ -343,6 +345,7 @@ export const ChatComponent = React.memo(
 
       // If nothing else, proceed with normal message submission
       setIsPredicting(true);
+      setShowPredictionSpinner(true);
       if (
         abortControllerRef.current === null ||
         abortControllerRef.current.signal.aborted === true
@@ -370,6 +373,7 @@ export const ChatComponent = React.memo(
         });
         const result = await llmRef.current.respond(chatRef.current, {
           onFirstToken() {
+            setShowPredictionSpinner(false);
             chatRef.current.append("assistant", "");
             const displayName =
               llmRef.current?.displayName ?? llmRef.current?.modelKey ?? "Assistant";
@@ -478,6 +482,7 @@ export const ChatComponent = React.memo(
         }
       } finally {
         setIsPredicting(false);
+        setShowPredictionSpinner(false);
         abortControllerRef.current = null;
       }
     }, [
@@ -537,6 +542,7 @@ export const ChatComponent = React.memo(
               ? suggestions[normalizedSelectedSuggestionIndex]
               : null
           }
+          predictionSpinnerVisible={showPredictionSpinner}
         />
         {suggestions.length > 0 && (
           <ChatSuggestions

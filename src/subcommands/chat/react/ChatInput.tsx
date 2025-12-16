@@ -34,6 +34,7 @@ interface ChatInputProps {
   onPaste: (content: string) => void;
   commandHasSuggestions: (commandName: string) => boolean;
   selectedSuggestion?: { command: string; args: string[] } | null;
+  predictionSpinnerVisible: boolean;
 }
 
 export const ChatInput = ({
@@ -59,6 +60,7 @@ export const ChatInput = ({
   onPaste,
   commandHasSuggestions,
   selectedSuggestion,
+  predictionSpinnerVisible,
 }: ChatInputProps) => {
   const skipUseInputRef = useBufferedPasteDetection({ onPaste });
   const disableUserInput =
@@ -231,6 +233,7 @@ export const ChatInput = ({
           promptProcessingProgress={promptProcessingProgress}
           fetchingModelDetails={fetchingModelDetails}
           downloadProgress={downloadProgress}
+          predictionSpinnerVisible={predictionSpinnerVisible}
         />
       ) : (
         lines.map((lineText, lineIndex) => {

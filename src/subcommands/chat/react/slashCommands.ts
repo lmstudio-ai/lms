@@ -75,8 +75,21 @@ export function createSlashCommands({
 
         const modelKey = commandArguments.join(" ");
 
-        if (llmRef.current !== null && modelKey === llmRef.current.modelKey) {
-          return;
+        if (llmRef.current !== null) {
+          // Direct identifier match
+          if (llmRef.current.identifier === modelKey) {
+            return;
+          }
+
+          // ModelKey match - only return if it's the only loaded instance
+          if (llmRef.current.modelKey === modelKey) {
+            const loadedInstancesOfThisModel = downloadedModels.filter(
+              model => model.modelKey === modelKey && model.isLoaded,
+            ).length;
+            if (loadedInstancesOfThisModel === 1) {
+              return;
+            }
+          }
         }
 
         setModelLoadingProgress(0);

@@ -62,22 +62,32 @@ export function useDownloadedModels(
         model => model.type === "llm",
       );
       const loadedModels = await client.llm.listLoaded();
-      const models = downloadedModels.map(model => {
-        const loadedCount = loadedModels.filter(
-          loadedModel => loadedModel.path === model.path,
-        ).length;
-        const isCurrent = loadedModels.some(
-          loadedModel =>
-            loadedModel.path === model.path && loadedModel.identifier === currentModelIdentifier,
-        );
+
+      // Create entry for each loaded model instance
+      const loadedModelStates = loadedModels.map(loadedModel => {
+        const downloadedModel = downloadedModels.find(model => model.path === loadedModel.path);
         return {
-          modelKey: model.modelKey,
-          isLoaded: loadedCount > 0,
-          isCurrent,
-          displayName: model.displayName,
+          modelKey: loadedModel.identifier,
+          isLoaded: true,
+          isCurrent: loadedModel.identifier === currentModelIdentifier,
+          displayName: downloadedModel?.displayName ?? loadedModel.path,
         };
       });
-      setDownloadedModels(models);
+
+      // Get set of paths that are currently loaded
+      const loadedPaths = new Set(loadedModels.map(loadedModel => loadedModel.path));
+
+      // Add downloaded models that are NOT loaded
+      const downloadedOnlyModels = downloadedModels
+        .filter(model => !loadedPaths.has(model.path))
+        .map(model => ({
+          modelKey: model.modelKey,
+          isLoaded: false,
+          isCurrent: false,
+          displayName: model.displayName,
+        }));
+
+      setDownloadedModels([...loadedModelStates, ...downloadedOnlyModels]);
     };
 
     fetchModels();

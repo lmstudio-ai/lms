@@ -7,6 +7,7 @@ interface InputPlaceholderOpts {
   promptProcessingProgress: number | null;
   fetchingModelDetails: { owner: string; name: string } | null;
   downloadProgress: { owner: string; name: string; progress: number } | null;
+  predictionSpinnerVisible: boolean;
 }
 
 export function InputPlaceholder({
@@ -15,6 +16,7 @@ export function InputPlaceholder({
   promptProcessingProgress,
   fetchingModelDetails,
   downloadProgress,
+  predictionSpinnerVisible,
 }: InputPlaceholderOpts) {
   if (fetchingModelDetails !== null) {
     return (
@@ -61,6 +63,9 @@ export function InputPlaceholder({
   }
 
   if (isPredicting) {
+    if (predictionSpinnerVisible) {
+      return <Spinner />;
+    }
     return <Text color="cyan">› </Text>;
   }
 
