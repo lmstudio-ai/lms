@@ -12,6 +12,7 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import chalk from "chalk";
+import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
 
 interface RuntimeSurveyCommandOptions {
   all: boolean;
@@ -21,20 +22,6 @@ interface RuntimeSurveyCommandOptions {
 
 interface GpuMemoryMetrics {
   totalBytes: number;
-}
-
-function formatBytes(bytes?: number): string {
-  if (bytes === undefined) {
-    return "n/a";
-  }
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let currentValue = bytes;
-  let unitIndex = 0;
-  while (currentValue >= 1024 && unitIndex < units.length - 1) {
-    currentValue /= 1024;
-    unitIndex += 1;
-  }
-  return `${currentValue.toFixed(1)} ${units[unitIndex]}`;
 }
 
 function getGpuMemoryMetrics(gpuInfo: RuntimeHardwareGpuInfo): GpuMemoryMetrics {
@@ -48,7 +35,7 @@ function getGpuMemoryMetrics(gpuInfo: RuntimeHardwareGpuInfo): GpuMemoryMetrics 
 }
 
 function formatMemoryRatio(memoryMetrics: GpuMemoryMetrics): string {
-  const totalText = formatBytes(memoryMetrics.totalBytes);
+  const totalText = formatSizeBytes1000(memoryMetrics.totalBytes);
   return ` ${totalText}`;
 }
 
@@ -76,21 +63,17 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
   const rows = gpus.map(gpuInfo => {
     const memoryMetrics = getGpuMemoryMetrics(gpuInfo);
     const deviceDescriptor = `${gpuInfo.name} (${gpuInfo.detectionPlatform}, ${gpuInfo.integrationType})`;
-    const driverVersion =
-      gpuInfo.detectionPlatformVersion !== "" ? gpuInfo.detectionPlatformVersion : "Unknown";
     return {
       device: deviceDescriptor,
       vram: formatMemoryRatio(memoryMetrics),
-      driver: driverVersion,
     };
   });
 
   return columnify(rows, {
-    columns: ["device", "vram", "driver"],
+    columns: ["device", "vram"],
     config: {
       device: { headingTransform: () => chalk.grey("GPU/ACCELERATORS"), align: "left" },
-      vram: { headingTransform: () => chalk.grey("Total VRAM"), align: "left" },
-      driver: { headingTransform: () => chalk.grey("DRIVER"), align: "left" },
+      vram: { headingTransform: () => chalk.grey("VRAM"), align: "left" },
     },
     columnSplitter: "   ",
   });
@@ -109,7 +92,7 @@ function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
 }
 
 function renderRamLine(survey: RuntimeHardwareSurveyEngine): string {
-  const ramCapacityText = formatBytes(survey.memoryInfo.totalMemory);
+  const ramCapacityText = formatSizeBytes1000(survey.memoryInfo.ramCapacity);
 
   return `RAM: ${ramCapacityText}`;
 }
@@ -126,12 +109,6 @@ function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | 
 
 function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine, logger: SimpleLogger) {
   const gpuTable = renderGpuTable(survey);
-  const gpuFramework = survey.hardwareSurvey.gpuSurveyResult.gpuInfo.find(
-    gpu => gpu.detectionPlatform,
-  )?.detectionPlatform;
-  logger.info(
-    chalk.gray(`Survey by ${survey.engine} [${gpuFramework ?? "Unknown"}] (${survey.version}):`),
-  );
   if (gpuTable === undefined) {
     logger.info("No accelerators detected.");
   } else {
@@ -181,14 +158,9 @@ const surveyCommand = new Command()
       logger.info("No runtime survey results.");
       return;
     }
-
-    surveyResult.engines.forEach((engineSurvey, engineIndex) => {
-      renderEngineSurvey(engineSurvey, logger);
-      const isLast = engineIndex === surveyResult.engines.length - 1;
-      if (!isLast) {
-        logger.info();
-      }
-    });
+    const engineSurvey = surveyResult.engines[0];
+    renderEngineSurvey(engineSurvey, logger);
+    logger.info("");
   });
 
 addCreateClientOptions(surveyCommand);
