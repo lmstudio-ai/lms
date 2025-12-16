@@ -243,9 +243,6 @@ export const ChatComponent = React.memo(
             downloadAbortControllerRef.current.abort();
             downloadAbortControllerRef.current = null;
           }
-          setDownloadProgress(null);
-          setFetchingModelDetails(null);
-          logInChat("Download cancelled.");
           handleExit();
         },
       });

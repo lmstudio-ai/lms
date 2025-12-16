@@ -358,6 +358,7 @@ export function useDownloadCommand({
               refreshDownloadedModels();
             }
           } catch (error) {
+            // Will not log error if aborted
             const errorMessage =
               error instanceof Error && error.message !== undefined ? error.message : String(error);
             setDownloadProgress(null);
