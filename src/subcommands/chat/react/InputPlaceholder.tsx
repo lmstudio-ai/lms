@@ -32,7 +32,6 @@ export function InputPlaceholder({
       <Box>
         <Text color="cyan">› </Text>
         <Text color="gray">
-          {" "}
           Downloading {downloadProgress.owner}/{downloadProgress.name}...{" "}
           {Math.round(downloadProgress.progress * 100)}%
         </Text>
@@ -44,7 +43,7 @@ export function InputPlaceholder({
     return (
       <Box>
         <Text color="cyan">› </Text>
-        <Text color="gray"> Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
+        <Text color="gray">Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
       </Box>
     );
   }
@@ -54,7 +53,6 @@ export function InputPlaceholder({
       <Box>
         <Text color="cyan">› </Text>
         <Text color="gray">
-          {" "}
           Processing prompt... {Math.round(promptProcessingProgress * 100)}%{" "}
         </Text>
         <Spinner />
