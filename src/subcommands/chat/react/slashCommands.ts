@@ -7,6 +7,7 @@ import type {
   SlashCommandSuggestionBuilderArgs,
 } from "./SlashCommandHandler.js";
 import type { ChatUserInputState, InkChatMessage, ModelState, Suggestion } from "./types.js";
+import chalk from "chalk";
 
 export interface CreateSlashCommandsOpts {
   client: LMStudioClient;
@@ -14,7 +15,6 @@ export interface CreateSlashCommandsOpts {
   chatRef: RefObject<Chat>;
   exitApp: () => void;
   ttl?: number;
-  abortControllerRef: RefObject<AbortController | null>;
   addMessage: (message: InkChatMessage) => void;
   setMessages: Dispatch<SetStateAction<InkChatMessage[]>>;
   setUserInputState: Dispatch<SetStateAction<ChatUserInputState>>;
@@ -26,6 +26,7 @@ export interface CreateSlashCommandsOpts {
   shouldFetchModelCatalog?: boolean;
   commandHandler: SlashCommandHandler;
   setModelLoadingProgress: Dispatch<SetStateAction<number | null>>;
+  modelLoadingAbortControllerRef: RefObject<AbortController | null>;
 }
 
 export function createSlashCommands({
@@ -34,7 +35,6 @@ export function createSlashCommands({
   chatRef,
   exitApp,
   ttl,
-  abortControllerRef,
   addMessage,
   setMessages,
   setUserInputState,
@@ -46,6 +46,7 @@ export function createSlashCommands({
   shouldFetchModelCatalog,
   commandHandler,
   setModelLoadingProgress,
+  modelLoadingAbortControllerRef,
 }: CreateSlashCommandsOpts): SlashCommand[] {
   return [
     {
@@ -79,6 +80,8 @@ export function createSlashCommands({
         }
 
         setModelLoadingProgress(0);
+        const abortController = new AbortController();
+        modelLoadingAbortControllerRef.current = abortController;
         try {
           llmRef.current = await client.llm.model(modelKey, {
             verbose: false,
@@ -86,7 +89,7 @@ export function createSlashCommands({
             onProgress(progress) {
               setModelLoadingProgress(progress);
             },
-            signal: abortControllerRef.current?.signal,
+            signal: abortController.signal,
           });
           logInChat(`Model Selected: ${llmRef.current.displayName}`);
         } catch (error) {
@@ -95,6 +98,7 @@ export function createSlashCommands({
           logErrorInChat(`Failed to load model: ${errorMessage}`);
         } finally {
           setModelLoadingProgress(null);
+          modelLoadingAbortControllerRef.current = null;
         }
       },
       buildSuggestions: ({ argsInput, registerSuggestionMetadata }) => {
@@ -169,7 +173,17 @@ export function createSlashCommands({
             priority: model.staffPickedAt !== undefined ? 2 : 1,
           };
           registerSuggestionMetadata(suggestion, {
-            label: `${model.owner}/${model.name}`,
+            label: `${model.owner}/${model.name}${
+              model.description
+                ? chalk.dim(
+                    ` - ${
+                      model.description.length > 80
+                        ? `${model.description.slice(0, 55)}...`
+                        : model.description
+                    }`,
+                  )
+                : ""
+            }`,
           });
           return suggestion;
         });

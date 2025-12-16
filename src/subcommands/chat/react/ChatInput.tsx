@@ -1,6 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import { type Dispatch, type SetStateAction, useMemo } from "react";
 import { useBufferedPasteDetection } from "./hooks.js";
+import { InputPlaceholder } from "./InputPlaceholder.js";
 import {
   deleteBeforeCursor,
   insertTextAtCursor,
@@ -15,9 +16,15 @@ interface ChatInputProps {
   isPredicting: boolean;
   isConfirmationActive: boolean;
   areSuggestionsVisible: boolean;
+  modelLoadingProgress: number | null;
+  promptProcessingProgress: number | null;
+  fetchingModelDetails: { owner: string; name: string } | null;
+  downloadProgress: { owner: string; name: string; progress: number } | null;
   setUserInputState: Dispatch<SetStateAction<ChatUserInputState>>;
   onSubmit: () => void;
   onAbortPrediction: () => void;
+  onAbortDownload: () => void;
+  onAbortModelLoading: () => void;
   onExit: () => void;
   onSuggestionsUp: () => void;
   onSuggestionsDown: () => void;
@@ -25,6 +32,8 @@ interface ChatInputProps {
   onSuggestionsPageRight: () => void;
   onSuggestionAccept: () => void;
   onPaste: (content: string) => void;
+  commandHasSuggestions: (commandName: string) => boolean;
+  selectedSuggestion?: { command: string; args: string[] } | null;
 }
 
 export const ChatInput = ({
@@ -32,9 +41,15 @@ export const ChatInput = ({
   isPredicting,
   isConfirmationActive,
   areSuggestionsVisible,
+  modelLoadingProgress,
+  promptProcessingProgress,
+  fetchingModelDetails,
+  downloadProgress,
   setUserInputState,
   onSubmit,
   onAbortPrediction,
+  onAbortDownload,
+  onAbortModelLoading,
   onExit,
   onSuggestionsUp,
   onSuggestionsDown,
@@ -42,8 +57,17 @@ export const ChatInput = ({
   onSuggestionsPageRight,
   onSuggestionAccept,
   onPaste,
+  commandHasSuggestions,
+  selectedSuggestion,
 }: ChatInputProps) => {
   const skipUseInputRef = useBufferedPasteDetection({ onPaste });
+  const disableUserInput =
+    (isPredicting ||
+      modelLoadingProgress !== null ||
+      downloadProgress !== null ||
+      fetchingModelDetails !== null ||
+      promptProcessingProgress !== null) &&
+    isConfirmationActive === false;
 
   useInput((inputCharacter, key) => {
     if (skipUseInputRef.current === true) {
@@ -51,7 +75,11 @@ export const ChatInput = ({
     }
 
     if (key.ctrl === true && inputCharacter === "c") {
-      if (isPredicting) {
+      if (modelLoadingProgress !== null) {
+        onAbortModelLoading();
+      } else if (downloadProgress !== null) {
+        onAbortDownload();
+      } else if (isPredicting) {
         onAbortPrediction();
       } else {
         onExit();
@@ -59,7 +87,7 @@ export const ChatInput = ({
       return;
     }
 
-    if (isPredicting) {
+    if (disableUserInput) {
       return;
     }
 
@@ -107,6 +135,30 @@ export const ChatInput = ({
     }
 
     if (key.return === true) {
+      // Check if there's a selected suggestion for a command that has suggestions
+      if (
+        selectedSuggestion !== undefined &&
+        selectedSuggestion !== null &&
+        selectedSuggestion.args.length === 0 &&
+        commandHasSuggestions(selectedSuggestion.command)
+      ) {
+        onSuggestionAccept();
+        return;
+      }
+
+      const currentText = inputState.segments.map(segment => segment.content).join("");
+
+      // Check if input is a slash command without arguments that has suggestions
+      if (currentText.startsWith("/") && currentText.includes(" ") === false) {
+        const commandName = currentText.slice(1);
+        if (commandHasSuggestions(commandName)) {
+          setUserInputState(previousState =>
+            insertTextAtCursor({ state: previousState, text: " " }),
+          );
+          return;
+        }
+      }
+
       onSubmit();
       return;
     }
@@ -173,17 +225,13 @@ export const ChatInput = ({
   return (
     <Box flexDirection="column" width="100%" paddingTop={1}>
       {fullText.length === 0 && !isConfirmationActive ? (
-        <Box>
-          <Text color="cyan">› </Text>
-          {isPredicting ? (
-            <Text color="gray">Generating response...</Text>
-          ) : (
-            <>
-              <Text inverse>T</Text>
-              <Text color="gray">ype a message or use / to use commands</Text>
-            </>
-          )}
-        </Box>
+        <InputPlaceholder
+          isPredicting={isPredicting}
+          modelLoadingProgress={modelLoadingProgress}
+          promptProcessingProgress={promptProcessingProgress}
+          fetchingModelDetails={fetchingModelDetails}
+          downloadProgress={downloadProgress}
+        />
       ) : (
         lines.map((lineText, lineIndex) => {
           const lineStartPos =

@@ -1,6 +1,6 @@
 import { produce } from "@lmstudio/immer-with-plugins";
 import { type Chat, type LLM, type LMStudioClient } from "@lmstudio/sdk";
-import { Box, Text, useApp } from "ink";
+import { Box, useApp } from "ink";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { displayVerboseStats } from "../util.js";
 import { ChatInput } from "./ChatInput.js";
@@ -48,11 +48,22 @@ export const ChatComponent = React.memo(
     const [userInputState, setUserInputState] = useState<ChatUserInputState>(emptyChatInputState);
     const [isPredicting, setIsPredicting] = useState(false);
     const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
+    const [fetchingModelDetails, setFetchingModelDetails] = useState<{
+      owner: string;
+      name: string;
+    } | null>(null);
+    const [downloadProgress, setDownloadProgress] = useState<{
+      owner: string;
+      name: string;
+      progress: number;
+    } | null>(null);
     const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
     const { isConfirmationActive, requestConfirmation, handleConfirmationResponse } =
       useConfirmationPrompt();
     const [promptProcessingProgress, setPromptProcessingProgress] = useState<number | null>(null);
     const abortControllerRef = useRef<AbortController | null>(new AbortController());
+    const downloadAbortControllerRef = useRef<AbortController | null>(null);
+    const modelLoadingAbortControllerRef = useRef<AbortController | null>(null);
     const chatRef = useRef<Chat>(chat);
     const llmRef = useRef<LLM | null>(llm ?? null);
     const { downloadedModels, refreshDownloadedModels } = useDownloadedModels(
@@ -61,7 +72,9 @@ export const ChatComponent = React.memo(
     );
     const modelCatalog = useModelCatalog(client, shouldFetchModelCatalog);
     const handleExit = useCallback(() => {
-      abortControllerRef.current?.abort();
+      if (abortControllerRef.current?.signal.aborted === false) {
+        abortControllerRef.current?.abort();
+      }
       onExit();
       exit();
       process.exit(0);
@@ -93,6 +106,9 @@ export const ChatComponent = React.memo(
       logErrorInChat,
       refreshDownloadedModels,
       requestConfirmation,
+      setFetchingModelDetails,
+      setDownloadProgress,
+      downloadAbortControllerRef,
     });
 
     const commandHandler = useMemo(() => {
@@ -105,7 +121,6 @@ export const ChatComponent = React.memo(
         chatRef,
         exitApp: handleExit,
         ttl,
-        abortControllerRef,
         addMessage,
         setMessages,
         setUserInputState,
@@ -117,6 +132,7 @@ export const ChatComponent = React.memo(
         shouldFetchModelCatalog,
         commandHandler: handler,
         setModelLoadingProgress,
+        modelLoadingAbortControllerRef,
       });
       handler.setCommands(commands);
       return handler;
@@ -199,11 +215,56 @@ export const ChatComponent = React.memo(
       } else {
         logInChat("Prediction aborted by user.");
       }
-      if (abortControllerRef.current !== null) {
+      if (
+        abortControllerRef.current !== null &&
+        abortControllerRef.current.signal.aborted === false
+      ) {
         abortControllerRef.current.abort();
       }
       setIsPredicting(false);
     }, [logInChat, messages]);
+
+    const handleAbortDownload = useCallback(() => {
+      if (downloadProgress === null && fetchingModelDetails === null) {
+        return;
+      }
+
+      logInChat("Download interrupted. Continue download in background?");
+      requestConfirmation({
+        onConfirm: () => {
+          logInChat("Download continuing in background...");
+          handleExit();
+        },
+        onCancel: () => {
+          if (
+            downloadAbortControllerRef.current !== null &&
+            downloadAbortControllerRef.current.signal.aborted === false
+          ) {
+            downloadAbortControllerRef.current.abort();
+            downloadAbortControllerRef.current = null;
+          }
+          setDownloadProgress(null);
+          setFetchingModelDetails(null);
+          logInChat("Download cancelled.");
+          handleExit();
+        },
+      });
+    }, [downloadProgress, fetchingModelDetails, handleExit, logInChat, requestConfirmation]);
+
+    const handleAbortModelLoading = useCallback(() => {
+      if (modelLoadingProgress === null) {
+        return;
+      }
+
+      if (
+        modelLoadingAbortControllerRef.current !== null &&
+        modelLoadingAbortControllerRef.current.signal.aborted === false
+      ) {
+        modelLoadingAbortControllerRef.current.abort();
+        modelLoadingAbortControllerRef.current = null;
+      }
+      setModelLoadingProgress(null);
+    }, [modelLoadingProgress]);
 
     const handlePaste = useCallback((content: string) => {
       const normalizedContent = content.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
@@ -273,7 +334,7 @@ export const ChatComponent = React.memo(
       }
 
       if (llmRef.current === null) {
-        logErrorInChat("No model loaded. Please load a model using /model [model_key]");
+        logErrorInChat("No model loaded. Please load a model using /model");
         return;
       }
 
@@ -421,6 +482,7 @@ export const ChatComponent = React.memo(
         }
       } finally {
         setIsPredicting(false);
+        abortControllerRef.current = null;
       }
     }, [
       userInputState.segments,
@@ -446,21 +508,21 @@ export const ChatComponent = React.memo(
           messages={messages}
           modelName={llmRef.current?.displayName ?? null}
           isPredicting={isPredicting}
-          promptProcessingProgress={promptProcessingProgress}
         />
-        {modelLoadingProgress !== null && (
-          <Box paddingTop={1}>
-            <Text color="yellow">Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
-          </Box>
-        )}
         <ChatInput
           inputState={userInputState}
           isPredicting={isPredicting}
           isConfirmationActive={isConfirmationActive}
           areSuggestionsVisible={areSuggestionsVisible}
+          modelLoadingProgress={modelLoadingProgress}
+          promptProcessingProgress={promptProcessingProgress}
+          fetchingModelDetails={fetchingModelDetails}
+          downloadProgress={downloadProgress}
           setUserInputState={setUserInputState}
           onSubmit={handleSubmit}
           onAbortPrediction={handleAbortPrediction}
+          onAbortDownload={handleAbortDownload}
+          onAbortModelLoading={handleAbortModelLoading}
           onExit={handleExit}
           onSuggestionsUp={handleSuggestionsUp}
           onSuggestionsDown={handleSuggestionsDown}
@@ -468,6 +530,17 @@ export const ChatComponent = React.memo(
           onSuggestionsPageRight={handleSuggestionsPageRight}
           onSuggestionAccept={handleSuggestionAccept}
           onPaste={handlePaste}
+          commandHasSuggestions={commandName => {
+            const command = commandHandler
+              .list()
+              .find(cmd => cmd.name.toLowerCase() === commandName.toLowerCase());
+            return command !== undefined && command.buildSuggestions !== undefined;
+          }}
+          selectedSuggestion={
+            normalizedSelectedSuggestionIndex !== null
+              ? suggestions[normalizedSelectedSuggestionIndex]
+              : null
+          }
         />
         {suggestions.length > 0 && (
           <ChatSuggestions

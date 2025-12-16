@@ -7,11 +7,10 @@ interface ChatMessagesListProps {
   messages: InkChatMessage[];
   modelName: string | null;
   isPredicting: boolean;
-  promptProcessingProgress: number | null;
 }
 
 export const ChatMessagesList = memo(
-  ({ messages, modelName, isPredicting, promptProcessingProgress }: ChatMessagesListProps) => {
+  ({ messages, modelName, isPredicting }: ChatMessagesListProps) => {
     const hasStreamingAssistantMessage =
       isPredicting === true &&
       messages.length > 0 &&
@@ -27,12 +26,7 @@ export const ChatMessagesList = memo(
           {(message, index) => <ChatMessage key={index} message={message} modelName={modelName} />}
         </Static>
         {streamingMessage !== null && (
-          <ChatMessage
-            message={streamingMessage}
-            modelName={modelName}
-            isStreaming={true}
-            promptProcessingProgress={promptProcessingProgress}
-          />
+          <ChatMessage message={streamingMessage} modelName={modelName} />
         )}
       </Box>
     );

@@ -3,12 +3,8 @@ import { type LMStudioClient } from "@lmstudio/sdk";
 import { useStdin } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
-import {
-  findModelInCatalog,
-  getCachedModelCatalogOrFetch,
-  parseModelKey,
-} from "../catalogHelpers.js";
-import { downloadModelWithProgress, getDownloadSize } from "../downloadHelpers.js";
+import { getCachedModelCatalogOrFetch, parseModelKey } from "../catalogHelpers.js";
+import { getDownloadSize } from "../downloadHelpers.js";
 import { estimateMessageLinesCount } from "../util.js";
 import {
   type ChatUserInputState,
@@ -272,14 +268,19 @@ export interface UseDownloadCommandOpts {
   logErrorInChat: (message: string) => void;
   requestConfirmation: (request: ConfirmationRequest) => void;
   refreshDownloadedModels?: () => void;
+  setFetchingModelDetails: (details: { owner: string; name: string } | null) => void;
+  setDownloadProgress: (progress: { owner: string; name: string; progress: number } | null) => void;
+  downloadAbortControllerRef: React.RefObject<AbortController | null>;
 }
-
 export function useDownloadCommand({
   client,
   logInChat,
   logErrorInChat,
   requestConfirmation,
   refreshDownloadedModels,
+  setFetchingModelDetails,
+  setDownloadProgress,
+  downloadAbortControllerRef,
 }: UseDownloadCommandOpts) {
   const handleDownloadCommand = useCallback(
     async (commandArguments: string[]) => {
@@ -306,51 +307,62 @@ export function useDownloadCommand({
 
       const { owner, name } = parsedModelKey;
 
-      logInChat(`Fetching model details for ${owner}/${name}...`);
+      setFetchingModelDetails({ owner, name });
       let downloadSizeBytes: number;
       try {
         downloadSizeBytes = await getDownloadSize(client, owner, name);
       } catch (error) {
         const errorMessage =
           error instanceof Error && error.message !== undefined ? error.message : String(error);
+        setFetchingModelDetails(null);
         logErrorInChat(`Failed to resolve download plan: ${errorMessage}`);
         return;
       }
 
       if (downloadSizeBytes === 0) {
+        setFetchingModelDetails(null);
         logInChat(`${owner}/${name} is already available locally.`);
         return;
       }
 
       const formattedSize = formatSizeBytes1000(downloadSizeBytes);
+      setFetchingModelDetails(null);
       logInChat(
         `Download ${owner}/${name}? This will download approximately ${formattedSize}. Type yes to continue or no to cancel.`,
       );
       requestConfirmation({
         onConfirm: async () => {
-          logInChat(`Downloading ${owner}/${name} in the background...`);
+          const abortController = new AbortController();
+          downloadAbortControllerRef.current = abortController;
+          setDownloadProgress({ owner, name, progress: 0 });
           try {
-            downloadModelWithProgress(client, owner, name, {
-              onComplete: (owner, name) => {
-                logInChat(`Download completed: ${owner}/${name}`);
-                if (refreshDownloadedModels !== undefined) {
-                  refreshDownloadedModels();
+            using downloadPlanner = client.repository.createArtifactDownloadPlanner({
+              owner,
+              name,
+            });
+            await downloadPlanner.untilReady();
+
+            await downloadPlanner.download({
+              signal: abortController.signal,
+              onProgress: update => {
+                if (update.totalBytes > 0) {
+                  const progress = update.downloadedBytes / update.totalBytes;
+                  setDownloadProgress({ owner, name, progress });
                 }
               },
-              onError: error => {
-                const errorMessage =
-                  error instanceof Error && error.message !== undefined
-                    ? error.message
-                    : String(error);
-                logErrorInChat(`Download failed for ${owner}/${name}: ${errorMessage}`);
-              },
-            }).catch(() => {
-              // Error already handled in callback
             });
+            setDownloadProgress(null);
+            downloadAbortControllerRef.current = null;
+            logInChat(`Download completed: ${owner}/${name}`);
+            if (refreshDownloadedModels !== undefined) {
+              refreshDownloadedModels();
+            }
           } catch (error) {
             const errorMessage =
               error instanceof Error && error.message !== undefined ? error.message : String(error);
-            logErrorInChat(`Failed to start download: ${errorMessage}`);
+            setDownloadProgress(null);
+            downloadAbortControllerRef.current = null;
+            logErrorInChat(`Download failed for ${owner}/${name}: ${errorMessage}`);
           }
         },
         onCancel: () => {
@@ -358,7 +370,16 @@ export function useDownloadCommand({
         },
       });
     },
-    [logInChat, client, requestConfirmation, logErrorInChat, refreshDownloadedModels],
+    [
+      logInChat,
+      client,
+      requestConfirmation,
+      logErrorInChat,
+      refreshDownloadedModels,
+      setFetchingModelDetails,
+      setDownloadProgress,
+      downloadAbortControllerRef,
+    ],
   );
 
   return { handleDownloadCommand };
@@ -435,6 +456,7 @@ export function useSuggestionHandlers({
 
     const hasArguments = selectedSuggestion.args.length > 0;
     const argumentsText = selectedSuggestion.args.join(" ");
+    // Always add a space after the command (even without args) to trigger suggestions
     const suggestionText = hasArguments
       ? `/${selectedSuggestion.command} ${argumentsText}`
       : `/${selectedSuggestion.command} `;
