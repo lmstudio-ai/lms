@@ -116,7 +116,9 @@ export const ChatInput = ({
       }
     }
 
-    if (key.delete === true && process.platform === "darwin") {
+    // Currently there is a bug in ink where backspace is detected as delete
+    // so we handle both the same way for now.
+    if (key.delete === true) {
       setUserInputState(previousState => deleteBeforeCursor(previousState));
       return;
     }
