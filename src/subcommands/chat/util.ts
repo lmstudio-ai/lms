@@ -2,6 +2,7 @@ import type { SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { ProgressBar } from "../../ProgressBar.js";
 import chalk from "chalk";
+import { type InkChatMessage } from "./react/types.js";
 
 export async function loadModelWithProgress(
   client: LMStudioClient,
@@ -48,25 +49,28 @@ export async function readStdin(): Promise<string> {
     });
   });
 }
-
-export function displayVerboseStats(stats: LLMPredictionStats, logger: SimpleLogger) {
-  logger.info("\n\nPrediction Stats:");
-  logger.info(`  Stop Reason: ${stats.stopReason}`);
+export function displayVerboseStats(
+  stats: LLMPredictionStats,
+  logFunction: (text: string) => void,
+) {
+  let result = "\n\nPrediction Stats:";
+  result += `\n  Stop Reason: ${stats.stopReason}`;
   if (stats.tokensPerSecond !== undefined) {
-    logger.info(`  Tokens/Second: ${stats.tokensPerSecond.toFixed(2)}`);
+    result += `\n  Tokens/Second: ${stats.tokensPerSecond.toFixed(2)}`;
   }
   if (stats.timeToFirstTokenSec !== undefined) {
-    logger.info(`  Time to First Token: ${stats.timeToFirstTokenSec.toFixed(3)}s`);
+    result += `\n  Time to First Token: ${stats.timeToFirstTokenSec.toFixed(3)}s`;
   }
   if (stats.promptTokensCount !== undefined) {
-    logger.info(`  Prompt Tokens: ${stats.promptTokensCount}`);
+    result += `\n  Prompt Tokens: ${stats.promptTokensCount}`;
   }
   if (stats.predictedTokensCount !== undefined) {
-    logger.info(`  Predicted Tokens: ${stats.predictedTokensCount}`);
+    result += `\n  Predicted Tokens: ${stats.predictedTokensCount}`;
   }
   if (stats.totalTokensCount !== undefined) {
-    logger.info(`  Total Tokens: ${stats.totalTokensCount}`);
+    result += `\n  Total Tokens: ${stats.totalTokensCount}`;
   }
+  logFunction(result);
 }
 
 /**
@@ -77,20 +81,31 @@ export async function executePrediction(
   llmModel: LLM,
   chat: Chat,
   input: string,
-  signal?: AbortSignal,
+  controller?: AbortController,
 ): Promise<{ result: any; lastFragment: string }> {
   chat.append("user", input);
   const prediction = llmModel.respond(chat, {
-    signal: signal,
+    signal: controller?.signal,
   });
 
   let lastFragment = "";
   for await (const fragment of prediction) {
+    if (fragment.reasoningType === "reasoningStartTag") {
+      process.stdout.write("<think>\n");
+      continue;
+    }
+    if (fragment.reasoningType === "reasoningEndTag") {
+      process.stdout.write("\n</think>\n");
+      continue;
+    }
+    if (fragment.isStructural) {
+      continue;
+    }
     process.stdout.write(fragment.content);
     lastFragment = fragment.content;
   }
 
-  if (signal?.aborted === true) {
+  if (controller?.signal.aborted === true) {
     process.stdout.write(chalk.gray("\nGeneration interrupted by user with Ctrl^C\n"));
   }
 
@@ -99,3 +114,60 @@ export async function executePrediction(
 
   return { result, lastFragment };
 }
+
+/**
+ * Removes leading and trailing newline characters from a string.
+ * @param input - The string to trim newlines from
+ * @returns The input string with leading and trailing newlines removed
+ */
+export function trimNewlines(input: string): string {
+  return input.replace(/^[\r\n]+|[\r\n]+$/g, "");
+}
+
+export const estimateMessageLinesCount = (message: InkChatMessage): number => {
+  const terminalWidth = process.stdout.columns ?? 80;
+
+  const countWrappedLines = (text: string, prefixLength: number = 0): number => {
+    const effectiveWidth = terminalWidth - prefixLength;
+    if (effectiveWidth <= 0) return 1;
+
+    // Split by newlines first
+    const textLines = text.split("\n");
+    let totalLines = 0;
+
+    for (const line of textLines) {
+      // Each line wraps based on its length
+      totalLines += Math.max(1, Math.ceil(line.length / effectiveWidth));
+    }
+
+    return Math.max(1, totalLines);
+  };
+
+  const type = message.type;
+  switch (type) {
+    case "user":
+      return countWrappedLines(
+        message.content.reduce((acc, a) => acc + a.text, ""),
+        5,
+      ); // "You: " prefix
+    case "assistant": {
+      let lines = 1; // displayName line
+      message.content.forEach(part => {
+        lines += countWrappedLines(part.text, 0);
+      });
+      return lines + 1; // marginBottom
+    }
+    case "help":
+      return 1 + countWrappedLines(message.content, 0) + 1;
+    case "log":
+      return countWrappedLines(message.content, 0) + 1;
+    case "error":
+      return countWrappedLines(message.content, 0) + 1;
+    case "welcome":
+      return 10;
+    default: {
+      const exhaustiveCheck: never = type;
+      throw new Error(`Unknown message type: ${exhaustiveCheck}`);
+    }
+  }
+};
