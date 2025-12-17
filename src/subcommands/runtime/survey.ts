@@ -131,8 +131,8 @@ surveyCommand.action(async function (commandOptions) {
     return;
   }
 
-  // If no engines found, retry with a fresh survey
   if (surveyResult.engines.length === 0) {
+    // If no results and refresh is not requested, try refreshing once
     if (!commandOptions.refresh) {
       const refreshedSurvey = await runSurvey(client, true);
       if (refreshedSurvey.engines.length === 0) {
