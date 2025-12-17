@@ -1,5 +1,4 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
-import { type SimpleLogger } from "@lmstudio/lms-common";
 import {
   type RuntimeHardwareGpuInfo,
   type RuntimeHardwareSurveyEngine,
@@ -110,8 +109,8 @@ async function runSurvey(
 type SurveyCommandOptions = OptionValues &
   CreateClientArgs &
   LogLevelArgs & {
-    json?: boolean;
-    refresh?: boolean;
+    json?: true;
+    refresh?: true;
   };
 
 const surveyCommand = new Command<[], SurveyCommandOptions>()
@@ -127,14 +126,24 @@ surveyCommand.action(async function (commandOptions) {
   await using client = await createClient(logger, commandOptions);
 
   const surveyResult = await runSurvey(client, commandOptions.refresh ?? false);
-  if (commandOptions.json === true) {
+  if (commandOptions.json) {
     console.info(JSON.stringify(surveyResult, null, 2));
     return;
   }
 
+  // If no engines found, retry with a fresh survey
   if (surveyResult.engines.length === 0) {
-    console.info("No runtime survey results.");
-    return;
+    if (!commandOptions.refresh) {
+      const refreshedSurvey = await runSurvey(client, true);
+      if (refreshedSurvey.engines.length === 0) {
+        console.info("No runtime survey results.");
+        return;
+      }
+      Object.assign(surveyResult, refreshedSurvey);
+    } else {
+      console.info("No runtime survey results");
+      return;
+    }
   }
 
   // Find and render the llama.cpp engine's survey
