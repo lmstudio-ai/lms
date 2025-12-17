@@ -132,18 +132,8 @@ surveyCommand.action(async function (commandOptions) {
   }
 
   if (surveyResult.engines.length === 0) {
-    // If no results and refresh is not requested, try refreshing once
-    if (!commandOptions.refresh) {
-      const refreshedSurvey = await runSurvey(client, true);
-      if (refreshedSurvey.engines.length === 0) {
-        console.info("No runtime survey results.");
-        return;
-      }
-      Object.assign(surveyResult, refreshedSurvey);
-    } else {
-      console.info("No runtime survey results");
-      return;
-    }
+    console.info("No runtime survey results");
+    return;
   }
 
   // Find and render the llama.cpp engine's survey
