@@ -11,6 +11,8 @@ import { type SimpleLogger } from "@lmstudio/lms-common";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
+import chalk from "chalk";
+import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
 
 interface RuntimeSurveyCommandOptions {
   all: boolean;
@@ -19,34 +21,7 @@ interface RuntimeSurveyCommandOptions {
 }
 
 interface GpuMemoryMetrics {
-  usedBytes?: number;
-  freeBytes?: number;
   totalBytes: number;
-}
-
-function formatBytes(bytes?: number): string {
-  if (bytes === undefined) {
-    return "n/a";
-  }
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let currentValue = bytes;
-  let unitIndex = 0;
-  while (currentValue >= 1024 && unitIndex < units.length - 1) {
-    currentValue /= 1024;
-    unitIndex += 1;
-  }
-  return `${currentValue.toFixed(1)} ${units[unitIndex]}`;
-}
-
-function parseMaybeNumber(value: string | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  const parsed = Number.parseFloat(value);
-  if (Number.isNaN(parsed)) {
-    return undefined;
-  }
-  return parsed;
 }
 
 function getGpuMemoryMetrics(gpuInfo: RuntimeHardwareGpuInfo): GpuMemoryMetrics {
@@ -54,35 +29,19 @@ function getGpuMemoryMetrics(gpuInfo: RuntimeHardwareGpuInfo): GpuMemoryMetrics 
     gpuInfo.dedicatedMemoryCapacityBytes > 0
       ? gpuInfo.dedicatedMemoryCapacityBytes
       : gpuInfo.totalMemoryCapacityBytes;
-  const freeBytes =
-    parseMaybeNumber(gpuInfo.otherInfo["freeVramBytes"]) ??
-    parseMaybeNumber(gpuInfo.otherInfo["free_memory_bytes"]);
-  const usedBytesFromOtherInfo =
-    parseMaybeNumber(gpuInfo.otherInfo["usedVramBytes"]) ??
-    parseMaybeNumber(gpuInfo.otherInfo["occupiedVramBytes"]);
-  const usedBytes =
-    usedBytesFromOtherInfo !== undefined
-      ? usedBytesFromOtherInfo
-      : freeBytes !== undefined
-        ? Math.max(totalBytes - freeBytes, 0)
-        : undefined;
   return {
-    usedBytes,
-    freeBytes,
     totalBytes,
   };
 }
 
 function formatMemoryRatio(memoryMetrics: GpuMemoryMetrics): string {
-  const usedText =
-    memoryMetrics.usedBytes !== undefined ? formatBytes(memoryMetrics.usedBytes) : "--";
-  const freeText =
-    memoryMetrics.freeBytes !== undefined ? formatBytes(memoryMetrics.freeBytes) : "--";
-  const totalText = formatBytes(memoryMetrics.totalBytes);
-  return `${usedText} / ${freeText} / ${totalText}`;
+  const totalText = formatSizeBytes1000(memoryMetrics.totalBytes);
+  return ` ${totalText}`;
 }
 
-function resolveScope(options: RuntimeSurveyCommandOptions): RuntimeHardwareSurveyScope | undefined {
+function resolveScope(
+  options: RuntimeSurveyCommandOptions,
+): RuntimeHardwareSurveyScope | undefined {
   if (options.all === true && options.refresh === true) {
     throw new UserInputError("Flags --all and --refresh cannot be used together.");
   }
@@ -104,24 +63,107 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
   const rows = gpus.map(gpuInfo => {
     const memoryMetrics = getGpuMemoryMetrics(gpuInfo);
     const deviceDescriptor = `${gpuInfo.name} (${gpuInfo.detectionPlatform}, ${gpuInfo.integrationType})`;
-    const driverVersion =
-      gpuInfo.detectionPlatformVersion !== "" ? gpuInfo.detectionPlatformVersion : "Unknown";
     return {
       device: deviceDescriptor,
       vram: formatMemoryRatio(memoryMetrics),
-      driver: driverVersion,
     };
   });
 
   return columnify(rows, {
-    columns: ["device", "vram", "driver"],
+    columns: ["device", "vram"],
     config: {
-      device: { headingTransform: () => "DEVICE", align: "left" },
-      vram: { headingTransform: () => "VRAM (used/free/total)", align: "left" },
-      driver: { headingTransform: () => "DRIVER", align: "left" },
+      device: { headingTransform: () => chalk.grey("GPU/ACCELERATORS"), align: "left" },
+      vram: { headingTransform: () => chalk.grey("VRAM"), align: "left" },
     },
     columnSplitter: "   ",
   });
+}
+
+function renderCombinedGpuTable(engines: RuntimeHardwareSurveyEngine[]): {
+  table: string | undefined;
+  hasFailures: boolean;
+} {
+  const rows: Array<{
+    engine: string;
+    device: string;
+    vram: string;
+    cpu: string;
+    ram: string;
+    status: string;
+  }> = [];
+
+  const maxStatusLength = 60;
+  let hasFailures = false;
+
+  for (const engineSurvey of engines) {
+    const gpus = engineSurvey.hardwareSurvey.gpuSurveyResult.gpuInfo;
+    const engineLabel = `${engineSurvey.engine}-${engineSurvey.version}`;
+
+    let statusText =
+      engineSurvey.compatibility.status === "Compatible"
+        ? "Compatible"
+        : engineSurvey.compatibility.message !== undefined
+          ? `${engineSurvey.compatibility.status}: ${engineSurvey.compatibility.message}`
+          : engineSurvey.compatibility.status;
+
+    if (engineSurvey.compatibility.status !== "Compatible") {
+      hasFailures = true;
+    }
+
+    if (statusText.length > maxStatusLength) {
+      statusText = statusText.substring(0, maxStatusLength - 3) + "...";
+    }
+
+    const cpuInfo = engineSurvey.hardwareSurvey.cpuSurveyResult.cpuInfo;
+    const cpuText =
+      cpuInfo === undefined
+        ? "No CPU detected"
+        : cpuInfo.supportedInstructionSetExtensions.length > 0
+          ? `${cpuInfo.architecture} (${cpuInfo.supportedInstructionSetExtensions.join(", ")})`
+          : cpuInfo.architecture;
+
+    const ramCapacity = engineSurvey.memoryInfo.ramCapacity;
+    const ramText = ramCapacity === 0 ? "-" : formatSizeBytes1000(ramCapacity);
+
+    if (gpus.length === 0) {
+      rows.push({
+        engine: engineLabel,
+        device: "No GPUs detected",
+        vram: "-",
+        cpu: cpuText,
+        ram: ramText,
+        status: statusText,
+      });
+    } else {
+      for (const gpuInfo of gpus) {
+        const memoryMetrics = getGpuMemoryMetrics(gpuInfo);
+        const deviceDescriptor = `${gpuInfo.name} (${gpuInfo.detectionPlatform}, ${gpuInfo.integrationType})`;
+        rows.push({
+          engine: engineLabel,
+          device: deviceDescriptor,
+          vram: formatMemoryRatio(memoryMetrics),
+          cpu: cpuText,
+          ram: ramText,
+          status: statusText,
+        });
+      }
+    }
+  }
+
+  const table = columnify(rows, {
+    columns: ["engine", "device", "vram", "cpu", "ram", "status"],
+    config: {
+      engine: { headingTransform: () => chalk.grey("ENGINE"), align: "left" },
+      device: { headingTransform: () => chalk.grey("GPU/ACCELERATORS"), align: "left" },
+      vram: { headingTransform: () => chalk.grey("VRAM"), align: "left" },
+      cpu: { headingTransform: () => chalk.grey("CPU"), align: "left" },
+      ram: { headingTransform: () => chalk.grey("RAM"), align: "left" },
+      status: { headingTransform: () => chalk.grey("STATUS"), align: "left" },
+    },
+    columnSplitter: "   ",
+  });
+
+  return { table, hasFailures };
 }
 
 function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
@@ -137,7 +179,8 @@ function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
 }
 
 function renderRamLine(survey: RuntimeHardwareSurveyEngine): string {
-  const ramCapacityText = formatBytes(survey.memoryInfo.ramCapacity);
+  const ramCapacityText = formatSizeBytes1000(survey.memoryInfo.ramCapacity);
+
   return `RAM: ${ramCapacityText}`;
 }
 
@@ -151,29 +194,20 @@ function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | 
   return `Compatibility: ${survey.compatibility.status} — ${survey.compatibility.message}`;
 }
 
-function renderEngineSurvey(
-  survey: RuntimeHardwareSurveyEngine,
-  logger: SimpleLogger,
-) {
+function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine, logger: SimpleLogger) {
   const gpuTable = renderGpuTable(survey);
   if (gpuTable === undefined) {
-    logger.info("GPU/ACCELERATOR SURVEY");
     logger.info("No accelerators detected.");
   } else {
-    logger.info("GPU/ACCELERATOR SURVEY");
     logger.info(gpuTable);
   }
-  logger.info(renderCpuLine(survey));
+  logger.info("\n" + renderCpuLine(survey));
   logger.info(renderRamLine(survey));
 
   const compatibilityLine = renderCompatibilityLine(survey);
   if (compatibilityLine !== undefined) {
     logger.info(compatibilityLine);
   }
-
-  logger.info(
-    `Survey using ${survey.name}@${survey.version} (${survey.platform})`,
-  );
 }
 
 async function runSurvey(
@@ -184,44 +218,46 @@ async function runSurvey(
   return await client.runtime.surveyHardware(scope);
 }
 
-export const survey = addLogLevelOptions(
-  addCreateClientOptions(
-    new Command()
-      .name("survey")
-      .description("Survey hardware available to runtime engines")
-      .option("--all", "Force a full resurvey of every installed runtime")
-      .option("--refresh", "Resurvey selected and new runtimes")
-      .option("--json", "Output the raw JSON response")
-      .action(async function (commandOptions) {
-        const parentOptions = this.parent?.opts() ?? {};
-        const logger = createLogger(parentOptions);
-        const client = await createClient(logger, parentOptions);
+const surveyCommand = new Command()
+  .name("survey")
+  .description("Survey hardware available to runtime engines")
+  .option("--all", "Force a full resurvey of every installed runtime")
+  .option("--refresh", "Resurvey selected and new runtimes")
+  .option("--json", "Output the raw JSON response")
+  .action(async function (commandOptions) {
+    const parentOptions = this.parent?.opts() ?? {};
+    const logger = createLogger(parentOptions);
+    const client = await createClient(logger, parentOptions);
 
-        const runtimeSurveyOptions: RuntimeSurveyCommandOptions = {
-          all: commandOptions.all ?? false,
-          refresh: commandOptions.refresh ?? false,
-          json: commandOptions.json ?? false,
-        };
+    const runtimeSurveyOptions: RuntimeSurveyCommandOptions = {
+      all: commandOptions.all ?? false,
+      refresh: commandOptions.refresh ?? false,
+      json: commandOptions.json ?? false,
+    };
 
-        const surveyResult = await runSurvey(client, runtimeSurveyOptions);
+    const surveyResult = await runSurvey(client, runtimeSurveyOptions);
+    if (runtimeSurveyOptions.json === true) {
+      logger.info(JSON.stringify(surveyResult, null, 2));
+      return;
+    }
 
-        if (runtimeSurveyOptions.json === true) {
-          logger.info(JSON.stringify(surveyResult, null, 2));
-          return;
-        }
+    if (surveyResult.engines.length === 0) {
+      logger.info("No runtime survey results.");
+      return;
+    }
+    if (commandOptions.all) {
+      const { table } = renderCombinedGpuTable(surveyResult.engines);
+      if (table !== undefined) {
+        logger.info(table);
+      }
+      return;
+    }
+    const engineSurvey = surveyResult.engines[0];
+    renderEngineSurvey(engineSurvey, logger);
+    logger.info("");
+  });
 
-        if (surveyResult.engines.length === 0) {
-          logger.info("No runtime survey results.");
-          return;
-        }
+addCreateClientOptions(surveyCommand);
+addLogLevelOptions(surveyCommand);
 
-        surveyResult.engines.forEach((engineSurvey, engineIndex) => {
-          renderEngineSurvey(engineSurvey, logger);
-          const isLast = engineIndex === surveyResult.engines.length - 1;
-          if (!isLast) {
-            logger.info();
-          }
-        });
-      }),
-  ),
-);
+export const survey = surveyCommand;
