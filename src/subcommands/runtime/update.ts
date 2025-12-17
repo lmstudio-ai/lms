@@ -171,9 +171,12 @@ async function runtimeUpdateAction(
   opts: RuntimeUpdateCommandOpts,
 ): Promise<void> {
   const searchQuery = queryArgument ?? "";
+  const hasQueryArgument = queryArgument !== undefined && queryArgument.length > 0;
 
-  if (opts.all) {
+  if (opts.all === true) {
     logger.info("Checking updates for all installed runtime extensions...");
+  } else if (hasQueryArgument === true) {
+    // Don't log anything here; the query is already specified.
   } else {
     logger.info(
       "Checking updates for selected installed runtime extensions... (Pass --all to include all)",
