@@ -115,7 +115,7 @@ type SurveyCommandOptions = OptionValues &
 
 const surveyCommand = new Command<[], SurveyCommandOptions>()
   .name("survey")
-  .description("Survey hardware available to runtime engines")
+  .description("Survey hardware available to selected runtime engines")
   .option("--json", "Output the raw JSON response")
   .option("--refresh", "Resurvey selected and new runtimes");
 addCreateClientOptions(surveyCommand);
