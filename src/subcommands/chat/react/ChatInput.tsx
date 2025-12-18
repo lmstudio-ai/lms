@@ -5,11 +5,15 @@ import { InputPlaceholder } from "./InputPlaceholder.js";
 import {
   deleteAfterCursor,
   deleteBeforeCursor,
+  deleteWordBackward,
+  deleteWordForward,
   insertTextAtCursor,
   moveCursorLeft,
   moveCursorRight,
   moveCursorToLineEnd,
   moveCursorToLineStart,
+  moveCursorWordLeft,
+  moveCursorWordRight,
 } from "./inputReducer.js";
 import { renderInputWithCursor } from "./inputRenderer.js";
 import { type ChatUserInputState } from "./types.js";
@@ -114,6 +118,28 @@ export const ChatInput = ({
 
       if (inputCharacter === "b") {
         setUserInputState(previousState => moveCursorLeft(previousState));
+        return;
+      }
+
+      if (inputCharacter === "w") {
+        setUserInputState(previousState => deleteWordBackward(previousState));
+        return;
+      }
+    }
+
+    if (key.meta === true) {
+      if (inputCharacter === "f") {
+        setUserInputState(previousState => moveCursorWordRight(previousState));
+        return;
+      }
+
+      if (inputCharacter === "b") {
+        setUserInputState(previousState => moveCursorWordLeft(previousState));
+        return;
+      }
+
+      if (inputCharacter === "d") {
+        setUserInputState(previousState => deleteWordForward(previousState));
         return;
       }
     }
