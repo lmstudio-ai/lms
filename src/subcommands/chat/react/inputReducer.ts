@@ -209,6 +209,90 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
   };
 }
 
+function isWhitespaceCharacter(character: string): boolean {
+  return /\s/.test(character);
+}
+
+function findPreviousWordBoundaryInSegment(content: string, cursorOffset: number): number {
+  if (cursorOffset <= 0) {
+    return 0;
+  }
+
+  const segmentLength = content.length;
+
+  if (segmentLength === 0) {
+    return 0;
+  }
+
+  let scanIndex = cursorOffset;
+
+  if (scanIndex > segmentLength) {
+    scanIndex = segmentLength;
+  }
+
+  while (scanIndex > 0) {
+    const previousCharacter = content.charAt(scanIndex - 1);
+
+    if (isWhitespaceCharacter(previousCharacter) === true) {
+      scanIndex -= 1;
+    } else {
+      break;
+    }
+  }
+
+  while (scanIndex > 0) {
+    const previousCharacter = content.charAt(scanIndex - 1);
+
+    if (isWhitespaceCharacter(previousCharacter) === false) {
+      scanIndex -= 1;
+    } else {
+      break;
+    }
+  }
+
+  return scanIndex;
+}
+
+function findNextWordBoundaryInSegment(content: string, cursorOffset: number): number {
+  const segmentLength = content.length;
+
+  if (segmentLength === 0) {
+    return 0;
+  }
+
+  let scanIndex = cursorOffset;
+
+  if (scanIndex < 0) {
+    scanIndex = 0;
+  }
+
+  if (scanIndex >= segmentLength) {
+    return segmentLength;
+  }
+
+  while (scanIndex < segmentLength) {
+    const character = content.charAt(scanIndex);
+
+    if (isWhitespaceCharacter(character) === true) {
+      scanIndex += 1;
+    } else {
+      break;
+    }
+  }
+
+  while (scanIndex < segmentLength) {
+    const character = content.charAt(scanIndex);
+
+    if (isWhitespaceCharacter(character) === false) {
+      scanIndex += 1;
+    } else {
+      break;
+    }
+  }
+
+  return scanIndex;
+}
+
 /**
  * Ensures the input state is valid by:
  * 1. Guaranteeing at least one segment exists
@@ -595,6 +679,93 @@ export function moveCursorToLineEnd(state: ChatUserInputState): ChatUserInputSta
 
     draft.cursorOnSegmentIndex = lineEndPosition.segmentIndex;
     draft.cursorInSegmentOffset = lineEndPosition.offset;
+  });
+}
+
+export function moveCursorWordLeft(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+
+    if (currentSegment === undefined || currentSegment.type !== "text") {
+      return;
+    }
+
+    const segmentContent = currentSegment.content;
+    const cursorOffset = draft.cursorInSegmentOffset;
+    const newCursorOffset = findPreviousWordBoundaryInSegment(segmentContent, cursorOffset);
+
+    draft.cursorInSegmentOffset = newCursorOffset;
+  });
+}
+
+export function moveCursorWordRight(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+
+    if (currentSegment === undefined || currentSegment.type !== "text") {
+      return;
+    }
+
+    const segmentContent = currentSegment.content;
+    const cursorOffset = draft.cursorInSegmentOffset;
+    const newCursorOffset = findNextWordBoundaryInSegment(segmentContent, cursorOffset);
+
+    draft.cursorInSegmentOffset = newCursorOffset;
+  });
+}
+
+export function deleteWordBackward(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+
+    if (currentSegment === undefined || currentSegment.type !== "text") {
+      return;
+    }
+
+    const segmentContent = currentSegment.content;
+    const cursorOffset = draft.cursorInSegmentOffset;
+    const segmentLength = segmentContent.length;
+
+    if (segmentLength === 0 || cursorOffset <= 0) {
+      return;
+    }
+
+    const newCursorOffset = findPreviousWordBoundaryInSegment(segmentContent, cursorOffset);
+
+    if (newCursorOffset === cursorOffset) {
+      return;
+    }
+
+    currentSegment.content =
+      segmentContent.slice(0, newCursorOffset) + segmentContent.slice(cursorOffset);
+    draft.cursorInSegmentOffset = newCursorOffset;
+  });
+}
+
+export function deleteWordForward(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+
+    if (currentSegment === undefined || currentSegment.type !== "text") {
+      return;
+    }
+
+    const segmentContent = currentSegment.content;
+    const cursorOffset = draft.cursorInSegmentOffset;
+    const segmentLength = segmentContent.length;
+
+    if (segmentLength === 0 || cursorOffset >= segmentLength) {
+      return;
+    }
+
+    const newCursorOffset = findNextWordBoundaryInSegment(segmentContent, cursorOffset);
+
+    if (newCursorOffset === cursorOffset) {
+      return;
+    }
+
+    currentSegment.content =
+      segmentContent.slice(0, cursorOffset) + segmentContent.slice(newCursorOffset);
   });
 }
 
