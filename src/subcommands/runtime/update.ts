@@ -17,7 +17,7 @@ import {
 interface RuntimeUpdateCommandOpts {
   all: boolean;
   allowIncompatible: boolean;
-  channel?: "stable" | "beta";
+  channel?: string;
   dryRun: boolean;
   yes: boolean;
 }
@@ -236,8 +236,8 @@ const updateCommand = new Command()
   .addOption(
     new Option(
       "--channel <channel>",
-      "Override the runtime extension channel to query from",
-    ).choices(["stable", "beta"]),
+      "Override the runtime extension channel to query from (examples: stable, beta)",
+    ),
   )
   .option("--dry-run", "Show extensions that would be updated without performing downloads")
   .option("-y, --yes", "Skip confirmation prompts")
