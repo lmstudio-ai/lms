@@ -8,6 +8,8 @@ import {
   insertTextAtCursor,
   moveCursorLeft,
   moveCursorRight,
+  moveCursorToLineEnd,
+  moveCursorToLineStart,
 } from "./inputReducer.js";
 import { renderInputWithCursor } from "./inputRenderer.js";
 import { type ChatUserInputState } from "./types.js";
@@ -92,6 +94,28 @@ export const ChatInput = ({
 
     if (disableUserInput) {
       return;
+    }
+
+    if (key.ctrl === true) {
+      if (inputCharacter === "a") {
+        setUserInputState(previousState => moveCursorToLineStart(previousState));
+        return;
+      }
+
+      if (inputCharacter === "e") {
+        setUserInputState(previousState => moveCursorToLineEnd(previousState));
+        return;
+      }
+
+      if (inputCharacter === "f") {
+        setUserInputState(previousState => moveCursorRight(previousState));
+        return;
+      }
+
+      if (inputCharacter === "b") {
+        setUserInputState(previousState => moveCursorLeft(previousState));
+        return;
+      }
     }
 
     if (areSuggestionsVisible) {
