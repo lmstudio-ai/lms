@@ -25,6 +25,7 @@ function getGpuMemoryMetrics(gpuInfo: RuntimeHardwareGpuInfo): GpuMemoryMetrics 
   };
 }
 
+// For now, we just display total VRAM
 function formatMemoryRatio(memoryMetrics: GpuMemoryMetrics): string {
   const totalText = formatSizeBytes1000(memoryMetrics.totalBytes);
   return ` ${totalText}`;
