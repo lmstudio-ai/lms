@@ -684,88 +684,291 @@ export function moveCursorToLineEnd(state: ChatUserInputState): ChatUserInputSta
 
 export function moveCursorWordLeft(state: ChatUserInputState): ChatUserInputState {
   return produceSanitizedState(state, draft => {
-    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentSegment = draft.segments[currentSegmentIndex];
 
-    if (currentSegment === undefined || currentSegment.type !== "text") {
+    if (currentSegment === undefined) {
       return;
     }
 
-    const segmentContent = currentSegment.content;
-    const cursorOffset = draft.cursorInSegmentOffset;
-    const newCursorOffset = findPreviousWordBoundaryInSegment(segmentContent, cursorOffset);
+    if (currentSegment.type === "text") {
+      const segmentContent = currentSegment.content;
+      const cursorOffset = draft.cursorInSegmentOffset;
 
+      if (cursorOffset > 0) {
+        const newCursorOffset = findPreviousWordBoundaryInSegment(segmentContent, cursorOffset);
+
+        draft.cursorInSegmentOffset = newCursorOffset;
+        return;
+      }
+
+      const previousSegmentIndex = currentSegmentIndex - 1;
+      const previousSegment = draft.segments[previousSegmentIndex];
+
+      if (previousSegment === undefined) {
+        return;
+      }
+
+      if (previousSegment.type === "largePaste") {
+        draft.cursorOnSegmentIndex = previousSegmentIndex;
+        draft.cursorInSegmentOffset = 0;
+        return;
+      }
+
+      const previousContent = previousSegment.content;
+      const newCursorOffset = findPreviousWordBoundaryInSegment(
+        previousContent,
+        previousContent.length,
+      );
+
+      draft.cursorOnSegmentIndex = previousSegmentIndex;
+      draft.cursorInSegmentOffset = newCursorOffset;
+      return;
+    }
+
+    const previousSegmentIndex = currentSegmentIndex - 1;
+    const previousSegment = draft.segments[previousSegmentIndex];
+
+    if (previousSegment === undefined) {
+      return;
+    }
+
+    if (previousSegment.type === "largePaste") {
+      draft.cursorOnSegmentIndex = previousSegmentIndex;
+      draft.cursorInSegmentOffset = 0;
+      return;
+    }
+
+    const previousContent = previousSegment.content;
+    const newCursorOffset = findPreviousWordBoundaryInSegment(
+      previousContent,
+      previousContent.length,
+    );
+
+    draft.cursorOnSegmentIndex = previousSegmentIndex;
     draft.cursorInSegmentOffset = newCursorOffset;
   });
 }
 
 export function moveCursorWordRight(state: ChatUserInputState): ChatUserInputState {
   return produceSanitizedState(state, draft => {
-    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentSegment = draft.segments[currentSegmentIndex];
 
-    if (currentSegment === undefined || currentSegment.type !== "text") {
+    if (currentSegment === undefined) {
       return;
     }
 
-    const segmentContent = currentSegment.content;
-    const cursorOffset = draft.cursorInSegmentOffset;
-    const newCursorOffset = findNextWordBoundaryInSegment(segmentContent, cursorOffset);
+    if (currentSegment.type === "text") {
+      const segmentContent = currentSegment.content;
+      const cursorOffset = draft.cursorInSegmentOffset;
+      const segmentLength = segmentContent.length;
 
+      if (cursorOffset < segmentLength) {
+        const newCursorOffset = findNextWordBoundaryInSegment(segmentContent, cursorOffset);
+
+        draft.cursorInSegmentOffset = newCursorOffset;
+        return;
+      }
+
+      const nextSegmentIndex = currentSegmentIndex + 1;
+      const nextSegment = draft.segments[nextSegmentIndex];
+
+      if (nextSegment === undefined) {
+        return;
+      }
+
+      if (nextSegment.type === "largePaste") {
+        draft.cursorOnSegmentIndex = nextSegmentIndex;
+        draft.cursorInSegmentOffset = 0;
+        return;
+      }
+
+      const nextContent = nextSegment.content;
+      const newCursorOffset = findNextWordBoundaryInSegment(nextContent, 0);
+
+      draft.cursorOnSegmentIndex = nextSegmentIndex;
+      draft.cursorInSegmentOffset = newCursorOffset;
+      return;
+    }
+
+    const nextSegmentIndex = currentSegmentIndex + 1;
+    const nextSegment = draft.segments[nextSegmentIndex];
+
+    if (nextSegment === undefined) {
+      return;
+    }
+
+    if (nextSegment.type === "largePaste") {
+      draft.cursorOnSegmentIndex = nextSegmentIndex;
+      draft.cursorInSegmentOffset = 0;
+      return;
+    }
+
+    const nextContent = nextSegment.content;
+    const newCursorOffset = findNextWordBoundaryInSegment(nextContent, 0);
+
+    draft.cursorOnSegmentIndex = nextSegmentIndex;
     draft.cursorInSegmentOffset = newCursorOffset;
   });
 }
 
 export function deleteWordBackward(state: ChatUserInputState): ChatUserInputState {
   return produceSanitizedState(state, draft => {
-    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentSegment = draft.segments[currentSegmentIndex];
 
-    if (currentSegment === undefined || currentSegment.type !== "text") {
+    if (currentSegment === undefined) {
       return;
     }
 
-    const segmentContent = currentSegment.content;
-    const cursorOffset = draft.cursorInSegmentOffset;
-    const segmentLength = segmentContent.length;
+    if (currentSegment.type === "text") {
+      const segmentContent = currentSegment.content;
+      const cursorOffset = draft.cursorInSegmentOffset;
 
-    if (segmentLength === 0 || cursorOffset <= 0) {
+      if (cursorOffset > 0) {
+        const newCursorOffset = findPreviousWordBoundaryInSegment(segmentContent, cursorOffset);
+
+        if (newCursorOffset === cursorOffset) {
+          return;
+        }
+
+        currentSegment.content =
+          segmentContent.slice(0, newCursorOffset) + segmentContent.slice(cursorOffset);
+        draft.cursorInSegmentOffset = newCursorOffset;
+        return;
+      }
+
+      const previousSegmentIndex = currentSegmentIndex - 1;
+      const previousSegment = draft.segments[previousSegmentIndex];
+
+      if (previousSegment === undefined) {
+        return;
+      }
+
+      if (previousSegment.type === "largePaste") {
+        draft.segments.splice(previousSegmentIndex, 1);
+        draft.cursorOnSegmentIndex = previousSegmentIndex;
+        draft.cursorInSegmentOffset = 0;
+        return;
+      }
+
+      const previousContent = previousSegment.content;
+      const previousLength = previousContent.length;
+
+      if (previousLength === 0) {
+        draft.segments.splice(previousSegmentIndex, 1);
+        draft.cursorOnSegmentIndex = previousSegmentIndex;
+        draft.cursorInSegmentOffset = 0;
+        return;
+      }
+
+      const newCursorOffset = findPreviousWordBoundaryInSegment(previousContent, previousLength);
+
+      previousSegment.content = previousContent.slice(0, newCursorOffset);
+      draft.cursorOnSegmentIndex = previousSegmentIndex;
+      draft.cursorInSegmentOffset = newCursorOffset;
       return;
     }
 
-    const newCursorOffset = findPreviousWordBoundaryInSegment(segmentContent, cursorOffset);
+    const currentSegmentIndexForLargePaste = draft.cursorOnSegmentIndex;
 
-    if (newCursorOffset === cursorOffset) {
-      return;
+    if (currentSegment.type === "largePaste") {
+      const segmentIndexToRemove = currentSegmentIndexForLargePaste;
+
+      draft.segments.splice(segmentIndexToRemove, 1);
+
+      const newCursorSegmentIndex = Math.max(0, segmentIndexToRemove - 1);
+      const newCursorSegment = draft.segments[newCursorSegmentIndex];
+
+      draft.cursorOnSegmentIndex = newCursorSegmentIndex;
+      if (newCursorSegment?.type === "text") {
+        draft.cursorInSegmentOffset = newCursorSegment.content.length;
+      } else {
+        draft.cursorInSegmentOffset = 0;
+      }
     }
-
-    currentSegment.content =
-      segmentContent.slice(0, newCursorOffset) + segmentContent.slice(cursorOffset);
-    draft.cursorInSegmentOffset = newCursorOffset;
   });
 }
 
 export function deleteWordForward(state: ChatUserInputState): ChatUserInputState {
   return produceSanitizedState(state, draft => {
-    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentSegment = draft.segments[currentSegmentIndex];
 
-    if (currentSegment === undefined || currentSegment.type !== "text") {
+    if (currentSegment === undefined) {
       return;
     }
 
-    const segmentContent = currentSegment.content;
-    const cursorOffset = draft.cursorInSegmentOffset;
-    const segmentLength = segmentContent.length;
+    if (currentSegment.type === "text") {
+      const segmentContent = currentSegment.content;
+      const cursorOffset = draft.cursorInSegmentOffset;
+      const segmentLength = segmentContent.length;
 
-    if (segmentLength === 0 || cursorOffset >= segmentLength) {
+      if (cursorOffset < segmentLength) {
+        const newCursorOffset = findNextWordBoundaryInSegment(segmentContent, cursorOffset);
+
+        if (newCursorOffset === cursorOffset) {
+          return;
+        }
+
+        currentSegment.content =
+          segmentContent.slice(0, cursorOffset) + segmentContent.slice(newCursorOffset);
+        return;
+      }
+
+      const nextSegmentIndex = currentSegmentIndex + 1;
+      const nextSegment = draft.segments[nextSegmentIndex];
+
+      if (nextSegment === undefined) {
+        return;
+      }
+
+      if (nextSegment.type === "largePaste") {
+        draft.segments.splice(nextSegmentIndex, 1);
+        return;
+      }
+
+      const nextContent = nextSegment.content;
+      const deleteEndOffset = findNextWordBoundaryInSegment(nextContent, 0);
+
+      if (deleteEndOffset === 0) {
+        return;
+      }
+
+      nextSegment.content = nextContent.slice(deleteEndOffset);
       return;
     }
 
-    const newCursorOffset = findNextWordBoundaryInSegment(segmentContent, cursorOffset);
+    if (currentSegment.type === "largePaste") {
+      const segmentIndexToRemove = currentSegmentIndex;
 
-    if (newCursorOffset === cursorOffset) {
-      return;
+      draft.segments.splice(segmentIndexToRemove, 1);
+
+      if (segmentIndexToRemove >= draft.segments.length) {
+        const newCursorSegmentIndex = draft.segments.length - 1;
+        if (newCursorSegmentIndex < 0) {
+          draft.cursorOnSegmentIndex = 0;
+          draft.cursorInSegmentOffset = 0;
+          return;
+        }
+        draft.cursorOnSegmentIndex = newCursorSegmentIndex;
+        const newCursorSegment = draft.segments[newCursorSegmentIndex];
+        if (newCursorSegment?.type === "text") {
+          draft.cursorInSegmentOffset = newCursorSegment.content.length;
+        } else {
+          draft.cursorInSegmentOffset = 0;
+        }
+      } else {
+        draft.cursorOnSegmentIndex = segmentIndexToRemove;
+        const newCursorSegment = draft.segments[segmentIndexToRemove];
+        if (newCursorSegment?.type === "text") {
+          draft.cursorInSegmentOffset = 0;
+        } else {
+          draft.cursorInSegmentOffset = 0;
+        }
+      }
     }
-
-    currentSegment.content =
-      segmentContent.slice(0, cursorOffset) + segmentContent.slice(newCursorOffset);
   });
 }
 
