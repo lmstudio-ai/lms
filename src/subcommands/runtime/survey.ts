@@ -86,7 +86,7 @@ function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | 
 function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine) {
   const gpuTable = renderGpuTable(survey);
   if (gpuTable === undefined) {
-    console.info("No GPUs detected.");
+    console.info("No GPUs detected");
   } else {
     console.info(gpuTable);
   }
