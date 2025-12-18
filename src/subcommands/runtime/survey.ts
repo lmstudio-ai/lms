@@ -104,7 +104,7 @@ async function runSurvey(
   client: LMStudioClient,
   refresh: boolean,
 ): Promise<RuntimeHardwareSurveyResult> {
-  return await client.runtime.surveyHardware(refresh ? { type: "newAndSelected" } : undefined);
+  return await client.runtime.surveyHardware(refresh ? { type: "selected" } : undefined);
 }
 
 type SurveyCommandOptions = OptionValues &
