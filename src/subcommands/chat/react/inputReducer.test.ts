@@ -1297,16 +1297,20 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe(0);
     });
 
-    it("does nothing when current segment is largePaste", () => {
+    it("treats largePaste before trailing placeholder as a word when moving left", () => {
       const initialState = createChatUserInputState(
-        [{ type: "largePaste", content: "pasted content" }],
-        0,
+        [
+          { type: "text", content: "before" },
+          { type: "largePaste", content: "x".repeat(1000) },
+          { type: "text", content: "" },
+        ],
+        2,
         0,
       );
 
       const result = moveCursorWordLeft(initialState);
 
-      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorOnSegmentIndex).toBe(1);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
   });
@@ -1351,16 +1355,20 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe("hello".length);
     });
 
-    it("does nothing when current segment is largePaste", () => {
+    it("treats largePaste as a word when moving right from preceding text", () => {
       const initialState = createChatUserInputState(
-        [{ type: "largePaste", content: "pasted content" }],
+        [
+          { type: "text", content: "before" },
+          { type: "largePaste", content: "x".repeat(1000) },
+          { type: "text", content: "" },
+        ],
         0,
-        0,
+        "before".length,
       );
 
       const result = moveCursorWordRight(initialState);
 
-      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorOnSegmentIndex).toBe(1);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
   });
@@ -1551,18 +1559,40 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe(0);
     });
 
-    it("does nothing when current segment is largePaste", () => {
+    it("deletes previous largePaste when cursor is at start of trailing placeholder", () => {
       const initialState = createChatUserInputState(
-        [{ type: "largePaste", content: "pasted content" }],
-        0,
+        [
+          { type: "text", content: "before" },
+          { type: "largePaste", content: "large content" },
+          { type: "text", content: "" },
+        ],
+        2,
         0,
       );
 
       const result = deleteWordBackward(initialState);
 
-      expect(result.segments).toEqual(initialState.segments);
+      expect(result.segments).toEqual([{ type: "text", content: "before" }]);
       expect(result.cursorOnSegmentIndex).toBe(0);
-      expect(result.cursorInSegmentOffset).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("before".length);
+    });
+
+    it("deletes current largePaste when cursor is on it", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "before" },
+          { type: "largePaste", content: "large content" },
+          { type: "text", content: "" },
+        ],
+        1,
+        0,
+      );
+
+      const result = deleteWordBackward(initialState);
+
+      expect(result.segments).toEqual([{ type: "text", content: "before" }]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("before".length);
     });
   });
 
@@ -1609,18 +1639,40 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe("hello".length);
     });
 
-    it("does nothing when current segment is largePaste", () => {
+    it("deletes next largePaste when cursor is at end of preceding text", () => {
       const initialState = createChatUserInputState(
-        [{ type: "largePaste", content: "pasted content" }],
+        [
+          { type: "text", content: "before" },
+          { type: "largePaste", content: "large content" },
+          { type: "text", content: "" },
+        ],
         0,
+        "before".length,
+      );
+
+      const result = deleteWordForward(initialState);
+
+      expect(result.segments).toEqual([{ type: "text", content: "before" }]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("before".length);
+    });
+
+    it("deletes current largePaste when cursor is on it", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "before" },
+          { type: "largePaste", content: "large content" },
+          { type: "text", content: "" },
+        ],
+        1,
         0,
       );
 
       const result = deleteWordForward(initialState);
 
-      expect(result.segments).toEqual(initialState.segments);
+      expect(result.segments).toEqual([{ type: "text", content: "before" }]);
       expect(result.cursorOnSegmentIndex).toBe(0);
-      expect(result.cursorInSegmentOffset).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("before".length);
     });
   });
 
