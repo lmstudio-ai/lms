@@ -49,6 +49,11 @@ interface InsertSuggestionAtCursorOpts {
   suggestionText: string;
 }
 
+interface CursorPosition {
+  segmentIndex: number;
+  offset: number;
+}
+
 type ChatUserInputStateMutator = (draft: ChatUserInputState) => void;
 
 /**
@@ -63,6 +68,145 @@ function produceSanitizedState(
     mutator(draft);
     sanitizeChatUserInputState(draft);
   });
+}
+
+function findLineStartPosition(state: ChatUserInputState): CursorPosition {
+  if (state.segments.length === 0) {
+    return {
+      segmentIndex: 0,
+      offset: 0,
+    };
+  }
+
+  const cursorSegmentIndex = state.cursorOnSegmentIndex;
+  const cursorOffset = state.cursorInSegmentOffset;
+
+  if (cursorSegmentIndex < 0 || cursorSegmentIndex >= state.segments.length) {
+    return {
+      segmentIndex: 0,
+      offset: 0,
+    };
+  }
+
+  const currentSegment = state.segments[cursorSegmentIndex];
+
+  if (currentSegment !== undefined && currentSegment.type === "text") {
+    const textBeforeCursor = currentSegment.content.slice(0, cursorOffset);
+    const lastNewlineInCurrentSegment = textBeforeCursor.lastIndexOf("\n");
+
+    if (lastNewlineInCurrentSegment !== -1) {
+      return {
+        segmentIndex: cursorSegmentIndex,
+        offset: lastNewlineInCurrentSegment + 1,
+      };
+    }
+  }
+
+  for (let segmentIndex = cursorSegmentIndex - 1; segmentIndex >= 0; segmentIndex -= 1) {
+    const segment = state.segments[segmentIndex];
+
+    if (segment === undefined || segment.type !== "text") {
+      continue;
+    }
+
+    const lastNewlineInSegment = segment.content.lastIndexOf("\n");
+
+    if (lastNewlineInSegment !== -1) {
+      return {
+        segmentIndex,
+        offset: lastNewlineInSegment + 1,
+      };
+    }
+  }
+
+  return {
+    segmentIndex: 0,
+    offset: 0,
+  };
+}
+
+function findLineEndPosition(state: ChatUserInputState): CursorPosition {
+  if (state.segments.length === 0) {
+    return {
+      segmentIndex: 0,
+      offset: 0,
+    };
+  }
+
+  const cursorSegmentIndex = state.cursorOnSegmentIndex;
+  const cursorOffset = state.cursorInSegmentOffset;
+
+  if (cursorSegmentIndex < 0 || cursorSegmentIndex >= state.segments.length) {
+    return {
+      segmentIndex: 0,
+      offset: 0,
+    };
+  }
+
+  const currentSegment = state.segments[cursorSegmentIndex];
+
+  if (currentSegment !== undefined && currentSegment.type === "text") {
+    const textAfterCursor = currentSegment.content.slice(cursorOffset);
+    const newlineRelativeIndex = textAfterCursor.indexOf("\n");
+
+    if (newlineRelativeIndex !== -1) {
+      const newlineAbsoluteIndex = cursorOffset + newlineRelativeIndex;
+
+      return {
+        segmentIndex: cursorSegmentIndex,
+        offset: newlineAbsoluteIndex,
+      };
+    }
+  }
+
+  for (
+    let segmentIndex = cursorSegmentIndex + 1;
+    segmentIndex < state.segments.length;
+    segmentIndex += 1
+  ) {
+    const segment = state.segments[segmentIndex];
+
+    if (segment === undefined || segment.type !== "text") {
+      continue;
+    }
+
+    const newlineIndex = segment.content.indexOf("\n");
+
+    if (newlineIndex !== -1) {
+      return {
+        segmentIndex,
+        offset: newlineIndex,
+      };
+    }
+  }
+
+  const lastSegmentIndex = state.segments.length - 1;
+  const lastSegment = state.segments[lastSegmentIndex];
+
+  if (lastSegment !== undefined && lastSegment.type === "text") {
+    return {
+      segmentIndex: lastSegmentIndex,
+      offset: lastSegment.content.length,
+    };
+  }
+
+  for (let segmentIndex = lastSegmentIndex - 1; segmentIndex >= 0; segmentIndex -= 1) {
+    const segment = state.segments[segmentIndex];
+
+    if (segment === undefined || segment.type !== "text") {
+      continue;
+    }
+
+    return {
+      segmentIndex,
+      offset: segment.content.length,
+    };
+  }
+
+  return {
+    segmentIndex: 0,
+    offset: 0,
+  };
 }
 
 /**
@@ -433,6 +577,24 @@ export function moveCursorRight(state: ChatUserInputState): ChatUserInputState {
     // Next segment is text - move to it
     draft.cursorOnSegmentIndex = nextSegmentIndex;
     draft.cursorInSegmentOffset = 0;
+  });
+}
+
+export function moveCursorToLineStart(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const lineStartPosition = findLineStartPosition(draft);
+
+    draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex;
+    draft.cursorInSegmentOffset = lineStartPosition.offset;
+  });
+}
+
+export function moveCursorToLineEnd(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const lineEndPosition = findLineEndPosition(draft);
+
+    draft.cursorOnSegmentIndex = lineEndPosition.segmentIndex;
+    draft.cursorInSegmentOffset = lineEndPosition.offset;
   });
 }
 

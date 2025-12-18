@@ -6,6 +6,8 @@ import {
   insertTextAtCursor,
   moveCursorLeft,
   moveCursorRight,
+  moveCursorToLineEnd,
+  moveCursorToLineStart,
 } from "./inputReducer.js";
 import { type ChatInputSegment, type ChatUserInputState } from "./types.js";
 
@@ -1248,6 +1250,128 @@ describe("chatInputStateReducers", () => {
 
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(5);
+    });
+  });
+
+  describe("moveCursorToLineStart", () => {
+    it("moves to start of buffer when there is no newline", () => {
+      const initialState = createChatUserInputState(
+        [{ type: "text", content: "hello world" }],
+        0,
+        5,
+      );
+
+      const result = moveCursorToLineStart(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("moves to character after last newline in current segment", () => {
+      const initialState = createChatUserInputState(
+        [{ type: "text", content: "first line\nsecond line" }],
+        0,
+        "first line\nsecond line".length,
+      );
+
+      const result = moveCursorToLineStart(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("first line\n".length);
+    });
+
+    it("moves to character after newline in previous text segment when current has none", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "line one\n" },
+          { type: "text", content: "line two" },
+        ],
+        1,
+        4,
+      );
+
+      const result = moveCursorToLineStart(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("line one\n".length);
+    });
+
+    it("ignores newlines inside largePaste segments when searching for line start", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "prefix" },
+          { type: "largePaste", content: "with\ninternal\nnewlines" },
+          { type: "text", content: "suffix" },
+        ],
+        2,
+        3,
+      );
+
+      const result = moveCursorToLineStart(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+  });
+
+  describe("moveCursorToLineEnd", () => {
+    it("moves to end of buffer when there is no newline", () => {
+      const initialState = createChatUserInputState(
+        [{ type: "text", content: "hello world" }],
+        0,
+        0,
+      );
+
+      const result = moveCursorToLineEnd(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("hello world".length);
+    });
+
+    it("moves to position before next newline in current segment", () => {
+      const initialState = createChatUserInputState(
+        [{ type: "text", content: "first line\nsecond line" }],
+        0,
+        0,
+      );
+
+      const result = moveCursorToLineEnd(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("first line".length);
+    });
+
+    it("moves to position before newline in subsequent text segment when current has none", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "prefix" },
+          { type: "text", content: "line one\nline two" },
+        ],
+        0,
+        3,
+      );
+
+      const result = moveCursorToLineEnd(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(1);
+      expect(result.cursorInSegmentOffset).toBe("line one".length);
+    });
+
+    it("skips largePaste segments when searching for next newline and moves to end of buffer when none found", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "start" },
+          { type: "largePaste", content: "with\ninternal\nnewlines" },
+          { type: "text", content: "tail" },
+        ],
+        0,
+        2,
+      );
+
+      const result = moveCursorToLineEnd(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(2);
+      expect(result.cursorInSegmentOffset).toBe("tail".length);
     });
   });
 
