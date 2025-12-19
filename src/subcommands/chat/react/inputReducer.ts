@@ -71,6 +71,7 @@ function produceSanitizedState(
 }
 
 function findLineStartPosition(state: ChatUserInputState): CursorPosition {
+  // Handle empty state
   if (state.segments.length === 0) {
     return {
       segmentIndex: 0,
@@ -81,6 +82,7 @@ function findLineStartPosition(state: ChatUserInputState): CursorPosition {
   const cursorSegmentIndex = state.cursorOnSegmentIndex;
   const cursorOffset = state.cursorInSegmentOffset;
 
+  // Validate cursor position
   if (cursorSegmentIndex < 0 || cursorSegmentIndex >= state.segments.length) {
     return {
       segmentIndex: 0,
@@ -90,10 +92,12 @@ function findLineStartPosition(state: ChatUserInputState): CursorPosition {
 
   const currentSegment = state.segments[cursorSegmentIndex];
 
+  // Check current segment for newline before cursor
   if (currentSegment !== undefined && currentSegment.type === "text") {
     const textBeforeCursor = currentSegment.content.slice(0, cursorOffset);
     const lastNewlineInCurrentSegment = textBeforeCursor.lastIndexOf("\n");
 
+    // Found newline in current segment - line starts after it
     if (lastNewlineInCurrentSegment !== -1) {
       return {
         segmentIndex: cursorSegmentIndex,
@@ -102,15 +106,18 @@ function findLineStartPosition(state: ChatUserInputState): CursorPosition {
     }
   }
 
+  // Search backward through previous segments for newline
   for (let segmentIndex = cursorSegmentIndex - 1; segmentIndex >= 0; segmentIndex -= 1) {
     const segment = state.segments[segmentIndex];
 
+    // Skip non-text segments (e.g., largePaste)
     if (segment === undefined || segment.type !== "text") {
       continue;
     }
 
     const lastNewlineInSegment = segment.content.lastIndexOf("\n");
 
+    // Found newline in previous segment - line starts after it
     if (lastNewlineInSegment !== -1) {
       return {
         segmentIndex,
@@ -119,6 +126,7 @@ function findLineStartPosition(state: ChatUserInputState): CursorPosition {
     }
   }
 
+  // No newline found - line starts at beginning of input
   return {
     segmentIndex: 0,
     offset: 0,
@@ -126,6 +134,7 @@ function findLineStartPosition(state: ChatUserInputState): CursorPosition {
 }
 
 function findLineEndPosition(state: ChatUserInputState): CursorPosition {
+  // Handle empty state
   if (state.segments.length === 0) {
     return {
       segmentIndex: 0,
@@ -136,6 +145,7 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
   const cursorSegmentIndex = state.cursorOnSegmentIndex;
   const cursorOffset = state.cursorInSegmentOffset;
 
+  // Validate cursor position
   if (cursorSegmentIndex < 0 || cursorSegmentIndex >= state.segments.length) {
     return {
       segmentIndex: 0,
@@ -145,10 +155,12 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
 
   const currentSegment = state.segments[cursorSegmentIndex];
 
+  // Check current segment for newline after cursor
   if (currentSegment !== undefined && currentSegment.type === "text") {
     const textAfterCursor = currentSegment.content.slice(cursorOffset);
     const newlineRelativeIndex = textAfterCursor.indexOf("\n");
 
+    // Found newline in current segment - line ends at it
     if (newlineRelativeIndex !== -1) {
       const newlineAbsoluteIndex = cursorOffset + newlineRelativeIndex;
 
@@ -159,6 +171,7 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
     }
   }
 
+  // Search forward through following segments for newline
   for (
     let segmentIndex = cursorSegmentIndex + 1;
     segmentIndex < state.segments.length;
@@ -166,12 +179,14 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
   ) {
     const segment = state.segments[segmentIndex];
 
+    // Skip non-text segments (e.g., largePaste)
     if (segment === undefined || segment.type !== "text") {
       continue;
     }
 
     const newlineIndex = segment.content.indexOf("\n");
 
+    // Found newline in following segment - line ends at it
     if (newlineIndex !== -1) {
       return {
         segmentIndex,
@@ -180,6 +195,7 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
     }
   }
 
+  // No newline found - line ends at end of last text segment
   const lastSegmentIndex = state.segments.length - 1;
   const lastSegment = state.segments[lastSegmentIndex];
 
@@ -190,6 +206,7 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
     };
   }
 
+  // Last segment is not text - search backward for last text segment
   for (let segmentIndex = lastSegmentIndex - 1; segmentIndex >= 0; segmentIndex -= 1) {
     const segment = state.segments[segmentIndex];
 
@@ -203,6 +220,7 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
     };
   }
 
+  // No text segments found - default to beginning
   return {
     segmentIndex: 0,
     offset: 0,
