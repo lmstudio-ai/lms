@@ -13,14 +13,14 @@ import { getCliPref } from "../../cliPref.js";
 
 const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
 
-export async function resolveModel(
+export async function maybeGetLLM(
   client: LMStudioClient,
   modelName: string | undefined,
   ttl: number,
   shouldFetchModelCatalog: boolean,
   logger: SimpleLogger,
   yes: boolean | undefined,
-): Promise<LLM> {
+): Promise<LLM | undefined> {
   let llm: LLM;
   const isModelRequested = modelName !== undefined && modelName !== "";
   const cliPref = await getCliPref(logger);
@@ -62,6 +62,8 @@ export async function resolveModel(
         `;
         process.exit(1);
       }
+    } else {
+      return undefined;
     }
     if (yes === true) {
       // This means no model has been loaded and user has passed -y/--yes so we cannot ask them to
