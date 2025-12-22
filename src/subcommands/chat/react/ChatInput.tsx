@@ -248,12 +248,14 @@ export const ChatInput = ({
             <Box key={lineIndex} flexWrap="wrap" width="100%">
               {lineIndex === 0 && isConfirmationActive && <Text color="cyan">(yes/no) </Text>}
               <Text color="cyan">{lineIndex === 0 ? "› " : "  "}</Text>
-              {renderInputWithCursor({
-                fullText: lineText,
-                cursorPosition: isCursorLine ? cursorColumnIndex : -1,
-                pasteRanges,
-                lineStartPos,
-              })}
+              <Text>
+                {renderInputWithCursor({
+                  fullText: lineText,
+                  cursorPosition: isCursorLine ? cursorColumnIndex : -1,
+                  pasteRanges,
+                  lineStartPos,
+                })}
+              </Text>
             </Box>
           );
         })

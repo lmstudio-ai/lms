@@ -1,5 +1,6 @@
-import { Text } from "ink";
+import { Transform } from "ink";
 import { type JSX } from "react";
+import chalk from "chalk";
 
 interface PasteRange {
   start: number;
@@ -19,96 +20,36 @@ export function renderInputWithCursor({
   pasteRanges,
   lineStartPos,
 }: RenderInputWithCursorOpts): JSX.Element {
-  const parts: JSX.Element[] = [];
+  return (
+    <Transform
+      transform={output => {
+        let result = "";
+        for (let index = 0; index < output.length; index++) {
+          const absolutePos = lineStartPos + index;
+          const char = output[index];
 
-  if (cursorPosition === -1) {
-    // No cursor on this line
-    const textParts = renderTextWithPasteColor({
-      text: fullText,
-      startPos: lineStartPos,
-      pasteRanges,
-      keyPrefix: "line",
-    });
-    parts.push(...textParts);
-    return <>{parts}</>;
-  }
+          if (index === cursorPosition) {
+            result += chalk.inverse(char);
+          } else {
+            const isInPasteRange = pasteRanges.some(
+              range => absolutePos >= range.start && absolutePos < range.end,
+            );
+            if (isInPasteRange) {
+              result += chalk.blue(char);
+            } else {
+              result += char;
+            }
+          }
+        }
 
-  if (cursorPosition > 0) {
-    const beforeText = fullText.slice(0, cursorPosition);
-    const beforeParts = renderTextWithPasteColor({
-      text: beforeText,
-      startPos: lineStartPos,
-      pasteRanges,
-      keyPrefix: "before",
-    });
-    parts.push(...beforeParts);
-  }
+        if (cursorPosition === output.length) {
+          result += chalk.inverse(" ");
+        }
 
-  const cursorChar = cursorPosition < fullText.length ? fullText[cursorPosition] : " ";
-  parts.push(
-    <Text key="cursor" inverse>
-      {cursorChar}
-    </Text>,
+        return result;
+      }}
+    >
+      {fullText}
+    </Transform>
   );
-
-  if (cursorPosition + 1 < fullText.length) {
-    const afterText = fullText.slice(cursorPosition + 1);
-    const afterParts = renderTextWithPasteColor({
-      text: afterText,
-      startPos: lineStartPos + cursorPosition + 1,
-      pasteRanges,
-      keyPrefix: "after",
-    });
-    parts.push(...afterParts);
-  }
-
-  return <>{parts}</>;
-}
-
-interface RenderTextWithPasteColorOpts {
-  text: string;
-  startPos: number;
-  pasteRanges: PasteRange[];
-  keyPrefix: string;
-}
-
-function renderTextWithPasteColor({
-  text,
-  startPos,
-  pasteRanges,
-  keyPrefix,
-}: RenderTextWithPasteColorOpts): JSX.Element[] {
-  if (text.length === 0) {
-    return [];
-  }
-
-  const parts: JSX.Element[] = [];
-  let currentPos = 0;
-
-  while (currentPos < text.length) {
-    const absolutePos = startPos + currentPos;
-    const pasteRange = pasteRanges.find(
-      range => absolutePos >= range.start && absolutePos < range.end,
-    );
-
-    if (pasteRange !== undefined) {
-      const relativeEnd = Math.min(pasteRange.end - startPos, text.length);
-      const pasteText = text.slice(currentPos, relativeEnd);
-      parts.push(
-        <Text key={`${keyPrefix}-${currentPos}`} color="blue">
-          {pasteText}
-        </Text>,
-      );
-      currentPos = relativeEnd;
-    } else {
-      const nextPaste = pasteRanges.find(range => range.start > absolutePos);
-      const endPos =
-        nextPaste !== undefined ? Math.min(nextPaste.start - startPos, text.length) : text.length;
-      const normalText = text.slice(currentPos, endPos);
-      parts.push(<Text key={`${keyPrefix}-${currentPos}`}>{normalText}</Text>);
-      currentPos = endPos;
-    }
-  }
-
-  return parts;
 }
