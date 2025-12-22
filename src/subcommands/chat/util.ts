@@ -171,3 +171,22 @@ export const estimateMessageLinesCount = (message: InkChatMessage): number => {
     }
   }
 };
+
+export function getOwnerNameFromModelName(modelName: string):
+  | {
+      owner: string;
+      name: string;
+    }
+  | false {
+  if (modelName.includes("/") === false) {
+    return false;
+  }
+  const parts = modelName.split("/");
+  if (parts.length !== 2) {
+    return false;
+  }
+  return {
+    owner: parts[0],
+    name: parts[1],
+  };
+}

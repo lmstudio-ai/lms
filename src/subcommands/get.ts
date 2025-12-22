@@ -760,6 +760,7 @@ export async function downloadArtifact(
     }
   };
   process.stdout.write("\x1B[?25l");
+  let autoReprintInterval: NodeJS.Timeout | undefined = undefined;
   using downloadPlanner = client.repository.createArtifactDownloadPlanner({
     owner,
     name,
@@ -768,14 +769,19 @@ export async function downloadArtifact(
       reprintDownloadPlan(false);
     },
   });
-  reprintDownloadPlan(false);
-  const autoReprintInterval = setInterval(() => {
+  try {
     reprintDownloadPlan(false);
-  }, 50);
-  await downloadPlanner.untilReady();
-  reprintDownloadPlan(true);
-  process.stdout.write("\x1B[?25h");
-  clearInterval(autoReprintInterval);
+    autoReprintInterval = setInterval(() => {
+      reprintDownloadPlan(false);
+    }, 50);
+    await downloadPlanner.untilReady();
+    reprintDownloadPlan(true);
+  } finally {
+    process.stdout.write("\x1B[?25h");
+    if (autoReprintInterval !== undefined) {
+      clearInterval(autoReprintInterval);
+    }
+  }
 
   if (downloadPlan.downloadSizeBytes === 0) {
     process.exit(0);
