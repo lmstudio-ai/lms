@@ -37,7 +37,11 @@ export async function downloadOrLoadRequestedModel(
     return llm;
   } catch (e) {
     if (!process.stdin.isTTY) {
-      logger.error("No loaded model found, load with:\n       lms load");
+      if (isModelRequested !== true) {
+        logger.error("No loaded model found, load with:\n       lms load");
+      } else {
+        logger.error(`Model "${model}" not found, load with:\n       lms load ${model}`);
+      }
       process.exit(1);
     }
     // Try downloading the model directly if requested
