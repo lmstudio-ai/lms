@@ -245,17 +245,21 @@ export const ChatInput = ({
           const isCursorLine = lineIndex === cursorLineIndex;
 
           return (
-            <Box key={lineIndex} flexWrap="wrap" width="100%">
-              {lineIndex === 0 && isConfirmationActive && <Text color="cyan">(yes/no) </Text>}
-              <Text color="cyan">{lineIndex === 0 ? "› " : "  "}</Text>
-              <Text>
-                {renderInputWithCursor({
-                  fullText: lineText,
-                  cursorPosition: isCursorLine ? cursorColumnIndex : -1,
-                  pasteRanges,
-                  lineStartPos,
-                })}
-              </Text>
+            <Box key={lineIndex} flexDirection="row" flexWrap="nowrap" width="100%">
+              <Box>
+                {lineIndex === 0 && isConfirmationActive && <Text color="cyan">(yes/no) </Text>}
+                <Text color="cyan">{lineIndex === 0 ? "› " : "  "}</Text>
+              </Box>
+              <Box>
+                <Text>
+                  {renderInputWithCursor({
+                    fullText: lineText,
+                    cursorPosition: isCursorLine ? cursorColumnIndex : -1,
+                    pasteRanges,
+                    lineStartPos,
+                  })}
+                </Text>
+              </Box>
             </Box>
           );
         })
