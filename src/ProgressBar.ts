@@ -1,6 +1,5 @@
 import { clearLine, cursorTo } from "readline";
-
-const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+import { SPINNER_FRAMES } from "./Spinner.js";
 
 export class ProgressBar {
   private stopped = false;
@@ -69,7 +68,7 @@ export class ProgressBar {
       clearLine(process.stdout, 0);
       this.lastClearTime = Date.now();
     }
-    process.stdout.write(`\r${spinnerFrames[this.spinnerIndex % spinnerFrames.length]} [`);
+    process.stdout.write(`\r${SPINNER_FRAMES[this.spinnerIndex % SPINNER_FRAMES.length]} [`);
     this.drawBar();
     process.stdout.write(`] ${(this.ratio * 100).toFixed(2)}%`);
     if (this.text) {
