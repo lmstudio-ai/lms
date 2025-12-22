@@ -240,7 +240,12 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
   }
 
   if (providedPrompt.length !== 0) {
-    await handleNonInteractiveChat(llm!, chat, providedPrompt, logger, {
+    if (llm === undefined) {
+      // Cannot reach this point in non-interactive mode but we check anyway
+      logger.error("No model loaded. Please specify a model to chat with.");
+      process.exit(1);
+    }
+    await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
       stats: options.stats,
       ttl,
     });
