@@ -13,7 +13,7 @@ import { getCliPref } from "../../cliPref.js";
 
 const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
 
-export async function downloadOrLoadRequestedModel(
+export async function resolveModel(
   client: LMStudioClient,
   modelName: string | undefined,
   ttl: number,
@@ -22,14 +22,13 @@ export async function downloadOrLoadRequestedModel(
   yes: boolean | undefined,
 ): Promise<LLM> {
   let llm: LLM;
-  const model = modelName;
-  const isModelRequested = model !== undefined && model !== "";
+  const isModelRequested = modelName !== undefined && modelName !== "";
   const cliPref = await getCliPref(logger);
 
   try {
     if (isModelRequested) {
       // Load the requested model if specified
-      llm = await loadModelWithProgress(client, model, ttl, logger);
+      llm = await loadModelWithProgress(client, modelName, ttl, logger);
     } else {
       // Try to use a loaded model if no model is specified
       llm = await client.llm.model();
@@ -40,22 +39,28 @@ export async function downloadOrLoadRequestedModel(
       if (isModelRequested !== true) {
         logger.error("No loaded model found, load with:\n       lms load");
       } else {
-        logger.error(`Model "${model}" not found, load with:\n       lms load ${model}`);
+        logger.error(`Model "${modelName}" not found, load with:\n       lms load ${modelName}`);
       }
       process.exit(1);
     }
     // Try downloading the model directly if requested
     if (isModelRequested) {
-      const getOwnerNameResult = getOwnerNameFromModelName(model);
-      if (getOwnerNameResult !== false) {
+      const getOwnerNameResult = getOwnerNameFromModelName(modelName);
+      if (getOwnerNameResult !== null) {
         const { owner, name } = getOwnerNameResult;
         try {
           await downloadArtifact(client, logger, owner, name, yes ?? false);
-          llm = await loadModelWithProgress(client, model, ttl, logger);
+          llm = await loadModelWithProgress(client, modelName, ttl, logger);
           return llm;
         } catch (e) {
           // No op, will fall back to model selection below
         }
+      } else {
+        logger.errorText`
+          Invalid model name '${modelName}'. Please provide a model name in the format
+          'owner/model-name'.
+        `;
+        process.exit(1);
       }
     }
     if (yes === true) {
@@ -64,7 +69,7 @@ export async function downloadOrLoadRequestedModel(
       if (isModelRequested) {
         // User requested a specific model but it could not be loaded or downloaded
         logger.errorText`
-          Unable to download or load the requested model '${model}'. Please check the model name
+          Unable to download or load the requested model '${modelName}'. Please check the model name
           and try downloading it first with 'lms get'.
         `;
       } else {

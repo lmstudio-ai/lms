@@ -15,7 +15,7 @@ import { runPromptWithExitHandling } from "../../prompt.js";
 import { render } from "ink";
 import { ChatComponent } from "./react/Chat.js";
 import { getCachedModelCatalogOrFetch } from "./catalogHelpers.js";
-import { downloadOrLoadRequestedModel } from "./resolveModel.js";
+import { resolveModel } from "./resolveModel.js";
 
 interface StartPredictionOpts {
   stats?: true;
@@ -221,14 +221,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     await getCachedModelCatalogOrFetch(client);
   }
 
-  const llm = await downloadOrLoadRequestedModel(
-    client,
-    model,
-    ttl,
-    shouldFetchModelCatalog,
-    logger,
-    yes,
-  );
+  const llm = await resolveModel(client, model, ttl, shouldFetchModelCatalog, logger, yes);
 
   // We intentionally do not check for a model being loaded here, as that is handled
   // inside startInteractiveChat to allow model selection inside the interactive chat flow
