@@ -61,6 +61,8 @@ export class Spinner {
 
   private refresh() {
     process.stdout.write("\x1B[?25l");
-    process.stdout.write(`\r${this.text} ${spinnerFrames[this.spinnerIndex % spinnerFrames.length]}`);
+    process.stdout.write(
+      `\r${this.text} ${spinnerFrames[this.spinnerIndex % spinnerFrames.length]}`,
+    );
   }
 }
