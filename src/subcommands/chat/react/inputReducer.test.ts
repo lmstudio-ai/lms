@@ -1033,6 +1033,20 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorOnSegmentIndex).toBe(2);
       expect(result.cursorInSegmentOffset).toBe(9);
     });
+
+    it("handles empty segments array by sanitizing before applying suggestion", () => {
+      const initialState = createChatUserInputState([], 0, 0);
+
+      const result = insertSuggestionAtCursor({
+        state: initialState,
+        suggestionText: "/model",
+      });
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0]).toEqual({ type: "text", content: "" });
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
   });
 
   describe("sanitizeChatUserInputState edge cases", () => {
@@ -1271,6 +1285,46 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe("hello ".length);
     });
 
+    it("treats newline as whitespace when moving to previous word", () => {
+      const content = "hello\nworld";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, content.length);
+
+      const result = moveCursorWordLeft(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("hello\n".length);
+    });
+
+    it("treats tab as whitespace when moving to previous word", () => {
+      const content = "hello\tworld";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, content.length);
+
+      const result = moveCursorWordLeft(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("hello\t".length);
+    });
+
+    it("treats hyphen as a word separator when moving to previous word from end of segment", () => {
+      const content = "test-test";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, content.length);
+
+      const result = moveCursorWordLeft(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("test-".length);
+    });
+
+    it("treats hyphen as a word separator when moving to previous word from after hyphen", () => {
+      const content = "test-test";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, "test-".length);
+
+      const result = moveCursorWordLeft(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
     it("skips whitespace then moves to start of previous word", () => {
       const initialState = createChatUserInputState(
         [{ type: "text", content: "hello   world" }],
@@ -1313,6 +1367,22 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorOnSegmentIndex).toBe(1);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
+
+    it("moves to start of previous segment last word when at start of current segment", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "first second" },
+          { type: "text", content: "third" },
+        ],
+        1,
+        0,
+      );
+
+      const result = moveCursorWordLeft(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("first ".length);
+    });
   });
 
   describe("moveCursorWordRight", () => {
@@ -1327,6 +1397,46 @@ describe("chatInputStateReducers", () => {
 
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe("hello".length);
+    });
+
+    it("treats newline as whitespace when moving to next word", () => {
+      const content = "hello\nworld";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, "hello".length);
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(content.length);
+    });
+
+    it("treats tab as whitespace when moving to next word", () => {
+      const content = "hello\tworld";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, "hello".length);
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(content.length);
+    });
+
+    it("treats hyphen as a word separator when moving to next word from start of segment", () => {
+      const content = "test-test more";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, 0);
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("test".length);
+    });
+
+    it("treats hyphen as a word separator when moving to next word from hyphen", () => {
+      const content = "test-test more";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, "test-".length);
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("test-test".length);
     });
 
     it("skips whitespace then moves to end of next word", () => {
@@ -1370,6 +1480,24 @@ describe("chatInputStateReducers", () => {
 
       expect(result.cursorOnSegmentIndex).toBe(1);
       expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("moves to end of next segment word when starting at end of current segment", () => {
+      const firstSegmentText = "hello";
+      const secondSegmentText = "   world";
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: firstSegmentText },
+          { type: "text", content: secondSegmentText },
+        ],
+        0,
+        firstSegmentText.length,
+      );
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe((firstSegmentText + secondSegmentText).length);
     });
   });
 
@@ -1577,7 +1705,7 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe("before".length);
     });
 
-    it("deletes current largePaste when cursor is on it", () => {
+    it("deletes previous text when cursor is on largePaste", () => {
       const initialState = createChatUserInputState(
         [
           { type: "text", content: "before" },
@@ -1590,9 +1718,12 @@ describe("chatInputStateReducers", () => {
 
       const result = deleteWordBackward(initialState);
 
-      expect(result.segments).toEqual([{ type: "text", content: "before" }]);
+      expect(result.segments).toEqual([
+        { type: "largePaste", content: "large content" },
+        { type: "text", content: "" },
+      ]);
       expect(result.cursorOnSegmentIndex).toBe(0);
-      expect(result.cursorInSegmentOffset).toBe("before".length);
+      expect(result.cursorInSegmentOffset).toBe(0);
     });
   });
 
@@ -1673,6 +1804,23 @@ describe("chatInputStateReducers", () => {
       expect(result.segments).toEqual([{ type: "text", content: "before" }]);
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe("before".length);
+    });
+
+    it("deletes first word from next text segment when cursor is at end of current text segment", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "hello" },
+          { type: "text", content: " world" },
+        ],
+        0,
+        "hello".length,
+      );
+
+      const result = deleteWordForward(initialState);
+
+      expect(result.segments).toEqual([{ type: "text", content: "hello" }]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("hello".length);
     });
   });
 
