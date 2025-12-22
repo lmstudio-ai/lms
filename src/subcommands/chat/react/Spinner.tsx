@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Text } from "ink";
+import { SPINNER_FRAMES } from "../../../Spinner.js";
 
 const LINE_SPINNER = ["-", "\\", "|", "/"];
-const BRAILLE_SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 interface SpinnerOpts {
   type?: "line" | "braille";
@@ -11,7 +11,7 @@ interface SpinnerOpts {
 export function Spinner({ type = "line" }: SpinnerOpts) {
   const [frameIndex, setFrameIndex] = useState(0);
 
-  const frames = type === "braille" ? BRAILLE_SPINNER : LINE_SPINNER;
+  const frames = type === "braille" ? SPINNER_FRAMES : LINE_SPINNER;
 
   useEffect(() => {
     const interval = setInterval(() => {

@@ -1,7 +1,7 @@
 import type { SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
-import { ProgressBar } from "../../ProgressBar.js";
 import chalk from "chalk";
+import { Spinner } from "../../Spinner.js";
 import { type InkChatMessage } from "./react/types.js";
 
 export async function loadModelWithProgress(
@@ -10,28 +10,27 @@ export async function loadModelWithProgress(
   ttl: number,
   logger: SimpleLogger,
 ): Promise<LLM> {
-  const progressBar = new ProgressBar();
+  const spinner = new Spinner(`Loading ${modelName}`);
   const abortController = new AbortController();
+
   const sigintListener = () => {
-    progressBar.stop();
+    spinner.stop();
     abortController.abort();
     logger.warn("Load cancelled.");
     process.exit(1);
   };
+
   process.addListener("SIGINT", sigintListener);
   try {
     const llmModel = await client.llm.model(modelName, {
       verbose: false,
-      onProgress: progress => {
-        progressBar.setRatio(progress);
-      },
       signal: abortController.signal,
       ttl,
     });
     return llmModel;
   } finally {
     process.removeListener("SIGINT", sigintListener);
-    progressBar.stop();
+    spinner.stop();
   }
 }
 

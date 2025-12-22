@@ -20,7 +20,7 @@ import { addCreateClientOptions, createClient, type CreateClientArgs } from "../
 import { formatElapsedTime } from "../formatElapsedTime.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
-import { ProgressBar } from "../ProgressBar.js";
+import { Spinner } from "../Spinner.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
@@ -346,32 +346,31 @@ async function loadModel(
   ttlSeconds: number | undefined,
 ) {
   const { path, sizeBytes } = model;
-  logger.info(`Loading model "${path}"...`);
   logger.debug("Identifier:", identifier);
   logger.debug("Config:", config);
-  const progressBar = new ProgressBar();
+
+  const spinner = new Spinner(`Loading ${path}`);
   const startTime = Date.now();
   const abortController = new AbortController();
+
   const sigintListener = () => {
-    progressBar.stop();
+    spinner.stop();
     abortController.abort();
     logger.warn("Load cancelled.");
     process.exit(1);
   };
+
   process.addListener("SIGINT", sigintListener);
   const llmModel = await (model.type === "llm" ? client.llm : client.embedding).load(path, {
     verbose: false,
     ttl: ttlSeconds,
-    onProgress: progress => {
-      progressBar.setRatio(progress);
-    },
     signal: abortController.signal,
     config,
     identifier,
   });
   process.removeListener("SIGINT", sigintListener);
   const endTime = Date.now();
-  progressBar.stop();
+  spinner.stop();
   logger.info(text`
     Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.
     (${formatSizeBytes1000(sizeBytes)})
