@@ -1058,6 +1058,10 @@ export function deleteToLineStart(state: ChatUserInputState): ChatUserInputState
           draft.segments.splice(lineStartPosition.segmentIndex, 1);
           draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex;
         }
+      } else if (lineStartSegment !== undefined) {
+        // Line start segment is non-text (e.g., largePaste) - remove it
+        draft.segments.splice(lineStartPosition.segmentIndex, 1);
+        draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex;
       }
 
       draft.cursorInSegmentOffset = 0;
@@ -1141,6 +1145,13 @@ export function deleteToLineEnd(state: ChatUserInputState): ChatUserInputState {
       } else {
         currentSegment.content = contentBeforeCursor;
       }
+    } else if (currentOffset === 0) {
+      // At start of non-text segment - remove it along with everything to line end
+      draft.segments.splice(
+        currentSegmentIndex,
+        lineEndPosition.segmentIndex - currentSegmentIndex + 1,
+      );
+      return;
     }
 
     // Remove segments between cursor and line end (inclusive of line end if different)
