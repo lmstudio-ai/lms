@@ -5,6 +5,8 @@ import { InputPlaceholder } from "./InputPlaceholder.js";
 import {
   deleteAfterCursor,
   deleteBeforeCursor,
+  deleteToLineEnd,
+  deleteToLineStart,
   deleteWordBackward,
   deleteWordForward,
   insertTextAtCursor,
@@ -17,6 +19,10 @@ import {
 } from "./inputReducer.js";
 import { renderInputWithCursor } from "./inputRenderer.js";
 import { type ChatUserInputState } from "./types.js";
+
+// Note: key.meta represents Command (⌘) on macOS and Alt on Windows/Linux
+const isWindows = process.platform === "win32";
+const isMac = process.platform === "darwin";
 
 interface ChatInputProps {
   inputState: ChatUserInputState;
@@ -79,6 +85,7 @@ export const ChatInput = ({
     isConfirmationActive === false;
 
   useInput((inputCharacter, key) => {
+    console.debug("Received input:", { inputCharacter, key });
     if (skipUseInputRef.current === true) {
       return;
     }
@@ -96,39 +103,77 @@ export const ChatInput = ({
       return;
     }
 
+    if (key.ctrl === true && inputCharacter === "d") {
+      const isInputEmpty = inputState.segments.every(segment => segment.content.length === 0);
+      if (isInputEmpty) {
+        onExit();
+        return;
+      }
+    }
+
     if (disableUserInput) {
       return;
     }
 
     if (key.ctrl === true) {
-      if (inputCharacter === "a") {
-        setUserInputState(previousState => moveCursorToLineStart(previousState));
-        return;
+      // Unix/Emacs-style shortcuts (not supported on Windows)
+      if (isWindows === false) {
+        // Also works as Cmd+LeftArrow on macOS
+        if (inputCharacter === "a") {
+          setUserInputState(previousState => moveCursorToLineStart(previousState));
+          return;
+        }
+
+        // Also works as Cmd+RightArrow on macOS
+        if (inputCharacter === "e") {
+          setUserInputState(previousState => moveCursorToLineEnd(previousState));
+          return;
+        }
+
+        // Also works as Option+RightArrow on macOS
+        if (inputCharacter === "f") {
+          setUserInputState(previousState => moveCursorRight(previousState));
+          return;
+        }
+
+        // Also works as Option+LeftArrow on macOS
+        if (inputCharacter === "b") {
+          setUserInputState(previousState => moveCursorLeft(previousState));
+          return;
+        }
+
+        if (inputCharacter === "w") {
+          setUserInputState(previousState => deleteWordBackward(previousState));
+          return;
+        }
+
+        if (inputCharacter === "d") {
+          setUserInputState(previousState => deleteAfterCursor(previousState));
+          return;
+        }
+
+        // This is usually Ctrl+Backspace or cmd+Backspace in mac
+        if (inputCharacter === "u") {
+          setUserInputState(previousState => deleteToLineStart(previousState));
+          return;
+        }
+
+        // This is usually Ctrl+Delete or cmd+Delete in mac
+        if (inputCharacter === "k") {
+          setUserInputState(previousState => deleteToLineEnd(previousState));
+          return;
+        }
       }
 
-      if (inputCharacter === "e") {
-        setUserInputState(previousState => moveCursorToLineEnd(previousState));
-        return;
-      }
-
-      if (inputCharacter === "f") {
-        setUserInputState(previousState => moveCursorRight(previousState));
-        return;
-      }
-
-      if (inputCharacter === "b") {
-        setUserInputState(previousState => moveCursorLeft(previousState));
-        return;
-      }
-
-      if (inputCharacter === "w") {
-        setUserInputState(previousState => deleteWordBackward(previousState));
-        return;
-      }
-
-      if (inputCharacter === "d") {
-        setUserInputState(previousState => deleteAfterCursor(previousState));
-        return;
+      if (isMac === false) {
+        if (key.leftArrow === true) {
+          setUserInputState(previousState => moveCursorWordLeft(previousState));
+          return;
+        }
+        if (key.rightArrow === true) {
+          setUserInputState(previousState => moveCursorWordRight(previousState));
+          return;
+        }
       }
     }
 
@@ -142,11 +187,13 @@ export const ChatInput = ({
         setUserInputState(previousState => moveCursorWordLeft(previousState));
         return;
       }
+      // When we press Alt + Delete on Windows/Linux, inputCharacter is "d" and same for macOS
       if (inputCharacter === "d") {
         setUserInputState(previousState => deleteWordForward(previousState));
         return;
       }
-      if (key.delete === true) {
+
+      if (key.backspace === true) {
         setUserInputState(previousState => deleteWordBackward(previousState));
         return;
       }

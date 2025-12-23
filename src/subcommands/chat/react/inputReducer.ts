@@ -1005,6 +1005,127 @@ export function deleteWordForward(state: ChatUserInputState): ChatUserInputState
 }
 
 /**
+ * Deletes all content from the cursor to the start of the current line.
+ * This is equivalent to Ctrl+U in Emacs/Unix terminals.
+ * - Deletes from cursor back to line start (after last newline or start of input)
+ * - Preserves segments structure
+ * - Handles multi-segment inputs
+ */
+export function deleteToLineStart(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const lineStartPosition = findLineStartPosition(draft);
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentOffset = draft.cursorInSegmentOffset;
+
+    // If already at line start, do nothing
+    if (
+      lineStartPosition.segmentIndex === currentSegmentIndex &&
+      lineStartPosition.offset === currentOffset
+    ) {
+      return;
+    }
+
+    // Same segment - just delete content within segment
+    if (lineStartPosition.segmentIndex === currentSegmentIndex) {
+      const currentSegment = draft.segments[currentSegmentIndex];
+      if (currentSegment !== undefined && currentSegment.type === "text") {
+        currentSegment.content =
+          currentSegment.content.slice(0, lineStartPosition.offset) +
+          currentSegment.content.slice(currentOffset);
+        draft.cursorInSegmentOffset = lineStartPosition.offset;
+      }
+      return;
+    }
+
+    // Different segments - need to delete across segments
+    const lineStartSegment = draft.segments[lineStartPosition.segmentIndex];
+    const currentSegment = draft.segments[currentSegmentIndex];
+
+    if (lineStartSegment !== undefined && lineStartSegment.type === "text") {
+      // Keep content before line start
+      lineStartSegment.content = lineStartSegment.content.slice(0, lineStartPosition.offset);
+    }
+
+    if (currentSegment !== undefined && currentSegment.type === "text") {
+      // Keep content after cursor
+      const contentAfterCursor = currentSegment.content.slice(currentOffset);
+      // Merge into line start segment if it's text
+      if (lineStartSegment !== undefined && lineStartSegment.type === "text") {
+        lineStartSegment.content += contentAfterCursor;
+      }
+    }
+
+    // Remove segments between line start and cursor (inclusive of current if different)
+    const segmentsToRemove = currentSegmentIndex - lineStartPosition.segmentIndex;
+    if (segmentsToRemove > 0) {
+      draft.segments.splice(lineStartPosition.segmentIndex + 1, segmentsToRemove);
+    }
+
+    // Position cursor at line start
+    draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex;
+    draft.cursorInSegmentOffset = lineStartPosition.offset;
+  });
+}
+
+/**
+ * Deletes all content from the cursor to the end of the current line.
+ * This is equivalent to Ctrl+K in Emacs/Unix terminals.
+ * - Deletes from cursor to line end (before next newline or end of input)
+ * - Preserves segments structure
+ * - Handles multi-segment inputs
+ */
+export function deleteToLineEnd(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const lineEndPosition = findLineEndPosition(draft);
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentOffset = draft.cursorInSegmentOffset;
+
+    // If already at line end, do nothing
+    if (
+      lineEndPosition.segmentIndex === currentSegmentIndex &&
+      lineEndPosition.offset === currentOffset
+    ) {
+      return;
+    }
+
+    // Same segment - just delete content within segment
+    if (lineEndPosition.segmentIndex === currentSegmentIndex) {
+      const currentSegment = draft.segments[currentSegmentIndex];
+      if (currentSegment !== undefined && currentSegment.type === "text") {
+        currentSegment.content =
+          currentSegment.content.slice(0, currentOffset) +
+          currentSegment.content.slice(lineEndPosition.offset);
+      }
+      return;
+    }
+
+    // Different segments - need to delete across segments
+    const currentSegment = draft.segments[currentSegmentIndex];
+    const lineEndSegment = draft.segments[lineEndPosition.segmentIndex];
+
+    if (currentSegment !== undefined && currentSegment.type === "text") {
+      // Keep content before cursor and append content after line end
+      const contentBeforeCursor = currentSegment.content.slice(0, currentOffset);
+      if (lineEndSegment !== undefined && lineEndSegment.type === "text") {
+        const contentAfterLineEnd = lineEndSegment.content.slice(lineEndPosition.offset);
+        currentSegment.content = contentBeforeCursor + contentAfterLineEnd;
+      } else {
+        currentSegment.content = contentBeforeCursor;
+      }
+    }
+
+    // Remove segments between cursor and line end (inclusive of line end if different)
+    const segmentsToRemove = lineEndPosition.segmentIndex - currentSegmentIndex;
+    if (segmentsToRemove > 0) {
+      draft.segments.splice(currentSegmentIndex + 1, segmentsToRemove);
+    }
+
+    // Cursor stays at current position
+    draft.cursorInSegmentOffset = currentOffset;
+  });
+}
+
+/**
  * Inserts text at the cursor position.
  * - In text segment: inserts text at cursor position
  * - At start of largePaste: appends to previous text segment or creates new text segment
