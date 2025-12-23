@@ -197,8 +197,11 @@ export const ChatInput = ({
         setUserInputState(previousState => deleteWordBackward(previousState));
         return;
       }
-      if (key.delete === true) {
-        setUserInputState(previousState => deleteWordForward(previousState));
+
+      if (isWindows) {
+        if (key.delete === true) {
+          setUserInputState(previousState => deleteWordForward(previousState));
+        }
       }
     }
 
