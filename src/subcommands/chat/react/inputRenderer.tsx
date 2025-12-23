@@ -23,6 +23,7 @@ export function renderInputWithCursor({
   if (fullText.length === 0 && cursorPosition === 0) {
     return <>{chalk.inverse(" ")}</>;
   }
+
   return (
     <Transform
       key={`${fullText}-${cursorPosition}`}
@@ -45,7 +46,6 @@ export function renderInputWithCursor({
             }
           }
         }
-
         if (cursorPosition === output.length) {
           result += chalk.inverse(" ");
         }
