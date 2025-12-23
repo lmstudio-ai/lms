@@ -2301,6 +2301,25 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
+
+    it("deletes largePaste when cursor is at trailing placeholder after paste", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "largePaste", content: "x".repeat(100) },
+          { type: "text", content: "" },
+        ],
+        cursorOnSegmentIndex: 1,
+        cursorInSegmentOffset: 0,
+      };
+
+      const result = deleteToLineStart(initialState);
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
   });
 
   describe("deleteToLineEnd", () => {
@@ -2435,6 +2454,25 @@ describe("chatInputStateReducers", () => {
       expect(result.segments[0].content).toBe("line \nline two");
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(5);
+    });
+
+    it("deletes largePaste and following text when cursor is at offset 0 of largePaste", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "largePaste", content: "x".repeat(100) },
+          { type: "text", content: "following text" },
+        ],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 0,
+      };
+
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
     });
   });
 });
