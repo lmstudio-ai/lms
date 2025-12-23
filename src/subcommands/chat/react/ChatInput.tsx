@@ -174,13 +174,8 @@ export const ChatInput = ({
         return;
       }
     }
-
     if (key.delete === true) {
-      if (process.platform === "win32") {
-        setUserInputState(previousState => deleteAfterCursor(previousState));
-      } else {
-        setUserInputState(previousState => deleteBeforeCursor(previousState));
-      }
+      setUserInputState(previousState => deleteAfterCursor(previousState));
       return;
     }
 
