@@ -187,6 +187,18 @@ export const ChatInput = ({
         setUserInputState(previousState => moveCursorWordLeft(previousState));
         return;
       }
+
+      // For linux, we need to specifically check for Alt+Arrows
+      if (isMac === false) {
+        if (key.leftArrow === true) {
+          setUserInputState(previousState => moveCursorWordLeft(previousState));
+          return;
+        }
+        if (key.rightArrow === true) {
+          setUserInputState(previousState => moveCursorWordRight(previousState));
+          return;
+        }
+      }
       // When we press option+fn+delete on macOS, it sends meta+d
       if (inputCharacter === "d") {
         setUserInputState(previousState => deleteWordForward(previousState));
