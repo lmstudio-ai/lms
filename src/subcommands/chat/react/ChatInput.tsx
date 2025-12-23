@@ -187,7 +187,7 @@ export const ChatInput = ({
         setUserInputState(previousState => moveCursorWordLeft(previousState));
         return;
       }
-      // When we press Alt + Delete on Windows/Linux, inputCharacter is "d" and same for macOS
+      // When we press option+fn+delete on macOS, it sends meta+d
       if (inputCharacter === "d") {
         setUserInputState(previousState => deleteWordForward(previousState));
         return;
