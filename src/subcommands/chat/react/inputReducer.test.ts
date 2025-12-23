@@ -1,6 +1,8 @@
 import {
   deleteAfterCursor,
   deleteBeforeCursor,
+  deleteToLineEnd,
+  deleteToLineStart,
   deleteWordBackward,
   deleteWordForward,
   insertPasteAtCursor,
@@ -2153,6 +2155,225 @@ describe("chatInputStateReducers", () => {
       // Note: emoji is multi-byte UTF-16, slice removes first code unit
       expect(result.segments[0].type).toBe("text");
       expect(result.segments[0].content.length).toBeLessThan("hello🎉world".length);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(5);
+    });
+  });
+
+  describe("deleteToLineStart", () => {
+    it("deletes from cursor to start of line within single segment", () => {
+      const initialState: ChatUserInputState = {
+        segments: [{ type: "text", content: "hello world" }],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 11,
+      };
+
+      const result = deleteToLineStart(initialState);
+
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("deletes from cursor to character after newline in same segment", () => {
+      const initialState: ChatUserInputState = {
+        segments: [{ type: "text", content: "first line\nsecond line" }],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 22,
+      };
+
+      const result = deleteToLineStart(initialState);
+
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("first line\n");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(11);
+    });
+
+    it("does nothing when cursor is already at line start", () => {
+      const initialState: ChatUserInputState = {
+        segments: [{ type: "text", content: "hello\nworld" }],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 6,
+      };
+
+      const result = deleteToLineStart(initialState);
+
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("hello\nworld");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(6);
+    });
+
+    it("deletes across multiple text segments", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "text", content: "first" },
+          { type: "text", content: " second" },
+          { type: "text", content: " third" },
+        ],
+        cursorOnSegmentIndex: 2,
+        cursorInSegmentOffset: 3,
+      };
+
+      const result = deleteToLineStart(initialState);
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("ird");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("handles largePaste segments by removing them", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "text", content: "start" },
+          { type: "largePaste", content: "x".repeat(100) },
+          { type: "text", content: "end" },
+        ],
+        cursorOnSegmentIndex: 2,
+        cursorInSegmentOffset: 3,
+      };
+
+      const result = deleteToLineStart(initialState);
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("preserves content after cursor", () => {
+      const initialState: ChatUserInputState = {
+        segments: [{ type: "text", content: "delete this keep this" }],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 11,
+      };
+
+      const result = deleteToLineStart(initialState);
+
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe(" keep this");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+  });
+
+  describe("deleteToLineEnd", () => {
+    it("deletes from cursor to end of line within single segment", () => {
+      const initialState: ChatUserInputState = {
+        segments: [{ type: "text", content: "hello world" }],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 0,
+      };
+
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("deletes from cursor to newline in same segment", () => {
+      const initialState: ChatUserInputState = {
+        segments: [{ type: "text", content: "first line\nsecond line" }],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 0,
+      };
+
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("\nsecond line");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("does nothing when cursor is already at line end", () => {
+      const initialState: ChatUserInputState = {
+        segments: [{ type: "text", content: "hello\nworld" }],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 5,
+      };
+
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("hello\nworld");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(5);
+    });
+
+    it("deletes across multiple text segments", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "text", content: "first" },
+          { type: "text", content: " second" },
+          { type: "text", content: " third" },
+        ],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 2,
+      };
+
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("fi");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(2);
+    });
+
+    it("handles largePaste segments by removing them", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "text", content: "start" },
+          { type: "largePaste", content: "x".repeat(100) },
+          { type: "text", content: "end" },
+        ],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 2,
+      };
+
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("st");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(2);
+    });
+
+    it("preserves content before cursor", () => {
+      const initialState: ChatUserInputState = {
+        segments: [{ type: "text", content: "keep this delete this" }],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 9,
+      };
+
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("keep this");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(9);
+    });
+
+    it("deletes to newline and preserves text after newline", () => {
+      const initialState: ChatUserInputState = {
+        segments: [{ type: "text", content: "line one\nline two" }],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 5,
+      };
+
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("line \nline two");
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(5);
     });
