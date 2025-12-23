@@ -2260,6 +2260,47 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
+
+    it("preserves text after cursor when line starts with largePaste", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "largePaste", content: "x".repeat(100) },
+          { type: "text", content: "should deleteshould keep" },
+        ],
+        cursorOnSegmentIndex: 1,
+        cursorInSegmentOffset: 13,
+      };
+
+      const result = deleteToLineStart(initialState);
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("should keep");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("deletes largePaste when cursor is at paste start with text on both sides", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "text", content: "before" },
+          { type: "largePaste", content: "x".repeat(100) },
+          { type: "text", content: "after" },
+        ],
+        cursorOnSegmentIndex: 1,
+        cursorInSegmentOffset: 0,
+      };
+
+      const result = deleteToLineStart(initialState);
+
+      expect(result.segments.length).toBe(2);
+      expect(result.segments[0].type).toBe("largePaste");
+      expect(result.segments[0].content).toBe("x".repeat(100));
+      expect(result.segments[1].type).toBe("text");
+      expect(result.segments[1].content).toBe("after");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
   });
 
   describe("deleteToLineEnd", () => {
@@ -2362,7 +2403,25 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(9);
     });
+    it("deletes trailing largePaste when cursor is in text before it", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "text", content: "keep this" },
+          { type: "largePaste", content: "x".repeat(100) },
+          { type: "text", content: "" },
+        ],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 9,
+      };
 
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("keep this");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(9);
+    });
     it("deletes to newline and preserves text after newline", () => {
       const initialState: ChatUserInputState = {
         segments: [{ type: "text", content: "line one\nline two" }],
