@@ -1041,18 +1041,44 @@ export function deleteToLineStart(state: ChatUserInputState): ChatUserInputState
     const lineStartSegment = draft.segments[lineStartPosition.segmentIndex];
     const currentSegment = draft.segments[currentSegmentIndex];
 
-    if (lineStartSegment !== undefined && lineStartSegment.type === "text") {
-      // Keep content before line start
-      lineStartSegment.content = lineStartSegment.content.slice(0, lineStartPosition.offset);
+    // If cursor is at start of current segment (offset 0), preserve current segment
+    if (currentOffset === 0) {
+      // Delete segments between line start and current (exclusive of current)
+      const segmentsToRemove = currentSegmentIndex - lineStartPosition.segmentIndex - 1;
+      if (segmentsToRemove > 0) {
+        draft.segments.splice(lineStartPosition.segmentIndex + 1, segmentsToRemove);
+        draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex + 1;
+      }
+
+      // Truncate line start segment at line start position
+      if (lineStartSegment !== undefined && lineStartSegment.type === "text") {
+        lineStartSegment.content = lineStartSegment.content.slice(0, lineStartPosition.offset);
+        if (lineStartSegment.content.length === 0) {
+          // Remove empty line start segment
+          draft.segments.splice(lineStartPosition.segmentIndex, 1);
+          draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex;
+        }
+      }
+
+      draft.cursorInSegmentOffset = 0;
+      return;
     }
 
+    let contentAfterCursor = "";
     if (currentSegment !== undefined && currentSegment.type === "text") {
-      // Keep content after cursor
-      const contentAfterCursor = currentSegment.content.slice(currentOffset);
-      // Merge into line start segment if it's text
-      if (lineStartSegment !== undefined && lineStartSegment.type === "text") {
-        lineStartSegment.content += contentAfterCursor;
-      }
+      contentAfterCursor = currentSegment.content.slice(currentOffset);
+    }
+
+    if (lineStartSegment !== undefined && lineStartSegment.type === "text") {
+      // Keep content before line start and merge content after cursor
+      lineStartSegment.content =
+        lineStartSegment.content.slice(0, lineStartPosition.offset) + contentAfterCursor;
+    } else if (contentAfterCursor.length > 0) {
+      // Line starts with non-text segment, create new text segment for content after cursor
+      draft.segments[lineStartPosition.segmentIndex] = {
+        type: "text",
+        content: contentAfterCursor,
+      };
     }
 
     // Remove segments between line start and cursor (inclusive of current if different)
@@ -1063,7 +1089,10 @@ export function deleteToLineStart(state: ChatUserInputState): ChatUserInputState
 
     // Position cursor at line start
     draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex;
-    draft.cursorInSegmentOffset = lineStartPosition.offset;
+    draft.cursorInSegmentOffset =
+      lineStartSegment !== undefined && lineStartSegment.type === "text"
+        ? lineStartPosition.offset
+        : 0;
   });
 }
 
