@@ -125,6 +125,11 @@ export const ChatInput = ({
         setUserInputState(previousState => deleteWordBackward(previousState));
         return;
       }
+
+      if (inputCharacter === "d") {
+        setUserInputState(previousState => deleteAfterCursor(previousState));
+        return;
+      }
     }
 
     if (key.meta === true) {
@@ -137,9 +142,12 @@ export const ChatInput = ({
         setUserInputState(previousState => moveCursorWordLeft(previousState));
         return;
       }
-
       if (inputCharacter === "d") {
         setUserInputState(previousState => deleteWordForward(previousState));
+        return;
+      }
+      if (key.delete === true) {
+        setUserInputState(previousState => deleteWordBackward(previousState));
         return;
       }
     }
