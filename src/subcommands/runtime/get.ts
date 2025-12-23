@@ -18,7 +18,7 @@ import {
 
 interface RuntimeGetCommandOpts {
   allowIncompatible: boolean;
-  channel?: "stable" | "beta";
+  channel?: string;
   list: boolean;
   yes: boolean;
 }
@@ -27,7 +27,7 @@ type RuntimeGetCommandOptions = OptionValues &
   CreateClientArgs &
   LogLevelArgs & {
     allowIncompatible?: boolean;
-    channel?: "stable" | "beta";
+    channel?: string;
     list?: boolean;
     yes?: boolean;
   };
@@ -221,8 +221,8 @@ const getCommand = new Command<[], RuntimeGetCommandOptions>()
   .addOption(
     new Option(
       "--channel <channel>",
-      "Override the runtime extension channel to query from",
-    ).choices(["stable", "beta"]),
+      "Override the runtime extension channel to query from (examples: stable, beta)",
+    ),
   )
   .option("-y, --yes", "Automatically pick the first result when multiple matches are found")
   .action(async function (queryArgument: string | undefined) {
