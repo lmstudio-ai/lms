@@ -85,7 +85,6 @@ export const ChatInput = ({
     isConfirmationActive === false;
 
   useInput((inputCharacter, key) => {
-    console.debug("Received input:", { inputCharacter, key });
     if (skipUseInputRef.current === true) {
       return;
     }
@@ -116,6 +115,12 @@ export const ChatInput = ({
     }
 
     if (key.ctrl === true) {
+      // Also works as Ctrl+Backspace
+      if (inputCharacter === "w") {
+        setUserInputState(previousState => deleteWordBackward(previousState));
+        return;
+      }
+
       // Unix/Emacs-style shortcuts (not supported on Windows)
       if (isWindows === false) {
         // Also works as Cmd+LeftArrow on macOS
@@ -130,20 +135,13 @@ export const ChatInput = ({
           return;
         }
 
-        // Also works as Option+RightArrow on macOS
         if (inputCharacter === "f") {
           setUserInputState(previousState => moveCursorRight(previousState));
           return;
         }
 
-        // Also works as Option+LeftArrow on macOS
         if (inputCharacter === "b") {
           setUserInputState(previousState => moveCursorLeft(previousState));
-          return;
-        }
-
-        if (inputCharacter === "w") {
-          setUserInputState(previousState => deleteWordBackward(previousState));
           return;
         }
 
@@ -178,11 +176,13 @@ export const ChatInput = ({
     }
 
     if (key.meta === true) {
+      // Also works as Option+RightArrow on macOS
       if (inputCharacter === "f") {
         setUserInputState(previousState => moveCursorWordRight(previousState));
         return;
       }
 
+      // Also works as Option+LeftArrow on macOS
       if (inputCharacter === "b") {
         setUserInputState(previousState => moveCursorWordLeft(previousState));
         return;
@@ -221,7 +221,7 @@ export const ChatInput = ({
         return;
       }
     }
-    if (key.delete === true) {
+    if (key.delete === true && key.meta === false) {
       setUserInputState(previousState => deleteAfterCursor(previousState));
       return;
     }
