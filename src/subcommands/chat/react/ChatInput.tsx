@@ -197,6 +197,9 @@ export const ChatInput = ({
         setUserInputState(previousState => deleteWordBackward(previousState));
         return;
       }
+      if (key.delete === true) {
+        setUserInputState(previousState => deleteWordForward(previousState));
+      }
     }
 
     if (areSuggestionsVisible) {
@@ -221,7 +224,7 @@ export const ChatInput = ({
         return;
       }
     }
-    if (key.delete === true && key.meta === false) {
+    if (key.delete === true) {
       setUserInputState(previousState => deleteAfterCursor(previousState));
       return;
     }
