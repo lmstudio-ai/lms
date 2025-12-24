@@ -311,7 +311,7 @@ async function selectModel(
       {
         message:
           chalk.green(`Select a model to ${estimateOnly === true ? "estimate" : "load"}`) +
-          chalk.gray(" |"),
+          chalk.dim(" |"),
         pageSize,
         source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
@@ -323,7 +323,7 @@ async function selectModel(
           return options.map(option => {
             const model = models[option.index];
             const displayName =
-              option.string + " " + chalk.gray(`(${formatSizeBytes1000(model.sizeBytes)})`);
+              option.string + " " + chalk.dim(`(${formatSizeBytes1000(model.sizeBytes)})`);
             return {
               value: model,
               short: option.original,

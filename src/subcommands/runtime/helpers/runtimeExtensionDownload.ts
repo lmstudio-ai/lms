@@ -21,7 +21,7 @@ export function determineLatestLocalVersion(localVersions: Array<string>): strin
 
 export function formatLatestLocalVersion(latestLocalVersion: string | undefined): string {
   if (latestLocalVersion === undefined) {
-    return chalk.gray("-");
+    return chalk.dim("-");
   }
   return latestLocalVersion;
 }
@@ -31,7 +31,7 @@ export function formatRuntimeUpdateStatus(
   latestLocalVersion: string | undefined,
 ): string {
   if (latestLocalVersion === undefined) {
-    return chalk.gray("not installed");
+    return chalk.dim("not installed");
   }
   const versionComparison = compareVersions(remoteVersion, latestLocalVersion);
   if (versionComparison > 0) {
@@ -39,7 +39,7 @@ export function formatRuntimeUpdateStatus(
   } else if (versionComparison < 0) {
     return chalk.yellow("newer version installed");
   } else {
-    return chalk.gray("up-to-date");
+    return chalk.dim("up-to-date");
   }
 }
 

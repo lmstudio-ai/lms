@@ -32,7 +32,7 @@ function formatModelKeyWithVariantCount(model: ModelInfo) {
   }
   const variantCount = model.variants.length;
   const variantLabel = variantCount === 1 ? "variant" : "variants";
-  return `${model.modelKey}${chalk.gray(` (${variantCount} ${variantLabel})`)}`;
+  return `${model.modelKey}${chalk.dim(` (${variantCount} ${variantLabel})`)}`;
 }
 
 function printDownloadedModelsTable(
@@ -64,18 +64,18 @@ function printDownloadedModelsTable(
           align: "left",
         },
         path: {
-          headingTransform: () => chalk.grey(title),
+          headingTransform: () => chalk.dim(title),
         },
         params: {
-          headingTransform: () => chalk.grey("PARAMS"),
+          headingTransform: () => chalk.dim("PARAMS"),
           align: "left",
         },
         arch: {
-          headingTransform: () => chalk.grey("ARCH"),
+          headingTransform: () => chalk.dim("ARCH"),
           align: "left",
         },
         sizeBytes: {
-          headingTransform: () => chalk.grey("SIZE"),
+          headingTransform: () => chalk.dim("SIZE"),
           align: "left",
         },
       },
@@ -128,7 +128,7 @@ function printModelsWithVariantRows({
       const isSelectedVariant =
         selectedVariantKey !== undefined && selectedVariantKey === variantInfo.modelKey;
       return {
-        path: `${chalk.gray(isSelectedVariant ? " * " : "   ")}${variantInfo.modelKey}`,
+        path: `${chalk.dim(isSelectedVariant ? " * " : "   ")}${variantInfo.modelKey}`,
         params: variantInfo.paramsString,
         arch: architecture(variantInfo.architecture),
         sizeBytes: formatSizeBytes1000(variantInfo.sizeBytes),
@@ -150,18 +150,18 @@ function printModelsWithVariantRows({
           align: "left",
         },
         path: {
-          headingTransform: () => chalk.grey(title),
+          headingTransform: () => chalk.dim(title),
         },
         params: {
-          headingTransform: () => chalk.grey("PARAMS"),
+          headingTransform: () => chalk.dim("PARAMS"),
           align: "left",
         },
         arch: {
-          headingTransform: () => chalk.grey("ARCH"),
+          headingTransform: () => chalk.dim("ARCH"),
           align: "left",
         },
         sizeBytes: {
-          headingTransform: () => chalk.grey("SIZE"),
+          headingTransform: () => chalk.dim("SIZE"),
           align: "left",
         },
       },
@@ -403,7 +403,7 @@ psCommand.action(async (options: PsCommandOptions) => {
       No models are currently loaded.
 
       To load a model, run:
-        
+
           ${chalk.cyan("lms load <model path>")}
     `;
     return;
@@ -429,7 +429,7 @@ psCommand.action(async (options: PsCommandOptions) => {
         contextLength: contextLength,
         ttlMs:
           timeLeft !== undefined && modelInstanceInfo.ttlMs !== null
-            ? `${formatTimeLean(timeLeft)} ${chalk.gray(`/ ${formatTimeLean(modelInstanceInfo.ttlMs)}`)}`
+            ? `${formatTimeLean(timeLeft)} ${chalk.dim(`/ ${formatTimeLean(modelInstanceInfo.ttlMs)}`)}`
             : "",
         status: processingState.status.toUpperCase(),
       };
@@ -444,27 +444,27 @@ psCommand.action(async (options: PsCommandOptions) => {
       columns: ["identifier", "path", "status", "sizeBytes", "contextLength", "ttlMs"],
       config: {
         identifier: {
-          headingTransform: () => chalk.grey("IDENTIFIER"),
+          headingTransform: () => chalk.dim("IDENTIFIER"),
           align: "left",
         },
         path: {
-          headingTransform: () => chalk.grey("MODEL"),
+          headingTransform: () => chalk.dim("MODEL"),
           align: "left",
         },
         status: {
-          headingTransform: () => chalk.grey("STATUS"),
+          headingTransform: () => chalk.dim("STATUS"),
           align: "left",
         },
         sizeBytes: {
-          headingTransform: () => chalk.grey("SIZE"),
+          headingTransform: () => chalk.dim("SIZE"),
           align: "left",
         },
         contextLength: {
-          headingTransform: () => chalk.grey("CONTEXT"),
+          headingTransform: () => chalk.dim("CONTEXT"),
           align: "left",
         },
         ttlMs: {
-          headingTransform: () => chalk.grey("TTL"),
+          headingTransform: () => chalk.dim("TTL"),
           align: "left",
         },
       },

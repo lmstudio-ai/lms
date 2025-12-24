@@ -502,7 +502,7 @@ async function askToChooseDownloadOption(
   defaultIndex: number,
   additionalRowsToReserve = 0,
 ): Promise<ModelSearchResultDownloadOption> {
-  console.info(chalk.gray("! Use the arrow keys to navigate, and press enter to select."));
+  console.info(chalk.dim("! Use the arrow keys to navigate, and press enter to select."));
 
   const pageSize = terminalSize().rows - 4 - additionalRowsToReserve;
   const choiceDefault = downloadOptions[defaultIndex] ?? downloadOptions[0];
@@ -519,7 +519,7 @@ async function askToChooseDownloadOption(
             name += `${option.quantization} `.padEnd(9);
           }
           name += `${formatSizeBytes1000(option.sizeBytes)} `.padStart(11);
-          name += chalk.gray(option.name) + " ";
+          name += chalk.dim(option.name) + " ";
           switch (option.fitEstimation) {
             case "willNotFit":
               name += chalk.red("[Likely too large for this machine]");
@@ -560,10 +560,10 @@ function formatOptionShortName(option: ModelSearchResultDownloadOption) {
 }
 
 const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const tableVerticalLine = chalk.gray("│");
-const tableBranch = chalk.gray("├");
-const tableLastBranch = chalk.gray("└");
-const tableHorizontalLine = chalk.gray("─");
+const tableVerticalLine = chalk.dim("│");
+const tableBranch = chalk.dim("├");
+const tableLastBranch = chalk.dim("└");
+const tableHorizontalLine = chalk.dim("─");
 
 function modelToString(model: ArtifactDownloadPlanModelInfo) {
   let result = model.displayName;
@@ -606,7 +606,7 @@ async function artifactDownloadPlanToString(
           break;
         }
         case "fetching": {
-          message = `${spinnerFrames[(spinnerFrame + currentNodeIndex) % spinnerFrames.length]} ${artifactName} ${chalk.gray("- Resolving...")}`;
+          message = `${spinnerFrames[(spinnerFrame + currentNodeIndex) % spinnerFrames.length]} ${artifactName} ${chalk.dim("- Resolving...")}`;
           break;
         }
         case "satisfied": {
@@ -650,7 +650,7 @@ async function artifactDownloadPlanToString(
           break;
         }
         case "fetching": {
-          message = `${spinnerFrames[(spinnerFrame + currentNodeIndex) % spinnerFrames.length]} ${chalk.gray(`Finding options based on your system... (${node.resolvedSources}/${node.totalSources})`)}`;
+          message = `${spinnerFrames[(spinnerFrame + currentNodeIndex) % spinnerFrames.length]} ${chalk.dim(`Finding options based on your system... (${node.resolvedSources}/${node.totalSources})`)}`;
           break;
         }
         case "satisfied": {
@@ -739,14 +739,14 @@ export async function downloadArtifact(
     } else {
       if (downloadPlan.downloadSizeBytes > 0) {
         lines.push(
-          chalk.gray(
+          chalk.dim(
             spinnerFrames[spinnerFrame] +
               ` Resolving download plan... (${formatSizeBytes1000(downloadPlan.downloadSizeBytes)})`,
           ),
         );
       } else {
         lines.push(
-          chalk.gray(
+          chalk.dim(
             spinnerFrames[(spinnerFrame + 5) % spinnerFrames.length] +
               " Resolving download plan...",
           ),

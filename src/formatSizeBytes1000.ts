@@ -24,7 +24,7 @@ export function formatSizeBytes1000(sizeBytes: number) {
 
 export function formatSizeBytesWithColor1000(sizeBytes: number) {
   if (sizeBytes < grayThreshold) {
-    return chalk.gray(formatSizeBytes1000(sizeBytes));
+    return chalk.dim(formatSizeBytes1000(sizeBytes));
   } else if (sizeBytes < greenThreshold) {
     return chalk.green(formatSizeBytes1000(sizeBytes));
   } else if (sizeBytes < yellowThreshold) {

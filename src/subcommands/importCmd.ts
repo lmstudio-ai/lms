@@ -57,7 +57,7 @@ type ImportCommandOptions = OptionValues &
 
 const missingFilePathHelpMessage = text`
   Provide the path to the model file you downloaded (e.g. .gguf).
-  
+
   Example:
 
       ${chalk.yellow("lms import ~/Downloads/mistral-7b-instruct.Q4_K_M.gguf")}
@@ -281,7 +281,7 @@ async function validateModelNameOrWarn(logger: SimpleLogger, path: string, yes: 
 
         This file does not look like a model file:
 
-            ${chalk.gray(path)}
+            ${chalk.dim(path)}
 
         Model files usually have extension: ${modelExtensions.join(", ")}${"\n\n"}
       `);
@@ -417,7 +417,7 @@ async function warnAboutMove(logger: SimpleLogger, yes: boolean, modelsFolderPat
     By default, ${chalk.yellow("lms import")} will ${chalk.cyan("move")} the file to LM
     Studio's models folder:
 
-        ${chalk.gray(modelsFolderPath)}
+        ${chalk.dim(modelsFolderPath)}
 
     If you want to ${chalk.cyan("copy")} the file instead, use the ${chalk.yellow("--copy")}
     flag.
@@ -530,21 +530,21 @@ async function resolveUserRepo(
           {
             name: text`
               Auto search Hugging Face
-              ${chalk.gray("(Recommended for models downloaded from Hugging Face)")}
+              ${chalk.dim("(Recommended for models downloaded from Hugging Face)")}
             `,
             value: "huggingFace",
           },
           {
             name: text`
               Interactive import
-              ${chalk.gray("(Recommended for custom models)")}
+              ${chalk.dim("(Recommended for custom models)")}
             `,
             value: "custom",
           },
           {
             name: text`
               Don't categorize
-              ${chalk.gray("(will put the model under imported-models/uncategorized)")}
+              ${chalk.dim("(will put the model under imported-models/uncategorized)")}
             `,
             value: "uncategorized",
           },
@@ -619,7 +619,7 @@ async function resolveByHuggingFaceInteractive(
   const selected = await runPromptWithExitHandling(() =>
     search<[string, string] | null>(
       {
-        message: chalk.green("Please select the correct one") + chalk.gray(" |"),
+        message: chalk.green("Please select the correct one") + chalk.dim(" |"),
         pageSize,
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;

@@ -149,7 +149,7 @@ async function selectScaffold(
   return await runPromptWithExitHandling(() =>
     search<number>(
       {
-        message: chalk.green("Select a scaffold to use") + chalk.gray(" |"),
+        message: chalk.green("Select a scaffold to use") + chalk.dim(" |"),
         pageSize,
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
@@ -163,7 +163,7 @@ async function selectScaffold(
             const parenthesisIndex = option.string.lastIndexOf("(");
             const colored =
               option.string.slice(0, parenthesisIndex) +
-              chalk.gray(option.string.slice(parenthesisIndex));
+              chalk.dim(option.string.slice(parenthesisIndex));
             return {
               value: option.index,
               short: scaffoldBasics.displayName,
@@ -383,7 +383,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
         );
         break;
       case "hint":
-        motdLines.push(chalk.gray(message));
+        motdLines.push(chalk.dim(message));
         break;
     }
   }

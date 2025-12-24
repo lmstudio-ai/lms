@@ -74,7 +74,7 @@ const pushCommand = new Command<[], PushCommandOptions>()
   .option(
     "-y, --yes",
     text`
-      Automatically approve all prompts. 
+      Automatically approve all prompts.
     `,
   );
 
@@ -138,16 +138,14 @@ function printFileList(fileList: LocalArtifactFileList, logger: SimpleLogger) {
   logger.info("The following files will be pushed:");
   logger.info();
   for (const file of fileList.files) {
-    logger.info(
-      `   ${file.relativePath} ${chalk.gray(`(${formatSizeBytes1000(file.sizeBytes)})`)}`,
-    );
+    logger.info(`   ${file.relativePath} ${chalk.dim(`(${formatSizeBytes1000(file.sizeBytes)})`)}`);
   }
   logger.info();
   if (fileList.usedIgnoreFile !== undefined && fileList.usedIgnoreFile !== "") {
-    logger.info(chalk.gray(`(Used ignore file ${fileList.usedIgnoreFile})`));
+    logger.info(chalk.dim(`(Used ignore file ${fileList.usedIgnoreFile})`));
   } else {
     logger.info(
-      chalk.gray(text`
+      chalk.dim(text`
         (i) You can create a ${chalk.yellow(".lmsignore")} or ${chalk.yellow(".gitignore")} file to
         filter out unwanted files.
       `),
