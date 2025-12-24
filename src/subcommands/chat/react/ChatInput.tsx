@@ -3,6 +3,7 @@ import { type Dispatch, type SetStateAction, useMemo } from "react";
 import { useBufferedPasteDetection } from "./hooks.js";
 import { InputPlaceholder } from "./InputPlaceholder.js";
 import {
+  deleteAfterCursor,
   deleteBeforeCursor,
   insertTextAtCursor,
   moveCursorLeft,
@@ -116,11 +117,8 @@ export const ChatInput = ({
       }
     }
 
-    // Currently there is a bug in ink where backspace is detected as delete
-    // so we handle both the same way for now.
-    // https://github.com/vadimdemedes/ink/issues/634
     if (key.delete === true) {
-      setUserInputState(previousState => deleteBeforeCursor(previousState));
+      setUserInputState(previousState => deleteAfterCursor(previousState));
       return;
     }
 
@@ -180,8 +178,13 @@ export const ChatInput = ({
         return;
       }
 
+      const filteredInputChunk = normalizedInputChunk.replace(/[^\x20-\x7E\n]/g, "");
+      if (filteredInputChunk.length === 0) {
+        return;
+      }
+
       setUserInputState(previousState =>
-        insertTextAtCursor({ state: previousState, text: normalizedInputChunk }),
+        insertTextAtCursor({ state: previousState, text: filteredInputChunk }),
       );
     }
   });

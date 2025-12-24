@@ -261,6 +261,81 @@ export function deleteBeforeCursor(state: ChatUserInputState): ChatUserInputStat
 }
 
 /**
+ * Deletes the character after the cursor (Delete key behavior).
+ * - Within text: deletes character at cursor position
+ * - At end of text segment: merges with next segment or deletes it
+ * - At end of input: does nothing
+ */
+export function deleteAfterCursor(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+    if (currentSegment === undefined) {
+      return;
+    }
+
+    const currentSegmentType = currentSegment.type;
+    switch (currentSegmentType) {
+      case "text": {
+        const cursorOffset = draft.cursorInSegmentOffset;
+
+        // Not at end of text segment - delete character at cursor
+        if (cursorOffset < currentSegment.content.length) {
+          currentSegment.content =
+            currentSegment.content.slice(0, cursorOffset) +
+            currentSegment.content.slice(cursorOffset + 1);
+          return;
+        }
+
+        // At end of text segment - try to merge or delete next segment
+        const nextSegmentIndex = draft.cursorOnSegmentIndex + 1;
+        const nextSegment = draft.segments[nextSegmentIndex];
+
+        if (nextSegment === undefined) {
+          // At end of input - nothing to delete
+          return;
+        }
+
+        if (nextSegment.type === "text") {
+          // Delete first character of next text segment
+          if (nextSegment.content.length > 0) {
+            nextSegment.content = nextSegment.content.slice(1);
+            return;
+          }
+          // Next segment is empty - remove it
+          draft.segments.splice(nextSegmentIndex, 1);
+          return;
+        } else {
+          // Next is largePaste - delete it entirely
+          draft.segments.splice(nextSegmentIndex, 1);
+          return;
+        }
+      }
+      case "largePaste": {
+        // Cursor should be at offset 0 on largePaste
+        if (draft.cursorInSegmentOffset !== 0) {
+          return;
+        }
+
+        // Delete the largePaste segment
+        draft.segments.splice(draft.cursorOnSegmentIndex, 1);
+
+        if (draft.segments.length === 0) {
+          // No segments left - will be handled by sanitization
+          draft.cursorOnSegmentIndex = 0;
+          draft.cursorInSegmentOffset = 0;
+        }
+        // Cursor stays at same index (which now points to trailing placeholder or next segment)
+        break;
+      }
+      default: {
+        const exhaustiveCheck: never = currentSegmentType;
+        throw new Error(`Unhandled segment type: ${exhaustiveCheck}`);
+      }
+    }
+  });
+}
+
+/**
  * Moves the cursor one position to the left.
  * - Within text: moves one character left
  * - On largePaste: moves to start of current largePaste

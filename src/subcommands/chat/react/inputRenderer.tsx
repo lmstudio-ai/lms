@@ -20,8 +20,12 @@ export function renderInputWithCursor({
   pasteRanges,
   lineStartPos,
 }: RenderInputWithCursorOpts): JSX.Element {
+  if (fullText.length === 0 && cursorPosition === 0) {
+    return <>{chalk.inverse(" ")}</>;
+  }
   return (
     <Transform
+      key={`${fullText}-${cursorPosition}`}
       transform={output => {
         let result = "";
         for (let index = 0; index < output.length; index++) {
