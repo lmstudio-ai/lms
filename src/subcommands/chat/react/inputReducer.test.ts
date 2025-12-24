@@ -1501,6 +1501,23 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe((firstSegmentText + secondSegmentText).length);
     });
+
+    it("jumps to end of largePaste in one move when cursor is mid-word before largePaste", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "ddf" },
+          { type: "largePaste", content: "x".repeat(1495) },
+          { type: "text", content: "Helh" },
+        ],
+        0,
+        "dd".length,
+      );
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(1);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
   });
 
   describe("moveCursorToLineStart", () => {
