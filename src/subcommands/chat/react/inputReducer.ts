@@ -833,7 +833,11 @@ export function moveCursorWordRight(state: ChatUserInputState): ChatUserInputSta
         // Find next word boundary within current segment and move cursor there
         const newCursorOffset = findNextWordBoundaryInSegment(segmentContent, cursorOffset);
         draft.cursorInSegmentOffset = newCursorOffset;
-        return;
+        // If we reached the end of the segment, continue to jump to next segment
+        if (newCursorOffset < segmentLength) {
+          return;
+        }
+        // Fall through to jump to next segment
       }
     }
 
