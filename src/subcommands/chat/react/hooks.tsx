@@ -311,7 +311,7 @@ export function useDownloadCommand({
 
       const parsedModelKey = parseModelKey(modelKeyInput);
       if (parsedModelKey === null) {
-        logInChat("Please use the owner/name format, for example meta/llama-3-8b.");
+        logInChat("Please use the owner/name format, for example google/gemma-3-1b");
         return;
       }
 
