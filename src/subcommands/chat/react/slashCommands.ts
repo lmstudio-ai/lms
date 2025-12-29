@@ -108,6 +108,12 @@ export function createSlashCommands({
         } catch (error) {
           const errorMessage =
             error instanceof Error && error.message !== undefined ? error.message : String(error);
+          if (errorMessage.includes("Cannot find a model with path")) {
+            logErrorInChat(
+              `Model "${modelKey}" not found. Use /download to download it or /model to list available models.`,
+            );
+            return;
+          }
           logErrorInChat(`Failed to load model: ${errorMessage}`);
         } finally {
           setModelLoadingProgress(null);
