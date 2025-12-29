@@ -109,13 +109,13 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
       logger.info(`Model "${model.identifier}" unloaded.`);
       return;
     }
-    console.info(chalk.gray("! To unload all models, use the --all flag."));
+    console.info(chalk.dim("! To unload all models, use the --all flag."));
     console.info();
     const pageSize = terminalSize().rows - 5;
     const selected = await runPromptWithExitHandling(() =>
       search<(typeof models)[number]>(
         {
-          message: chalk.green("Select a model to unload") + chalk.gray(" |"),
+          message: chalk.green("Select a model to unload") + chalk.dim(" |"),
           pageSize,
           source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
             void signal;
@@ -129,7 +129,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
               const questionMarkIndex = option.string.lastIndexOf("?");
               const displayName =
                 option.string.slice(0, questionMarkIndex) +
-                chalk.gray(option.string.slice(questionMarkIndex + 1));
+                chalk.dim(option.string.slice(questionMarkIndex + 1));
               return {
                 value: model,
                 short: models[option.index].identifier,

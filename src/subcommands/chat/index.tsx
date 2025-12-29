@@ -80,15 +80,15 @@ export function createModelDisplayOptions(
     const size = formatSizeBytes1000(model.size);
 
     const displayName = dontFetchCatalog
-      ? `${model.name} ${chalk.gray(`(${size})`)}`
+      ? `${model.name} ${chalk.dim(`(${size})`)}`
       : // uses columnify to align text in columns because we have both downloaded and local models
         // here.
         columnify(
           [
             {
               name: model.name,
-              size: chalk.gray(`(min. ${size})`),
-              status: chalk.gray(status),
+              size: chalk.dim(`(min. ${size})`),
+              status: chalk.dim(status),
             },
           ],
           {

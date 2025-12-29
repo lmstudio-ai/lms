@@ -49,8 +49,8 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
   return columnify(rows, {
     columns: ["device", "vram"],
     config: {
-      device: { headingTransform: () => chalk.grey("GPU/ACCELERATORS"), align: "left" },
-      vram: { headingTransform: () => chalk.grey("VRAM"), align: "left" },
+      device: { headingTransform: () => chalk.dim("GPU/ACCELERATORS"), align: "left" },
+      vram: { headingTransform: () => chalk.dim("VRAM"), align: "left" },
     },
     columnSplitter: "   ",
   });
@@ -59,19 +59,19 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
 function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
   const cpuInfo = survey.hardwareSurvey.cpuSurveyResult.cpuInfo;
   if (cpuInfo === undefined) {
-    return `${chalk.gray("CPU:")} unavailable`;
+    return `${chalk.dim("CPU:")} unavailable`;
   }
   const instructionSetExtensions =
     cpuInfo.supportedInstructionSetExtensions.length > 0
       ? ` (${cpuInfo.supportedInstructionSetExtensions.join(", ")})`
       : "";
-  return `${chalk.gray("CPU:")} ${cpuInfo.architecture}${instructionSetExtensions}`;
+  return `${chalk.dim("CPU:")} ${cpuInfo.architecture}${instructionSetExtensions}`;
 }
 
 function renderRamLine(survey: RuntimeHardwareSurveyEngine): string {
   const ramCapacityText = formatSizeBytes1000(survey.memoryInfo.ramCapacity);
 
-  return `${chalk.gray("RAM:")} ${ramCapacityText}`;
+  return `${chalk.dim("RAM:")} ${ramCapacityText}`;
 }
 
 function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | undefined {
@@ -141,7 +141,7 @@ surveyCommand.action(async function (commandOptions) {
   const engineSurvey = surveyResult.engines.find(engine => engine.engine === "llama.cpp");
   if (engineSurvey !== undefined) {
     if (commandOptions.verbose === true) {
-      console.info(chalk.gray(`Survey by ${engineSurvey.name} (${engineSurvey.version})`));
+      console.info(chalk.dim(`Survey by ${engineSurvey.name} (${engineSurvey.version})`));
     }
     renderEngineSurvey(engineSurvey);
   } else {

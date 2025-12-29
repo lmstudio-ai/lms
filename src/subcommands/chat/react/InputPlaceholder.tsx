@@ -21,7 +21,7 @@ export function InputPlaceholder({
   if (fetchingModelDetails !== null) {
     return (
       <Box>
-        <Text color="gray">
+        <Text dimColor>
           Fetching model details for {fetchingModelDetails.owner}/{fetchingModelDetails.name}{" "}
         </Text>
         <Spinner />
@@ -33,7 +33,7 @@ export function InputPlaceholder({
     return (
       <Box>
         <Text color="cyan">› </Text>
-        <Text color="gray">
+        <Text dimColor>
           Downloading {downloadProgress.owner}/{downloadProgress.name}...{" "}
           {Math.round(downloadProgress.progress * 100)}%
         </Text>
@@ -45,7 +45,7 @@ export function InputPlaceholder({
     return (
       <Box>
         <Text color="cyan">› </Text>
-        <Text color="gray">Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
+        <Text dimColor>Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
       </Box>
     );
   }
@@ -54,9 +54,7 @@ export function InputPlaceholder({
     return (
       <Box>
         <Text color="cyan">› </Text>
-        <Text color="gray">
-          Processing prompt... {Math.round(promptProcessingProgress * 100)}%{" "}
-        </Text>
+        <Text dimColor>Processing prompt... {Math.round(promptProcessingProgress * 100)}% </Text>
         <Spinner />
       </Box>
     );
@@ -73,7 +71,7 @@ export function InputPlaceholder({
     <Box>
       <Text color="cyan">› </Text>
       <Text inverse>T</Text>
-      <Text color="gray">ype a message or use / to use commands</Text>
+      <Text dimColor>ype a message or use / to use commands</Text>
     </Box>
   );
 }

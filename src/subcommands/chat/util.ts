@@ -105,7 +105,7 @@ export async function executePrediction(
   }
 
   if (controller?.signal.aborted === true) {
-    process.stdout.write(chalk.gray("\nGeneration interrupted by user with Ctrl^C\n"));
+    process.stdout.write(chalk.dim("\nGeneration interrupted by user with Ctrl^C\n"));
   }
 
   const result = await prediction.result();

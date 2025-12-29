@@ -52,7 +52,7 @@ export const ChatSuggestions = React.memo(
         )}
         {totalPages > 1 && (
           <Box>
-            <Text color="gray">
+            <Text dimColor>
               {Array.from({ length: totalPages }, (_unused, pageIndex) =>
                 pageIndex === currentPage ? "●" : "○",
               ).join(" ")}

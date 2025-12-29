@@ -64,7 +64,7 @@ statusCommand.action(async options => {
         const sizeBytes = downloadedModels.find(m => m.path === model.path)?.sizeBytes;
         let sizeText = "";
         if (sizeBytes !== undefined) {
-          sizeText = `${chalk.gray(" - ")}${chalk.gray(formatSizeBytes1000(sizeBytes))}`;
+          sizeText = `${chalk.dim(" - ")}${chalk.dim(formatSizeBytes1000(sizeBytes))}`;
         }
         content += `\n  · ${model.identifier}${sizeText}`;
       }
@@ -73,7 +73,7 @@ statusCommand.action(async options => {
     content += text`
       Server: ${chalk.red(" OFF ")}
 
-      ${chalk.gray("(i) To start the server, run the following command:")}
+      ${chalk.dim("(i) To start the server, run the following command:")}
 
           lms server start
     `;
