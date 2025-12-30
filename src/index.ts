@@ -26,6 +26,7 @@ import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
 import { getVersion, printVersionCompact, version } from "./subcommands/version.js";
 import { UserInputError } from "./types/UserInputError.js";
+import { LMStudioClient } from "@lmstudio/sdk";
 
 const processArguments = process.argv.slice();
 let commandArguments = processArguments.slice(2);
@@ -45,7 +46,7 @@ if (commandArguments.length === 1) {
 }
 
 if (commandArguments.length === 0) {
-  printVersionCompact();
+  printVersionCompact(true);
   console.info();
 }
 
@@ -154,10 +155,6 @@ program.helpCommand(true);
 
 // Add a hidden global version option (-v/--version) that prints and exits without cluttering help
 program.addOption(new Option("-v, --version", "Print the version of the CLI").hideHelp());
-program.on("option:version", () => {
-  console.info(getVersion());
-  process.exit(0);
-});
 program.addHelpText(
   "after",
   `
@@ -178,6 +175,15 @@ program.addCommand(status, { hidden: true });
 program.addCommand(version, { hidden: true });
 
 applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig);
+
+// Handle -v/--version before Commander parsing
+if (commandArguments.includes("-v") || commandArguments.includes("--version")) {
+  await using client = new LMStudioClient();
+  const versionText = await getVersion(client);
+  console.info(versionText);
+  process.exit(0);
+}
+
 // Here we manually pass in the arguments to avoid Commander.js's built-in parsing of process.argv
 // which can interfere with our custom handling of no-argument case above.
 //
