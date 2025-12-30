@@ -3,9 +3,13 @@ import chalk from "chalk";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+
 export async function getVersion(client: LMStudioClient) {
   const version = await client.system.getLMStudioVersion();
-  return `v${version.version} - build ${version.build}`;
+  const daemonInfo = await client.system.getInfo();
+  const isDaemon = daemonInfo.isDaemon;
+  const target = isDaemon ? "llmster" : "LM Studio";
+  return `${target} v${version.version} - build ${version.build} - CLI version ${getCommitHash()}`;
 }
 
 export function getCommitHash() {
@@ -28,27 +32,41 @@ export async function printVersionWithLogo(client: LMStudioClient) {
   });
 
   console.info();
-  printVersionCompact();
-  const version = await getVersion(client);
+  printLmsInformationWithVerison();
+  const version = await client.system.getLMStudioVersion();
   const daemonInfo = await client.system.getInfo();
   console.info();
   const target = daemonInfo.isDaemon ? "llmster" : "LM Studio";
   const targetColor = daemonInfo.isDaemon ? chalk.green(target) : chalk.magenta(target);
-  console.info(chalk.blue(`Using with: ${targetColor} (`) + chalk.cyan(version) + chalk.blue(")"));
+  console.info(
+    chalk.blue(`Using with: ${targetColor} (`) +
+      chalk.cyan(`v${version.version} build ${version.build}`) +
+      chalk.blue(")"),
+  );
   console.info(chalk.blue("CLI Version: ") + chalk.gray("commit ") + chalk.cyan(getCommitHash()));
   console.info(chalk.blue("Docs: https://lmstudio.ai/docs/developer"));
   console.info(chalk.blue("Join our Discord: https://discord.gg/lmstudio"));
   console.info(chalk.blue("Contribute: https://github.com/lmstudio-ai/lms"));
 }
 
-export function printVersionCompact(shouldShowCommitHash = false) {
+export async function printLmsInformationWithVerison(
+  showTargetInfo = false,
+  client?: LMStudioClient,
+) {
   console.info();
   console.info(
     chalk.blue("lms") +
       " is LM Studio's CLI utility for your models, server, and inference runtime.",
   );
-  if (shouldShowCommitHash) {
-    console.info(chalk.dim(`CLI version: commit ${chalk.cyan(getCommitHash())}`));
+  if (showTargetInfo && client !== undefined) {
+    const version = await client.system.getLMStudioVersion();
+    const daemonInfo = await client.system.getInfo();
+    const target = daemonInfo.isDaemon ? "llmster" : "LM Studio";
+    const targetColor = daemonInfo.isDaemon ? chalk.green(target) : chalk.magenta(target);
+    console.info(
+      `Using with: ${targetColor} (${chalk.cyan(`v${version.version} build ${version.build}`)})`,
+    );
+    console.info(`CLI commit: ${chalk.cyan(getCommitHash())}`);
   }
 }
 

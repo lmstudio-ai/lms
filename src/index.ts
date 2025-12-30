@@ -24,9 +24,10 @@ import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
-import { getVersion, printVersionCompact, version } from "./subcommands/version.js";
+import { getVersion, printLmsInformationWithVerison, version } from "./subcommands/version.js";
 import { UserInputError } from "./types/UserInputError.js";
-import { LMStudioClient } from "@lmstudio/sdk";
+import { createClient } from "./createClient.js";
+import { createLogger } from "./logLevel.js";
 
 const processArguments = process.argv.slice();
 let commandArguments = processArguments.slice(2);
@@ -46,7 +47,9 @@ if (commandArguments.length === 1) {
 }
 
 if (commandArguments.length === 0) {
-  printVersionCompact(true);
+  const logger = createLogger({});
+  await using client = await createClient(logger, {});
+  await printLmsInformationWithVerison(true, client);
   console.info();
 }
 
@@ -178,7 +181,13 @@ applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig)
 
 // Handle -v/--version before Commander parsing
 if (commandArguments.includes("-v") || commandArguments.includes("--version")) {
-  await using client = new LMStudioClient();
+  const hostIndex = commandArguments.indexOf("--host");
+  const portIndex = commandArguments.indexOf("--port");
+  const host = hostIndex !== -1 ? commandArguments[hostIndex + 1] : undefined;
+  const port = portIndex !== -1 ? parseInt(commandArguments[portIndex + 1], 10) : undefined;
+
+  const logger = createLogger({});
+  await using client = await createClient(logger, { host, port });
   const versionText = await getVersion(client);
   console.info(versionText);
   process.exit(0);
