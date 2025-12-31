@@ -24,7 +24,7 @@ import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
-import { getVersion, printLmsInformationWithVerison, version } from "./subcommands/version.js";
+import { getVersionInfo, printLmsInformationWithVerison, version } from "./subcommands/version.js";
 import { UserInputError } from "./types/UserInputError.js";
 import { createClient } from "./createClient.js";
 import { createLogger } from "./logLevel.js";
@@ -188,8 +188,8 @@ if (commandArguments.includes("-v") || commandArguments.includes("--version")) {
 
   const logger = createLogger({});
   await using client = await createClient(logger, { host, port });
-  const versionText = await getVersion(client);
-  console.info(versionText);
+  const { target, build, version, cliCommitHash } = await getVersionInfo(client);
+  console.info(`${target} v${version} - build ${build} - CLI version ${cliCommitHash}`);
   process.exit(0);
 }
 

@@ -4,12 +4,23 @@ import { addCreateClientOptions, createClient, type CreateClientArgs } from "../
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
-export async function getVersion(client: LMStudioClient) {
+/**
+ * Gets the version information of the LM Studio instance the client is connected to.
+ * If there is no instance LM Studio connected, we try to wake it up and if not,
+ * the waking up fails, and we return with errors anyway so don't need to handle
+ * that here.
+ */
+export async function getVersionInfo(client: LMStudioClient) {
   const version = await client.system.getLMStudioVersion();
   const daemonInfo = await client.system.getInfo();
   const isDaemon = daemonInfo.isDaemon;
   const target = isDaemon ? "llmster" : "LM Studio";
-  return `${target} v${version.version} - build ${version.build} - CLI version ${getCommitHash()}`;
+  return {
+    version: version.version,
+    build: version.build,
+    target,
+    cliCommitHash: getCommitHash(),
+  };
 }
 
 export function getCommitHash() {
@@ -33,17 +44,20 @@ export async function printVersionWithLogo(client: LMStudioClient) {
 
   console.info();
   printLmsInformationWithVerison();
-  const version = await client.system.getLMStudioVersion();
-  const daemonInfo = await client.system.getInfo();
+  const versionInfo = await getVersionInfo(client);
   console.info();
-  const target = daemonInfo.isDaemon ? "llmster" : "LM Studio";
-  const targetColor = daemonInfo.isDaemon ? chalk.green(target) : chalk.magenta(target);
+  const targetColor =
+    versionInfo.target === "llmster"
+      ? chalk.green(versionInfo.target)
+      : chalk.magenta(versionInfo.target);
   console.info(
     chalk.blue(`Using with: ${targetColor} (`) +
-      chalk.cyan(`v${version.version} build ${version.build}`) +
+      chalk.cyan(`v${versionInfo.version} build ${versionInfo.build}`) +
       chalk.blue(")"),
   );
-  console.info(chalk.blue("CLI Version: ") + chalk.gray("commit ") + chalk.cyan(getCommitHash()));
+  console.info(
+    chalk.blue("CLI Version: ") + chalk.gray("commit ") + chalk.cyan(versionInfo.cliCommitHash),
+  );
   console.info(chalk.blue("Docs: https://lmstudio.ai/docs/developer"));
   console.info(chalk.blue("Join our Discord: https://discord.gg/lmstudio"));
   console.info(chalk.blue("Contribute: https://github.com/lmstudio-ai/lms"));
@@ -59,14 +73,15 @@ export async function printLmsInformationWithVerison(
       " is LM Studio's CLI utility for your models, server, and inference runtime.",
   );
   if (showTargetInfo && client !== undefined) {
-    const version = await client.system.getLMStudioVersion();
-    const daemonInfo = await client.system.getInfo();
-    const target = daemonInfo.isDaemon ? "llmster" : "LM Studio";
-    const targetColor = daemonInfo.isDaemon ? chalk.green(target) : chalk.magenta(target);
+    const versionInfo = await getVersionInfo(client);
+    const targetColor =
+      versionInfo.target === "llmster"
+        ? chalk.green(versionInfo.target)
+        : chalk.magenta(versionInfo.target);
     console.info(
-      `Using with: ${targetColor} (${chalk.cyan(`v${version.version} build ${version.build}`)})`,
+      `Using with: ${targetColor} (${chalk.cyan(`v${versionInfo.version} build ${versionInfo.build}`)})`,
     );
-    console.info(`CLI commit: ${chalk.cyan(getCommitHash())}`);
+    console.info(`CLI commit: ${chalk.cyan(versionInfo.cliCommitHash)}`);
   }
 }
 
@@ -89,11 +104,15 @@ version.action(async options => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
   if (json) {
-    const targetVersion = await getVersion(client);
-    const daemonInfo = await client.system.getInfo();
-    const target = daemonInfo.isDaemon ? "llmster" : "LM Studio";
-    const cliCommitHash = getCommitHash();
-    console.info(JSON.stringify({ target, targetVersion, cliCommitHash }));
+    const versionInfo = await getVersionInfo(client);
+    console.info(
+      JSON.stringify({
+        target: versionInfo.target,
+        version: versionInfo.version,
+        build: versionInfo.build,
+        cliCommitHash: versionInfo.cliCommitHash,
+      }),
+    );
   } else {
     await printVersionWithLogo(client);
   }
