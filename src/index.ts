@@ -24,10 +24,8 @@ import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
-import { getVersionInfo, printLmsInformationWithVerison, version } from "./subcommands/version.js";
+import { getCommitHash, printVersionCompact, version } from "./subcommands/version.js";
 import { UserInputError } from "./types/UserInputError.js";
-import { createClient } from "./createClient.js";
-import { createLogger } from "./logLevel.js";
 
 const processArguments = process.argv.slice();
 let commandArguments = processArguments.slice(2);
@@ -47,9 +45,7 @@ if (commandArguments.length === 1) {
 }
 
 if (commandArguments.length === 0) {
-  const logger = createLogger({});
-  await using client = await createClient(logger, {});
-  await printLmsInformationWithVerison(true, client);
+  printVersionCompact();
   console.info();
 }
 
@@ -181,15 +177,7 @@ applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig)
 
 // Handle -v/--version before Commander parsing
 if (commandArguments.includes("-v") || commandArguments.includes("--version")) {
-  const hostIndex = commandArguments.indexOf("--host");
-  const portIndex = commandArguments.indexOf("--port");
-  const host = hostIndex !== -1 ? commandArguments[hostIndex + 1] : undefined;
-  const port = portIndex !== -1 ? parseInt(commandArguments[portIndex + 1], 10) : undefined;
-
-  const logger = createLogger({});
-  await using client = await createClient(logger, { host, port });
-  const { target, build, version, cliCommitHash } = await getVersionInfo(client);
-  console.info(`${target} v${version} - build ${build} - CLI version ${cliCommitHash}`);
+  console.info("CLI commit: " + getCommitHash());
   process.exit(0);
 }
 
