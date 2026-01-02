@@ -24,7 +24,7 @@ import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
-import { getVersion, printVersionCompact, version } from "./subcommands/version.js";
+import { getCommitHash, printVersionCompact, version } from "./subcommands/version.js";
 import { UserInputError } from "./types/UserInputError.js";
 
 const processArguments = process.argv.slice();
@@ -154,10 +154,6 @@ program.helpCommand(true);
 
 // Add a hidden global version option (-v/--version) that prints and exits without cluttering help
 program.addOption(new Option("-v, --version", "Print the version of the CLI").hideHelp());
-program.on("option:version", () => {
-  console.info(getVersion());
-  process.exit(0);
-});
 program.addHelpText(
   "after",
   `
@@ -178,6 +174,13 @@ program.addCommand(status, { hidden: true });
 program.addCommand(version, { hidden: true });
 
 applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig);
+
+// Handle -v/--version before Commander parsing
+if (commandArguments.includes("-v") || commandArguments.includes("--version")) {
+  console.info("CLI commit: " + getCommitHash());
+  process.exit(0);
+}
+
 // Here we manually pass in the arguments to avoid Commander.js's built-in parsing of process.argv
 // which can interfere with our custom handling of no-argument case above.
 //

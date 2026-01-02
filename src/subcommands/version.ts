@@ -1,8 +1,8 @@
 import { Command } from "@commander-js/extra-typings";
 import chalk from "chalk";
 
-export function getVersion() {
-  return "<LMS-CLI-CURRENT-VERSION>";
+export function getCommitHash() {
+  return "<LMS-CLI-COMMIT-HASH>";
 }
 
 export function printVersionWithLogo() {
@@ -31,8 +31,9 @@ export function printVersionWithLogo() {
 export function printVersionCompact() {
   console.info(
     chalk.blue("lms"),
-    `is LM Studio's CLI utility for your models, server, and inference runtime. (v${getVersion()})`,
+    `is LM Studio's CLI utility for your models, server, and inference runtime.`,
   );
+  console.info(chalk.dim("CLI commit:"), chalk.cyan(getCommitHash()));
 }
 
 export const version = new Command()
@@ -42,7 +43,7 @@ export const version = new Command()
   .action(async options => {
     const { json = false } = options;
     if (json) {
-      console.info(JSON.stringify({ version: getVersion() }));
+      console.info(JSON.stringify({ version: getCommitHash() }));
     } else {
       printVersionWithLogo();
     }
