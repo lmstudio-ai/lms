@@ -5,6 +5,7 @@ import { InputPlaceholder } from "./InputPlaceholder.js";
 import {
   deleteAfterCursor,
   deleteBeforeCursor,
+  deleteWordBeforeCursor,
   insertTextAtCursor,
   moveCursorLeft,
   moveCursorRight,
@@ -124,6 +125,12 @@ export const ChatInput = ({
 
     if (key.backspace === true) {
       setUserInputState(previousState => deleteBeforeCursor(previousState));
+      return;
+    }
+
+    // Ctrl+W to delete word before cursor
+    if (key.ctrl === true && inputCharacter === "w") {
+      setUserInputState(previousState => deleteWordBeforeCursor(previousState));
       return;
     }
 

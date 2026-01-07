@@ -336,6 +336,57 @@ export function deleteAfterCursor(state: ChatUserInputState): ChatUserInputState
 }
 
 /**
+ * Deletes the word before the cursor (Ctrl+W behavior).
+ * Mimics standard terminal Ctrl+W: deletes backwards to the start of the word,
+ * treating spaces and punctuation as word boundaries.
+ * - Skips any trailing whitespace before the cursor
+ * - Deletes the word characters back to whitespace or start of line
+ * - Only operates within the current text segment
+ */
+export function deleteWordBeforeCursor(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+    if (currentSegment === undefined) {
+      return;
+    }
+
+    // At the very start - nothing to delete
+    if (draft.cursorOnSegmentIndex === 0 && draft.cursorInSegmentOffset === 0) {
+      return;
+    }
+
+    // Can't delete within largePaste segments
+    if (currentSegment.type === "largePaste") {
+      return;
+    }
+
+    const cursorPosition = draft.cursorInSegmentOffset;
+    const textBeforeCursor = currentSegment.content.slice(0, cursorPosition);
+
+    // Find the start position of the word to delete
+    // First, skip trailing whitespace to find the end of the word
+    let wordEnd = cursorPosition;
+    while (wordEnd > 0 && /\s/.test(textBeforeCursor[wordEnd - 1])) {
+      wordEnd--;
+    }
+
+    // Then, find the start of the word (non-whitespace characters)
+    let wordStart = wordEnd;
+    while (wordStart > 0 && !/\s/.test(textBeforeCursor[wordStart - 1])) {
+      wordStart--;
+    }
+
+    // Delete from word start to cursor position (includes the word and trailing whitespace)
+    if (wordStart < cursorPosition) {
+      currentSegment.content =
+        currentSegment.content.slice(0, wordStart) +
+        currentSegment.content.slice(cursorPosition);
+      draft.cursorInSegmentOffset = wordStart;
+    }
+  });
+}
+
+/**
  * Moves the cursor one position to the left.
  * - Within text: moves one character left
  * - On largePaste: moves to start of current largePaste
