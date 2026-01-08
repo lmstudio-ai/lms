@@ -202,7 +202,7 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
     if (estimateOnly === true) {
       const estimate = await (
         model.type === "llm" ? client.llm : client.embedding
-      ).estimateResourcesUsage(model.path, loadConfig);
+      ).estimateResourcesUsage(model.modelKey, loadConfig);
       printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
       return;
     }
@@ -277,7 +277,7 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
   if (estimateOnly === true) {
     const estimate = await (
       model.type === "llm" ? client.llm : client.embedding
-    ).estimateResourcesUsage(model.path, loadConfig);
+    ).estimateResourcesUsage(model.modelKey, loadConfig);
     printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
     return;
   }
@@ -361,7 +361,7 @@ async function loadModel(
   };
 
   process.addListener("SIGINT", sigintListener);
-  const llmModel = await (model.type === "llm" ? client.llm : client.embedding).load(path, {
+  const llmModel = await (model.type === "llm" ? client.llm : client.embedding).load(model.modelKey, {
     verbose: false,
     ttl: ttlSeconds,
     signal: abortController.signal,
