@@ -1,9 +1,8 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
-import chalk from "chalk";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
+import { ensureAuthenticated } from "../ensureAuthenticated.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
-import { openUrl } from "../openUrl.js";
 
 type LoginCommandOptions = OptionValues &
   CreateClientArgs &
@@ -73,31 +72,13 @@ loginCommand.action(async options => {
         --with-pre-authenticated-keys.`);
     }
   }
-  let askedToAuthenticate = false;
-  await client.repository.ensureAuthenticated({
-    onAuthenticationUrl: async url => {
-      askedToAuthenticate = true;
-
-      try {
-        await openUrl(url);
-        logger.infoText`
-          Opening browser for authentication...
-          If a browser window does not open automatically, visit the following URL directly:
-        `;
-      } catch {
-        logger.info("Please visit the following URL to authenticate:");
-      }
-
-      logger.info();
-      logger.info(chalk.green(`    ${url}`));
-      logger.info();
-    },
-  });
-  if (!askedToAuthenticate) {
+  const isAuthenticated = await client.repository.isAuthenticated();
+  if (isAuthenticated) {
     logger.info("You are already authenticated.");
-  } else {
-    logger.info("Authentication successful.");
+    return;
   }
+  await ensureAuthenticated(client, logger);
+  logger.info("Authentication successful.");
 });
 
 export const login = loginCommand;

@@ -10,23 +10,29 @@ export async function ensureAuthenticated(
   const { promise, resolve, reject } = makePromise<void>();
   client.repository
     .ensureAuthenticated({
-      onAuthenticationUrl: url => {
+      onAuthenticationCode: ({ code, manualUrl, filledUrl }) => {
         if (yes) {
           reject(
             makeTitledPrettyError(
               "Authentication required",
               text`
                 This operation requires you to be authenticated. Inline authentication disabled due
-                to ${chalk.yellow("--yes")} flag. Please use ${chalk.yellow("lms auth")}
+                to ${chalk.yellow("--yes")} flag. Please use ${chalk.yellow("lms login")}
                 to authenticate before running this command again.
               `,
-              url,
             ),
           );
         } else {
-          logger.info("Authentication required. Please visit the following URL to authenticate:");
           logger.info();
-          logger.info(chalk.green(`    ${url}`));
+          logger.info(
+            `Visit ${chalk.cyanBright(manualUrl)} and enter the following code to authenticate:`,
+          );
+          logger.info();
+          logger.info(chalk.green(`    ${code}`));
+          logger.info();
+          logger.info("Or visit the following URL directly:");
+          logger.info();
+          logger.info(chalk.green(`    ${filledUrl}`));
           logger.info();
         }
       },
