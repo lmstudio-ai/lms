@@ -11,11 +11,18 @@ type LoginCommandOptions = OptionValues &
     keyId?: string;
     publicKey?: string;
     privateKey?: string;
+    status?: boolean;
   };
 
 const loginCommand = new Command<[], LoginCommandOptions>()
   .name("login")
-  .description(text`Authenticate with LM Studio}`)
+  .description(text`Authenticate with LM Studio`)
+  .option(
+    "--status",
+    text`
+      Check the current authentication status without logging in.
+    `,
+  )
   .option(
     "--with-pre-authenticated-keys",
     text`
@@ -51,7 +58,32 @@ addLogLevelOptions(loginCommand);
 loginCommand.action(async options => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
-  const { withPreAuthenticatedKeys = false, keyId, publicKey, privateKey } = options;
+  const {
+    status = false,
+    withPreAuthenticatedKeys = false,
+    keyId,
+    publicKey,
+    privateKey,
+  } = options;
+
+  // Validate mutually exclusive options
+  if (status && withPreAuthenticatedKeys) {
+    throw new Error(text`
+      The --status and --with-pre-authenticated-keys flags cannot be used together.
+    `);
+  }
+
+  // Handle --status flag
+  if (status) {
+    const authStatus = await client.repository.getAuthenticationStatus();
+    if (authStatus !== null) {
+      logger.info(`You are currently logged in as: ${authStatus.userName}`);
+    } else {
+      logger.info("You are not currently logged in.");
+    }
+    return;
+  }
+
   if (withPreAuthenticatedKeys) {
     if (keyId === undefined || publicKey === undefined || privateKey === undefined) {
       throw new Error(text`

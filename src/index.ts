@@ -19,12 +19,14 @@ import { ls, ps } from "./subcommands/list.js";
 import { load } from "./subcommands/load.js";
 import { log } from "./subcommands/log.js";
 import { login } from "./subcommands/login.js";
+import { logout } from "./subcommands/logout.js";
 import { push } from "./subcommands/push.js";
 import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
 import { getCommitHash, printVersionCompact, version } from "./subcommands/version.js";
+import { whoami } from "./subcommands/whoami.js";
 import { UserInputError } from "./types/UserInputError.js";
 
 const processArguments = process.argv.slice();
@@ -164,7 +166,7 @@ Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`,
 addCommandsGroup("Local models", [chat, get, load, unload, ls, ps, importCmd], "#22D3EE");
 addCommandsGroup("Serve", [server, log], "#34D399");
 addCommandsGroup("Runtime", [runtime], "#C084FC");
-addCommandsGroup("Develop & Publish (Beta)", [clone, push, dev, login], "#F9A8D4");
+addCommandsGroup("Develop & Publish (Beta)", [clone, push, dev, login, logout, whoami], "#F9A8D4");
 
 program.addCommand(create, { hidden: true });
 program.addCommand(bootstrap, { hidden: true });
