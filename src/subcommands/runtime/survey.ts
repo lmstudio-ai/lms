@@ -140,13 +140,13 @@ surveyCommand.action(async function (commandOptions) {
   // Find and render the llama.cpp engine's survey
   const engineSurvey = surveyResult.engines.find(engine => engine.engine === "llama.cpp");
   if (engineSurvey !== undefined) {
-    if (commandOptions.verbose === true) {
-      console.info(chalk.dim(`Survey by ${engineSurvey.name} (${engineSurvey.version})`));
-    }
+    console.info(chalk.dim(`Survey by ${engineSurvey.name} (${engineSurvey.version})`));
     renderEngineSurvey(engineSurvey);
   } else {
     // If llama.cpp survey is not available, render the first engine's survey as a fallback
-    renderEngineSurvey(surveyResult.engines[0]);
+    const firstEngine = surveyResult.engines[0];
+    console.info(chalk.dim(`Survey by ${firstEngine.name} (${firstEngine.version})`));
+    renderEngineSurvey(firstEngine);
   }
 });
 
