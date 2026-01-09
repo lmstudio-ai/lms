@@ -25,14 +25,14 @@ export async function ensureAuthenticated(
         } else {
           logger.info();
           logger.info(
-            `Visit ${chalk.cyanBright(manualUrl)} and enter the following code to authenticate:`,
+            `Visit ${chalk.yellowBright(manualUrl)} and enter the following code to authenticate:`,
           );
           logger.info();
-          logger.info(chalk.green(`    ${code}`));
+          logger.info(chalk.yellowBright(`    ${code}`));
           logger.info();
           logger.info("Or visit the following URL directly:");
           logger.info();
-          logger.info(chalk.green(`    ${filledUrl}`));
+          logger.info(`    ${filledUrl}`);
           logger.info();
         }
       },
