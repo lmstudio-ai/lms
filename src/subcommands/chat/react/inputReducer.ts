@@ -345,6 +345,36 @@ function findNextWordBoundaryInSegment(content: string, cursorOffset: number): n
   return scanIndex;
 }
 
+function findNextWordStartInSegment(content: string, cursorOffset: number): number {
+  const segmentLength = content.length;
+
+  if (segmentLength === 0) {
+    return 0;
+  }
+
+  let scanIndex = cursorOffset;
+
+  if (scanIndex < 0) {
+    scanIndex = 0;
+  }
+
+  if (scanIndex >= segmentLength) {
+    return segmentLength;
+  }
+
+  // Skip over separators to land at the first non-separator (start of the next word)
+  while (scanIndex < segmentLength) {
+    const character = content.charAt(scanIndex);
+    if (isWordSeparatorCharacter(character) === true) {
+      scanIndex += 1;
+      continue;
+    }
+    break;
+  }
+
+  return scanIndex;
+}
+
 /**
  * Ensures the input state is valid by:
  * 1. Guaranteeing at least one segment exists
@@ -851,7 +881,10 @@ export function moveCursorWordRight(state: ChatUserInputState): ChatUserInputSta
 
     // The next segment is text - move to its start word boundary
     const nextContent = nextSegment.content;
-    const newCursorOffset = findNextWordBoundaryInSegment(nextContent, 0);
+    const newCursorOffset =
+      currentSegment.type === "largePaste"
+        ? findNextWordStartInSegment(nextContent, 0)
+        : findNextWordBoundaryInSegment(nextContent, 0);
 
     draft.cursorOnSegmentIndex = nextSegmentIndex;
     draft.cursorInSegmentOffset = newCursorOffset;

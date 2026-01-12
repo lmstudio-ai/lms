@@ -1564,6 +1564,23 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe(0);
     });
 
+    it("lands at start of the next word when skipping over a largePaste", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "before" },
+          { type: "largePaste", content: "x".repeat(200) },
+          { type: "text", content: "\nMy tail" },
+        ],
+        1,
+        0,
+      );
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(2);
+      expect(result.cursorInSegmentOffset).toBe(1); // start of "My"
+    });
+
     it("moves to end of next segment word when starting at end of current segment", () => {
       const firstSegmentText = "hello";
       const secondSegmentText = "   world";
