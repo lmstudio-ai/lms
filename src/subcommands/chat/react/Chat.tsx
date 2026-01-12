@@ -1,5 +1,5 @@
 import { produce } from "@lmstudio/immer-with-plugins";
-import { type Chat, type LLM, type LMStudioClient } from "@lmstudio/sdk";
+import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, useApp } from "ink";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { displayVerboseStats } from "../util.js";
@@ -58,6 +58,7 @@ export const ChatComponent = React.memo(
       name: string;
       progress: number;
     } | null>(null);
+    const lastPredictionStatsRef = useRef<LLMPredictionStats | null>(null);
     const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
     const { isConfirmationActive, requestConfirmation, handleConfirmationResponse } =
       useConfirmationPrompt();
@@ -134,6 +135,7 @@ export const ChatComponent = React.memo(
         commandHandler: handler,
         setModelLoadingProgress,
         modelLoadingAbortControllerRef,
+        lastPredictionStatsRef,
       });
       handler.setCommands(commands);
       return handler;
@@ -441,7 +443,9 @@ export const ChatComponent = React.memo(
         if (stats === true) {
           displayVerboseStats(result.stats, logInChat);
         }
+        lastPredictionStatsRef.current = result.stats;
       } catch (error) {
+        lastPredictionStatsRef.current = null;
         if (error instanceof Error) {
           const errorMessage = error.message.toLowerCase();
           if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
