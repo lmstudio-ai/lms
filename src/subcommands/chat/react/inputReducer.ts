@@ -232,15 +232,8 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
 }
 
 function isWordSeparatorCharacter(character: string): boolean {
-  if (/\s/.test(character) === true) {
-    return true;
-  }
-
-  if (character === "-") {
-    return true;
-  }
-
-  return false;
+  // Treat whitespace and common shell separators (including ASCII hyphen and Unicode en/em dashes) as word breaks; keep path/flag chars intact
+  return /[\s"'`,;|&<>()[\]{}\-\u2013\u2014]/.test(character);
 }
 
 /**
