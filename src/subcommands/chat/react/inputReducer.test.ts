@@ -1327,6 +1327,46 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorInSegmentOffset).toBe(0);
     });
 
+    it("treats en dash as a word separator when moving left", () => {
+      const content = "foo–bar";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, content.length);
+
+      const result = moveCursorWordLeft(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("foo–".length);
+    });
+
+    it("treats em dash as a word separator when moving left", () => {
+      const content = "foo—bar";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, content.length);
+
+      const result = moveCursorWordLeft(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("foo—".length);
+    });
+
+    it("treats quotes as word separators when moving left", () => {
+      const content = 'foo"bar';
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, content.length);
+
+      const result = moveCursorWordLeft(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe('foo"'.length);
+    });
+
+    it("treats pipe as a word separator when moving left", () => {
+      const content = "foo|bar";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, content.length);
+
+      const result = moveCursorWordLeft(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("foo|".length);
+    });
+
     it("skips whitespace then moves to start of previous word", () => {
       const initialState = createChatUserInputState(
         [{ type: "text", content: "hello   world" }],
@@ -1452,6 +1492,46 @@ describe("chatInputStateReducers", () => {
 
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe("hello   world".length);
+    });
+
+    it("treats en dash as a word separator when moving right", () => {
+      const content = "foo–bar";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, 0);
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("foo".length);
+    });
+
+    it("treats em dash as a word separator when moving right", () => {
+      const content = "foo—bar";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, 0);
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("foo".length);
+    });
+
+    it("treats quotes as word separators when moving right", () => {
+      const content = 'foo"bar';
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, 0);
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("foo".length);
+    });
+
+    it("treats pipe as a word separator when moving right", () => {
+      const content = "foo|bar";
+      const initialState = createChatUserInputState([{ type: "text", content }], 0, 0);
+
+      const result = moveCursorWordRight(initialState);
+
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe("foo".length);
     });
 
     it("does nothing when at end of segment", () => {
