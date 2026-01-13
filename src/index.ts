@@ -54,10 +54,12 @@ if (commandArguments.length === 0) {
 const HELP_MESSAGE_PADDING_LEFT = 1;
 const HELP_MESSAGE_MAX_WIDTH = 90;
 const HELP_MESSAGE_GAP = 10;
-const commandColorByName = new Map<string, string | undefined>();
+const commandColorByPath = new Map<string, string | undefined>();
 
-function formatCommandTerm(commandName: string, helpMessageGap: number): string {
-  const color = commandColorByName.get(commandName);
+function formatCommandTerm(command: CommandUnknownOpts, helpMessageGap: number): string {
+  const commandPath = getCommandPath(command);
+  const commandName = command.name();
+  const color = commandColorByPath.get(commandPath);
   const paddedName = commandName.padEnd(commandName.length + helpMessageGap);
   const coloredName = color === undefined ? paddedName : chalk.hex(color)(paddedName);
   const boldName = chalk.bold(coloredName);
@@ -70,13 +72,13 @@ function addCommandsGroup(
   colorHex?: string | null,
 ): void {
   const commandColor = colorHex ?? undefined;
-  commands.forEach(command => {
-    commandColorByName.set(command.name(), commandColor);
-  });
   const groupTitle = chalk.bold(title);
   program.commandsGroup(groupTitle);
   commands.forEach(command => {
     program.addCommand(command);
+    // After adding to program, we can compute the full path
+    const commandPath = getCommandPath(command);
+    commandColorByPath.set(commandPath, commandColor);
   });
 }
 
@@ -108,8 +110,8 @@ function createHelpConfiguration(maxWidth: number, helpMessageGap: number): Help
   return {
     helpWidth: maxWidth,
     commandUsage: command => chalk.bold(`${getCommandPath(command)} ${command.usage()}`),
-    subcommandTerm: (command: { name(): string }) =>
-      formatCommandTerm(command.name(), helpMessageGap),
+    subcommandTerm: (command: CommandUnknownOpts) =>
+      formatCommandTerm(command, helpMessageGap),
     subcommandDescription: (command: { description(): string }) => command.description(),
     visibleOptions: command =>
       command.options.filter(
