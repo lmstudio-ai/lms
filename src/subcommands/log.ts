@@ -56,7 +56,6 @@ stream.action(async options => {
   let filterTypes: string[] = [];
   if (source === "model") {
     if (filter === undefined) {
-      // Default behavior with warning
       filterTypes = ["input", "output"];
     } else {
       // Check for empty string
