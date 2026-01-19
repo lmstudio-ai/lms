@@ -1,13 +1,14 @@
-import { type LLM, type LMStudioClient, Chat } from "@lmstudio/sdk";
 import type { HubModel } from "@lmstudio/lms-shared-types";
+import { type LLM, type LLMPredictionStats, type LMStudioClient, Chat } from "@lmstudio/sdk";
+import chalk from "chalk";
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import { displayVerboseStats } from "../util.js";
 import type {
   SlashCommand,
   SlashCommandHandler,
   SlashCommandSuggestionBuilderArgs,
 } from "./SlashCommandHandler.js";
 import type { ChatUserInputState, InkChatMessage, ModelState, Suggestion } from "./types.js";
-import chalk from "chalk";
 
 export interface CreateSlashCommandsOpts {
   client: LMStudioClient;
@@ -27,6 +28,7 @@ export interface CreateSlashCommandsOpts {
   commandHandler: SlashCommandHandler;
   setModelLoadingProgress: Dispatch<SetStateAction<number | null>>;
   modelLoadingAbortControllerRef: RefObject<AbortController | null>;
+  lastPredictionStatsRef: RefObject<LLMPredictionStats | null>;
 }
 
 export function createSlashCommands({
@@ -47,6 +49,7 @@ export function createSlashCommands({
   commandHandler,
   setModelLoadingProgress,
   modelLoadingAbortControllerRef,
+  lastPredictionStatsRef,
 }: CreateSlashCommandsOpts): SlashCommand[] {
   return [
     {
@@ -150,6 +153,7 @@ export function createSlashCommands({
         const systemPrompt = chatRef.current.getSystemPrompt();
         chatRef.current = Chat.empty();
         chatRef.current.append("system", systemPrompt);
+        lastPredictionStatsRef.current = null;
       },
     },
     {
@@ -164,6 +168,17 @@ export function createSlashCommands({
 
         chatRef.current.replaceSystemPrompt(prompt);
         logInChat("System prompt updated to: " + prompt);
+      },
+    },
+    {
+      name: "stats",
+      description: "Show stats of the previous generation",
+      handler: async () => {
+        if (lastPredictionStatsRef.current === null) {
+          logInChat("No previous generation stats available.");
+          return;
+        }
+        displayVerboseStats(lastPredictionStatsRef.current, logInChat);
       },
     },
     {
