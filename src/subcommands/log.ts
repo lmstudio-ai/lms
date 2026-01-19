@@ -57,14 +57,7 @@ stream.action(async options => {
   if (source === "model") {
     if (filter === undefined) {
       // Default behavior with warning
-      filterTypes = ["input"];
-      logger.warn(
-        text`
-          WARNING: 'lms log stream' will show both user and assistant messages in future versions.
-          To continue seeing only user messages, please use 'lms log stream --source model --filter
-          input'
-        `,
-      );
+      filterTypes = ["input", "output"];
     } else {
       // Check for empty string
       if (filter.trim() === "") {
