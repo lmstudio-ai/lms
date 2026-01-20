@@ -15,6 +15,7 @@ import { dev } from "./subcommands/dev/index.js";
 import { flags } from "./subcommands/flags.js";
 import { get } from "./subcommands/get.js";
 import { importCmd } from "./subcommands/importCmd.js";
+import { link } from "./subcommands/link.js";
 import { ls, ps } from "./subcommands/list.js";
 import { load } from "./subcommands/load.js";
 import { log } from "./subcommands/log.js";
@@ -164,7 +165,7 @@ Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`,
 );
 
 addCommandsGroup("Local models", [chat, get, load, unload, ls, ps, importCmd], "#22D3EE");
-addCommandsGroup("Serve", [server, log], "#34D399");
+addCommandsGroup("Serve", [server, log, link], "#34D399");
 addCommandsGroup("Runtime", [runtime], "#C084FC");
 addCommandsGroup("Develop & Publish (Beta)", [clone, push, dev, login, logout, whoami], "#F9A8D4");
 
