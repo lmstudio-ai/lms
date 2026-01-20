@@ -1,7 +1,7 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import chalk from "chalk";
-import { createClient, type CreateClientArgs } from "../createClient.js";
+import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 type LinkUpCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
@@ -18,6 +18,7 @@ const up = new Command<[], LinkUpCommandOptions>()
   .name("up")
   .description("Enable and start LM Link");
 
+addCreateClientOptions(up);
 addLogLevelOptions(up);
 
 up.action(async options => {
@@ -53,7 +54,9 @@ up.action(async options => {
   if (result.peers.length === 0) {
     logger.info(`${message}. No devices found.`);
   } else {
-    logger.info(`${message}. Found ${result.peers.length} device${result.peers.length === 1 ? "" : "s"}:`);
+    logger.info(
+      `${message}. Found ${result.peers.length} device${result.peers.length === 1 ? "" : "s"}:`,
+    );
     logger.info("");
     for (const peer of result.peers) {
       logger.info(`  - ${peer.deviceName}`);
@@ -65,6 +68,7 @@ const down = new Command<[], LinkDownCommandOptions>()
   .name("down")
   .description("Stop and disable LM Link");
 
+addCreateClientOptions(down);
 addLogLevelOptions(down);
 
 down.action(async options => {
@@ -94,6 +98,7 @@ const status = new Command<[], LinkStatusCommandOptions>()
     `,
   );
 
+addCreateClientOptions(status);
 addLogLevelOptions(status);
 
 status.action(async options => {
@@ -159,7 +164,9 @@ status.action(async options => {
 
   // Enabled and connected
   const peerCount = lmLinkStatus.peers.length;
-  logger.info(`LM Link is enabled and connected. Found ${peerCount} device${peerCount === 1 ? "" : "s"}:`);
+  logger.info(
+    `LM Link is enabled and connected. Found ${peerCount} device${peerCount === 1 ? "" : "s"}:`,
+  );
   logger.info("");
 
   // Get loaded models to display per peer
