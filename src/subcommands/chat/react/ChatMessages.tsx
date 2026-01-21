@@ -7,10 +7,9 @@ import { trimNewlines } from "../util.js";
 interface ChatMessageProps {
   message: InkChatMessage;
   modelName: string | null;
-  isStreaming?: boolean;
 }
 
-export const ChatMessage = memo(({ message, modelName, isStreaming = false }: ChatMessageProps) => {
+export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
   const type = message.type;
   switch (type) {
     case "user": {
@@ -32,15 +31,11 @@ export const ChatMessage = memo(({ message, modelName, isStreaming = false }: Ch
     }
 
     case "assistant": {
-      const assistantBackgroundColor = isStreaming ? "blue" : undefined;
       return (
         <Box flexDirection="column" width={"100%"}>
           {message.content.map((contentPart, contentIndex) => (
             <Box key={contentIndex}>
-              <Text
-                backgroundColor={assistantBackgroundColor}
-                color={contentPart.type === "reasoning" ? "gray" : undefined}
-              >
+              <Text color={contentPart.type === "reasoning" ? "gray" : undefined}>
                 {contentPart.text}
               </Text>
             </Box>
@@ -48,7 +43,7 @@ export const ChatMessage = memo(({ message, modelName, isStreaming = false }: Ch
 
           {message.stoppedByUser === true && (
             <Box>
-              <Text color="red" wrap="truncate" backgroundColor={assistantBackgroundColor}>
+              <Text color="red" wrap="truncate">
                 [Response stopped by user]
               </Text>
             </Box>

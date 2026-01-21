@@ -1,7 +1,7 @@
-import { type JSX, memo } from "react";
-import { Box, Static } from "ink";
-import type { InkChatMessage } from "./types.js";
+import { Static } from "ink";
+import { memo } from "react";
 import { ChatMessage } from "./ChatMessages.js";
+import type { InkChatMessage } from "./types.js";
 
 interface ChatMessagesListProps {
   messages: InkChatMessage[];
@@ -25,7 +25,7 @@ export const ChatMessagesList = memo(
     ));
     const pendingItems =
       streamingMessage !== null ? (
-        <ChatMessage message={streamingMessage} modelName={modelName} isStreaming />
+        <ChatMessage message={streamingMessage} modelName={modelName} />
       ) : null;
 
     return (
