@@ -28,7 +28,7 @@ import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js"
 // Higher minChunk = freeze less often but more work per token.
 // Lower minChunk = many static inserts and reconciliation work.
 const STREAMING_ASSISTANT_STATIC_BOUNDARIES = [
-  { token: "\n", minChunk: 500 },
+  { token: "\n", minChunk: 200 },
   { token: ".", minChunk: 1000 },
 ];
 
