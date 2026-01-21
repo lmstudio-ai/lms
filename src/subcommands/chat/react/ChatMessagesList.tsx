@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { type JSX, memo } from "react";
 import { Box, Static } from "ink";
 import type { InkChatMessage } from "./types.js";
 import { ChatMessage } from "./ChatMessages.js";
@@ -20,15 +20,19 @@ export const ChatMessagesList = memo(
     const streamingMessage =
       hasStreamingAssistantMessage === true ? messages[messages.length - 1] : null;
 
+    const staticItems = staticMessages.map((message, index) => (
+      <ChatMessage key={`static-${index}`} message={message} modelName={modelName} />
+    ));
+    const pendingItems =
+      streamingMessage !== null ? (
+        <ChatMessage message={streamingMessage} modelName={modelName} isStreaming />
+      ) : null;
+
     return (
-      <Box width={"98%"} flexDirection="column" flexWrap="wrap">
-        <Static items={staticMessages}>
-          {(message, index) => <ChatMessage key={index} message={message} modelName={modelName} />}
-        </Static>
-        {streamingMessage !== null && (
-          <ChatMessage message={streamingMessage} modelName={modelName} />
-        )}
-      </Box>
+      <>
+        <Static items={staticItems}>{item => item}</Static>
+        {pendingItems}
+      </>
     );
   },
 );

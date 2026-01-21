@@ -1,7 +1,7 @@
 import { produce } from "@lmstudio/immer-with-plugins";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
-import { Box, useApp } from "ink";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import { Box, type DOMElement, useApp, Text } from "ink";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { displayVerboseStats } from "../util.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
@@ -12,6 +12,7 @@ import {
   useConfirmationPrompt,
   useDownloadCommand,
   useDownloadedModels,
+  useLayoutOverflowMonitor,
   useModelCatalog,
   useSuggestionHandlers,
   useSuggestionsPerPage,
@@ -19,6 +20,10 @@ import {
 import { insertPasteAtCursor } from "./inputReducer.js";
 import { createSlashCommands } from "./slashCommands.js";
 import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
+
+// Keep this many trailing characters in the live (re-rendering) streaming message.
+// Higher value = less frequent graduating to static, but more re-render work per token.
+const STREAMING_ASSISTANT_TAIL_CHARS = 500;
 
 interface ChatComponentProps {
   client: LMStudioClient;
@@ -39,6 +44,7 @@ export const emptyChatInputState: ChatUserInputState = {
 export const ChatComponent = React.memo(
   ({ client, llm, chat, onExit, stats, ttl, shouldFetchModelCatalog }: ChatComponentProps) => {
     const { exit } = useApp();
+    const rootUiRef = useRef<DOMElement | null>(null);
     const [messages, setMessages] = useState<InkChatMessage[]>([
       {
         type: "welcome",
@@ -49,6 +55,8 @@ export const ChatComponent = React.memo(
     const [isPredicting, setIsPredicting] = useState(false);
     const [showPredictionSpinner, setShowPredictionSpinner] = useState(false);
     const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
+    const [statusMessage, setStatusMessage] = useState<string | null>(null);
+    const [flickerCount, setFlickerCount] = useState(0);
     const [fetchingModelDetails, setFetchingModelDetails] = useState<{
       owner: string;
       name: string;
@@ -87,6 +95,15 @@ export const ChatComponent = React.memo(
         return [...previousMessages, message];
       });
     }, []);
+
+    useLayoutOverflowMonitor(rootUiRef, {
+      onOverflow: snapshot => {
+        setFlickerCount(prev => prev + 1);
+        setStatusMessage(
+          `Layout Overflow - ${snapshot.renderedHeight} rendered height exceeds ${snapshot.availableHeight} available height`,
+        );
+      },
+    });
 
     const logInChat = useCallback(
       (logText: string) => {
@@ -347,6 +364,7 @@ export const ChatComponent = React.memo(
 
       // If nothing else, proceed with normal message submission
       setIsPredicting(true);
+      setPromptProcessingProgress(null);
       setShowPredictionSpinner(true);
       if (
         abortControllerRef.current === null ||
@@ -376,6 +394,7 @@ export const ChatComponent = React.memo(
         const result = await llmRef.current.respond(chatRef.current, {
           onFirstToken() {
             setShowPredictionSpinner(false);
+            setPromptProcessingProgress(null);
             chatRef.current.append("assistant", "");
             const displayName =
               llmRef.current?.displayName ?? llmRef.current?.modelKey ?? "Assistant";
@@ -419,14 +438,14 @@ export const ChatComponent = React.memo(
                 if (draftMessages.length === 0) {
                   return;
                 }
-                const lastMessageIndex = draftMessages.length - 1;
-                const lastMessage = draftMessages[lastMessageIndex];
+                const lastMessage = draftMessages[draftMessages.length - 1];
                 if (lastMessage === undefined || lastMessage.type !== "assistant") {
                   return;
                 }
                 const targetPartType = fragment.reasoningType === "none" ? "response" : "reasoning";
                 const parts = lastMessage.content;
                 const lastPart = parts.length > 0 ? parts[parts.length - 1] : undefined;
+                // Append to the current part when the type matches; otherwise start a new part.
                 if (lastPart !== undefined && lastPart.type === targetPartType) {
                   lastPart.text += fragment.content;
                 } else {
@@ -434,6 +453,54 @@ export const ChatComponent = React.memo(
                     type: targetPartType,
                     text: fragment.content,
                   });
+                }
+
+                // Once we have more than one part, older parts are "done" and can be graduated
+                // to static messages (Ink <Static> in the list renders these once).
+                while (parts.length > 1) {
+                  const staticPart = parts.shift();
+                  if (staticPart === undefined) {
+                    break;
+                  }
+                  draftMessages.splice(draftMessages.length - 1, 0, {
+                    type: "assistant",
+                    content: [staticPart],
+                    displayName: lastMessage.displayName,
+                    stoppedByUser: false,
+                  });
+                }
+
+                const activePart = parts[0];
+                if (activePart === undefined) {
+                  return;
+                }
+
+                // Keep a small live tail to reduce re-render cost; graduate to static only at a newline so
+                // the current line stays visually contiguous.
+                const excessLength = activePart.text.length - STREAMING_ASSISTANT_TAIL_CHARS;
+                if (excessLength > 0) {
+                  const staticCandidate = activePart.text.slice(0, excessLength);
+                  const lastNewlineIndex = staticCandidate.lastIndexOf("\n");
+                  if (lastNewlineIndex >= 0) {
+                    const staticLength = lastNewlineIndex + 1;
+                    let staticText = activePart.text.slice(0, staticLength);
+                    // Drop exactly one trailing newline to compensate for Static boundary spacing
+                    if (staticText.endsWith("\r\n")) {
+                      staticText = staticText.slice(0, -2);
+                    } else if (staticText.endsWith("\n") || staticText.endsWith("\r")) {
+                      staticText = staticText.slice(0, -1);
+                    }
+                    // Skip graduating to static if text is only whitespace (avoid empty Static items)
+                    if (staticText.trim().length > 0) {
+                      activePart.text = activePart.text.slice(staticLength);
+                      draftMessages.splice(draftMessages.length - 1, 0, {
+                        type: "assistant",
+                        content: [{ type: activePart.type, text: staticText }],
+                        displayName: lastMessage.displayName,
+                        stoppedByUser: false,
+                      });
+                    }
+                  }
                 }
               }),
             );
@@ -486,6 +553,7 @@ export const ChatComponent = React.memo(
         }
       } finally {
         setIsPredicting(false);
+        setPromptProcessingProgress(null);
         setShowPredictionSpinner(false);
         abortControllerRef.current = null;
       }
@@ -508,12 +576,26 @@ export const ChatComponent = React.memo(
     ]);
 
     return (
-      <Box flexDirection="column" width={"95%"} flexWrap="wrap">
+      <Box
+        ref={rootUiRef}
+        flexDirection="column"
+        width={"95%"}
+        overflow="hidden"
+        flexGrow={0}
+        flexShrink={0}
+      >
         <ChatMessagesList
           messages={messages}
           modelName={llmRef.current?.identifier ?? null}
           isPredicting={isPredicting}
         />
+        {statusMessage !== null && (
+          <Box>
+            <Text color="yellow">
+              {statusMessage} + {flickerCount}
+            </Text>
+          </Box>
+        )}
         <ChatInput
           inputState={userInputState}
           isPredicting={isPredicting}
