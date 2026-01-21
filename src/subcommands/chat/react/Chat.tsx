@@ -1,7 +1,7 @@
 import { produce } from "@lmstudio/immer-with-plugins";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, type DOMElement, useApp, Text } from "ink";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { displayVerboseStats } from "../util.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
@@ -21,9 +21,15 @@ import { insertPasteAtCursor } from "./inputReducer.js";
 import { createSlashCommands } from "./slashCommands.js";
 import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
 
-// Keep this many trailing characters in the live (re-rendering) streaming message.
-// Higher value = less frequent graduating to static, but more re-render work per token.
-const STREAMING_ASSISTANT_TAIL_CHARS = 500;
+// Freezes streaming content into static chunks at natural breaks to reduce re-renders.
+// Uses multiple boundaries to handle different content (best effort):
+// - Newline: Freezes at line breaks - preserves formatting
+// - Period: Fallback for long text without line breaks - loses formatting
+// Higher minChunk = freeze less often but more work per token.
+const STREAMING_ASSISTANT_STATIC_BOUNDARIES = [
+  { token: "\n", minChunk: 500 },
+  { token: ".", minChunk: 1000 },
+];
 
 interface ChatComponentProps {
   client: LMStudioClient;
@@ -477,29 +483,42 @@ export const ChatComponent = React.memo(
 
                 // Keep a small live tail to reduce re-render cost; graduate to static only at a newline so
                 // the current line stays visually contiguous.
-                const excessLength = activePart.text.length - STREAMING_ASSISTANT_TAIL_CHARS;
-                if (excessLength > 0) {
-                  const staticCandidate = activePart.text.slice(0, excessLength);
-                  const lastNewlineIndex = staticCandidate.lastIndexOf("\n");
-                  if (lastNewlineIndex >= 0) {
-                    const staticLength = lastNewlineIndex + 1;
-                    let staticText = activePart.text.slice(0, staticLength);
-                    // Drop exactly one trailing newline to compensate for Static boundary spacing
-                    if (staticText.endsWith("\r\n")) {
-                      staticText = staticText.slice(0, -2);
-                    } else if (staticText.endsWith("\n") || staticText.endsWith("\r")) {
-                      staticText = staticText.slice(0, -1);
+                let boundaryIndex = -1;
+                let boundaryToken: string | undefined;
+                for (const boundary of STREAMING_ASSISTANT_STATIC_BOUNDARIES) {
+                  const minChunk = boundary.minChunk;
+                  if (activePart.text.length <= minChunk) {
+                    continue;
+                  }
+                  const index = activePart.text.lastIndexOf(boundary.token);
+                  if (index >= 0) {
+                    const candidateLength = index + boundary.token.length;
+                    if (candidateLength < minChunk) {
+                      continue;
                     }
-                    // Skip graduating to static if text is only whitespace (avoid empty Static items)
-                    if (staticText.trim().length > 0) {
-                      activePart.text = activePart.text.slice(staticLength);
-                      draftMessages.splice(draftMessages.length - 1, 0, {
-                        type: "assistant",
-                        content: [{ type: activePart.type, text: staticText }],
-                        displayName: lastMessage.displayName,
-                        stoppedByUser: false,
-                      });
-                    }
+                    boundaryIndex = index;
+                    boundaryToken = boundary.token;
+                    break;
+                  }
+                }
+                if (boundaryIndex >= 0 && boundaryToken !== undefined) {
+                  const staticLength = boundaryIndex + boundaryToken.length;
+                  let staticText = activePart.text.slice(0, staticLength);
+                  // Drop exactly one trailing newline to compensate for Static boundary spacing
+                  if (staticText.endsWith("\r\n")) {
+                    staticText = staticText.slice(0, -2);
+                  } else if (staticText.endsWith("\n") || staticText.endsWith("\r")) {
+                    staticText = staticText.slice(0, -1);
+                  }
+                  // Skip graduating to static if text is only whitespace (avoid empty Static items)
+                  if (staticText.trim().length > 0) {
+                    activePart.text = activePart.text.slice(staticLength);
+                    draftMessages.splice(draftMessages.length - 1, 0, {
+                      type: "assistant",
+                      content: [{ type: activePart.type, text: staticText }],
+                      displayName: lastMessage.displayName,
+                      stoppedByUser: false,
+                    });
                   }
                 }
               }),
