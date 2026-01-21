@@ -26,6 +26,7 @@ import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js"
 // - Newline: Freezes at line breaks - preserves formatting
 // - Period: Fallback for long text without line breaks - loses formatting
 // Higher minChunk = freeze less often but more work per token.
+// Lower minChunk = many static inserts and reconciliation work.
 const STREAMING_ASSISTANT_STATIC_BOUNDARIES = [
   { token: "\n", minChunk: 500 },
   { token: ".", minChunk: 1000 },
@@ -503,6 +504,10 @@ export const ChatComponent = React.memo(
                 }
                 if (boundaryIndex >= 0 && boundaryToken !== undefined) {
                   const staticLength = boundaryIndex + boundaryToken.length;
+                  // Skip if boundary is at the end - splitting would leave empty active text
+                  if (staticLength === activePart.text.length) {
+                    return;
+                  }
                   let staticText = activePart.text.slice(0, staticLength);
                   // Drop exactly one trailing newline to compensate for Static boundary spacing
                   if (staticText.endsWith("\r\n")) {
