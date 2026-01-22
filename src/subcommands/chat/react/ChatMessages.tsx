@@ -36,10 +36,11 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
           {message.content.map((contentPart, contentIndex) => (
             <Box key={contentIndex}>
               <Text color={contentPart.type === "reasoning" ? "gray" : undefined}>
-                {trimNewlines(contentPart.text)}
+                {contentPart.text}
               </Text>
             </Box>
           ))}
+
           {message.stoppedByUser === true && (
             <Box>
               <Text color="red" wrap="truncate">

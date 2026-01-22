@@ -1,7 +1,7 @@
 import type { HubModel } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
-import { useStdin } from "ink";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { measureElement, type DOMElement, useStdin } from "ink";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
 import { getCachedModelCatalogOrFetch, parseModelKey } from "../catalogHelpers.js";
 import { getDownloadSize } from "../downloadHelpers.js";
@@ -12,6 +12,75 @@ import {
   type ModelState,
   type Suggestion,
 } from "./types.js";
+
+type LayoutSnapshot = {
+  renderedHeight: number;
+  availableHeight: number;
+};
+
+function isLayoutMonitoringEnabled() {
+  const envValue = process.env.LMS_LAYOUT_MONITOR?.toLowerCase();
+  return envValue === "1" || envValue === "true" || envValue === "yes";
+}
+
+/**
+ * DEV ONLY HOOK - Used to see if we have unintended layout overflows
+ */
+export function useLayoutOverflowMonitor(
+  containerRef: RefObject<DOMElement | null>,
+  opts?: {
+    onOverflow?: (snapshot: LayoutSnapshot) => void;
+  },
+) {
+  const [viewportHeight, setViewportHeight] = useState(() => process.stdout.rows ?? 24);
+  const hasReportedOverflowRef = useRef(false);
+  useEffect(() => {
+    if (!isLayoutMonitoringEnabled()) {
+      return;
+    }
+    const onResize = () => {
+      setViewportHeight(process.stdout.rows ?? 24);
+    };
+    process.stdout.on("resize", onResize);
+    return () => {
+      process.stdout.off("resize", onResize);
+    };
+  }, []);
+
+  // No deps - runs every render to catch overflow from any UI changes
+  // WARNING: Be careful modifying this effect - calling setState or triggering re-renders can
+  // cause infinite loops
+  useEffect(() => {
+    if (!isLayoutMonitoringEnabled()) {
+      return;
+    }
+
+    const containerElement = containerRef.current;
+    if (containerElement === null) {
+      return;
+    }
+
+    const measurements = measureElement(containerElement);
+    const exceedsViewport = measurements.height > viewportHeight;
+
+    if (!exceedsViewport) {
+      hasReportedOverflowRef.current = false;
+      return;
+    }
+
+    const snapshot: LayoutSnapshot = {
+      renderedHeight: measurements.height,
+      availableHeight: viewportHeight,
+    };
+
+    if (hasReportedOverflowRef.current) {
+      return;
+    }
+
+    hasReportedOverflowRef.current = true;
+    opts?.onOverflow?.(snapshot);
+  });
+}
 
 export function useModelCatalog(
   client: LMStudioClient,

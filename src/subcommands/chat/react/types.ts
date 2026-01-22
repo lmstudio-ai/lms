@@ -1,3 +1,8 @@
+/**
+ * Internal type to represent how ink is rendering messages. Note that this is NOT 1:1 to chat
+ * history, because a single assistant message is split into multiple chunks for performant
+ * rendering.
+ */
 export type InkChatMessage =
   | {
       type: "user";
