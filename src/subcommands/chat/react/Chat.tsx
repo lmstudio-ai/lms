@@ -515,16 +515,13 @@ export const ChatComponent = React.memo(
                   } else if (staticText.endsWith("\n") || staticText.endsWith("\r")) {
                     staticText = staticText.slice(0, -1);
                   }
-                  // Skip graduating to static if text is only whitespace (avoid empty Static items)
-                  if (staticText.trim().length > 0) {
-                    activePart.text = activePart.text.slice(staticLength);
-                    draftMessages.splice(draftMessages.length - 1, 0, {
-                      type: "assistant",
-                      content: [{ type: activePart.type, text: staticText }],
-                      displayName: lastMessage.displayName,
-                      stoppedByUser: false,
-                    });
-                  }
+                  activePart.text = activePart.text.slice(staticLength);
+                  draftMessages.splice(draftMessages.length - 1, 0, {
+                    type: "assistant",
+                    content: [{ type: activePart.type, text: staticText }],
+                    displayName: lastMessage.displayName,
+                    stoppedByUser: false,
+                  });
                 }
               }),
             );
