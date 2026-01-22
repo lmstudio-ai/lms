@@ -1175,11 +1175,36 @@ export function deleteToLineEnd(state: ChatUserInputState): ChatUserInputState {
         currentSegment.content = contentBeforeCursor;
       }
     } else if (currentOffset === 0) {
-      // At start of non-text segment - remove it along with everything to line end
-      draft.segments.splice(
-        currentSegmentIndex,
-        lineEndPosition.segmentIndex - currentSegmentIndex + 1,
-      );
+      // At start of non-text segment - delete from here to line end, but preserve any
+      // remaining text after the line end (e.g., after a newline) in the line-end segment.
+      const preservedTextAfterLineEnd =
+        lineEndSegment !== undefined && lineEndSegment.type === "text"
+          ? lineEndSegment.content.slice(lineEndPosition.offset)
+          : "";
+
+      const segmentsToRemove = lineEndPosition.segmentIndex - currentSegmentIndex + 1;
+      if (segmentsToRemove > 0) {
+        draft.segments.splice(currentSegmentIndex, segmentsToRemove);
+      }
+
+      if (preservedTextAfterLineEnd.length > 0) {
+        draft.segments.splice(currentSegmentIndex, 0, {
+          type: "text",
+          content: preservedTextAfterLineEnd,
+        });
+        draft.cursorOnSegmentIndex = currentSegmentIndex;
+        draft.cursorInSegmentOffset = 0;
+      } else if (currentSegmentIndex < draft.segments.length) {
+        draft.cursorOnSegmentIndex = currentSegmentIndex;
+        draft.cursorInSegmentOffset = 0;
+      } else {
+        // Cursor is now at end-of-input.
+        const lastSegmentIndex = draft.segments.length - 1;
+        draft.cursorOnSegmentIndex = Math.max(0, lastSegmentIndex);
+        const lastSegment = draft.segments[draft.cursorOnSegmentIndex];
+        draft.cursorInSegmentOffset =
+          lastSegment !== undefined && lastSegment.type === "text" ? lastSegment.content.length : 0;
+      }
       return;
     }
 

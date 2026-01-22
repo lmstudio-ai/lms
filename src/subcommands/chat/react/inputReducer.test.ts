@@ -2588,5 +2588,44 @@ describe("chatInputStateReducers", () => {
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(0);
     });
+
+    it("preserves text after newline when cursor is at offset 0 of largePaste", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "largePaste", content: "x".repeat(100) },
+          { type: "text", content: "abc\ndef" },
+        ],
+        cursorOnSegmentIndex: 0,
+        cursorInSegmentOffset: 0,
+      };
+
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("\ndef");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(0);
+    });
+
+    it("keeps cursor logical position when deletion from largePaste reaches end-of-input", () => {
+      const initialState: ChatUserInputState = {
+        segments: [
+          { type: "text", content: "keep" },
+          { type: "largePaste", content: "x".repeat(100) },
+          { type: "text", content: "" },
+        ],
+        cursorOnSegmentIndex: 1,
+        cursorInSegmentOffset: 0,
+      };
+
+      const result = deleteToLineEnd(initialState);
+
+      expect(result.segments.length).toBe(1);
+      expect(result.segments[0].type).toBe("text");
+      expect(result.segments[0].content).toBe("keep");
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(4);
+    });
   });
 });
