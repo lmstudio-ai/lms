@@ -20,7 +20,6 @@ import {
 import { renderInputWithCursor } from "./inputRenderer.js";
 import { type ChatUserInputState } from "./types.js";
 
-// Note: key.meta represents Command (⌘) on macOS and Alt on Windows/Linux
 const isWindows = process.platform === "win32";
 const isMac = process.platform === "darwin";
 
@@ -188,7 +187,7 @@ export const ChatInput = ({
         return;
       }
 
-      if (isMac === false) {
+      if (isMac === false && isWindows === false) {
         // For linux, we need to specifically check for Alt+Arrows so we have these here
         if (key.leftArrow === true) {
           setUserInputState(previousState => moveCursorWordLeft(previousState));

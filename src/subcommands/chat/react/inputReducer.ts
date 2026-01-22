@@ -199,8 +199,6 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
   const lastSegmentIndex = state.segments.length - 1;
   const lastSegment = state.segments[lastSegmentIndex];
 
-  // Can never be the case because we have our trailing placeholder rule
-  // but we handle it anyway as this runs before sanitation
   if (lastSegment !== undefined && lastSegment.type === "text") {
     return {
       segmentIndex: lastSegmentIndex,
@@ -208,7 +206,7 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
     };
   }
 
-  // Again, this can never be the case because of our trailing placeholder rule
+  // A last segment being non-text should not be the case because of our trailing placeholder rule
   // but we handle it anyway as this runs before sanitation
   // Last segment is not text - search backward for last text segment
   for (let segmentIndex = lastSegmentIndex - 1; segmentIndex >= 0; segmentIndex -= 1) {
@@ -232,7 +230,8 @@ function findLineEndPosition(state: ChatUserInputState): CursorPosition {
 }
 
 function isWordSeparatorCharacter(character: string): boolean {
-  // Treat whitespace and common shell separators (including ASCII hyphen and Unicode en/em dashes) as word breaks; keep path/flag chars intact
+  // Treat whitespace and common shell separators (including ASCII hyphen and Unicode en/em dashes)
+  // as word breaks; keep path/flag chars intact
   return /[\s"'`,;|&<>()[\]{}\-\u2013\u2014]/.test(character);
 }
 
