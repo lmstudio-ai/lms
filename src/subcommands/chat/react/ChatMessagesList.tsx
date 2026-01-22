@@ -16,22 +16,21 @@ export const ChatMessagesList = memo(
       messages.length > 0 &&
       messages[messages.length - 1]?.type === "assistant";
 
-    const staticMessages = hasStreamingAssistantMessage === true ? messages.slice(0, -1) : messages;
+    const completedMessages =
+      hasStreamingAssistantMessage === true ? messages.slice(0, -1) : messages;
     const streamingMessage =
       hasStreamingAssistantMessage === true ? messages[messages.length - 1] : null;
 
-    const staticItems = staticMessages.map((message, index) => (
-      <ChatMessage key={`static-${index}`} message={message} modelName={modelName} />
-    ));
-    const pendingItems =
-      streamingMessage !== null ? (
-        <ChatMessage message={streamingMessage} modelName={modelName} />
-      ) : null;
-
     return (
       <>
-        <Static items={staticItems}>{item => item}</Static>
-        {pendingItems}
+        <Static items={completedMessages}>
+          {(message, index) => (
+            <ChatMessage key={`static-${index}`} message={message} modelName={modelName} />
+          )}
+        </Static>
+        {streamingMessage !== null && (
+          <ChatMessage message={streamingMessage} modelName={modelName} />
+        )}
       </>
     );
   },
