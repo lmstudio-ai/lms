@@ -361,16 +361,23 @@ async function loadModel(
   };
 
   process.addListener("SIGINT", sigintListener);
-  const llmModel = await (model.type === "llm" ? client.llm : client.embedding).load(model.modelKey, {
-    verbose: false,
-    ttl: ttlSeconds,
-    signal: abortController.signal,
-    config,
-    identifier,
-  });
-  process.removeListener("SIGINT", sigintListener);
+  let llmModel;
+  try {
+    llmModel = await (model.type === "llm" ? client.llm : client.embedding).load(
+      model.modelKey,
+      {
+        verbose: false,
+        ttl: ttlSeconds,
+        signal: abortController.signal,
+        config,
+        identifier,
+      },
+    );
+  } finally {
+    process.removeListener("SIGINT", sigintListener);
+    spinner.stopIfNotStopped();
+  }
   const endTime = Date.now();
-  spinner.stop();
   logger.info(text`
     Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.
     (${formatSizeBytes1000(sizeBytes)})

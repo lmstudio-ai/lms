@@ -228,6 +228,9 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
     const wasRaw = stdin.isRaw;
     if (!wasRaw) setRawMode(true);
     stdin.setEncoding("utf8");
+    const restoreRawMode = () => {
+      if (!wasRaw) setRawMode(false);
+    };
 
     const schedulePasteFlush = (chunkSize: number) => {
       const bonus = chunkSize * SCALE;
@@ -279,11 +282,31 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
       }
     };
 
+    const handleProcessExit = () => {
+      restoreRawMode();
+    };
+
+    const handleSigInt = () => {
+      restoreRawMode();
+      process.kill(process.pid, "SIGINT");
+    };
+
+    const handleSigTerm = () => {
+      restoreRawMode();
+      process.kill(process.pid, "SIGTERM");
+    };
+
     stdin.on("data", handleData);
+    process.once("exit", handleProcessExit);
+    process.once("SIGINT", handleSigInt);
+    process.once("SIGTERM", handleSigTerm);
 
     return () => {
       stdin.off("data", handleData);
-      if (!wasRaw) setRawMode(false);
+      process.off("exit", handleProcessExit);
+      process.off("SIGINT", handleSigInt);
+      process.off("SIGTERM", handleSigTerm);
+      restoreRawMode();
       if (pasteTimeoutRef.current) clearTimeout(pasteTimeoutRef.current);
     };
   }, [stdin, onPaste, setRawMode]);
