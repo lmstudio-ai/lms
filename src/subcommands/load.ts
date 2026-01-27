@@ -20,8 +20,8 @@ import { addCreateClientOptions, createClient, type CreateClientArgs } from "../
 import { formatElapsedTime } from "../formatElapsedTime.js";
 import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
-import { Spinner } from "../Spinner.js";
 import { runPromptWithExitHandling } from "../prompt.js";
+import { Spinner } from "../Spinner.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
 const gpuOptionParser = (str: string): number => {
@@ -172,30 +172,47 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
       process.exit(1);
     }
     if (model === undefined) {
-      const shortestName = models.reduce((shortest, model) => {
-        if (model.path.length < shortest.length) {
-          return model.path;
-        }
-        return shortest;
-      }, models[0].path);
-      logger.errorWithoutPrefix(
-        makeTitledPrettyError(
-          "Model not found",
-          text`
-            No model found with path being exactly "${chalk.yellow(path)}".
+      if (models.length === 0) {
+        logger.errorWithoutPrefix(
+          makeTitledPrettyError(
+            "Model not found",
+            text`
+              No model found with path being exactly "${chalk.yellow(path)}".
 
-            To disable exact matching, remove the ${chalk.yellow("--exact")} flag.
+              To disable exact matching, remove the ${chalk.yellow("--exact")} flag.
 
-            To see a list of all downloaded models, run:
+              To see a list of all downloaded models, run:
 
-                ${chalk.yellow("lms ls")}
+                  ${chalk.yellow("lms ls")}
+            `,
+          ).message,
+        );
+      } else {
+        const shortestName = models.reduce((shortest, model) => {
+          if (model.path.length < shortest.length) {
+            return model.path;
+          }
+          return shortest;
+        }, models[0].path);
+        logger.errorWithoutPrefix(
+          makeTitledPrettyError(
+            "Model not found",
+            text`
+              No model found with path being exactly "${chalk.yellow(path)}".
 
-            Note, you need to provide the full model path. For example:
+              To disable exact matching, remove the ${chalk.yellow("--exact")} flag.
 
-               lms load --exact ${shortestName}
-          `,
-        ).message,
-      );
+              To see a list of all downloaded models, run:
+
+                  ${chalk.yellow("lms ls")}
+
+              Note, you need to provide the full model path. For example:
+
+                lms load --exact ${shortestName}
+            `,
+          ).message,
+        );
+      }
       process.exit(1);
     }
 
@@ -363,16 +380,13 @@ async function loadModel(
   process.addListener("SIGINT", sigintListener);
   let llmModel;
   try {
-    llmModel = await (model.type === "llm" ? client.llm : client.embedding).load(
-      model.modelKey,
-      {
-        verbose: false,
-        ttl: ttlSeconds,
-        signal: abortController.signal,
-        config,
-        identifier,
-      },
-    );
+    llmModel = await (model.type === "llm" ? client.llm : client.embedding).load(model.modelKey, {
+      verbose: false,
+      ttl: ttlSeconds,
+      signal: abortController.signal,
+      config,
+      identifier,
+    });
   } finally {
     process.removeListener("SIGINT", sigintListener);
     spinner.stopIfNotStopped();
