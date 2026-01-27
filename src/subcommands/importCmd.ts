@@ -7,6 +7,7 @@ import {
   type SimpleLogger,
   text,
 } from "@lmstudio/lms-common";
+import { findLMStudioHome } from "@lmstudio/lms-common-server";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
 import { existsSync, statSync } from "fs";
@@ -347,9 +348,8 @@ function getUserAppDataPath() {
  */
 async function locateSettingsJson(logger: SimpleLogger) {
   logger.debug("Locating settings.json");
-  const appDataFolderPath = getUserAppDataPath();
-  logger.debug("AppData folder path", appDataFolderPath);
-  const settingsJsonFilePath = join(appDataFolderPath, "LM Studio", "settings.json");
+  const lmstudioHome = findLMStudioHome();
+  const settingsJsonFilePath = join(lmstudioHome, "settings.json");
   logger.debug("Settings.json file path", settingsJsonFilePath);
   try {
     await access(settingsJsonFilePath);
