@@ -2,6 +2,7 @@ import type { HubModel } from "@lmstudio/lms-shared-types";
 import { type LLM, type LLMPredictionStats, type LMStudioClient, Chat } from "@lmstudio/sdk";
 import chalk from "chalk";
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { DiscoveredSkill } from "../../../skills/types.js";
 import { displayVerboseStats } from "../util.js";
 import type {
   SlashCommand,
@@ -29,6 +30,8 @@ export interface CreateSlashCommandsOpts {
   setModelLoadingProgress: Dispatch<SetStateAction<number | null>>;
   modelLoadingAbortControllerRef: RefObject<AbortController | null>;
   lastPredictionStatsRef: RefObject<LLMPredictionStats | null>;
+  loadedSkills?: DiscoveredSkill[];
+  sendChatMessageRef: RefObject<((text: string) => Promise<void>) | null>;
 }
 
 export function createSlashCommands({
@@ -50,6 +53,8 @@ export function createSlashCommands({
   setModelLoadingProgress,
   modelLoadingAbortControllerRef,
   lastPredictionStatsRef,
+  loadedSkills,
+  sendChatMessageRef,
 }: CreateSlashCommandsOpts): SlashCommand[] {
   return [
     {
@@ -182,6 +187,24 @@ export function createSlashCommands({
       },
     },
     {
+      name: "skills",
+      description: "List loaded Agent Skills",
+      handler: async () => {
+        const skills = loadedSkills ?? [];
+        if (skills.length === 0) {
+          logInChat(
+            "No skills loaded. Use --skills <dir> or configure skillsDirectories in CLI preferences.",
+          );
+          return;
+        }
+        const lines = skills.map(
+          s =>
+            `  ${chalk.bold.cyan(s.metadata.name)} - ${s.metadata.description}\n  ${chalk.dim(s.path)}`,
+        );
+        logInChat(`Loaded ${skills.length} skill${skills.length === 1 ? "" : "s"}:\n\n${lines.join("\n\n")}`);
+      },
+    },
+    {
       name: "download",
       description: "Download a model",
       handler: handleDownloadCommand,
@@ -223,6 +246,42 @@ export function createSlashCommands({
         });
       },
     },
+    // Register each discovered skill as a slash command (e.g. /ui-skills, /pdf-processing)
+    ...(loadedSkills ?? []).map(
+      (skill): SlashCommand => ({
+        name: skill.metadata.name,
+        description: skill.metadata.description,
+        handler: async commandArguments => {
+          const currentPrompt = chatRef.current.getSystemPrompt();
+          const isAlreadyActive = currentPrompt.includes(
+            `<skill-active>${skill.metadata.name}</skill-active>`,
+          );
+
+          if (!isAlreadyActive) {
+            const skillContext =
+              `\n\n<skill-active>${skill.metadata.name}</skill-active>\n` +
+              `<skill-instructions>\n${skill.body}\n</skill-instructions>`;
+            chatRef.current.replaceSystemPrompt(currentPrompt + skillContext);
+            logInChat(
+              `Activated skill: ${chalk.bold.cyan(skill.metadata.name)}\n` +
+                chalk.dim(`  ${skill.metadata.description}`),
+            );
+          }
+
+          if (commandArguments.length > 0) {
+            // User provided arguments — send them as a message to the model
+            await sendChatMessageRef.current?.(commandArguments.join(" "));
+          } else if (!isAlreadyActive) {
+            // Skill just activated with no args — prompt the model to begin
+            await sendChatMessageRef.current?.(
+              `I've activated the "${skill.metadata.name}" skill. Please follow your skill instructions and let me know what you need to proceed.`,
+            );
+          } else {
+            logInChat(`Skill "${skill.metadata.name}" is already active.`);
+          }
+        },
+      }),
+    ),
   ];
 }
 

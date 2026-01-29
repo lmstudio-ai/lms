@@ -8,7 +8,11 @@ import { getCliPref, type CliPref } from "../../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
 import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
+import { defaultSkillsFolderPath } from "../../lmstudioPaths.js";
 import { type SimpleFileData } from "../../SimpleFileData.js";
+import { discoverSkills } from "../../skills/discovery.js";
+import { buildSkillsPromptXml } from "../../skills/promptBuilder.js";
+import type { DiscoveredSkill } from "../../skills/types.js";
 import { createRefinedNumberParser } from "../../types/refinedNumber.js";
 import { displayVerboseStats, executePrediction, readStdin } from "./util.js";
 import { runPromptWithExitHandling } from "../../prompt.js";
@@ -31,6 +35,7 @@ type ChatCommandOptions = OptionValues &
     ttl: number;
     dontFetchCatalog: boolean;
     yes?: boolean;
+    skills?: string;
   };
 
 export const DEFAULT_SYSTEM_PROMPT =
@@ -148,6 +153,7 @@ export async function startInteractiveChat(
   opts: StartPredictionOpts,
   llm: LLM | undefined,
   shouldFetchModelCatalog: boolean,
+  loadedSkills?: DiscoveredSkill[],
 ): Promise<void> {
   return new Promise<void>(resolve => {
     render(
@@ -161,6 +167,7 @@ export async function startInteractiveChat(
           resolve();
         }}
         shouldFetchModelCatalog={shouldFetchModelCatalog}
+        loadedSkills={loadedSkills}
       />,
       {
         exitOnCtrlC: false,
@@ -182,7 +189,8 @@ const chatCommandBase = new Command<[], ChatCommandOptions>()
       .default(3600),
   )
   .option("--dont-fetch-catalog", "Skip fetching the model catalog", false)
-  .option("-y, --yes", "Assume 'yes' as answer to all CLI prompts");
+  .option("-y, --yes", "Assume 'yes' as answer to all CLI prompts")
+  .option("--skills <directory>", "Load Agent Skills from this directory");
 
 const chatCommandWithClient = addCreateClientOptions(chatCommandBase);
 const chatCommand = addLogLevelOptions(chatCommandWithClient);
@@ -207,8 +215,27 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     logger.error("Invalid TTL value, must be a non-negative integer.");
     process.exit(1);
   }
+  // Discover and load Agent Skills if configured
+  let loadedSkills: DiscoveredSkill[] = [];
+  if (options.skills !== undefined) {
+    loadedSkills = await discoverSkills([options.skills], logger);
+    if (loadedSkills.length > 0) {
+      logger.debug(`Loaded ${loadedSkills.length} skill(s) from ${options.skills}`);
+    }
+  } else {
+    const cliPrefForSkills = await getCliPref(logger);
+    const skillsDirs = cliPrefForSkills.get().skillsDirectories;
+    if (skillsDirs !== undefined && skillsDirs.length > 0) {
+      loadedSkills = await discoverSkills(skillsDirs, logger);
+      if (loadedSkills.length > 0) {
+        logger.debug(`Loaded ${loadedSkills.length} skill(s) from configured directories`);
+      }
+    }
+  }
+  const skillsPrompt = loadedSkills.length > 0 ? "\n\n" + buildSkillsPromptXml(loadedSkills) : "";
+
   const chat = Chat.empty();
-  chat.append("system", options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
+  chat.append("system", (options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT) + skillsPrompt);
   const cliPref = await getCliPref(logger);
   const shouldFetchModelCatalog = await getOrAskShouldFetchModelCatalog(
     dontFetchCatalog,
@@ -235,6 +262,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       },
       llm,
       shouldFetchModelCatalog,
+      loadedSkills,
     );
     return;
   }

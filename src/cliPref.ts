@@ -9,6 +9,7 @@ const cliPrefSchema = z.object({
   lastLoadedModels: z.array(z.string()).optional(),
   autoStartServer: z.boolean().optional(),
   fetchModelCatalog: z.boolean().optional(),
+  skillsDirectories: z.array(z.string()).optional(),
 });
 
 export type CliPref = z.infer<typeof cliPrefSchema>;
