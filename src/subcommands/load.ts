@@ -47,6 +47,7 @@ type LoadCommandOptions = OptionValues &
     ttl?: number;
     gpu?: number;
     contextLength?: number;
+    parallel?: number;
     exact?: boolean;
     identifier?: string;
     yes?: boolean;
@@ -78,6 +79,16 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       text`
         The number of tokens to consider as context when generating text. If not provided, the
         default value will be used.
+      `,
+    ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
+  )
+  .addOption(
+    new Option(
+      "--parallel <count>",
+      text`
+        Maximum number of predictions the model can run at a given time. The speed of each
+        individual prediction may decrease with concurrency, but each prediction will start faster
+        and higher total throughput can be achieved.
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
@@ -126,6 +137,7 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
     ttl: ttlSeconds,
     gpu,
     contextLength,
+    parallel: maxParallelPredictions,
     yes = false,
     exact = false,
     identifier,
@@ -133,6 +145,7 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
   } = options;
   const loadConfig: LLMLoadModelConfig = {
     contextLength,
+    maxParallelPredictions,
   };
   if (gpu !== undefined) {
     loadConfig.gpu = {
