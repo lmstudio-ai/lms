@@ -178,7 +178,14 @@ export const ChatInput = ({
         return;
       }
 
-      const filteredInputChunk = normalizedInputChunk.replace(/[^\x20-\x7E\n]/g, "");
+      // Filter out control characters and non-BMP characters (via surrogate pairs).
+      // We currently don't support unicode beyond BMP due to UTF-16 handling complexities.
+      // Blocked: C0 controls (except newline), DEL, C1 controls, surrogate pairs (0xD800-0xDFFF)
+      const filteredInputChunk = normalizedInputChunk.replace(
+        // eslint-disable-next-line no-control-regex
+        /[\x00-\x09\x0B-\x1F\x7F\x80-\x9F\uD800-\uDFFF]/g,
+        "",
+      );
       if (filteredInputChunk.length === 0) {
         return;
       }
