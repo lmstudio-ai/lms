@@ -20,6 +20,7 @@ import {
 import { insertPasteAtCursor } from "./inputReducer.js";
 import { createSlashCommands } from "./slashCommands.js";
 import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
+import type { DiscoveredSkill } from "../../../skills/types.js";
 
 // Freezes streaming content into static chunks at natural breaks to reduce re-renders.
 // Uses multiple boundaries to handle different content (best effort):
@@ -40,6 +41,7 @@ interface ChatComponentProps {
   stats?: true;
   ttl?: number;
   shouldFetchModelCatalog?: boolean;
+  loadedSkills?: DiscoveredSkill[];
 }
 
 export const emptyChatInputState: ChatUserInputState = {
@@ -49,7 +51,7 @@ export const emptyChatInputState: ChatUserInputState = {
 };
 
 export const ChatComponent = React.memo(
-  ({ client, llm, chat, onExit, stats, ttl, shouldFetchModelCatalog }: ChatComponentProps) => {
+  ({ client, llm, chat, onExit, stats, ttl, shouldFetchModelCatalog, loadedSkills }: ChatComponentProps) => {
     const { exit } = useApp();
     const rootUiRef = useRef<DOMElement | null>(null);
     const [messages, setMessages] = useState<InkChatMessage[]>([
@@ -81,6 +83,7 @@ export const ChatComponent = React.memo(
     const abortControllerRef = useRef<AbortController | null>(new AbortController());
     const downloadAbortControllerRef = useRef<AbortController | null>(null);
     const modelLoadingAbortControllerRef = useRef<AbortController | null>(null);
+    const sendChatMessageRef = useRef<((text: string) => Promise<void>) | null>(null);
     const chatRef = useRef<Chat>(chat);
     const llmRef = useRef<LLM | null>(llm ?? null);
     const { downloadedModels, refreshDownloadedModels } = useDownloadedModels(
@@ -160,6 +163,8 @@ export const ChatComponent = React.memo(
         setModelLoadingProgress,
         modelLoadingAbortControllerRef,
         lastPredictionStatsRef,
+        loadedSkills,
+        sendChatMessageRef,
       });
       handler.setCommands(commands);
       return handler;
@@ -174,6 +179,7 @@ export const ChatComponent = React.memo(
       logInChat,
       logErrorInChat,
       shouldFetchModelCatalog,
+      loadedSkills,
     ]);
 
     const suggestions = useMemo<Suggestion[]>(() => {
@@ -306,6 +312,244 @@ export const ChatComponent = React.memo(
       );
     }, []);
 
+    const performPrediction = useCallback(
+      async (
+        userText: string,
+        userDisplaySegments: Array<{ type: "text" | "largePaste"; text: string }>,
+      ) => {
+        if (llmRef.current === null) {
+          logErrorInChat("No model loaded. Please load a model using /model");
+          return;
+        }
+
+        if (isPredicting) {
+          logInChat(
+            "A prediction is already in progress. Please wait for it to finish or press CTRL+C to abort it.",
+          );
+          return;
+        }
+
+        setIsPredicting(true);
+        setPromptProcessingProgress(null);
+        setShowPredictionSpinner(true);
+        if (
+          abortControllerRef.current === null ||
+          abortControllerRef.current.signal.aborted === true
+        ) {
+          abortControllerRef.current = new AbortController();
+        }
+        const signal = abortControllerRef.current.signal;
+
+        try {
+          chatRef.current.append("user", userText);
+          addMessage({
+            type: "user",
+            content: userDisplaySegments,
+          });
+          const result = await llmRef.current.respond(chatRef.current, {
+            onFirstToken() {
+              setShowPredictionSpinner(false);
+              setPromptProcessingProgress(null);
+              chatRef.current.append("assistant", "");
+              const displayName =
+                llmRef.current?.displayName ?? llmRef.current?.modelKey ?? "Assistant";
+              setMessages(
+                produce(draftMessages => {
+                  draftMessages.push({
+                    type: "assistant",
+                    content: [],
+                    displayName,
+                    stoppedByUser: false,
+                  });
+                }),
+              );
+            },
+            onPromptProcessingProgress(progress) {
+              if (signal.aborted) {
+                return;
+              }
+              if (progress === 1) {
+                setPromptProcessingProgress(null);
+              } else if (progress !== promptProcessingProgress) {
+                setPromptProcessingProgress(progress);
+              }
+            },
+            onPredictionFragment(fragment) {
+              if (signal.aborted) {
+                return;
+              }
+              chatRef.current.at(-1).appendText(fragment.content);
+              if (
+                fragment.reasoningType === "reasoningStartTag" ||
+                fragment.reasoningType === "reasoningEndTag"
+              ) {
+                return;
+              }
+              if (fragment.isStructural) {
+                return;
+              }
+              setMessages(
+                produce(draftMessages => {
+                  if (draftMessages.length === 0) {
+                    return;
+                  }
+                  const lastMessage = draftMessages[draftMessages.length - 1];
+                  if (lastMessage === undefined || lastMessage.type !== "assistant") {
+                    return;
+                  }
+                  const targetPartType =
+                    fragment.reasoningType === "none" ? "response" : "reasoning";
+                  const parts = lastMessage.content;
+                  const lastPart = parts.length > 0 ? parts[parts.length - 1] : undefined;
+                  // Append to the current part when the type matches; otherwise start a new part.
+                  if (lastPart !== undefined && lastPart.type === targetPartType) {
+                    lastPart.text += fragment.content;
+                  } else {
+                    parts.push({
+                      type: targetPartType,
+                      text: fragment.content,
+                    });
+                  }
+
+                  // Once we have more than one part, older parts are "done" and can be graduated
+                  // to static messages (Ink <Static> in the list renders these once).
+                  while (parts.length > 1) {
+                    const staticPart = parts.shift();
+                    if (staticPart === undefined) {
+                      break;
+                    }
+                    draftMessages.splice(draftMessages.length - 1, 0, {
+                      type: "assistant",
+                      content: [staticPart],
+                      displayName: lastMessage.displayName,
+                      stoppedByUser: false,
+                    });
+                  }
+
+                  const activePart = parts[0];
+                  if (activePart === undefined) {
+                    return;
+                  }
+
+                  // Keep a small live tail to reduce re-render cost; graduate to static only at a newline so
+                  // the current line stays visually contiguous.
+                  let boundaryIndex = -1;
+                  let boundaryToken: string | undefined;
+                  for (const boundary of STREAMING_ASSISTANT_STATIC_BOUNDARIES) {
+                    const minChunk = boundary.minChunk;
+                    if (activePart.text.length <= minChunk) {
+                      continue;
+                    }
+                    const index = activePart.text.lastIndexOf(boundary.token);
+                    if (index >= 0) {
+                      const candidateLength = index + boundary.token.length;
+                      if (candidateLength < minChunk) {
+                        continue;
+                      }
+                      boundaryIndex = index;
+                      boundaryToken = boundary.token;
+                      break;
+                    }
+                  }
+                  if (boundaryIndex >= 0 && boundaryToken !== undefined) {
+                    const staticLength = boundaryIndex + boundaryToken.length;
+                    // Skip if boundary is at the end - splitting would leave empty active text
+                    if (staticLength === activePart.text.length) {
+                      return;
+                    }
+                    let staticText = activePart.text.slice(0, staticLength);
+                    // Drop exactly one trailing newline to compensate for Static boundary spacing
+                    if (staticText.endsWith("\r\n")) {
+                      staticText = staticText.slice(0, -2);
+                    } else if (staticText.endsWith("\n") || staticText.endsWith("\r")) {
+                      staticText = staticText.slice(0, -1);
+                    }
+                    activePart.text = activePart.text.slice(staticLength);
+                    draftMessages.splice(draftMessages.length - 1, 0, {
+                      type: "assistant",
+                      content: [{ type: activePart.type, text: staticText }],
+                      displayName: lastMessage.displayName,
+                      stoppedByUser: false,
+                    });
+                  }
+                }),
+              );
+            },
+            signal,
+          });
+          if (stats === true) {
+            displayVerboseStats(result.stats, logInChat);
+          }
+          lastPredictionStatsRef.current = result.stats;
+        } catch (error) {
+          lastPredictionStatsRef.current = null;
+          if (error instanceof Error) {
+            const errorMessage = error.message.toLowerCase();
+            if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
+              const currentModelKey = llmRef.current.modelKey;
+              logErrorInChat(`${error.message}`);
+              logInChat(`Would you like to reload the model?`);
+              requestConfirmation({
+                onConfirm: async () => {
+                  logInChat("Reloading model...");
+                  setModelLoadingProgress(0);
+                  try {
+                    llmRef.current = await client.llm.model(currentModelKey, {
+                      verbose: false,
+                      ttl,
+                      onProgress(progress) {
+                        setModelLoadingProgress(progress);
+                      },
+                    });
+                    logInChat(`Model reloaded: ${llmRef.current.displayName}`);
+                    setModelLoadingProgress(null);
+                  } catch (reloadError) {
+                    setModelLoadingProgress(null);
+                    const reloadErrorMessage =
+                      reloadError instanceof Error && reloadError.message !== undefined
+                        ? reloadError.message
+                        : String(reloadError);
+                    logErrorInChat(`Failed to reload model: ${reloadErrorMessage}`);
+                  }
+                },
+                onCancel: () => {
+                  logInChat("Model reload cancelled.");
+                  handleExit();
+                },
+              });
+            } else {
+              logErrorInChat(`Prediction error: ${error.message}`);
+            }
+          }
+        } finally {
+          setIsPredicting(false);
+          setPromptProcessingProgress(null);
+          setShowPredictionSpinner(false);
+          abortControllerRef.current = null;
+        }
+      },
+      [
+        isPredicting,
+        logInChat,
+        logErrorInChat,
+        addMessage,
+        stats,
+        promptProcessingProgress,
+        requestConfirmation,
+        client.llm,
+        ttl,
+        handleExit,
+      ],
+    );
+
+    const sendChatMessage = useCallback(
+      async (text: string) => {
+        await performPrediction(text, [{ type: "text", text }]);
+      },
+      [performPrediction],
+    );
+    sendChatMessageRef.current = sendChatMessage;
+
     const handleSubmit = useCallback(async () => {
       // Collect the full text input from the userInputState
       const userInputText = userInputState.segments
@@ -357,243 +601,29 @@ export const ChatComponent = React.memo(
         return;
       }
 
-      if (llmRef.current === null) {
-        logErrorInChat("No model loaded. Please load a model using /model");
-        return;
-      }
-
-      if (isPredicting) {
-        logInChat(
-          "A prediction is already in progress. Please wait for it to finish or press CTRL+C to abort it.",
-        );
-        return;
-      }
-
-      // If nothing else, proceed with normal message submission
-      setIsPredicting(true);
-      setPromptProcessingProgress(null);
-      setShowPredictionSpinner(true);
-      if (
-        abortControllerRef.current === null ||
-        abortControllerRef.current.signal.aborted === true
-      ) {
-        abortControllerRef.current = new AbortController();
-      }
-      const signal = abortControllerRef.current.signal;
-
-      try {
-        chatRef.current.append("user", userInputText);
-        addMessage({
-          type: "user",
-          content: userInputState.segments.map(segment => {
-            if (segment.type === "largePaste") {
-              if (segment.content.length > 50) {
-                return {
-                  type: "largePaste",
-                  text: `[Pasted ${segment.content.replace(/\r\n|\r|\n/g, "").slice(0, 50)}...]`,
-                };
-              }
-              return { type: segment.type, text: segment.content };
-            }
-            return { type: segment.type, text: segment.content };
-          }),
-        });
-        const result = await llmRef.current.respond(chatRef.current, {
-          onFirstToken() {
-            setShowPredictionSpinner(false);
-            setPromptProcessingProgress(null);
-            chatRef.current.append("assistant", "");
-            const displayName =
-              llmRef.current?.displayName ?? llmRef.current?.modelKey ?? "Assistant";
-            setMessages(
-              produce(draftMessages => {
-                draftMessages.push({
-                  type: "assistant",
-                  content: [],
-                  displayName,
-                  stoppedByUser: false,
-                });
-              }),
-            );
-          },
-          onPromptProcessingProgress(progress) {
-            if (signal.aborted) {
-              return;
-            }
-            if (progress === 1) {
-              setPromptProcessingProgress(null);
-            } else if (progress !== promptProcessingProgress) {
-              setPromptProcessingProgress(progress);
-            }
-          },
-          onPredictionFragment(fragment) {
-            if (signal.aborted) {
-              return;
-            }
-            chatRef.current.at(-1).appendText(fragment.content);
-            if (
-              fragment.reasoningType === "reasoningStartTag" ||
-              fragment.reasoningType === "reasoningEndTag"
-            ) {
-              return;
-            }
-            if (fragment.isStructural) {
-              return;
-            }
-            setMessages(
-              produce(draftMessages => {
-                if (draftMessages.length === 0) {
-                  return;
-                }
-                const lastMessage = draftMessages[draftMessages.length - 1];
-                if (lastMessage === undefined || lastMessage.type !== "assistant") {
-                  return;
-                }
-                const targetPartType = fragment.reasoningType === "none" ? "response" : "reasoning";
-                const parts = lastMessage.content;
-                const lastPart = parts.length > 0 ? parts[parts.length - 1] : undefined;
-                // Append to the current part when the type matches; otherwise start a new part.
-                if (lastPart !== undefined && lastPart.type === targetPartType) {
-                  lastPart.text += fragment.content;
-                } else {
-                  parts.push({
-                    type: targetPartType,
-                    text: fragment.content,
-                  });
-                }
-
-                // Once we have more than one part, older parts are "done" and can be graduated
-                // to static messages (Ink <Static> in the list renders these once).
-                while (parts.length > 1) {
-                  const staticPart = parts.shift();
-                  if (staticPart === undefined) {
-                    break;
-                  }
-                  draftMessages.splice(draftMessages.length - 1, 0, {
-                    type: "assistant",
-                    content: [staticPart],
-                    displayName: lastMessage.displayName,
-                    stoppedByUser: false,
-                  });
-                }
-
-                const activePart = parts[0];
-                if (activePart === undefined) {
-                  return;
-                }
-
-                // Keep a small live tail to reduce re-render cost; graduate to static only at a newline so
-                // the current line stays visually contiguous.
-                let boundaryIndex = -1;
-                let boundaryToken: string | undefined;
-                for (const boundary of STREAMING_ASSISTANT_STATIC_BOUNDARIES) {
-                  const minChunk = boundary.minChunk;
-                  if (activePart.text.length <= minChunk) {
-                    continue;
-                  }
-                  const index = activePart.text.lastIndexOf(boundary.token);
-                  if (index >= 0) {
-                    const candidateLength = index + boundary.token.length;
-                    if (candidateLength < minChunk) {
-                      continue;
-                    }
-                    boundaryIndex = index;
-                    boundaryToken = boundary.token;
-                    break;
-                  }
-                }
-                if (boundaryIndex >= 0 && boundaryToken !== undefined) {
-                  const staticLength = boundaryIndex + boundaryToken.length;
-                  // Skip if boundary is at the end - splitting would leave empty active text
-                  if (staticLength === activePart.text.length) {
-                    return;
-                  }
-                  let staticText = activePart.text.slice(0, staticLength);
-                  // Drop exactly one trailing newline to compensate for Static boundary spacing
-                  if (staticText.endsWith("\r\n")) {
-                    staticText = staticText.slice(0, -2);
-                  } else if (staticText.endsWith("\n") || staticText.endsWith("\r")) {
-                    staticText = staticText.slice(0, -1);
-                  }
-                  activePart.text = activePart.text.slice(staticLength);
-                  draftMessages.splice(draftMessages.length - 1, 0, {
-                    type: "assistant",
-                    content: [{ type: activePart.type, text: staticText }],
-                    displayName: lastMessage.displayName,
-                    stoppedByUser: false,
-                  });
-                }
-              }),
-            );
-          },
-          signal,
-        });
-        if (stats === true) {
-          displayVerboseStats(result.stats, logInChat);
-        }
-        lastPredictionStatsRef.current = result.stats;
-      } catch (error) {
-        lastPredictionStatsRef.current = null;
-        if (error instanceof Error) {
-          const errorMessage = error.message.toLowerCase();
-          if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
-            const currentModelKey = llmRef.current.modelKey;
-            logErrorInChat(`${error.message}`);
-            logInChat(`Would you like to reload the model?`);
-            requestConfirmation({
-              onConfirm: async () => {
-                logInChat("Reloading model...");
-                setModelLoadingProgress(0);
-                try {
-                  llmRef.current = await client.llm.model(currentModelKey, {
-                    verbose: false,
-                    ttl,
-                    onProgress(progress) {
-                      setModelLoadingProgress(progress);
-                    },
-                  });
-                  logInChat(`Model reloaded: ${llmRef.current.displayName}`);
-                  setModelLoadingProgress(null);
-                } catch (reloadError) {
-                  setModelLoadingProgress(null);
-                  const reloadErrorMessage =
-                    reloadError instanceof Error && reloadError.message !== undefined
-                      ? reloadError.message
-                      : String(reloadError);
-                  logErrorInChat(`Failed to reload model: ${reloadErrorMessage}`);
-                }
-              },
-              onCancel: () => {
-                logInChat("Model reload cancelled.");
-                handleExit();
-              },
-            });
-          } else {
-            logErrorInChat(`Prediction error: ${error.message}`);
+      // Map input segments for display, then delegate to the shared prediction function
+      const displaySegments = userInputState.segments.map(segment => {
+        if (segment.type === "largePaste") {
+          if (segment.content.length > 50) {
+            return {
+              type: "largePaste" as const,
+              text: `[Pasted ${segment.content.replace(/\r\n|\r|\n/g, "").slice(0, 50)}...]`,
+            };
           }
+          return { type: segment.type, text: segment.content };
         }
-      } finally {
-        setIsPredicting(false);
-        setPromptProcessingProgress(null);
-        setShowPredictionSpinner(false);
-        abortControllerRef.current = null;
-      }
+        return { type: segment.type, text: segment.content };
+      });
+      await performPrediction(userInputText, displaySegments);
     }, [
       userInputState.segments,
       handleConfirmationResponse,
-      isPredicting,
       logInChat,
       normalizedSelectedSuggestionIndex,
       suggestions,
       commandHandler,
       handleExit,
-      logErrorInChat,
-      addMessage,
-      stats,
-      promptProcessingProgress,
-      requestConfirmation,
-      client.llm,
-      ttl,
+      performPrediction,
     ]);
 
     return (

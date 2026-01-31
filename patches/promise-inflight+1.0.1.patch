@@ -1,0 +1,18 @@
+diff --git a/node_modules/promise-inflight/inflight.js b/node_modules/promise-inflight/inflight.js
+index ce054d3..3e2dcff 100644
+--- a/node_modules/promise-inflight/inflight.js
++++ b/node_modules/promise-inflight/inflight.js
+@@ -1,12 +1,7 @@
+ 'use strict'
+ module.exports = inflight
+ 
+-let Bluebird
+-try {
+-  Bluebird = require('bluebird')
+-} catch (_) {
+-  Bluebird = Promise
+-}
++let Bluebird = Promise;
+ 
+ const active = {}
+ inflight.active = active

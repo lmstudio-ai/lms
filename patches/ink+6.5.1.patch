@@ -1,0 +1,16 @@
+diff --git a/node_modules/ink/build/parse-keypress.js b/node_modules/ink/build/parse-keypress.js
+index 1e13e81..c065e7b 100644
+--- a/node_modules/ink/build/parse-keypress.js
++++ b/node_modules/ink/build/parse-keypress.js
+@@ -161,9 +161,8 @@ const parseKeypress = (s = '') => {
+         key.meta = s.charAt(0) === '\x1b';
+     }
+     else if (s === '\x7f' || s === '\x1b\x7f') {
+-        // TODO(vadimdemedes): `enquirer` detects delete key as backspace, but I had to split them up to avoid breaking changes in Ink. Merge them back together in the next major version.
+-        // delete
+-        key.name = 'delete';
++        // backspace on most terminals sends DEL character (0x7F)
++        key.name = 'backspace';
+         key.meta = s.charAt(0) === '\x1b';
+     }
+     else if (s === '\x1b' || s === '\x1b\x1b') {

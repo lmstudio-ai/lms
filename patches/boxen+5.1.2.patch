@@ -1,0 +1,22 @@
+diff --git a/node_modules/boxen/index.js b/node_modules/boxen/index.js
+index d6bc693..da5e32f 100644
+--- a/node_modules/boxen/index.js
++++ b/node_modules/boxen/index.js
+@@ -218,7 +218,7 @@ module.exports = (text, options) => {
+ 
+ 	const colorizeContent = content => options.backgroundColor ? getBGColorFn(options.backgroundColor)(content) : content;
+ 
+-	const columns = terminalColumns();
++	const columns = terminalColumns() - 1;
+ 
+ 	let contentWidth = widestLine(wrapAnsi(text, columns - BORDERS_WIDTH, {hard: true, trim: false})) + padding.left + padding.right;
+ 
+@@ -265,7 +265,7 @@ module.exports = (text, options) => {
+ 	const bottom = colorizeBorder(marginLeft + chars.bottomLeft + horizontal + chars.bottomRight + NL.repeat(margin.bottom));
+ 	const side = colorizeBorder(chars.vertical);
+ 
+-	const LINE_SEPARATOR = (contentWidth + BORDERS_WIDTH + margin.left >= columns) ? '' : NL;
++	const LINE_SEPARATOR = NL;
+ 
+ 	const lines = text.split(NL);
+ 
