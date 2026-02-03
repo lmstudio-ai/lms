@@ -387,45 +387,42 @@ export const ChatComponent = React.memo(
           type: "user",
           content: userInputState.segments.map((segment, segmentIndex, segments) => {
             if (segment.type === "largePaste") {
-              if (segment.content.length > 50) {
-                const startsWithNewline = (value: string | undefined) => {
-                  if (value === undefined || value.length === 0) return false;
-                  const firstCharCode = value.charCodeAt(0);
-                  return firstCharCode === 10 || firstCharCode === 13; // \n or \r
-                };
-                const endsWithNewline = (value: string | undefined) => {
-                  if (value === undefined || value.length === 0) return false;
-                  const lastCharCode = value.charCodeAt(value.length - 1);
-                  return lastCharCode === 10 || lastCharCode === 13; // \n or \r
-                };
+              const startsWithNewline = (value: string | undefined) => {
+                if (value === undefined || value.length === 0) return false;
+                const firstCharCode = value.charCodeAt(0);
+                return firstCharCode === 10 || firstCharCode === 13; // \n or \r
+              };
+              const endsWithNewline = (value: string | undefined) => {
+                if (value === undefined || value.length === 0) return false;
+                const lastCharCode = value.charCodeAt(value.length - 1);
+                return lastCharCode === 10 || lastCharCode === 13; // \n or \r
+              };
 
-                const previousSegment = segments[segmentIndex - 1];
-                const nextSegment = segments[segmentIndex + 1];
+              const previousSegment = segments[segmentIndex - 1];
+              const nextSegment = segments[segmentIndex + 1];
 
-                // Keep newlines only when bordering non-largePaste segments to avoid turning
-                // consecutive placeholders into multiple lines.
-                const previousIsLargePaste = previousSegment?.type === "largePaste";
-                const nextIsLargePaste = nextSegment?.type === "largePaste";
+              // Keep newlines only when bordering non-largePaste segments to avoid turning
+              // consecutive placeholders into multiple lines.
+              const previousIsLargePaste = previousSegment?.type === "largePaste";
+              const nextIsLargePaste = nextSegment?.type === "largePaste";
 
-                const leadingNewline =
-                  startsWithNewline(segment.content) &&
-                  previousIsLargePaste !== true &&
-                  endsWithNewline(previousSegment?.content) !== true
-                    ? "\n"
-                    : "";
-                const trailingNewline =
-                  endsWithNewline(segment.content) &&
-                  nextIsLargePaste !== true &&
-                  startsWithNewline(nextSegment?.content) !== true
-                    ? "\n"
-                    : "";
-                const placeholder = `[Pasted ${segment.content.length} characters]`;
-                return {
-                  type: "largePaste",
-                  text: `${leadingNewline}${placeholder}${trailingNewline}`,
-                };
-              }
-              return { type: segment.type, text: segment.content };
+              const leadingNewline =
+                startsWithNewline(segment.content) &&
+                previousIsLargePaste !== true &&
+                endsWithNewline(previousSegment?.content) !== true
+                  ? "\n"
+                  : "";
+              const trailingNewline =
+                endsWithNewline(segment.content) &&
+                nextIsLargePaste !== true &&
+                startsWithNewline(nextSegment?.content) !== true
+                  ? "\n"
+                  : "";
+              const placeholder = `[Pasted ${segment.content.length} characters]`;
+              return {
+                type: "largePaste",
+                text: `${leadingNewline}${placeholder}${trailingNewline}`,
+              };
             }
             return { type: segment.type, text: segment.content };
           }),
