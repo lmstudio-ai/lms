@@ -2,10 +2,7 @@ import { produce } from "@lmstudio/immer-with-plugins";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, type DOMElement, useApp, Text } from "ink";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import {
-  displayVerboseStats,
-  getLargePastePlaceholderText,
-} from "../util.js";
+import { displayVerboseStats, getLargePastePlaceholderText } from "../util.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
@@ -388,7 +385,7 @@ export const ChatComponent = React.memo(
         chatRef.current.append("user", userInputText);
         addMessage({
           type: "user",
-          content: userInputState.segments.map((segment, segmentIndex, segments) => {
+          content: userInputState.segments.map(segment => {
             if (segment.type === "largePaste") {
               const placeholder = getLargePastePlaceholderText(segment.content);
               return {
