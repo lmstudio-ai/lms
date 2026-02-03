@@ -142,23 +142,6 @@ export interface NewlineBoundaryInfo {
   endsWithNewline: boolean;
 }
 
-export function getNewlineBoundaryInfo(value: string | undefined): NewlineBoundaryInfo {
-  if (value === undefined) {
-    return { startsWithNewline: false, endsWithNewline: false };
-  }
-
-  if (value.length === 0) {
-    return { startsWithNewline: false, endsWithNewline: false };
-  }
-
-  const firstCharacter = value[0];
-  const lastCharacter = value[value.length - 1];
-  return {
-    startsWithNewline: firstCharacter === "\n" || firstCharacter === "\r",
-    endsWithNewline: lastCharacter === "\n" || lastCharacter === "\r",
-  };
-}
-
 export function getLargePastePlaceholderText(content: string, previewLength: number = 50): string {
   const preview = content.replace(/\r\n|\r|\n/g, "").slice(0, previewLength);
   return `[Pasted ${preview}...]`;
