@@ -115,52 +115,48 @@ export async function executePrediction(
 }
 
 /**
- * Removes leading and trailing newline characters from a string.
+ * Removes leading newline characters from a string.
  * @param input - The string to trim newlines from
- * @returns The input string with leading and trailing newlines removed
+ * @returns The input string with leading newlines removed
  */
-export function trimNewlines(input: string): string {
-  return input.replace(/^[\r\n]+|[\r\n]+$/g, "");
-}
-
 export function trimLeadingNewlines(input: string): string {
-  const sentinel = "\u0000";
-  const valueWithSentinel = `${input}${sentinel}`;
-  const trimmed = trimNewlines(valueWithSentinel);
-  return trimmed.slice(0, trimmed.length - 1);
+  return input.replace(/^[\r\n]+/g, "");
 }
 
+/**
+ * Removes trailing newline characters from a string.
+ * @param input - The string to trim newlines from
+ * @returns The input string with trailing newlines removed
+ */
 export function trimTrailingNewlines(input: string): string {
-  const sentinel = "\u0000";
-  const valueWithSentinel = `${sentinel}${input}`;
-  const trimmed = trimNewlines(valueWithSentinel);
-  return trimmed.slice(1);
+  return input.replace(/[\r\n]+$/g, "");
 }
 
-export interface NewlineBoundaryInfo {
-  startsWithNewline: boolean;
-  endsWithNewline: boolean;
-}
+const MAX_SCAN_FOR_PLACEHOLDER = 2000; // Just a reasonable limit to avoid excessive processing
 
 export function getLargePastePlaceholderText(content: string, previewLength: number = 50): string {
-  // Avoid scanning/allocating proportional to the entire paste. We only need a short preview of the
-  // newline-stripped content, plus whether it's actually truncated.
   let previewCharsCount = 0;
   let truncated = false;
   let preview = "";
+  let scanned = 0;
 
   for (const character of content) {
-    if (character === "\n" || character === "\r") {
-      continue;
+    if (scanned >= MAX_SCAN_FOR_PLACEHOLDER) {
+      truncated = true;
+      break;
     }
+    scanned += character.length;
+
+    if (character === "\n" || character === "\r") continue;
 
     if (previewCharsCount < previewLength) {
       preview += character;
       previewCharsCount++;
-    } else {
-      truncated = true;
-      break;
+      continue;
     }
+
+    truncated = true;
+    break;
   }
 
   const ellipsis = truncated ? "..." : "";
