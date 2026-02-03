@@ -15,6 +15,7 @@ import { z } from "zod";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { runPromptWithExitHandling } from "../prompt.js";
+import { ANSI_CYAN, ANSI_RESET_COLOR, fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 
 const execAsync = util.promisify(exec);
 const illegalPathChars = ["/", "\\", ":", "*", "?", '"', "<", ">", "|"];
@@ -151,13 +152,11 @@ async function selectScaffold(
       {
         message: chalk.green("Select a scaffold to use") + chalk.dim(" |"),
         pageSize,
+        theme: searchTheme,
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
           const searchTerm = inputValue ?? initialSearch;
-          const options = fuzzy.filter(searchTerm, searchKeys, {
-            pre: "\x1b[91m",
-            post: "\x1b[39m",
-          });
+          const options = fuzzy.filter(searchTerm, searchKeys, fuzzyHighlightOptions);
           return options.map(option => {
             const scaffoldBasics = scaffoldBasicsList[option.index];
             const parenthesisIndex = option.string.lastIndexOf("(");
@@ -364,8 +363,8 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
   for (const { type, text } of scaffold.motd) {
     const message = replacer
       .replace(text)
-      .replaceAll("<hl>", "\x1b[96m")
-      .replaceAll("</hl>", "\x1b[39m");
+      .replaceAll("<hl>", ANSI_CYAN)
+      .replaceAll("</hl>", ANSI_RESET_COLOR);
     switch (type) {
       case "title":
         motdLines.push(chalk.green(`  ${message}  `));

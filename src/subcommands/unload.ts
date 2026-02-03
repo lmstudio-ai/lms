@@ -7,6 +7,7 @@ import fuzzy from "fuzzy";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
+import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 
 type UnloadCommandOptions = OptionValues &
   CreateClientArgs &
@@ -117,13 +118,11 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
         {
           message: chalk.green("Select a model to unload") + chalk.dim(" |"),
           pageSize,
+          theme: searchTheme,
           source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
             void signal;
             const sanitizedInput = (input ?? "").split("?").join("");
-            const options = fuzzy.filter(sanitizedInput, modelSearchStrings, {
-              pre: "\x1b[91m",
-              post: "\x1b[39m",
-            });
+            const options = fuzzy.filter(sanitizedInput, modelSearchStrings, fuzzyHighlightOptions);
             return options.map(option => {
               const model = models[option.index];
               const questionMarkIndex = option.string.lastIndexOf("?");

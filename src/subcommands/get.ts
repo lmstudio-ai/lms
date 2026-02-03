@@ -26,6 +26,7 @@ import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel
 import { ProgressBar } from "../ProgressBar.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
+import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 
 type GetCommandOptions = OptionValues &
   CreateClientArgs &
@@ -462,13 +463,11 @@ async function askToChooseModel(
       {
         message: "Select a model to download",
         pageSize,
+        theme: searchTheme,
         source: async (term: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
           const searchTerm = term ?? "";
-          const options = fuzzy.filter(searchTerm, modelNames, {
-            pre: "\x1b[91m",
-            post: "\x1b[39m",
-          });
+          const options = fuzzy.filter(searchTerm, modelNames, fuzzyHighlightOptions);
           return options.map(option => {
             const model = models[option.index];
             let name: string = "";
