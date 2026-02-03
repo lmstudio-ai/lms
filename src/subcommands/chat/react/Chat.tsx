@@ -388,33 +388,41 @@ export const ChatComponent = React.memo(
           content: userInputState.segments.map((segment, segmentIndex, segments) => {
             if (segment.type === "largePaste") {
               if (segment.content.length > 50) {
-                const normalizeNewlines = (value: string | undefined) => {
-                  if (value === undefined) return undefined;
-                  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+                const startsWithNewline = (value: string | undefined) => {
+                  if (value === undefined || value.length === 0) return false;
+                  const firstCharCode = value.charCodeAt(0);
+                  return firstCharCode === 10 || firstCharCode === 13; // \n or \r
+                };
+                const endsWithNewline = (value: string | undefined) => {
+                  if (value === undefined || value.length === 0) return false;
+                  const lastCharCode = value.charCodeAt(value.length - 1);
+                  return lastCharCode === 10 || lastCharCode === 13; // \n or \r
                 };
 
-                const normalizedContent = normalizeNewlines(segment.content) ?? "";
-                const normalizedPreviousSegmentContent = normalizeNewlines(
-                  segments[segmentIndex - 1]?.content,
-                );
-                const normalizedNextSegmentContent = normalizeNewlines(
-                  segments[segmentIndex + 1]?.content,
-                );
+                const previousSegment = segments[segmentIndex - 1];
+                const nextSegment = segments[segmentIndex + 1];
+
+                // Keep newlines only when bordering non-largePaste segments to avoid turning
+                // consecutive placeholders into multiple lines.
+                const previousIsLargePaste = previousSegment?.type === "largePaste";
+                const nextIsLargePaste = nextSegment?.type === "largePaste";
 
                 const leadingNewline =
-                  normalizedContent.startsWith("\n") &&
-                  normalizedPreviousSegmentContent?.endsWith("\n") !== true
+                  startsWithNewline(segment.content) &&
+                  previousIsLargePaste !== true &&
+                  endsWithNewline(previousSegment?.content) !== true
                     ? "\n"
                     : "";
                 const trailingNewline =
-                  normalizedContent.endsWith("\n") &&
-                  normalizedNextSegmentContent?.startsWith("\n") !== true
+                  endsWithNewline(segment.content) &&
+                  nextIsLargePaste !== true &&
+                  startsWithNewline(nextSegment?.content) !== true
                     ? "\n"
                     : "";
-                const preview = normalizedContent.replace(/\n/g, "").slice(0, 50);
+                const placeholder = `[Pasted ${segment.content.length} characters]`;
                 return {
                   type: "largePaste",
-                  text: `${leadingNewline}[Pasted ${preview}...]${trailingNewline}`,
+                  text: `${leadingNewline}${placeholder}${trailingNewline}`,
                 };
               }
               return { type: segment.type, text: segment.content };

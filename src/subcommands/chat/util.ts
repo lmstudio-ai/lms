@@ -123,6 +123,20 @@ export function trimNewlines(input: string): string {
   return input.replace(/^[\r\n]+|[\r\n]+$/g, "");
 }
 
+export function trimLeadingNewlines(input: string): string {
+  const sentinel = "\u0000";
+  const valueWithSentinel = `${input}${sentinel}`;
+  const trimmed = trimNewlines(valueWithSentinel);
+  return trimmed.slice(0, trimmed.length - 1);
+}
+
+export function trimTrailingNewlines(input: string): string {
+  const sentinel = "\u0000";
+  const valueWithSentinel = `${sentinel}${input}`;
+  const trimmed = trimNewlines(valueWithSentinel);
+  return trimmed.slice(1);
+}
+
 export const estimateMessageLinesCount = (message: InkChatMessage): number => {
   const terminalWidth = process.stdout.columns ?? 80;
 

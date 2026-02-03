@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Box, Text } from "ink";
 import chalk from "chalk";
 import type { InkChatMessage } from "./types.js";
-import { trimNewlines } from "../util.js";
+import { trimLeadingNewlines, trimNewlines, trimTrailingNewlines } from "../util.js";
 
 interface ChatMessageProps {
   message: InkChatMessage;
@@ -15,9 +15,10 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
     case "user": {
       const contentParts = message.content.map(part => ({ ...part }));
 
+      // Trim only edge newlines on the first/last non-empty parts to keep internal newlines intact.
       let startIndex = 0;
       while (startIndex < contentParts.length) {
-        contentParts[startIndex].text = contentParts[startIndex].text.replace(/^[\r\n]+/, "");
+        contentParts[startIndex].text = trimLeadingNewlines(contentParts[startIndex].text);
         if (contentParts[startIndex].text.length === 0) {
           startIndex += 1;
           continue;
@@ -26,7 +27,7 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
       }
       let endIndex = contentParts.length - 1;
       while (endIndex >= 0) {
-        contentParts[endIndex].text = contentParts[endIndex].text.replace(/[\r\n]+$/, "");
+        contentParts[endIndex].text = trimTrailingNewlines(contentParts[endIndex].text);
         if (contentParts[endIndex].text.length === 0) {
           endIndex -= 1;
           continue;
@@ -34,12 +35,11 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
         break;
       }
 
+      // After edge trimming, apply large paste coloring and join into a single string.
       const formattedContent = contentParts
         .map(contentPart => {
           const text = contentPart.text;
-          return contentPart.type === "largePaste" && contentPart.text.length > 50
-            ? chalk.blue(text)
-            : text;
+          return contentPart.type === "largePaste" ? chalk.blue(text) : text;
         })
         .join("");
 
