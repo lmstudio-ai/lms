@@ -385,12 +385,36 @@ export const ChatComponent = React.memo(
         chatRef.current.append("user", userInputText);
         addMessage({
           type: "user",
-          content: userInputState.segments.map(segment => {
+          content: userInputState.segments.map((segment, segmentIndex, segments) => {
             if (segment.type === "largePaste") {
               if (segment.content.length > 50) {
+                const normalizeNewlines = (value: string | undefined) => {
+                  if (value === undefined) return undefined;
+                  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+                };
+
+                const normalizedContent = normalizeNewlines(segment.content) ?? "";
+                const normalizedPreviousSegmentContent = normalizeNewlines(
+                  segments[segmentIndex - 1]?.content,
+                );
+                const normalizedNextSegmentContent = normalizeNewlines(
+                  segments[segmentIndex + 1]?.content,
+                );
+
+                const leadingNewline =
+                  normalizedContent.startsWith("\n") &&
+                  normalizedPreviousSegmentContent?.endsWith("\n") !== true
+                    ? "\n"
+                    : "";
+                const trailingNewline =
+                  normalizedContent.endsWith("\n") &&
+                  normalizedNextSegmentContent?.startsWith("\n") !== true
+                    ? "\n"
+                    : "";
+                const preview = normalizedContent.replace(/\n/g, "").slice(0, 50);
                 return {
                   type: "largePaste",
-                  text: `[Pasted ${segment.content.replace(/\r\n|\r|\n/g, "").slice(0, 50)}...]`,
+                  text: `${leadingNewline}[Pasted ${preview}...]${trailingNewline}`,
                 };
               }
               return { type: segment.type, text: segment.content };

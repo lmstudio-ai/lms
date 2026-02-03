@@ -13,9 +13,30 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
   const type = message.type;
   switch (type) {
     case "user": {
-      const formattedContent = message.content
+      const contentParts = message.content.map(part => ({ ...part }));
+
+      let startIndex = 0;
+      while (startIndex < contentParts.length) {
+        contentParts[startIndex].text = contentParts[startIndex].text.replace(/^[\r\n]+/, "");
+        if (contentParts[startIndex].text.length === 0) {
+          startIndex += 1;
+          continue;
+        }
+        break;
+      }
+      let endIndex = contentParts.length - 1;
+      while (endIndex >= 0) {
+        contentParts[endIndex].text = contentParts[endIndex].text.replace(/[\r\n]+$/, "");
+        if (contentParts[endIndex].text.length === 0) {
+          endIndex -= 1;
+          continue;
+        }
+        break;
+      }
+
+      const formattedContent = contentParts
         .map(contentPart => {
-          const text = trimNewlines(contentPart.text);
+          const text = contentPart.text;
           return contentPart.type === "largePaste" && contentPart.text.length > 50
             ? chalk.blue(text)
             : text;
