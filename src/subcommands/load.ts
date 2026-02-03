@@ -23,12 +23,7 @@ import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel
 import { runPromptWithExitHandling } from "../prompt.js";
 import { Spinner } from "../Spinner.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
-import {
-  ANSI_RED,
-  ANSI_RESET_COLOR,
-  fuzzyHighlightOptions,
-  searchTheme,
-} from "../inquirerTheme.js";
+import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 
 const gpuOptionParser = (str: string): number => {
   str = str.trim().toLowerCase();
