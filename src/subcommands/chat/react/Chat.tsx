@@ -2,7 +2,7 @@ import { produce } from "@lmstudio/immer-with-plugins";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, type DOMElement, useApp, Text } from "ink";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { displayVerboseStats } from "../util.js";
+import { displayVerboseStats, getNewlineBoundaryInfo } from "../util.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
@@ -387,17 +387,6 @@ export const ChatComponent = React.memo(
           type: "user",
           content: userInputState.segments.map((segment, segmentIndex, segments) => {
             if (segment.type === "largePaste") {
-              const startsWithNewline = (value: string | undefined) => {
-                if (value === undefined || value.length === 0) return false;
-                const firstCharCode = value.charCodeAt(0);
-                return firstCharCode === 10 || firstCharCode === 13; // \n or \r
-              };
-              const endsWithNewline = (value: string | undefined) => {
-                if (value === undefined || value.length === 0) return false;
-                const lastCharCode = value.charCodeAt(value.length - 1);
-                return lastCharCode === 10 || lastCharCode === 13; // \n or \r
-              };
-
               const previousSegment = segments[segmentIndex - 1];
               const nextSegment = segments[segmentIndex + 1];
 
@@ -406,16 +395,22 @@ export const ChatComponent = React.memo(
               const previousIsLargePaste = previousSegment?.type === "largePaste";
               const nextIsLargePaste = nextSegment?.type === "largePaste";
 
+              const segmentBoundaryInfo = getNewlineBoundaryInfo(segment.content);
+              const previousBoundaryInfo = getNewlineBoundaryInfo(previousSegment?.content);
+              const nextBoundaryInfo = getNewlineBoundaryInfo(nextSegment?.content);
+
               const leadingNewline =
-                startsWithNewline(segment.content) &&
+                segmentBoundaryInfo.startsWithNewline &&
+                previousSegment === undefined &&
                 previousIsLargePaste !== true &&
-                endsWithNewline(previousSegment?.content) !== true
+                previousBoundaryInfo.endsWithNewline !== true
                   ? "\n"
                   : "";
               const trailingNewline =
-                endsWithNewline(segment.content) &&
+                segmentBoundaryInfo.endsWithNewline &&
+                nextSegment === undefined &&
                 nextIsLargePaste !== true &&
-                startsWithNewline(nextSegment?.content) !== true
+                nextBoundaryInfo.startsWithNewline !== true
                   ? "\n"
                   : "";
               const placeholder = `[Pasted ${segment.content.length} characters]`;

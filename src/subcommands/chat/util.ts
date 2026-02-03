@@ -137,6 +137,28 @@ export function trimTrailingNewlines(input: string): string {
   return trimmed.slice(1);
 }
 
+export interface NewlineBoundaryInfo {
+  startsWithNewline: boolean;
+  endsWithNewline: boolean;
+}
+
+export function getNewlineBoundaryInfo(value: string | undefined): NewlineBoundaryInfo {
+  if (value === undefined) {
+    return { startsWithNewline: false, endsWithNewline: false };
+  }
+
+  if (value.length === 0) {
+    return { startsWithNewline: false, endsWithNewline: false };
+  }
+
+  const firstCharacter = value[0];
+  const lastCharacter = value[value.length - 1];
+  return {
+    startsWithNewline: firstCharacter === "\n" || firstCharacter === "\r",
+    endsWithNewline: lastCharacter === "\n" || lastCharacter === "\r",
+  };
+}
+
 export const estimateMessageLinesCount = (message: InkChatMessage): number => {
   const terminalWidth = process.stdout.columns ?? 80;
 
