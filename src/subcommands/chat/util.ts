@@ -159,6 +159,11 @@ export function getNewlineBoundaryInfo(value: string | undefined): NewlineBounda
   };
 }
 
+export function getLargePastePlaceholderText(content: string, previewLength: number = 50): string {
+  const preview = content.replace(/\r\n|\r|\n/g, "").slice(0, previewLength);
+  return `[Pasted ${preview}...]`;
+}
+
 export const estimateMessageLinesCount = (message: InkChatMessage): number => {
   const terminalWidth = process.stdout.columns ?? 80;
 

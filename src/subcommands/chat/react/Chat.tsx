@@ -2,7 +2,10 @@ import { produce } from "@lmstudio/immer-with-plugins";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, type DOMElement, useApp, Text } from "ink";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { displayVerboseStats, getNewlineBoundaryInfo } from "../util.js";
+import {
+  displayVerboseStats,
+  getLargePastePlaceholderText,
+} from "../util.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
@@ -387,36 +390,10 @@ export const ChatComponent = React.memo(
           type: "user",
           content: userInputState.segments.map((segment, segmentIndex, segments) => {
             if (segment.type === "largePaste") {
-              const previousSegment = segments[segmentIndex - 1];
-              const nextSegment = segments[segmentIndex + 1];
-
-              // Keep newlines only when bordering non-largePaste segments to avoid turning
-              // consecutive placeholders into multiple lines.
-              const previousIsLargePaste = previousSegment?.type === "largePaste";
-              const nextIsLargePaste = nextSegment?.type === "largePaste";
-
-              const segmentBoundaryInfo = getNewlineBoundaryInfo(segment.content);
-              const previousBoundaryInfo = getNewlineBoundaryInfo(previousSegment?.content);
-              const nextBoundaryInfo = getNewlineBoundaryInfo(nextSegment?.content);
-
-              const leadingNewline =
-                segmentBoundaryInfo.startsWithNewline &&
-                previousSegment === undefined &&
-                previousIsLargePaste !== true &&
-                previousBoundaryInfo.endsWithNewline !== true
-                  ? "\n"
-                  : "";
-              const trailingNewline =
-                segmentBoundaryInfo.endsWithNewline &&
-                nextSegment === undefined &&
-                nextIsLargePaste !== true &&
-                nextBoundaryInfo.startsWithNewline !== true
-                  ? "\n"
-                  : "";
-              const placeholder = `[Pasted ${segment.content.length} characters]`;
+              const placeholder = getLargePastePlaceholderText(segment.content);
               return {
                 type: "largePaste",
-                text: `${leadingNewline}${placeholder}${trailingNewline}`,
+                text: placeholder,
               };
             }
             return { type: segment.type, text: segment.content };
