@@ -22,15 +22,6 @@ const illegalPathChars = ["/", "\\", ":", "*", "?", '"', "<", ">", "|"];
 const illegalPaths = [".", ".."];
 
 async function checkIfCommandExists(logger: SimpleLogger, command: string) {
-</text>
-
-<old_text line=158>
-          void signal;
-          const searchTerm = inputValue ?? initialSearch;
-          const options = fuzzy.filter(searchTerm, searchKeys, {
-            pre: ANSI_RED,
-            post: ANSI_RESET_COLOR,
-          });
   logger.debug(`Checking if ${command} exists...`);
   try {
     const { stdout } = await execAsync(`${command} --version`);
