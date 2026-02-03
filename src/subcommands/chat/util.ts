@@ -115,6 +115,15 @@ export async function executePrediction(
 }
 
 /**
+ * Removes leading and trailing newline characters from a string.
+ * @param input - The string to trim newlines from
+ * @returns The input string with leading and trailing newlines removed
+ */
+export function trimNewlines(input: string): string {
+  return input.replace(/^[\r\n]+|[\r\n]+$/g, "");
+}
+
+/**
  * Removes leading newline characters from a string.
  * @param input - The string to trim newlines from
  * @returns The input string with leading newlines removed

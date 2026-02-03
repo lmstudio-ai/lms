@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Box, Text } from "ink";
 import chalk from "chalk";
 import type { InkChatMessage } from "./types.js";
-import { trimLeadingNewlines, trimNewlines, trimTrailingNewlines } from "../util.js";
+import { trimLeadingNewlines, trimTrailingNewlines, trimNewlines } from "../util.js";
 
 interface ChatMessageProps {
   message: InkChatMessage;
