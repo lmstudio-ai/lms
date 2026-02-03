@@ -143,8 +143,29 @@ export interface NewlineBoundaryInfo {
 }
 
 export function getLargePastePlaceholderText(content: string, previewLength: number = 50): string {
-  const preview = content.replace(/\r\n|\r|\n/g, "").slice(0, previewLength);
-  return `[Pasted ${preview}...]`;
+  // Avoid scanning/allocating proportional to the entire paste. We only need a short preview of the
+  // newline-stripped content, plus whether it's actually truncated.
+  let previewCharsCount = 0;
+  let truncated = false;
+  let preview = "";
+
+  for (const character of content) {
+    if (character === "\n" || character === "\r") {
+      continue;
+    }
+
+    if (previewCharsCount < previewLength) {
+      preview += character;
+      previewCharsCount++;
+    } else {
+      truncated = true;
+      break;
+    }
+  }
+
+  const ellipsis = truncated ? "..." : "";
+  const spacer = preview.length > 0 ? " " : "";
+  return `[Pasted${spacer}${preview}${ellipsis}]`;
 }
 
 export const estimateMessageLinesCount = (message: InkChatMessage): number => {
