@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Box, Text } from "ink";
 import chalk from "chalk";
 import type { InkChatMessage } from "./types.js";
-import { trimNewlines } from "../util.js";
+import { trimLeadingNewlines, trimTrailingNewlines, trimNewlines } from "../util.js";
 
 interface ChatMessageProps {
   message: InkChatMessage;
@@ -13,12 +13,33 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
   const type = message.type;
   switch (type) {
     case "user": {
-      const formattedContent = message.content
+      const contentParts = message.content.map(part => ({ ...part }));
+
+      // Trim only edge newlines on the first/last non-empty parts to keep internal newlines intact.
+      let startIndex = 0;
+      while (startIndex < contentParts.length) {
+        contentParts[startIndex].text = trimLeadingNewlines(contentParts[startIndex].text);
+        if (contentParts[startIndex].text.length === 0) {
+          startIndex += 1;
+          continue;
+        }
+        break;
+      }
+      let endIndex = contentParts.length - 1;
+      while (endIndex >= 0) {
+        contentParts[endIndex].text = trimTrailingNewlines(contentParts[endIndex].text);
+        if (contentParts[endIndex].text.length === 0) {
+          endIndex -= 1;
+          continue;
+        }
+        break;
+      }
+
+      // After edge trimming, apply large paste coloring and join into a single string.
+      const formattedContent = contentParts
         .map(contentPart => {
-          const text = trimNewlines(contentPart.text);
-          return contentPart.type === "largePaste" && contentPart.text.length > 50
-            ? chalk.blue(text)
-            : text;
+          const text = contentPart.text;
+          return contentPart.type === "largePaste" ? chalk.blue(text) : text;
         })
         .join("");
 

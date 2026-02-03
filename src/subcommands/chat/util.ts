@@ -123,6 +123,56 @@ export function trimNewlines(input: string): string {
   return input.replace(/^[\r\n]+|[\r\n]+$/g, "");
 }
 
+/**
+ * Removes leading newline characters from a string.
+ * @param input - The string to trim newlines from
+ * @returns The input string with leading newlines removed
+ */
+export function trimLeadingNewlines(input: string): string {
+  return input.replace(/^[\r\n]+/g, "");
+}
+
+/**
+ * Removes trailing newline characters from a string.
+ * @param input - The string to trim newlines from
+ * @returns The input string with trailing newlines removed
+ */
+export function trimTrailingNewlines(input: string): string {
+  return input.replace(/[\r\n]+$/g, "");
+}
+
+const MAX_SCAN_FOR_PLACEHOLDER = 2000; // Just a reasonable limit to avoid excessive processing
+
+export function getLargePastePlaceholderText(content: string, previewLength: number = 50): string {
+  let previewCharsCount = 0;
+  let truncated = false;
+  let preview = "";
+  let scanned = 0;
+
+  for (const character of content) {
+    if (scanned >= MAX_SCAN_FOR_PLACEHOLDER) {
+      truncated = true;
+      return `[Pasted ${content.length} characters...]`;
+    }
+    scanned++;
+
+    if (character === "\n" || character === "\r") continue;
+
+    if (previewCharsCount < previewLength) {
+      preview += character;
+      previewCharsCount++;
+      continue;
+    }
+
+    truncated = true;
+    break;
+  }
+
+  const ellipsis = truncated ? "..." : "";
+  const spacer = preview.length > 0 ? " " : "";
+  return `[Pasted${spacer}${preview}${ellipsis}]`;
+}
+
 export const estimateMessageLinesCount = (message: InkChatMessage): number => {
   const terminalWidth = process.stdout.columns ?? 80;
 

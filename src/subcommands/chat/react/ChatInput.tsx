@@ -11,6 +11,7 @@ import {
 } from "./inputReducer.js";
 import { renderInputWithCursor } from "./inputRenderer.js";
 import { type ChatUserInputState } from "./types.js";
+import { getLargePastePlaceholderText } from "../util.js";
 
 interface ChatInputProps {
   inputState: ChatUserInputState;
@@ -205,7 +206,7 @@ export const ChatInput = ({
       const segment = inputState.segments[index];
 
       if (segment.type === "largePaste") {
-        const placeholder = `[Pasted ${segment.content.length} characters]`;
+        const placeholder = getLargePastePlaceholderText(segment.content);
         const startPos = fullText.length;
 
         if (index < inputState.cursorOnSegmentIndex) {
