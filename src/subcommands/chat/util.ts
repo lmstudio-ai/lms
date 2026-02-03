@@ -152,9 +152,9 @@ export function getLargePastePlaceholderText(content: string, previewLength: num
   for (const character of content) {
     if (scanned >= MAX_SCAN_FOR_PLACEHOLDER) {
       truncated = true;
-      break;
+      return `[Pasted ${content.length} characters...]`;
     }
-    scanned += character.length;
+    scanned++;
 
     if (character === "\n" || character === "\r") continue;
 
