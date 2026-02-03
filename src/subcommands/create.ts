@@ -15,7 +15,7 @@ import { z } from "zod";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { runPromptWithExitHandling } from "../prompt.js";
-import { ANSI_CYAN, ANSI_RESET_COLOR, fuzzyHighlightOptions } from "../inquirerTheme.js";
+import { ANSI_CYAN, ANSI_RESET_COLOR, fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 
 const execAsync = util.promisify(exec);
 const illegalPathChars = ["/", "\\", ":", "*", "?", '"', "<", ">", "|"];
@@ -152,6 +152,7 @@ async function selectScaffold(
       {
         message: chalk.green("Select a scaffold to use") + chalk.dim(" |"),
         pageSize,
+        theme: searchTheme,
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
           const searchTerm = inputValue ?? initialSearch;

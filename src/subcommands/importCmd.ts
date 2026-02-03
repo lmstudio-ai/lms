@@ -20,7 +20,7 @@ import { getCliPref } from "../cliPref.js";
 import { defaultModelsFolder } from "../lmstudioPaths.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
-import { fuzzyHighlightOptions } from "../inquirerTheme.js";
+import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 
 /**
  * Parse user/repo string into tuple
@@ -622,6 +622,7 @@ async function resolveByHuggingFaceInteractive(
       {
         message: chalk.green("Please select the correct one") + chalk.dim(" |"),
         pageSize,
+        theme: searchTheme,
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
           const options = fuzzy.filter(inputValue ?? "", candidatesJoined, fuzzyHighlightOptions);

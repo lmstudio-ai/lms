@@ -7,7 +7,7 @@ import fuzzy from "fuzzy";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
-import { fuzzyHighlightOptions } from "../inquirerTheme.js";
+import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 
 type UnloadCommandOptions = OptionValues &
   CreateClientArgs &
@@ -118,6 +118,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
         {
           message: chalk.green("Select a model to unload") + chalk.dim(" |"),
           pageSize,
+          theme: searchTheme,
           source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
             void signal;
             const sanitizedInput = (input ?? "").split("?").join("");
