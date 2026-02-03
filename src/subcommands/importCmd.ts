@@ -21,6 +21,9 @@ import { defaultModelsFolder } from "../lmstudioPaths.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 
+const ANSI_RED = "\x1b[91m";
+const ANSI_RESET_COLOR = "\x1b[39m";
+
 /**
  * Parse user/repo string into tuple
  */
@@ -624,8 +627,8 @@ async function resolveByHuggingFaceInteractive(
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
           const options = fuzzy.filter(inputValue ?? "", candidatesJoined, {
-            pre: "\x1b[91m",
-            post: "\x1b[39m",
+            pre: ANSI_RED,
+            post: ANSI_RESET_COLOR,
           });
           return [
             ...options.map(option => {

@@ -20,6 +20,10 @@ const execAsync = util.promisify(exec);
 const illegalPathChars = ["/", "\\", ":", "*", "?", '"', "<", ">", "|"];
 const illegalPaths = [".", ".."];
 
+const ANSI_RED = "\x1b[91m";
+const ANSI_RESET_COLOR = "\x1b[39m";
+const ANSI_CYAN = "\x1b[96m";
+
 async function checkIfCommandExists(logger: SimpleLogger, command: string) {
   logger.debug(`Checking if ${command} exists...`);
   try {
@@ -155,8 +159,8 @@ async function selectScaffold(
           void signal;
           const searchTerm = inputValue ?? initialSearch;
           const options = fuzzy.filter(searchTerm, searchKeys, {
-            pre: "\x1b[91m",
-            post: "\x1b[39m",
+            pre: ANSI_RED,
+            post: ANSI_RESET_COLOR,
           });
           return options.map(option => {
             const scaffoldBasics = scaffoldBasicsList[option.index];
@@ -364,8 +368,8 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
   for (const { type, text } of scaffold.motd) {
     const message = replacer
       .replace(text)
-      .replaceAll("<hl>", "\x1b[96m")
-      .replaceAll("</hl>", "\x1b[39m");
+      .replaceAll("<hl>", ANSI_CYAN)
+      .replaceAll("</hl>", ANSI_RESET_COLOR);
     switch (type) {
       case "title":
         motdLines.push(chalk.green(`  ${message}  `));

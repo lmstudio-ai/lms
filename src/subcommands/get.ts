@@ -27,6 +27,9 @@ import { ProgressBar } from "../ProgressBar.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
+const ANSI_RED = "\x1b[91m";
+const ANSI_RESET_COLOR = "\x1b[39m";
+
 type GetCommandOptions = OptionValues &
   CreateClientArgs &
   LogLevelArgs & {
@@ -466,8 +469,8 @@ async function askToChooseModel(
           void signal;
           const searchTerm = term ?? "";
           const options = fuzzy.filter(searchTerm, modelNames, {
-            pre: "\x1b[91m",
-            post: "\x1b[39m",
+            pre: ANSI_RED,
+            post: ANSI_RESET_COLOR,
           });
           return options.map(option => {
             const model = models[option.index];

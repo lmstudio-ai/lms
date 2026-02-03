@@ -8,6 +8,9 @@ import { addCreateClientOptions, createClient, type CreateClientArgs } from "../
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 
+const ANSI_RED = "\x1b[91m";
+const ANSI_RESET_COLOR = "\x1b[39m";
+
 type UnloadCommandOptions = OptionValues &
   CreateClientArgs &
   LogLevelArgs & {
@@ -121,8 +124,8 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
             void signal;
             const sanitizedInput = (input ?? "").split("?").join("");
             const options = fuzzy.filter(sanitizedInput, modelSearchStrings, {
-              pre: "\x1b[91m",
-              post: "\x1b[39m",
+              pre: ANSI_RED,
+              post: ANSI_RESET_COLOR,
             });
             return options.map(option => {
               const model = models[option.index];
