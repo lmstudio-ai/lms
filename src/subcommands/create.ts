@@ -15,16 +15,22 @@ import { z } from "zod";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { runPromptWithExitHandling } from "../prompt.js";
+import { ANSI_CYAN, ANSI_RESET_COLOR, fuzzyHighlightOptions } from "../inquirerTheme.js";
 
 const execAsync = util.promisify(exec);
 const illegalPathChars = ["/", "\\", ":", "*", "?", '"', "<", ">", "|"];
 const illegalPaths = [".", ".."];
 
-const ANSI_RED = "\x1b[91m";
-const ANSI_RESET_COLOR = "\x1b[39m";
-const ANSI_CYAN = "\x1b[96m";
-
 async function checkIfCommandExists(logger: SimpleLogger, command: string) {
+</text>
+
+<old_text line=158>
+          void signal;
+          const searchTerm = inputValue ?? initialSearch;
+          const options = fuzzy.filter(searchTerm, searchKeys, {
+            pre: ANSI_RED,
+            post: ANSI_RESET_COLOR,
+          });
   logger.debug(`Checking if ${command} exists...`);
   try {
     const { stdout } = await execAsync(`${command} --version`);
@@ -158,10 +164,7 @@ async function selectScaffold(
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
           const searchTerm = inputValue ?? initialSearch;
-          const options = fuzzy.filter(searchTerm, searchKeys, {
-            pre: ANSI_RED,
-            post: ANSI_RESET_COLOR,
-          });
+          const options = fuzzy.filter(searchTerm, searchKeys, fuzzyHighlightOptions);
           return options.map(option => {
             const scaffoldBasics = scaffoldBasicsList[option.index];
             const parenthesisIndex = option.string.lastIndexOf("(");

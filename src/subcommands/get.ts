@@ -26,9 +26,7 @@ import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel
 import { ProgressBar } from "../ProgressBar.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
-
-const ANSI_RED = "\x1b[91m";
-const ANSI_RESET_COLOR = "\x1b[39m";
+import { fuzzyHighlightOptions } from "../inquirerTheme.js";
 
 type GetCommandOptions = OptionValues &
   CreateClientArgs &
@@ -468,10 +466,7 @@ async function askToChooseModel(
         source: async (term: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
           const searchTerm = term ?? "";
-          const options = fuzzy.filter(searchTerm, modelNames, {
-            pre: ANSI_RED,
-            post: ANSI_RESET_COLOR,
-          });
+          const options = fuzzy.filter(searchTerm, modelNames, fuzzyHighlightOptions);
           return options.map(option => {
             const model = models[option.index];
             let name: string = "";

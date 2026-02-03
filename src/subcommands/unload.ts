@@ -7,9 +7,7 @@ import fuzzy from "fuzzy";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
-
-const ANSI_RED = "\x1b[91m";
-const ANSI_RESET_COLOR = "\x1b[39m";
+import { fuzzyHighlightOptions } from "../inquirerTheme.js";
 
 type UnloadCommandOptions = OptionValues &
   CreateClientArgs &
@@ -123,10 +121,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
           source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
             void signal;
             const sanitizedInput = (input ?? "").split("?").join("");
-            const options = fuzzy.filter(sanitizedInput, modelSearchStrings, {
-              pre: ANSI_RED,
-              post: ANSI_RESET_COLOR,
-            });
+            const options = fuzzy.filter(sanitizedInput, modelSearchStrings, fuzzyHighlightOptions);
             return options.map(option => {
               const model = models[option.index];
               const questionMarkIndex = option.string.lastIndexOf("?");

@@ -23,11 +23,12 @@ import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel
 import { runPromptWithExitHandling } from "../prompt.js";
 import { Spinner } from "../Spinner.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
-
-const ANSI_TEAL = "\x1b[36m";
-const ANSI_RESET_COLOR = "\x1b[39m";
-const ANSI_RESET_ALL = "\x1b[0m";
-const ANSI_RED = "\x1b[91m";
+import {
+  ANSI_RED,
+  ANSI_RESET_COLOR,
+  fuzzyHighlightOptions,
+  searchTheme,
+} from "../inquirerTheme.js";
 
 const gpuOptionParser = (str: string): number => {
   str = str.trim().toLowerCase();
@@ -341,17 +342,6 @@ async function selectModel(
   estimateOnly: boolean = false,
 ) {
   const pageSize = terminalSize().rows - leaveEmptyLines;
-  const highlightSelectedText = (value: string) => {
-    const valueWithResetColor = value.replaceAll(
-      ANSI_RESET_COLOR,
-      `${ANSI_RESET_COLOR}${ANSI_TEAL}`,
-    );
-    const valueWithResetAll = valueWithResetColor.replaceAll(
-      ANSI_RESET_ALL,
-      `${ANSI_RESET_ALL}${ANSI_TEAL}`,
-    );
-    return `${ANSI_TEAL}${valueWithResetAll}${ANSI_RESET_COLOR}`;
-  };
   return await runPromptWithExitHandling(() =>
     search<ModelInfo>(
       {
@@ -359,18 +349,11 @@ async function selectModel(
           chalk.green(`Select a model to ${estimateOnly === true ? "estimate" : "load"}`) +
           chalk.dim(" |"),
         pageSize,
-        theme: {
-          style: {
-            highlight: highlightSelectedText,
-          },
-        },
+        theme: searchTheme,
         source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
           const searchTerm = input ?? initialSearch;
-          const options = fuzzy.filter(searchTerm, modelPaths, {
-            pre: ANSI_RED,
-            post: ANSI_RESET_COLOR,
-          });
+          const options = fuzzy.filter(searchTerm, modelPaths, fuzzyHighlightOptions);
           return options.map(option => {
             const model = models[option.index];
             const displayName =
