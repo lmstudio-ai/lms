@@ -2,22 +2,17 @@ import { Transform } from "ink";
 import { type JSX } from "react";
 import chalk from "chalk";
 
-interface PasteRange {
-  start: number;
-  end: number;
-}
-
 interface RenderInputWithCursorOpts {
   fullText: string;
   cursorPosition: number;
-  pasteRanges: PasteRange[];
+  chipRanges: Array<{ start: number; end: number; kind: "largePaste" | "image" }>;
   lineStartPos: number;
 }
 
 export function renderInputWithCursor({
   fullText,
   cursorPosition,
-  pasteRanges,
+  chipRanges,
   lineStartPos,
 }: RenderInputWithCursorOpts): JSX.Element {
   if (fullText.length === 0 && cursorPosition === 0) {
@@ -35,11 +30,13 @@ export function renderInputWithCursor({
           if (index === cursorPosition) {
             result += chalk.inverse(char);
           } else {
-            const isInPasteRange = pasteRanges.some(
-              range => absolutePos >= range.start && absolutePos < range.end,
+            const range = chipRanges.find(
+              highlight => absolutePos >= highlight.start && absolutePos < highlight.end,
             );
-            if (isInPasteRange) {
+            if (range?.kind === "largePaste") {
               result += chalk.blue(char);
+            } else if (range?.kind === "image") {
+              result += chalk.cyan(char);
             } else {
               result += char;
             }

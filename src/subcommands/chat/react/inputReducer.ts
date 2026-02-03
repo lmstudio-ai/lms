@@ -2,36 +2,35 @@
  * Input Reducer for Chat User Input State
  *
  * This module manages a multi-segment text input buffer that supports both regular text
- * and large paste segments (or chips). The buffer is designed to handle large pastes efficiently
- * by treating them as separate segments that can be removed/navigated independently.
+ * and chip segments. The buffer is designed to handle large pastes efficiently by treating them
+ * as separate non-text segments that can be removed/navigated independently.
  *
  * Segment Model:
  * - `text`: Regular text segments where the user can type. Cursor can be positioned
  *           anywhere within the text (0 to content.length).
- * - `largePaste`: Read-only paste segments for large content. Cursor can only be at
- *                 position 0 (start) and is typically used for navigation.
+ * - `chip`: Read-only chip segments (e.g. largePaste, image). Cursor can only be at
+ *           position 0 (start) and is typically used for navigation.
  *
- * We do not throw error if in largePaste segment cursorInSegmentOffset > 0, instead
+ * We do not throw error if in chip segment cursorInSegmentOffset > 0, instead
  * we sanitize it back to 0.
  *
- * There will be a trailing empty text segment after a largePaste to allow typing
- * after the paste.
+ * There will be a trailing empty text segment after a chip segment to allow typing after it.
  *
  * Cursor Semantics:
  * - `cursorOnSegmentIndex`: Which segment the cursor is currently on
  * - `cursorInSegmentOffset`: Position within that segment
  *   - For text segments: 0 to content.length (0 = before first char, length = after last char)
- *   - For largePaste segments: 0 = start, 1 = treated as "inside" for certain operations
+ *   - For chip segments: 0 = start
  *
  * Sanitation:
  * After each mutation, the state is automatically sanitized to ensure:
  * - At least one segment always exists
- * - Empty text segments are removed (except trailing placeholders after largePaste)
+ * - Empty text segments are removed (except trailing placeholders after chip)
  * - Cursor indices are within valid bounds
  */
 
 import { produce } from "@lmstudio/immer-with-plugins";
-import { type ChatUserInputState } from "./types.js";
+import { type ChatInputData, type ChatInputSegment, type ChatUserInputState } from "./types.js";
 
 interface InsertTextAtCursorOpts {
   state: ChatUserInputState;
@@ -49,7 +48,16 @@ interface InsertSuggestionAtCursorOpts {
   suggestionText: string;
 }
 
+interface InsertImageAtCursorOpts {
+  state: ChatUserInputState;
+  image: InsertableChatImageData;
+}
+
 type ChatUserInputStateMutator = (draft: ChatUserInputState) => void;
+
+type ChatImageData = Extract<ChatInputData, { kind: "image" }>;
+type DistributiveOmit<T, K extends PropertyKey> = T extends any ? Omit<T, K> : never;
+type InsertableChatImageData = DistributiveOmit<ChatImageData, "kind">;
 
 /**
  * Wrapper that applies a mutation to the state and automatically sanitizes it afterward.
@@ -68,14 +76,14 @@ function produceSanitizedState(
 /**
  * Ensures the input state is valid by:
  * 1. Guaranteeing at least one segment exists
- * 2. Removing empty text segments (except trailing placeholders after largePaste)
+ * 2. Removing empty text segments (except trailing placeholders after chip)
  * 3. Clamping cursor indices to valid bounds
  * 4. Adjusting cursor offsets to valid ranges for each segment type
  * 5. Merging consecutive text segments to prevent navigation issues
  */
 function sanitizeChatUserInputState(state: ChatUserInputState): void {
   // Remove empty text segments, except "trailing placeholders"
-  // A trailing placeholder is an empty text segment after a largePaste that allows typing
+  // A trailing placeholder is an empty text segment after a chip segment that allows typing
   for (let segmentIndex = state.segments.length - 1; segmentIndex >= 0; segmentIndex -= 1) {
     const segment = state.segments[segmentIndex];
     // Skip non-text segments or non-empty text segments
@@ -84,8 +92,8 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
     }
     const isLastSegment = segmentIndex === state.segments.length - 1;
     const previousSegment = state.segments[segmentIndex - 1];
-    const isTrailingPlaceholder = isLastSegment === true && previousSegment?.type === "largePaste";
-    // Keep trailing placeholders - they allow typing after largePaste segments
+    const isTrailingPlaceholder = isLastSegment === true && previousSegment?.type === "chip";
+    // Keep trailing placeholders - they allow typing after chip segments
     if (isTrailingPlaceholder === true) {
       continue;
     }
@@ -173,7 +181,7 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
       state.cursorInSegmentOffset = activeSegment.content.length;
     }
   } else if (state.cursorInSegmentOffset < 0 || state.cursorInSegmentOffset > 0) {
-    // For largePaste segments, ensure it is always 0
+    // For chip segments, ensure it is always 0
     state.cursorInSegmentOffset = 0;
   }
 }
@@ -182,7 +190,7 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
  * Deletes content before the cursor (backspace behavior).
  * Handles all segment types and cursor positions:
  * - On text segment: deletes character or merges with previous segment
- * - On largePaste at offset 0: deletes the previous segment
+ * - On chip at offset 0: deletes the previous segment
  */
 export function deleteBeforeCursor(state: ChatUserInputState): ChatUserInputState {
   return produceSanitizedState(state, draft => {
@@ -226,12 +234,12 @@ export function deleteBeforeCursor(state: ChatUserInputState): ChatUserInputStat
         draft.cursorInSegmentOffset = 0;
         return;
       } else {
-        // Previous is largePaste - delete the entire segment
+        // Previous is data - delete the entire segment
         draft.segments.splice(previousSegmentIndex, 1);
         draft.cursorOnSegmentIndex = Math.max(0, previousSegmentIndex - 1);
 
         if (previousSegmentIndex > 0) {
-          // Cursor moves to segment before the deleted largePaste
+          // Cursor moves to segment before the deleted data
           const currentSegmentAfterDeletion = draft.segments[draft.cursorOnSegmentIndex];
           if (currentSegmentAfterDeletion?.type === "text") {
             draft.cursorInSegmentOffset = currentSegmentAfterDeletion.content.length;
@@ -246,8 +254,8 @@ export function deleteBeforeCursor(state: ChatUserInputState): ChatUserInputStat
       }
     }
 
-    if (currentSegment.type === "largePaste") {
-      // Error: cursor should not be > 0 on largePaste segments
+    if (currentSegment.type === "chip") {
+      // Error: cursor should not be > 0 on chip segments
       return;
     }
 
@@ -305,18 +313,18 @@ export function deleteAfterCursor(state: ChatUserInputState): ChatUserInputState
           draft.segments.splice(nextSegmentIndex, 1);
           return;
         } else {
-          // Next is largePaste - delete it entirely
+          // Next is data - delete it entirely
           draft.segments.splice(nextSegmentIndex, 1);
           return;
         }
       }
-      case "largePaste": {
-        // Cursor should be at offset 0 on largePaste
+      case "chip": {
+        // Cursor should be at offset 0 on chip
         if (draft.cursorInSegmentOffset !== 0) {
           return;
         }
 
-        // Delete the largePaste segment
+        // Delete the chip segment
         draft.segments.splice(draft.cursorOnSegmentIndex, 1);
 
         if (draft.segments.length === 0) {
@@ -338,7 +346,7 @@ export function deleteAfterCursor(state: ChatUserInputState): ChatUserInputState
 /**
  * Moves the cursor one position to the left.
  * - Within text: moves one character left
- * - On largePaste: moves to start of current largePaste
+ * - On chip: moves to start of current chip
  * - At start of anything: moves to previous segment
  */
 export function moveCursorLeft(state: ChatUserInputState): ChatUserInputState {
@@ -347,12 +355,12 @@ export function moveCursorLeft(state: ChatUserInputState): ChatUserInputState {
     if (currentSegment === undefined) {
       return;
     }
-    if (currentSegment.type === "largePaste") {
+    if (currentSegment.type === "chip") {
       if (draft.cursorOnSegmentIndex === 0) {
         return; // Already at first segment
       }
       if (draft.cursorInSegmentOffset > 0) {
-        // Error: Not expected. Move to start of current largePaste
+        // Error: Not expected. Move to start of current chip
         draft.cursorInSegmentOffset = 0;
         return;
       }
@@ -373,7 +381,7 @@ export function moveCursorLeft(state: ChatUserInputState): ChatUserInputState {
     if (previousSegment === undefined) {
       return;
     }
-    if (previousSegment.type === "largePaste") {
+    if (previousSegment.type === "chip") {
       draft.cursorOnSegmentIndex = previousSegmentIndex;
       draft.cursorInSegmentOffset = 0;
       return;
@@ -388,7 +396,7 @@ export function moveCursorLeft(state: ChatUserInputState): ChatUserInputState {
  * Moves the cursor one position to the right.
  * - Within text: moves one character right
  * - At end of text: moves to next segment
- * - On largePaste: moves to the next segment (skipping over the largePaste)
+ * - On chip: moves to the next segment (skipping over chips when moving from text)
  */
 export function moveCursorRight(state: ChatUserInputState): ChatUserInputState {
   return produceSanitizedState(state, draft => {
@@ -405,7 +413,7 @@ export function moveCursorRight(state: ChatUserInputState): ChatUserInputState {
         return;
       }
     }
-    // At end of segment or on largePaste - move to next segment, handling largePast skips
+    // At end of segment or on chip - move to next segment, handling chip skips
     if (draft.cursorOnSegmentIndex >= draft.segments.length - 1) {
       return; // Already at last segment
     }
@@ -414,19 +422,19 @@ export function moveCursorRight(state: ChatUserInputState): ChatUserInputState {
     if (nextSegment === undefined) {
       return;
     }
-    if (currentSegment.type === "largePaste") {
-      // Move to next segment (whether it's text or largePaste)
+    if (currentSegment.type === "chip") {
+      // Move to next segment (whether it's text or chip)
       draft.cursorOnSegmentIndex = nextSegmentIndex;
       draft.cursorInSegmentOffset = 0;
       return;
     }
-    if (nextSegment.type === "largePaste") {
-      // Skip over largePaste to the segment after it
-      const segmentAfterPaste = nextSegmentIndex + 1;
-      if (segmentAfterPaste >= draft.segments.length) {
-        return; // No segment after the largePaste
+    if (nextSegment.type === "chip") {
+      // Skip over chip to the segment after it
+      const segmentAfterChip = nextSegmentIndex + 1;
+      if (segmentAfterChip >= draft.segments.length) {
+        return; // No segment after the chip
       }
-      draft.cursorOnSegmentIndex = segmentAfterPaste;
+      draft.cursorOnSegmentIndex = segmentAfterChip;
       draft.cursorInSegmentOffset = 0;
       return;
     }
@@ -439,8 +447,8 @@ export function moveCursorRight(state: ChatUserInputState): ChatUserInputState {
 /**
  * Inserts text at the cursor position.
  * - In text segment: inserts text at cursor position
- * - At start of largePaste: appends to previous text segment or creates new text segment
- *  (there is no real "inside" for largePaste)
+ * - At start of chip: appends to previous text segment or creates new text segment
+ *  (there is no real "inside" for chip)
  */
 export function insertTextAtCursor({ state, text }: InsertTextAtCursorOpts): ChatUserInputState {
   return produceSanitizedState(state, draft => {
@@ -448,23 +456,23 @@ export function insertTextAtCursor({ state, text }: InsertTextAtCursorOpts): Cha
     if (currentSegment === undefined) {
       return;
     }
-    if (currentSegment.type === "largePaste") {
+    if (currentSegment.type === "chip") {
       if (draft.cursorInSegmentOffset !== 0) {
-        // Something is wrong - we can only insert text at offset 0 of largePaste
+        // Something is wrong - we can only insert text at offset 0 of chip
         return;
       }
-      const largePasteIndex = draft.cursorOnSegmentIndex;
-      // At start of largePaste - try to append to previous text segment
-      const previousSegment = draft.segments[largePasteIndex - 1];
+      const chipIndex = draft.cursorOnSegmentIndex;
+      // At start of chip - try to append to previous text segment
+      const previousSegment = draft.segments[chipIndex - 1];
       if (previousSegment !== undefined && previousSegment.type === "text") {
         previousSegment.content += text;
-        draft.cursorOnSegmentIndex = largePasteIndex - 1;
+        draft.cursorOnSegmentIndex = chipIndex - 1;
         draft.cursorInSegmentOffset = previousSegment.content.length;
         return;
       }
-      // No previous text segment - create a new one before the largePaste
-      draft.segments.splice(largePasteIndex, 0, { type: "text", content: text });
-      draft.cursorOnSegmentIndex = largePasteIndex;
+      // No previous text segment - create a new one before the chip
+      draft.segments.splice(chipIndex, 0, { type: "text", content: text });
+      draft.cursorOnSegmentIndex = chipIndex;
       draft.cursorInSegmentOffset = text.length;
       return;
     }
@@ -484,9 +492,9 @@ export function insertTextAtCursor({ state, text }: InsertTextAtCursorOpts): Cha
  * Inserts pasted content at the cursor position.
  * Content is treated as "large paste" if it exceeds largePasteThreshold.
  * - Small paste: inserted as regular text
- * - Large paste: creates a largePaste segment with a trailing placeholder text segment
- *   - In text segment: splits the text, inserts largePaste, preserves text after cursor
- *   - On largePaste at offset 0: inserts before the largePaste segment
+ * - Large paste: creates a chip segment with a trailing placeholder text segment
+ *   - In text segment: splits the text, inserts chip, preserves text after cursor
+ *   - On chip at offset 0: inserts before the chip segment
  */
 export function insertPasteAtCursor({
   state,
@@ -502,20 +510,23 @@ export function insertPasteAtCursor({
       return;
     }
     const isLargePaste = content.length >= largePasteThreshold;
-    if (currentSegment.type === "largePaste") {
-      // Inserting paste while on a largePaste segment
+    if (currentSegment.type === "chip") {
+      // Inserting paste while on a chip segment
       if (draft.cursorInSegmentOffset !== 0) {
-        // Error: cursor should only be at offset 0 on largePaste segments
+        // Error: cursor should only be at offset 0 on chip segments
         return;
       }
-      const largePasteIndex = draft.cursorOnSegmentIndex;
-      // Insert before current largePaste
-      draft.segments.splice(largePasteIndex, 0, {
-        type: isLargePaste === true ? "largePaste" : "text",
-        content,
-      });
-      draft.cursorOnSegmentIndex = largePasteIndex;
-      draft.cursorInSegmentOffset = content.length;
+      const chipIndex = draft.cursorOnSegmentIndex;
+      // Insert before current chip
+      draft.segments.splice(
+        chipIndex,
+        0,
+        isLargePaste === true
+          ? { type: "chip", data: { kind: "largePaste", content } }
+          : { type: "text", content },
+      );
+      draft.cursorOnSegmentIndex = chipIndex;
+      draft.cursorInSegmentOffset = isLargePaste === true ? 0 : content.length;
       return;
     }
     if (currentSegment.type !== "text") {
@@ -523,22 +534,22 @@ export function insertPasteAtCursor({
     }
     const cursorPosition = draft.cursorInSegmentOffset;
     if (isLargePaste === true) {
-      // Split current text segment to insert largePaste
+      // Split current text segment to insert chip
       const textBeforeCursor = currentSegment.content.slice(0, cursorPosition);
       const textAfterCursor = currentSegment.content.slice(cursorPosition);
       currentSegment.content = textBeforeCursor;
       const insertIndex = draft.cursorOnSegmentIndex + 1;
-      // Insert largePaste followed by trailing text segment (preserves text after cursor)
+      // Insert chip followed by trailing text segment (preserves text after cursor)
       draft.segments.splice(
         insertIndex,
         0,
-        { type: "largePaste", content },
+        { type: "chip", data: { kind: "largePaste", content } },
         {
           type: "text",
           content: textAfterCursor, // Empty string if no text after cursor
         },
       );
-      // Place cursor in the trailing text segment after largePaste
+      // Place cursor in the trailing text segment after chip
       draft.cursorOnSegmentIndex = insertIndex + 1;
       draft.cursorInSegmentOffset = 0;
       return;
@@ -553,10 +564,51 @@ export function insertPasteAtCursor({
 }
 
 /**
+ * Inserts an image chip at the cursor position.
+ * - In text segment: splits the text, inserts image chip, preserves text after cursor
+ * - On chip at offset 0: inserts before the chip
+ *
+ * Cursor is placed on the inserted chip (when inserting before an existing chip),
+ * or on the trailing text segment (when inserting inside a text segment).
+ */
+export function insertImageAtCursor({ state, image }: InsertImageAtCursorOpts): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
+    if (currentSegment === undefined) {
+      return;
+    }
+
+    const imageData: ChatImageData = { kind: "image", ...image };
+    const chip: ChatInputSegment = { type: "chip", data: imageData };
+
+    if (currentSegment.type === "chip") {
+      if (draft.cursorInSegmentOffset !== 0) {
+        return;
+      }
+      const chipIndex = draft.cursorOnSegmentIndex;
+      draft.segments.splice(chipIndex, 0, chip);
+      draft.cursorOnSegmentIndex = chipIndex;
+      draft.cursorInSegmentOffset = 0;
+      return;
+    }
+
+    const cursorPosition = draft.cursorInSegmentOffset;
+    const textBeforeCursor = currentSegment.content.slice(0, cursorPosition);
+    const textAfterCursor = currentSegment.content.slice(cursorPosition);
+    currentSegment.content = textBeforeCursor;
+
+    const insertIndex = draft.cursorOnSegmentIndex + 1;
+    draft.segments.splice(insertIndex, 0, chip, { type: "text", content: textAfterCursor });
+    draft.cursorOnSegmentIndex = insertIndex + 1;
+    draft.cursorInSegmentOffset = 0;
+  });
+}
+
+/**
  * Inserts a suggestion at the cursor position by replacing the last segment's content.
  * Used for autocomplete/suggestion acceptance (e.g., /model or /download suggestions).
  * - If last segment is text: replaces its content with suggestion
- * - If last segment is largePaste: appends a new text segment with suggestion
+ * - If last segment is chip: appends a new text segment with suggestion
  * Cursor is placed at the end of the inserted suggestion.
  */
 export function insertSuggestionAtCursor({

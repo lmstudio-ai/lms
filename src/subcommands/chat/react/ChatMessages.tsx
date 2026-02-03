@@ -13,7 +13,12 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
   const type = message.type;
   switch (type) {
     case "user": {
-      const contentParts = message.content.map(part => ({ ...part }));
+      const contentParts = message.content.map(part => {
+        if (part.type === "text") {
+          return { type: "text" as const, text: part.text };
+        }
+        return { type: "chip" as const, kind: part.kind, text: part.displayText };
+      });
 
       // Trim only edge newlines on the first/last non-empty parts to keep internal newlines intact.
       let startIndex = 0;
@@ -38,8 +43,13 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
       // After edge trimming, apply large paste coloring and join into a single string.
       const formattedContent = contentParts
         .map(contentPart => {
-          const text = contentPart.text;
-          return contentPart.type === "largePaste" ? chalk.blue(text) : text;
+          if (contentPart.type === "text") {
+            return contentPart.text;
+          }
+
+          return contentPart.kind === "largePaste"
+            ? chalk.blue(contentPart.text)
+            : chalk.cyan(contentPart.text);
         })
         .join("");
 
