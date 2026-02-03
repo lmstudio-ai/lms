@@ -14,14 +14,14 @@ export const ANSI_RESET_ALL = "\x1b[0m";
  * Wraps the text and preserves any reset sequences within it.
  */
 export const highlightSelectedText = (value: string) => {
-  const valueWithResetColor = value.replaceAll(
-    ANSI_RESET_COLOR,
-    `${ANSI_RESET_COLOR}${ANSI_TEAL}`,
-  );
+  // Re-apply teal after any "reset foreground color" codes inside the string.
+  const valueWithResetColor = value.replaceAll(ANSI_RESET_COLOR, `${ANSI_RESET_COLOR}${ANSI_TEAL}`);
+  // Re-apply teal after any "reset all styles" codes inside the string.
   const valueWithResetAll = valueWithResetColor.replaceAll(
     ANSI_RESET_ALL,
     `${ANSI_RESET_ALL}${ANSI_TEAL}`,
   );
+  // Start in teal and reset foreground color at the end to avoid color leakage.
   return `${ANSI_TEAL}${valueWithResetAll}${ANSI_RESET_COLOR}`;
 };
 
