@@ -221,7 +221,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
   // non-interactive mode (it can keep the process alive after printing output).
   if (shouldFetchModelCatalog && process.stdin.isTTY && providedPrompt.length === 0) {
     setTimeout(() => {
-      void getCachedModelCatalogOrFetch(client, logger);
+      void getCachedModelCatalogOrFetch(client);
     }, 0);
   }
 
