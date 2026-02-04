@@ -216,9 +216,13 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     logger,
   );
 
-  if (shouldFetchModelCatalog) {
-    // Pre-fetch model catalog to speed up later model selection
-    await getCachedModelCatalogOrFetch(client);
+  // Pre-fetch model catalog to speed up later /download suggestions and model selection.
+  // Important: don't block chat startup on this, and don't start background fetches in
+  // non-interactive mode (it can keep the process alive after printing output).
+  if (shouldFetchModelCatalog && process.stdin.isTTY && providedPrompt.length === 0) {
+    setTimeout(() => {
+      void getCachedModelCatalogOrFetch(client, logger);
+    }, 0);
   }
 
   const llm = await maybeGetLLM(client, model, ttl, shouldFetchModelCatalog, logger, yes);
