@@ -2,7 +2,7 @@ import type { SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { Spinner } from "../../Spinner.js";
-import { type InkChatMessage } from "./react/types.js";
+import { type ChatInputData, type InkChatMessage } from "./react/types.js";
 
 export async function loadModelWithProgress(
   client: LMStudioClient,
@@ -173,6 +173,26 @@ export function getLargePastePlaceholderText(content: string, previewLength: num
   return `[Pasted${spacer}${preview}${ellipsis}]`;
 }
 
+function getBaseName(filePath: string): string | undefined {
+  const trimmed = filePath.trim();
+  if (trimmed.length === 0) return undefined;
+  const parts = trimmed.split(/[\\/]/);
+  return parts[parts.length - 1];
+}
+
+export function getChipPreviewText(data: ChatInputData): string {
+  if (data.kind === "largePaste") {
+    return getLargePastePlaceholderText(data.content);
+  }
+
+  const imageDisplayName =
+    data.name ??
+    getBaseName(data.fileName ?? "") ??
+    data.fileName ??
+    "image";
+  return `[Image: ${imageDisplayName}]`;
+}
+
 export const estimateMessageLinesCount = (message: InkChatMessage): number => {
   const terminalWidth = process.stdout.columns ?? 80;
 
@@ -196,7 +216,9 @@ export const estimateMessageLinesCount = (message: InkChatMessage): number => {
   switch (type) {
     case "user":
       return countWrappedLines(
-        message.content.reduce((acc, a) => acc + a.text, ""),
+        message.content.reduce((acc, part) => {
+          return acc + (part.type === "text" ? part.text : part.displayText);
+        }, ""),
         5,
       ); // "You: " prefix
     case "assistant": {

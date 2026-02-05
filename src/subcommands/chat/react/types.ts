@@ -6,10 +6,7 @@
 export type InkChatMessage =
   | {
       type: "user";
-      content: Array<{
-        type: "text" | "largePaste";
-        text: string;
-      }>;
+      content: UserInputContentPart[];
     }
   | {
       type: "assistant";
@@ -49,14 +46,39 @@ export interface Suggestion {
   priority: number;
 }
 
+export type ChatInputData =
+  | {
+      kind: "largePaste";
+      content: string;
+    }
+  | {
+      kind: "image";
+      mime?: string;
+      source: "base64";
+      fileName: string;
+      contentBase64: string;
+      name?: string;
+    };
+
+export type UserInputContentPart =
+  | {
+      type: "text";
+      text: string;
+    }
+  | {
+      type: "chip";
+      kind: ChatInputData["kind"];
+      displayText: string;
+    };
+
 export type ChatInputSegment =
   | {
       type: "text";
       content: string;
     }
   | {
-      type: "largePaste";
-      content: string;
+      type: "chip";
+      data: ChatInputData;
     };
 
 export interface ChatUserInputState {
