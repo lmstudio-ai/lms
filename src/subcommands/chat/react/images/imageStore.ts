@@ -93,15 +93,15 @@ export class ImageStore {
       }),
     );
 
-    for (const [hash, prepared] of preparedEntries) {
-      this.preparedByHash.set(hash, prepared);
-    }
-
     if (preparedEntries.some(([, prepared]) => prepared.type !== "image")) {
       throw new ImagePreparationError(
         "not_image",
         "clipboard content was not recognized as an image.",
       );
+    }
+
+    for (const [hash, prepared] of preparedEntries) {
+      this.preparedByHash.set(hash, prepared);
     }
 
     return this.preparedByHash;
