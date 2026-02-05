@@ -47,9 +47,7 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
             return contentPart.text;
           }
 
-          return contentPart.kind === "largePaste"
-            ? chalk.blue(contentPart.text)
-            : chalk.blue(contentPart.text);
+          return chalk.blue(contentPart.text);
         })
         .join("");
 
