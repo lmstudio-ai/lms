@@ -60,7 +60,6 @@ export async function handlePasteOrDrop({
             fileName: image.fileName,
             contentBase64: image.base64,
             mime: image.mimeType,
-            name: image.fileName,
           },
         });
       }

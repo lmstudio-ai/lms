@@ -14,7 +14,7 @@ const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 export async function readDroppedImageFileAsBase64(filePath: string): Promise<DroppedImage | null> {
   let stat;
   try {
-    stat = await fs.stat(filePath);
+    stat = await fs.lstat(filePath);
   } catch {
     return null;
   }

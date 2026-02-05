@@ -51,6 +51,16 @@ function tokenizeDropText(raw: string): string[] {
       continue;
     }
 
+    // Outside quotes, allow backslash-escaped whitespace or quotes.
+    if (character === "\\") {
+      const next = text[i + 1];
+      if (next !== undefined && (isSeparatorWhitespace(next) || next === `"` || next === "'" || next === "\\")) {
+        i += 1;
+        current += next;
+        continue;
+      }
+    }
+
     if (isSeparatorWhitespace(character)) {
       if (current.length > 0) {
         tokens.push(current);
@@ -69,8 +79,26 @@ function tokenizeDropText(raw: string): string[] {
   return tokens;
 }
 
+type ExtractDroppedFilePathsOptions = {
+  requireAllPathLike?: boolean;
+};
+
+function isLikelyAbsolutePathToken(token: string): boolean {
+  const trimmed = token.trim();
+  if (trimmed.length === 0) return false;
+
+  if (trimmed.startsWith("file://")) return true;
+  if (trimmed === "~") return true;
+  if (trimmed.startsWith("~/") || trimmed.startsWith("~\\")) return true;
+  if (trimmed.startsWith("/")) return true;
+  if (trimmed.startsWith("\\\\")) return true; // UNC path
+  if (/^[A-Za-z]:[\\/]/.test(trimmed)) return true; // Windows drive path
+
+  return false;
+}
+
 function normalizeDroppedPath(token: string): string | null {
-  let trimmed = token.trim();
+  const trimmed = token.trim();
   if (trimmed.length === 0) return null;
 
   // file:// URI (common in some terminals / desktop environments)
@@ -97,13 +125,28 @@ function normalizeDroppedPath(token: string): string | null {
  * Terminals typically send dropped files as a "paste" of one or more file paths.
  * Paths may be quoted, backslash-escaped, separated by whitespace/newlines, or be file:// URIs.
  */
-export function extractDroppedFilePaths(content: string): string[] {
+export function extractDroppedFilePaths(
+  content: string,
+  options: ExtractDroppedFilePathsOptions = {},
+): string[] {
   const tokens = tokenizeDropText(content);
+  if (tokens.length === 0) return [];
+
+  if (options.requireAllPathLike === true) {
+    const allPathLike = tokens.every(isLikelyAbsolutePathToken);
+    if (!allPathLike) return [];
+  }
+
   const results: string[] = [];
 
   for (const token of tokens) {
     const normalized = normalizeDroppedPath(token);
-    if (normalized === null) continue;
+    if (normalized === null) {
+      if (options.requireAllPathLike === true) {
+        return [];
+      }
+      continue;
+    }
     // Don't resolve relative paths; terminals typically provide absolute paths.
     results.push(normalized);
   }

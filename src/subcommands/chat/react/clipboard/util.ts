@@ -13,6 +13,15 @@ const MAGIC_NUMBERS = [
   { signatures: [{ offset: 0, bytes: [0x47, 0x49, 0x46] }], format: "GIF", mimeType: "image/gif", extension: "gif" },
   { signatures: [{ offset: 0, bytes: [0x42, 0x4d] }], format: "BMP", mimeType: "image/bmp", extension: "bmp" },
   {
+    signatures: [
+      { offset: 0, bytes: [0x49, 0x49, 0x2a, 0x00] }, // "II*\0" little-endian TIFF
+      { offset: 0, bytes: [0x4d, 0x4d, 0x00, 0x2a] }, // "MM\0*" big-endian TIFF
+    ],
+    format: "TIFF",
+    mimeType: "image/tiff",
+    extension: "tiff",
+  },
+  {
     // RIFF-based formats share the "RIFF" prefix; WEBP is identified by a "WEBP" FourCC at bytes 8–11.
     signatures: [
       { offset: 0, bytes: [0x52, 0x49, 0x46, 0x46] }, // "RIFF"
