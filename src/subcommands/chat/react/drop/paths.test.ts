@@ -9,35 +9,8 @@ describe("extractDroppedFilePaths", () => {
     expect(extractDroppedFilePaths('"/Users/me/My Cat.png"')).toEqual(["/Users/me/My Cat.png"]);
   });
 
-  it("parses backslash-escaped spaces", () => {
-    expect(extractDroppedFilePaths("/Users/me/My\\ Cat.png")).toEqual(["/Users/me/My Cat.png"]);
-  });
-
   it("parses multiple paths separated by whitespace", () => {
     expect(extractDroppedFilePaths('"/a/b.png" "/c/d.jpg"')).toEqual(["/a/b.png", "/c/d.jpg"]);
-  });
-
-  it("handles wrapped escaped paths (backslash-newline)", () => {
-    expect(extractDroppedFilePaths("/Users/me/Screenshot\\\n  6.png")).toEqual([
-      "/Users/me/Screenshot 6.png",
-    ]);
-  });
-
-  it("preserves narrow no-break space characters in file names", () => {
-    expect(
-      extractDroppedFilePaths("/Users/me/Screenshot\\ 2026-02-03\\ at\\ 6.16.20\u202FPM.png"),
-    ).toEqual(["/Users/me/Screenshot 2026-02-03 at 6.16.20\u202FPM.png"]);
-  });
-
-  it("strips literal bracketed paste markers", () => {
-    expect(extractDroppedFilePaths("[200~/a/b.png [201~")).toEqual(["/a/b.png"]);
-  });
-
-  it("splits concatenated duplicate absolute paths", () => {
-    expect(extractDroppedFilePaths("/Users/me/a.png/Users/me/b.png")).toEqual([
-      "/Users/me/a.png",
-      "/Users/me/b.png",
-    ]);
   });
 
   it("does not break Windows-style paths", () => {

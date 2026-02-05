@@ -1,11 +1,10 @@
 import { Box, Text, useInput } from "ink";
-import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef } from "react";
+import { type Dispatch, type SetStateAction, useMemo } from "react";
 import { useBufferedPasteDetection } from "./hooks.js";
 import { InputPlaceholder } from "./InputPlaceholder.js";
 import {
   deleteAfterCursor,
   deleteBeforeCursor,
-  deleteBeforeCursorCount,
   insertTextAtCursor,
   moveCursorLeft,
   moveCursorRight,
@@ -13,14 +12,8 @@ import {
 import { renderInputWithCursor } from "./inputRenderer.js";
 import { type ChatUserInputState } from "./types.js";
 import { getChipPreviewText } from "../util.js";
-import { extractDroppedFilePaths } from "./drop/paths.js";
 
 type ChipRange = { start: number; end: number; kind: "largePaste" | "image" };
-
-const IMAGE_PATH_REGEX = /\.(png|jpe?g|gif|bmp|webp|tiff?)\b/i;
-const PATH_SEPARATORS_REGEX = /[\\/]/;
-const DROP_BURST_RESET_MS = 120;
-const DROP_BURST_MAX_CHARS = 2048;
 
 interface ChatInputProps {
   inputState: ChatUserInputState;
@@ -73,13 +66,10 @@ export const ChatInput = ({
   selectedSuggestion,
   predictionSpinnerVisible,
 }: ChatInputProps) => {
-  const skipUseInputRef = useBufferedPasteDetection({ onPaste });
-  const dropBurstRef = useRef<{ text: string; length: number; lastAt: number }>({
-    text: "",
-    length: 0,
-    lastAt: 0,
+  const { skipUseInputRef, handleInputChunk } = useBufferedPasteDetection({
+    onPaste,
+    setUserInputState,
   });
-  const convertingPathRef = useRef(false);
   const disableUserInput =
     (isPredicting ||
       modelLoadingProgress !== null ||
@@ -87,42 +77,6 @@ export const ChatInput = ({
       fetchingModelDetails !== null ||
       promptProcessingProgress !== null) &&
     isConfirmationActive === false;
-
-  useEffect(() => {
-    if (convertingPathRef.current) return;
-    if (inputState.segments.length !== 1) return;
-    const onlySegment = inputState.segments[0];
-    if (onlySegment?.type !== "text") return;
-    const rawText = onlySegment.content;
-    const stripped = rawText.trim();
-    if (stripped.length === 0) return;
-
-    const paths = extractDroppedFilePaths(stripped);
-    if (paths.length !== 1) return;
-    const candidate = paths[0] ?? "";
-    if (candidate.length === 0) return;
-
-    const looksLikeFullPath =
-      stripped === candidate ||
-      stripped === `"${candidate}"` ||
-      stripped === `'${candidate}'` ||
-      stripped === `file://${candidate}` ||
-      (stripped.includes(candidate) && stripped.length <= candidate.length + 10);
-
-    if (!looksLikeFullPath) return;
-    if (!IMAGE_PATH_REGEX.test(candidate)) return;
-
-    convertingPathRef.current = true;
-    setUserInputState({
-      segments: [{ type: "text", content: "" }],
-      cursorOnSegmentIndex: 0,
-      cursorInSegmentOffset: 0,
-    });
-    queueMicrotask(() => {
-      onPaste(stripped);
-      convertingPathRef.current = false;
-    });
-  }, [inputState, onPaste, setUserInputState]);
 
   useInput((inputCharacter, key) => {
     if (skipUseInputRef.current === true) {
@@ -250,55 +204,11 @@ export const ChatInput = ({
         return;
       }
 
-      const now = Date.now();
-      const sinceLast = now - dropBurstRef.current.lastAt;
-      if (sinceLast > DROP_BURST_RESET_MS) {
-        dropBurstRef.current.text = "";
-        dropBurstRef.current.length = 0;
-      }
-      dropBurstRef.current.lastAt = now;
-      dropBurstRef.current.text += filteredInputChunk;
-      dropBurstRef.current.length += filteredInputChunk.length;
-      if (dropBurstRef.current.text.length > DROP_BURST_MAX_CHARS) {
-        dropBurstRef.current.text = dropBurstRef.current.text.slice(-DROP_BURST_MAX_CHARS);
-      }
-
-      // Fallback: if Ink delivers a drop/paste as a multi-char chunk (not caught by raw paste
-      // detection), treat image-looking paths as a paste so they can attach as chips.
-      if (
-        filteredInputChunk.length > 1 &&
-        IMAGE_PATH_REGEX.test(filteredInputChunk) &&
-        (filteredInputChunk.includes("file://") || PATH_SEPARATORS_REGEX.test(filteredInputChunk))
-      ) {
-        const extracted = extractDroppedFilePaths(filteredInputChunk);
-        if (extracted.length > 0) {
-          onPaste(filteredInputChunk);
-          return;
-        }
-      }
-
       setUserInputState(previousState =>
         insertTextAtCursor({ state: previousState, text: filteredInputChunk }),
       );
-
-      const burstText = dropBurstRef.current.text;
-      if (
-        burstText.length > 0 &&
-        IMAGE_PATH_REGEX.test(burstText) &&
-        (burstText.includes("file://") ||
-          PATH_SEPARATORS_REGEX.test(burstText) ||
-          burstText.includes("[200~") ||
-          burstText.includes("[201~"))
-      ) {
-        const extracted = extractDroppedFilePaths(burstText);
-        if (extracted.length > 0) {
-          const deleteCount = dropBurstRef.current.length;
-          dropBurstRef.current.text = "";
-          dropBurstRef.current.length = 0;
-          setUserInputState(previousState => deleteBeforeCursorCount(previousState, deleteCount));
-          onPaste(burstText);
-          return;
-        }
+      if (handleInputChunk(filteredInputChunk)) {
+        return;
       }
     }
   });

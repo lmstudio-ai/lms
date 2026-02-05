@@ -305,7 +305,7 @@ export const ChatComponent = React.memo(
       (content: string) => {
         const normalizedContent = content.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
         if (normalizedContent.trim().length === 0) return;
-        void handlePasteOrDrop({
+        handlePasteOrDrop({
           normalizedContent,
           setUserInputState,
           largePasteThreshold: LARGE_PASTE_THRESHOLD,
@@ -314,7 +314,6 @@ export const ChatComponent = React.memo(
       },
       [logErrorInChat, setUserInputState],
     );
-
 
     const handleSubmit = useCallback(async () => {
       const inputStateSnapshot = userInputState;

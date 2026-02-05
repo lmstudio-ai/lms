@@ -8,6 +8,14 @@ function isSeparatorWhitespace(character: string): boolean {
   return ASCII_SEPARATOR_WHITESPACE.has(character);
 }
 
+/**
+ * Splits terminal drop/paste text into path-like tokens.
+ *
+ * Handles:
+ * - whitespace-separated paths
+ * - quoted paths with spaces
+ * - simple backslash escapes inside double quotes (space, quote, backslash)
+ */
 function tokenizeDropText(raw: string): string[] {
   const text = raw.trim();
   if (text.length === 0) return [];
@@ -28,10 +36,7 @@ function tokenizeDropText(raw: string): string[] {
       // In double quotes, terminals may escape spaces/quotes with backslash.
       if (quote === '"' && character === "\\") {
         const next = text[i + 1];
-        if (
-          next !== undefined &&
-          (isSeparatorWhitespace(next) || next === `"` || next === "\\")
-        ) {
+        if (next !== undefined && (isSeparatorWhitespace(next) || next === `"` || next === "\\")) {
           i += 1;
           current += next;
           continue;
@@ -44,41 +49,6 @@ function tokenizeDropText(raw: string): string[] {
     if (character === "'" || character === '"') {
       quote = character;
       continue;
-    }
-
-    if (character === "\\") {
-      const next = text[i + 1];
-      const nextNext = text[i + 2];
-
-      // Some terminals may wrap long, shell-escaped paths by inserting a newline after a trailing
-      // backslash (e.g. "...at\\\n  6.16 PM.png"). Treat this as a single space.
-      if (next === "\n") {
-        i += 1;
-        while (text[i + 1] !== undefined && isSeparatorWhitespace(text[i + 1] ?? "")) {
-          i += 1;
-        }
-        current += " ";
-        continue;
-      }
-      if (next === "\r" && nextNext === "\n") {
-        i += 2;
-        while (text[i + 1] !== undefined && isSeparatorWhitespace(text[i + 1] ?? "")) {
-          i += 1;
-        }
-        current += " ";
-        continue;
-      }
-
-      // Only treat backslash as an escape when it is used to escape whitespace/quotes.
-      // This avoids breaking Windows paths like C:\Users\me\cat.png.
-      if (
-        next !== undefined &&
-        (isSeparatorWhitespace(next) || next === `"` || next === "'" || next === "\\")
-      ) {
-        i += 1;
-        current += next;
-        continue;
-      }
     }
 
     if (isSeparatorWhitespace(character)) {
@@ -103,14 +73,6 @@ function normalizeDroppedPath(token: string): string | null {
   let trimmed = token.trim();
   if (trimmed.length === 0) return null;
 
-  // If ESC was stripped elsewhere, some terminals leave bracketed paste markers as literal text.
-  // Strip those markers defensively.
-  if (trimmed.startsWith("[200~")) trimmed = trimmed.slice(5);
-  if (trimmed.startsWith("[201~")) trimmed = trimmed.slice(5);
-  if (trimmed.endsWith("[201~")) trimmed = trimmed.slice(0, -5);
-  trimmed = trimmed.trim();
-  if (trimmed.length === 0) return null;
-
   // file:// URI (common in some terminals / desktop environments)
   if (trimmed.startsWith("file://")) {
     try {
@@ -129,45 +91,6 @@ function normalizeDroppedPath(token: string): string | null {
   return trimmed;
 }
 
-function splitConcatenatedAbsolutePaths(token: string): string[] {
-  // Some terminals appear to paste the path twice without whitespace, e.g.
-  // "/Users/...png/Users/...png". Split on the second absolute-path marker.
-  const markers = ["/Users/", "/home/", "/Volumes/"];
-  for (const marker of markers) {
-    const first = token.indexOf(marker);
-    if (first === -1) continue;
-    const second = token.indexOf(marker, first + marker.length);
-    if (second === -1) continue;
-    const left = token.slice(0, second).trim();
-    const right = token.slice(second).trim();
-    return [left, right].filter(part => part.length > 0);
-  }
-
-  // Very small fallback: if a token starts with "/" and contains another "/Users/" later, split there.
-  if (token.startsWith("/") && token.includes("/Users/")) {
-    const secondUsers = token.indexOf("/Users/", 1);
-    if (secondUsers > 0) {
-      const left = token.slice(0, secondUsers).trim();
-      const right = token.slice(secondUsers).trim();
-      return [left, right].filter(part => part.length > 0);
-    }
-  }
-
-  // Windows: repeated drive prefix
-  const driveMatch = token.match(/^[A-Za-z]:\\/);
-  if (driveMatch) {
-    const prefix = driveMatch[0];
-    const second = token.indexOf(prefix, prefix.length);
-    if (second > 0) {
-      const left = token.slice(0, second).trim();
-      const right = token.slice(second).trim();
-      return [left, right].filter(part => part.length > 0);
-    }
-  }
-
-  return [token];
-}
-
 /**
  * Best-effort parser for drag-and-drop file paths in terminals.
  *
@@ -179,12 +102,10 @@ export function extractDroppedFilePaths(content: string): string[] {
   const results: string[] = [];
 
   for (const token of tokens) {
-    for (const piece of splitConcatenatedAbsolutePaths(token)) {
-      const normalized = normalizeDroppedPath(piece);
-      if (normalized === null) continue;
-      // Don't resolve relative paths; terminals typically provide absolute paths.
-      results.push(normalized);
-    }
+    const normalized = normalizeDroppedPath(token);
+    if (normalized === null) continue;
+    // Don't resolve relative paths; terminals typically provide absolute paths.
+    results.push(normalized);
   }
 
   return results;

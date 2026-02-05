@@ -1,11 +1,22 @@
 import type { HubModel } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { measureElement, type DOMElement, useStdin } from "ink";
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
 import { getCachedModelCatalogOrFetch, parseModelKey } from "../catalogHelpers.js";
 import { getDownloadSize } from "../downloadHelpers.js";
 import { estimateMessageLinesCount } from "../util.js";
+import { extractDroppedFilePaths } from "./drop/paths.js";
+import { deleteBeforeCursorCount } from "./inputReducer.js";
 import {
   type ChatUserInputState,
   type InkChatMessage,
@@ -192,24 +203,38 @@ export function useSuggestionsPerPage(messages: InkChatMessage[]): number {
 
 interface UseBufferedPasteDetectionOpts {
   onPaste: (content: string) => void;
+  setUserInputState: Dispatch<SetStateAction<ChatUserInputState>>;
   pasteDelayMs?: number;
 }
 
 export const LARGE_PASTE_THRESHOLD = 512; // Minimum characters to consider input as a paste
+const IMAGE_PATH_REGEX = /\.(png|jpe?g|gif|bmp|webp|tiff?)\b/i;
+const PATH_SEPARATORS_REGEX = /[\\/]/;
+const DROP_BURST_RESET_MS = 120;
+const DROP_BURST_MAX_CHARS = 2048;
 
 /**
  * This hook listens to raw stdin data and uses debouncing to distinguish between normal typing and
  * paste operations. When a paste is detected, it buffers the content and calls the onPaste callback
  * once the paste operation completes.
  *
- * Returns a ref to signal whether normal input processing should be skipped (i.e., during paste).
- * as true indicates that this hook is currently buffering all input as part of a paste operation.
+ * Returns a ref to signal whether normal input processing should be skipped (i.e., during paste),
+ * along with a handler for small input bursts that may represent a drop/paste path.
  */
-export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetectionOpts) {
+export function useBufferedPasteDetection({
+  onPaste,
+  setUserInputState,
+}: UseBufferedPasteDetectionOpts) {
   const { stdin, setRawMode } = useStdin();
 
   // Ref to signal that normal input processing should be bypassed during paste operations
   const skipUseInputRef = useRef(false);
+
+  const dropBurstRef = useRef<{ text: string; length: number; lastAt: number }>({
+    text: "",
+    length: 0,
+    lastAt: 0,
+  });
 
   const pasteBufferRef = useRef("");
   const pasteTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -220,6 +245,43 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
   // and we want to adaptively wait longer for bigger pastes
   // The scale adds additional time for each character in the last chunk
   const SCALE = 0.1;
+
+  const handleInputChunk = useCallback(
+    (inputChunk: string) => {
+      const now = Date.now();
+      const sinceLast = now - dropBurstRef.current.lastAt;
+      if (sinceLast > DROP_BURST_RESET_MS) {
+        dropBurstRef.current.text = "";
+        dropBurstRef.current.length = 0;
+      }
+      dropBurstRef.current.lastAt = now;
+      dropBurstRef.current.text += inputChunk;
+      dropBurstRef.current.length += inputChunk.length;
+      if (dropBurstRef.current.text.length > DROP_BURST_MAX_CHARS) {
+        dropBurstRef.current.text = dropBurstRef.current.text.slice(-DROP_BURST_MAX_CHARS);
+      }
+
+      const burstText = dropBurstRef.current.text;
+      if (
+        burstText.length > 0 &&
+        IMAGE_PATH_REGEX.test(burstText) &&
+        (burstText.includes("file://") || PATH_SEPARATORS_REGEX.test(burstText))
+      ) {
+        const extracted = extractDroppedFilePaths(burstText);
+        if (extracted.length > 0) {
+          const deleteCount = dropBurstRef.current.length;
+          dropBurstRef.current.text = "";
+          dropBurstRef.current.length = 0;
+          setUserInputState(previousState => deleteBeforeCursorCount(previousState, deleteCount));
+          onPaste(burstText);
+          return true;
+        }
+      }
+
+      return false;
+    },
+    [onPaste, setUserInputState],
+  );
 
   useEffect(() => {
     if (stdin === undefined) return;
@@ -311,7 +373,7 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
     };
   }, [stdin, onPaste, setRawMode]);
 
-  return skipUseInputRef;
+  return { skipUseInputRef, handleInputChunk };
 }
 
 export type ConfirmationResponseStatus = "handled" | "invalid" | "ignored";

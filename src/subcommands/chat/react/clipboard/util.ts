@@ -1,24 +1,8 @@
 // Tiny magic-number helpers for detecting if a Buffer is an image.
 // This is intentionally minimal and best-effort (no full parsing).
 
-type MagicSignature = { offset: number; bytes: readonly number[] };
-
-type MagicNumber = {
-  signatures: readonly MagicSignature[];
-  format: "JPEG" | "PNG" | "GIF" | "BMP" | "WEBP";
-  mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/bmp" | "image/webp";
-  extension: "jpg" | "png" | "gif" | "bmp" | "webp";
-};
-
-function matchesMagicSignatures(content: Buffer, signatures: readonly MagicSignature[]): boolean {
-  return signatures.every(({ offset, bytes }) => {
-    if (content.length < offset + bytes.length) return false;
-    return bytes.every((byte, index) => content[offset + index] === byte);
-  });
-}
-
 // Check for common image format magic numbers
-const BASE64_MAGIC_NUMBERS: readonly MagicNumber[] = [
+const MAGIC_NUMBERS = [
   { signatures: [{ offset: 0, bytes: [0xff, 0xd8, 0xff] }], format: "JPEG", mimeType: "image/jpeg", extension: "jpg" },
   {
     signatures: [{ offset: 0, bytes: [0x89, 0x50, 0x4e, 0x47] }],
@@ -40,22 +24,25 @@ const BASE64_MAGIC_NUMBERS: readonly MagicNumber[] = [
   },
 ] as const;
 
-export function isImageViaMagic(content: Buffer): boolean {
-  for (const { signatures } of BASE64_MAGIC_NUMBERS) {
-    if (matchesMagicSignatures(content, signatures)) return true;
-  }
-  return false;
-}
+type MagicNumber = (typeof MAGIC_NUMBERS)[number];
 
 export function detectImageViaMagic(content: Buffer): {
   format: MagicNumber["format"];
   mimeType: MagicNumber["mimeType"];
   extension: MagicNumber["extension"];
 } | null {
-  for (const entry of BASE64_MAGIC_NUMBERS) {
-    if (matchesMagicSignatures(content, entry.signatures)) {
+  for (const entry of MAGIC_NUMBERS) {
+    const matches = entry.signatures.every(({ offset, bytes }) => {
+      if (content.length < offset + bytes.length) return false;
+      return bytes.every((byte, index) => content[offset + index] === byte);
+    });
+    if (matches) {
       return { format: entry.format, mimeType: entry.mimeType, extension: entry.extension };
     }
   }
   return null;
+}
+
+export function isImageViaMagic(content: Buffer): boolean {
+  return detectImageViaMagic(content) !== null;
 }
