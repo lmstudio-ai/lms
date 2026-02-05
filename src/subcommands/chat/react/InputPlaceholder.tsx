@@ -71,7 +71,7 @@ export function InputPlaceholder({
     <Box>
       <Text color="cyan">› </Text>
       <Text inverse>T</Text>
-      <Text dimColor>ype a message or use / to use commands</Text>
+      <Text dimColor>ype a message, drag & drop an image file, or use / to use commands</Text>
     </Box>
   );
 }

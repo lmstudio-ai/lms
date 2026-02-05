@@ -66,7 +66,7 @@ export const ChatInput = ({
   selectedSuggestion,
   predictionSpinnerVisible,
 }: ChatInputProps) => {
-  const skipUseInputRef = useBufferedPasteDetection({ onPaste });
+  const { skipUseInputRef, handleInputChunk } = useBufferedPasteDetection({ onPaste });
   const disableUserInput =
     (isPredicting ||
       modelLoadingProgress !== null ||
@@ -201,6 +201,10 @@ export const ChatInput = ({
         return;
       }
 
+      // Check if this was part of a dropped file path before inserting.
+      if (handleInputChunk(filteredInputChunk)) {
+        return;
+      }
       setUserInputState(previousState =>
         insertTextAtCursor({ state: previousState, text: filteredInputChunk }),
       );

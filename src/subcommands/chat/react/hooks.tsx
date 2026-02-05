@@ -6,6 +6,7 @@ import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
 import { getCachedModelCatalogOrFetch, parseModelKey } from "../catalogHelpers.js";
 import { getDownloadSize } from "../downloadHelpers.js";
 import { estimateMessageLinesCount } from "../util.js";
+import { extractDroppedFilePaths } from "./drop/paths.js";
 import {
   type ChatUserInputState,
   type InkChatMessage,
@@ -196,20 +197,39 @@ interface UseBufferedPasteDetectionOpts {
 }
 
 export const LARGE_PASTE_THRESHOLD = 512; // Minimum characters to consider input as a paste
+const IMAGE_PATH_REGEX = /\.(png|jpe?g|gif|bmp|webp|tiff?)\b/i;
+const DROP_BURST_RESET_MS = 120;
+const DROP_BURST_MAX_CHARS = 2048;
+function quoteDroppedPath(filePath: string): string {
+  return `"${filePath.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+function isPathLikeToken(token: string): boolean {
+  if (token.startsWith("file://")) return true;
+  if (token.startsWith("/")) return true;
+  if (token.startsWith("~")) return true;
+  if (token.startsWith("\\\\")) return true;
+  if (/^[A-Za-z]:[\\/]/.test(token)) return true;
+  return false;
+}
 
 /**
  * This hook listens to raw stdin data and uses debouncing to distinguish between normal typing and
  * paste operations. When a paste is detected, it buffers the content and calls the onPaste callback
  * once the paste operation completes.
  *
- * Returns a ref to signal whether normal input processing should be skipped (i.e., during paste).
- * as true indicates that this hook is currently buffering all input as part of a paste operation.
+ * Returns a ref to signal whether normal input processing should be skipped (i.e., during paste),
+ * along with a handler for small input bursts that may represent a drop/paste path.
  */
 export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetectionOpts) {
   const { stdin, setRawMode } = useStdin();
 
   // Ref to signal that normal input processing should be bypassed during paste operations
   const skipUseInputRef = useRef(false);
+
+  const dropBurstRef = useRef<{ text: string; lastAt: number }>({
+    text: "",
+    lastAt: 0,
+  });
 
   const pasteBufferRef = useRef("");
   const pasteTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -220,6 +240,43 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
   // and we want to adaptively wait longer for bigger pastes
   // The scale adds additional time for each character in the last chunk
   const SCALE = 0.1;
+
+  const handleInputChunk = useCallback(
+    (inputChunk: string) => {
+      // Track small, rapid chunks that may actually be a drop/paste delivered as keystrokes.
+      const now = Date.now();
+      const sinceLast = now - dropBurstRef.current.lastAt;
+      if (sinceLast > DROP_BURST_RESET_MS) {
+        dropBurstRef.current.text = "";
+      }
+      dropBurstRef.current.lastAt = now;
+      dropBurstRef.current.text += inputChunk;
+      if (dropBurstRef.current.text.length > DROP_BURST_MAX_CHARS) {
+        dropBurstRef.current.text = dropBurstRef.current.text.slice(-DROP_BURST_MAX_CHARS);
+      }
+
+      const burstText = dropBurstRef.current.text;
+      if (burstText.length > 0) {
+        const extracted = extractDroppedFilePaths(burstText);
+        const hasImagePath = extracted.some(filePath => IMAGE_PATH_REGEX.test(filePath));
+        if (!hasImagePath) return false;
+        const pathLikeTokens = extracted.filter(isPathLikeToken);
+        const isLikelyDropQuick =
+          pathLikeTokens.length > 0 &&
+          (burstText.includes("file://") ||
+            burstText.includes("\n") ||
+            burstText.includes("\r") ||
+            extracted.length > 1);
+        if (!isLikelyDropQuick) return false;
+        dropBurstRef.current.text = "";
+        onPaste(pathLikeTokens.map(quoteDroppedPath).join(" "));
+        return true;
+      }
+
+      return false;
+    },
+    [onPaste],
+  );
 
   useEffect(() => {
     if (stdin === undefined) return;
@@ -311,7 +368,7 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
     };
   }, [stdin, onPaste, setRawMode]);
 
-  return skipUseInputRef;
+  return { skipUseInputRef, handleInputChunk };
 }
 
 export type ConfirmationResponseStatus = "handled" | "invalid" | "ignored";
