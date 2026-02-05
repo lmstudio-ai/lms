@@ -1,4 +1,5 @@
 import {
+  type FileHandle,
   type ChatMessagePartFileData,
   type ChatMessagePartTextData,
   type LMStudioClient,
@@ -31,7 +32,7 @@ export async function buildUserMessageParts({
     return [segment.data];
   });
 
-  let preparedImages: Awaited<ReturnType<typeof client.files.prepareImage>>[] = [];
+  let preparedImages: Awaited<Promise<FileHandle>>[] = [];
   try {
     preparedImages =
       imagesToPrepare.length > 0
@@ -56,34 +57,44 @@ export async function buildUserMessageParts({
   const parts: UserMessagePart[] = [];
   let preparedImageIndex = 0;
   for (const segment of inputSegments) {
-    if (segment.type === "text") {
-      parts.push({ type: "text", text: segment.content });
-      continue;
+    switch (segment.type) {
+      case "text": {
+        parts.push({ type: "text", text: segment.content });
+        break;
+      }
+      case "chip": {
+        switch (segment.data.kind) {
+          case "largePaste": {
+            parts.push({ type: "text", text: segment.data.content });
+            break;
+          }
+          case "image": {
+            const nextImage = preparedImages[preparedImageIndex];
+            if (nextImage === undefined) {
+              break;
+            }
+            preparedImageIndex += 1;
+            parts.push({
+              type: "file",
+              name: nextImage.name,
+              identifier: nextImage.identifier,
+              sizeBytes: nextImage.sizeBytes,
+              fileType: nextImage.type,
+            });
+            break;
+          }
+          default: {
+            const exhaustiveCheck: never = segment.data;
+            throw new Error(`Unhandled chip kind: ${JSON.stringify(exhaustiveCheck)}`);
+          }
+        }
+        break;
+      }
+      default: {
+        const exhaustiveCheck: never = segment;
+        throw new Error(`Unhandled segment type: ${JSON.stringify(exhaustiveCheck)}`);
+      }
     }
-    if (segment.data.kind === "largePaste") {
-      parts.push({ type: "text", text: segment.data.content });
-      continue;
-    }
-    // image chip
-    const nextImage = preparedImages[preparedImageIndex];
-    if (nextImage === undefined) {
-      continue;
-    }
-    preparedImageIndex += 1;
-    parts.push({
-      type: "file",
-      name: nextImage.name,
-      identifier: nextImage.identifier,
-      sizeBytes: nextImage.sizeBytes,
-      fileType: nextImage.type,
-    });
   }
-
-  // Ensure there is at least a leading text part. This matches the append(role, content, opts)
-  // behavior and avoids edge cases with image-only messages.
-  if (parts.length === 0 || parts[0]?.type !== "text") {
-    parts.unshift({ type: "text", text: "" });
-  }
-
   return parts;
 }
