@@ -2,6 +2,7 @@ import type { SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { Spinner } from "../../Spinner.js";
+import { basename } from "path";
 import { type ChatInputData, type InkChatMessage } from "./react/types.js";
 
 export async function loadModelWithProgress(
@@ -173,23 +174,12 @@ export function getLargePastePlaceholderText(content: string, previewLength: num
   return `[Pasted${spacer}${preview}${ellipsis}]`;
 }
 
-function getBaseName(filePath: string): string | undefined {
-  const trimmed = filePath.trim();
-  if (trimmed.length === 0) return undefined;
-  const parts = trimmed.split(/[\\/]/);
-  return parts[parts.length - 1];
-}
-
 export function getChipPreviewText(data: ChatInputData): string {
   if (data.kind === "largePaste") {
     return getLargePastePlaceholderText(data.content);
   }
 
-  const imageDisplayName =
-    data.name ??
-    getBaseName(data.fileName ?? "") ??
-    data.fileName ??
-    "image";
+  const imageDisplayName = basename(data.fileName ?? "").trim() || data.fileName || "image";
   return `[Image: ${imageDisplayName}]`;
 }
 

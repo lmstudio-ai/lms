@@ -33,10 +33,8 @@ export function renderInputWithCursor({
             const range = chipRanges.find(
               highlight => absolutePos >= highlight.start && absolutePos < highlight.end,
             );
-            if (range?.kind === "largePaste") {
+            if (range?.kind === "largePaste" || range?.kind === "image") {
               result += chalk.blue(char);
-            } else if (range?.kind === "image") {
-              result += chalk.cyan(char);
             } else {
               result += char;
             }

@@ -57,7 +57,6 @@ export type ChatInputData =
       source: "base64";
       fileName: string;
       contentBase64: string;
-      name?: string;
     };
 
 export type UserInputContentPart =

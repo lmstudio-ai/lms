@@ -1022,7 +1022,6 @@ describe("chatInputStateReducers", () => {
           source: "base64",
           fileName: "cat.png",
           contentBase64: "aGVsbG8=",
-          name: "cat.png",
           mime: "image/png",
         },
       });
@@ -1036,7 +1035,6 @@ describe("chatInputStateReducers", () => {
             source: "base64",
             fileName: "cat.png",
             contentBase64: "aGVsbG8=",
-            name: "cat.png",
             mime: "image/png",
           },
         },
