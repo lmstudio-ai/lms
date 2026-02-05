@@ -56,7 +56,7 @@ export type ChatInputData =
       mime?: string;
       source: "base64";
       fileName: string;
-      contentBase64: string;
+      imageHash: string;
     };
 
 export type UserInputContentPart =

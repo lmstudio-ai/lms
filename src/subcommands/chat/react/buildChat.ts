@@ -1,61 +1,36 @@
 import {
-  type FileHandle,
   type ChatMessagePartFileData,
   type ChatMessagePartTextData,
+  type FileHandle,
   type LMStudioClient,
 } from "@lmstudio/sdk";
 import type { ChatInputSegment } from "./types.js";
+import type { ImageStore } from "./images/imageStore.js";
+import { ImagePreparationError } from "./images/imageErrors.js";
 
 export type UserMessagePart = ChatMessagePartTextData | ChatMessagePartFileData;
-
-export class ImagePreparationError extends Error {
-  code: "not_image" | "prepare_failed";
-
-  constructor(code: "not_image" | "prepare_failed", message: string) {
-    super(message);
-    this.code = code;
-    this.name = "ImagePreparationError";
-  }
-}
 
 export async function buildUserMessageParts({
   client,
   inputSegments,
+  imageStore,
 }: {
   client: LMStudioClient;
   inputSegments: ChatInputSegment[];
+  imageStore: ImageStore;
 }): Promise<UserMessagePart[]> {
-  const imagesToPrepare = inputSegments.flatMap(segment => {
-    if (segment.type !== "chip" || segment.data.kind !== "image") {
-      return [];
-    }
-    return [segment.data];
-  });
-
-  let preparedImages: Awaited<Promise<FileHandle>>[] = [];
+  let preparedImagesByHash = new Map<string, FileHandle>();
   try {
-    preparedImages =
-      imagesToPrepare.length > 0
-        ? await Promise.all(
-            imagesToPrepare.map(image => {
-              return client.files.prepareImageBase64(image.fileName, image.contentBase64);
-            }),
-          )
-        : [];
+    preparedImagesByHash = await imageStore.prepareImagesForChat(client, inputSegments);
   } catch (error) {
+    if (error instanceof ImagePreparationError) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : String(error);
     throw new ImagePreparationError("prepare_failed", message);
   }
 
-  if (preparedImages.some(image => image.type !== "image")) {
-    throw new ImagePreparationError(
-      "not_image",
-      "clipboard content was not recognized as an image.",
-    );
-  }
-
   const parts: UserMessagePart[] = [];
-  let preparedImageIndex = 0;
   for (const segment of inputSegments) {
     switch (segment.type) {
       case "text": {
@@ -69,11 +44,13 @@ export async function buildUserMessageParts({
             break;
           }
           case "image": {
-            const nextImage = preparedImages[preparedImageIndex];
+            const nextImage = preparedImagesByHash.get(segment.data.imageHash);
             if (nextImage === undefined) {
-              break;
+              throw new ImagePreparationError(
+                "prepare_failed",
+                `Missing prepared image for hash ${segment.data.imageHash}.`,
+              );
             }
-            preparedImageIndex += 1;
             parts.push({
               type: "file",
               name: nextImage.name,

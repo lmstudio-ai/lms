@@ -1020,7 +1020,7 @@ describe("chatInputStateReducers", () => {
         image: {
           source: "base64",
           fileName: "cat.png",
-          contentBase64: "aGVsbG8=",
+          imageHash: "hash-cat",
           mime: "image/png",
         },
       });
@@ -1033,7 +1033,7 @@ describe("chatInputStateReducers", () => {
             kind: "image",
             source: "base64",
             fileName: "cat.png",
-            contentBase64: "aGVsbG8=",
+            imageHash: "hash-cat",
             mime: "image/png",
           },
         },
@@ -1056,14 +1056,14 @@ describe("chatInputStateReducers", () => {
 
       const result = insertImageAtCursor({
         state: initialState,
-        image: { source: "base64", fileName: "cat.png", contentBase64: "aGVsbG8=" },
+        image: { source: "base64", fileName: "cat.png", imageHash: "hash-cat" },
       });
 
       expect(result.segments).toEqual([
         { type: "text", content: "head" },
         {
           type: "chip",
-          data: { kind: "image", source: "base64", fileName: "cat.png", contentBase64: "aGVsbG8=" },
+          data: { kind: "image", source: "base64", fileName: "cat.png", imageHash: "hash-cat" },
         },
         { type: "chip", data: { kind: "largePaste", content: "PASTE" } },
         { type: "text", content: "tail" },

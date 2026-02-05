@@ -25,7 +25,9 @@ import type {
   Suggestion,
   UserInputContentPart,
 } from "./types.js";
-import { buildUserMessageParts, ImagePreparationError } from "./buildChat.js";
+import { buildUserMessageParts } from "./buildChat.js";
+import { ImagePreparationError } from "./images/imageErrors.js";
+import { ImageStore } from "./images/imageStore.js";
 
 // Freezes streaming content into static chunks at natural breaks to reduce re-renders.
 // Uses multiple boundaries to handle different content (best effort):
@@ -53,6 +55,8 @@ export const emptyChatInputState: ChatUserInputState = {
   cursorOnSegmentIndex: 0,
   cursorInSegmentOffset: 0,
 };
+
+const imageStore = new ImageStore();
 
 export const ChatComponent = React.memo(
   ({ client, llm, chat, onExit, stats, ttl, shouldFetchModelCatalog }: ChatComponentProps) => {
@@ -425,7 +429,11 @@ export const ChatComponent = React.memo(
       try {
         let parts: Awaited<ReturnType<typeof buildUserMessageParts>>;
         try {
-          parts = await buildUserMessageParts({ client, inputSegments });
+          parts = await buildUserMessageParts({
+            client,
+            inputSegments,
+            imageStore,
+          });
         } catch (error) {
           if (error instanceof ImagePreparationError) {
             setMessages(
