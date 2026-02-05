@@ -25,7 +25,7 @@ export class ImageStore {
   private readonly preparedByHash = new Map<string, FileHandle>();
   private readonly maxEntries: number;
 
-  constructor(maxEntries: number = 10) {
+  constructor(maxEntries: number = 35) {
     this.maxEntries = maxEntries;
   }
 
