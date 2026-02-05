@@ -23,6 +23,12 @@ describe("extractDroppedFilePaths", () => {
     ]);
   });
 
+  it("preserves narrow no-break space characters in file names", () => {
+    expect(
+      extractDroppedFilePaths("/Users/me/Screenshot\\ 2026-02-03\\ at\\ 6.16.20\u202FPM.png"),
+    ).toEqual(["/Users/me/Screenshot 2026-02-03 at 6.16.20\u202FPM.png"]);
+  });
+
   it("strips literal bracketed paste markers", () => {
     expect(extractDroppedFilePaths("[200~/a/b.png [201~")).toEqual(["/a/b.png"]);
   });

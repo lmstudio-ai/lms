@@ -33,4 +33,3 @@ export async function readDroppedImageFileAsBase64(filePath: string): Promise<Dr
     mimeType: detected.mimeType,
   };
 }
-

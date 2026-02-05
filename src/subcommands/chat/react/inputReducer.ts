@@ -269,6 +269,23 @@ export function deleteBeforeCursor(state: ChatUserInputState): ChatUserInputStat
 }
 
 /**
+ * Deletes multiple characters before the cursor by applying deleteBeforeCursor repeatedly.
+ */
+export function deleteBeforeCursorCount(
+  state: ChatUserInputState,
+  count: number,
+): ChatUserInputState {
+  if (count <= 0) {
+    return state;
+  }
+  let nextState = state;
+  for (let i = 0; i < count; i += 1) {
+    nextState = deleteBeforeCursor(nextState);
+  }
+  return nextState;
+}
+
+/**
  * Deletes the character after the cursor (Delete key behavior).
  * - Within text: deletes character at cursor position
  * - At end of text segment: merges with next segment or deletes it

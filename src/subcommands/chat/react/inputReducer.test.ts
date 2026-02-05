@@ -1,6 +1,7 @@
 import {
   deleteAfterCursor,
   deleteBeforeCursor,
+  deleteBeforeCursorCount,
   insertPasteAtCursor,
   insertImageAtCursor,
   insertSuggestionAtCursor,
@@ -268,6 +269,46 @@ describe("chatInputStateReducers", () => {
       ]);
       expect(afterThirdBackspace.cursorOnSegmentIndex).toBe(0);
       expect(afterThirdBackspace.cursorInSegmentOffset).toBe(3);
+    });
+  });
+  describe("deleteBeforeCursorCount", () => {
+    it("deletes multiple characters within a text segment", () => {
+      const initialState = createChatUserInputState([{ type: "text", content: "hello" }], 0, 5);
+
+      const result = deleteBeforeCursorCount(initialState, 2);
+
+      expect(result.segments).toEqual([{ type: "text", content: "hel" }]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(3);
+    });
+
+    it("deletes across chip boundaries", () => {
+      const initialState = createChatUserInputState(
+        [
+          { type: "text", content: "hi" },
+          { type: "chip", data: { kind: "largePaste", content: "pasted" } },
+          { type: "text", content: "ok" },
+        ],
+        2,
+        0,
+      );
+
+      const result = deleteBeforeCursorCount(initialState, 2);
+
+      expect(result.segments).toEqual([
+        { type: "text", content: "h" },
+        { type: "text", content: "ok" },
+      ]);
+      expect(result.cursorOnSegmentIndex).toBe(0);
+      expect(result.cursorInSegmentOffset).toBe(1);
+    });
+
+    it("does nothing when count is zero", () => {
+      const initialState = createChatUserInputState([{ type: "text", content: "hello" }], 0, 2);
+
+      const result = deleteBeforeCursorCount(initialState, 0);
+
+      expect(result).toEqual(initialState);
     });
   });
   describe("deleteAfterCursor", () => {

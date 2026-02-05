@@ -196,18 +196,6 @@ interface UseBufferedPasteDetectionOpts {
 }
 
 export const LARGE_PASTE_THRESHOLD = 512; // Minimum characters to consider input as a paste
-const DROP_BURST_THRESHOLD = 8; // Minimum chunk length to consider a "drop/paste burst"
-const BRACKETED_PASTE_START = "\x1b[200~";
-const BRACKETED_PASTE_END = "\x1b[201~";
-
-function longestSuffixThatIsPrefix(text: string, marker: string): string {
-  const max = Math.min(text.length, marker.length - 1);
-  for (let length = max; length > 0; length--) {
-    const suffix = text.slice(-length);
-    if (marker.startsWith(suffix)) return suffix;
-  }
-  return "";
-}
 
 /**
  * This hook listens to raw stdin data and uses debouncing to distinguish between normal typing and
@@ -225,8 +213,6 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
 
   const pasteBufferRef = useRef("");
   const pasteTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const isBracketedPasteRef = useRef(false);
-  const bracketedMarkerRemainderRef = useRef("");
 
   const BASE_DELAY = 20; // Minimum debounce delay in milliseconds
   const MAX_DELAY = 1000; // Maximum delay to prevent excessive waiting
@@ -245,26 +231,6 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
     const restoreRawMode = () => {
       if (!wasRaw) setRawMode(false);
     };
-
-    // Enable bracketed paste mode (many terminals wrap paste/drop content in ESC[200~ ... ESC[201~).
-    // This lets us reliably detect drops even when the terminal delivers the path in small chunks.
-    const enableBracketedPaste = () => {
-      if (process.stdout.isTTY !== true) return;
-      try {
-        process.stdout.write("\x1b[?2004h");
-      } catch {
-        // ignore
-      }
-    };
-    const disableBracketedPaste = () => {
-      if (process.stdout.isTTY !== true) return;
-      try {
-        process.stdout.write("\x1b[?2004l");
-      } catch {
-        // ignore
-      }
-    };
-    enableBracketedPaste();
 
     const schedulePasteFlush = (chunkSize: number) => {
       const bonus = chunkSize * SCALE;
@@ -289,95 +255,31 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
         pasteBufferRef.current = "";
         skipUseInputRef.current = false;
         pasteTimeoutRef.current = undefined;
-        isBracketedPasteRef.current = false;
       }, delay);
     };
 
     const handleData = (inputText: string) => {
-      // Bracketed paste mode parsing (must run before escape-sequence filtering).
-      // Some terminals split the ESC[200~/ESC[201~ markers across chunks, so we keep a remainder.
-      let remaining = bracketedMarkerRemainderRef.current + inputText;
-      bracketedMarkerRemainderRef.current = "";
+      // Check if this is an ANSI escape sequence (e.g., arrow keys, function keys)
+      // Escape sequences start with ESC character (\x1b)
+      const isEscapeSequence = inputText.startsWith("\x1b");
 
-      const handleLegacy = (legacyText: string) => {
-        if (legacyText.length === 0) return;
-        // Check if this is an ANSI escape sequence (e.g., arrow keys, function keys)
-        // Escape sequences start with ESC character (\x1b)
-        const isEscapeSequence = legacyText.startsWith("\x1b");
+      // Detect paste start: large input (>512 chars) that's not an escape sequence
+      // and we're not already in a paste operation
+      const isPasteStart =
+        inputText.length > LARGE_PASTE_THRESHOLD &&
+        !isEscapeSequence &&
+        pasteBufferRef.current.length === 0;
 
-        const isDropLikeBurst =
-          legacyText.length >= DROP_BURST_THRESHOLD &&
-          /[\\/]/.test(legacyText) &&
-          /\.[a-z0-9]{2,8}/i.test(legacyText);
+      // Detect paste continuation: we're already buffering and this isn't an escape sequence
+      const isContinuingPaste = pasteBufferRef.current.length > 0 && !isEscapeSequence;
 
-        // Detect paste start: large input (>512 chars) OR a drop-like burst, not an escape sequence,
-        // and we're not already in a paste operation.
-        const isPasteStart =
-          (legacyText.length > LARGE_PASTE_THRESHOLD || isDropLikeBurst) &&
-          !isEscapeSequence &&
-          pasteBufferRef.current.length === 0;
+      if (isPasteStart || isContinuingPaste) {
+        skipUseInputRef.current = true;
+        pasteBufferRef.current += inputText;
 
-        // Detect paste continuation: we're already buffering and this isn't an escape sequence
-        const isContinuingPaste = pasteBufferRef.current.length > 0 && !isEscapeSequence;
-
-        if (isPasteStart || isContinuingPaste) {
-          skipUseInputRef.current = true;
-          pasteBufferRef.current += legacyText;
-          schedulePasteFlush(legacyText.length);
-        }
-      };
-
-      while (remaining.length > 0) {
-        if (isBracketedPasteRef.current === false) {
-          const startIndex = remaining.indexOf(BRACKETED_PASTE_START);
-          if (startIndex === -1) {
-            const remainder = longestSuffixThatIsPrefix(remaining, BRACKETED_PASTE_START);
-            if (remainder.length > 0) {
-              bracketedMarkerRemainderRef.current = remainder;
-              handleLegacy(remaining.slice(0, -remainder.length));
-            } else {
-              handleLegacy(remaining);
-            }
-            return;
-          }
-
-          handleLegacy(remaining.slice(0, startIndex));
-          remaining = remaining.slice(startIndex + BRACKETED_PASTE_START.length);
-
-          isBracketedPasteRef.current = true;
-          skipUseInputRef.current = true;
-          pasteBufferRef.current = "";
-          if (pasteTimeoutRef.current) {
-            clearTimeout(pasteTimeoutRef.current);
-            pasteTimeoutRef.current = undefined;
-          }
-          continue;
-        }
-
-        const endIndex = remaining.indexOf(BRACKETED_PASTE_END);
-        if (endIndex === -1) {
-          const remainder = longestSuffixThatIsPrefix(remaining, BRACKETED_PASTE_END);
-          if (remainder.length > 0) {
-            bracketedMarkerRemainderRef.current = remainder;
-            pasteBufferRef.current += remaining.slice(0, -remainder.length);
-          } else {
-            pasteBufferRef.current += remaining;
-          }
-          return;
-        }
-
-        pasteBufferRef.current += remaining.slice(0, endIndex);
-        const normalized = pasteBufferRef.current.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-        if (normalized.length > 0) {
-          onPaste(normalized);
-        }
-        pasteBufferRef.current = "";
-        skipUseInputRef.current = false;
-        isBracketedPasteRef.current = false;
-        remaining = remaining.slice(endIndex + BRACKETED_PASTE_END.length);
+        // Schedule a flush with adaptive timing based on data size
+        schedulePasteFlush(inputText.length);
       }
-
-      // fully handled above
     };
 
     const handleProcessExit = () => {
@@ -394,9 +296,7 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
       process.kill(process.pid, "SIGTERM");
     };
 
-    // Use a prepended listener so we can set skipUseInputRef before Ink processes the same chunk.
-    // Otherwise, Ink may convert bracketed paste/drop sequences into typed characters first.
-    stdin.prependListener("data", handleData);
+    stdin.on("data", handleData);
     process.once("exit", handleProcessExit);
     process.once("SIGINT", handleSigInt);
     process.once("SIGTERM", handleSigTerm);
@@ -407,7 +307,6 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
       process.off("SIGINT", handleSigInt);
       process.off("SIGTERM", handleSigTerm);
       restoreRawMode();
-      disableBracketedPaste();
       if (pasteTimeoutRef.current) clearTimeout(pasteTimeoutRef.current);
     };
   }, [stdin, onPaste, setRawMode]);

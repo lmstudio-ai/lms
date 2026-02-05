@@ -2,6 +2,12 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+const ASCII_SEPARATOR_WHITESPACE = new Set([" ", "\n", "\r", "\t"]);
+
+function isSeparatorWhitespace(character: string): boolean {
+  return ASCII_SEPARATOR_WHITESPACE.has(character);
+}
+
 function tokenizeDropText(raw: string): string[] {
   const text = raw.trim();
   if (text.length === 0) return [];
@@ -22,7 +28,10 @@ function tokenizeDropText(raw: string): string[] {
       // In double quotes, terminals may escape spaces/quotes with backslash.
       if (quote === '"' && character === "\\") {
         const next = text[i + 1];
-        if (next !== undefined && (/\s/.test(next) || next === `"` || next === "\\")) {
+        if (
+          next !== undefined &&
+          (isSeparatorWhitespace(next) || next === `"` || next === "\\")
+        ) {
           i += 1;
           current += next;
           continue;
@@ -45,7 +54,7 @@ function tokenizeDropText(raw: string): string[] {
       // backslash (e.g. "...at\\\n  6.16 PM.png"). Treat this as a single space.
       if (next === "\n") {
         i += 1;
-        while (text[i + 1] !== undefined && /\s/.test(text[i + 1] ?? "")) {
+        while (text[i + 1] !== undefined && isSeparatorWhitespace(text[i + 1] ?? "")) {
           i += 1;
         }
         current += " ";
@@ -53,7 +62,7 @@ function tokenizeDropText(raw: string): string[] {
       }
       if (next === "\r" && nextNext === "\n") {
         i += 2;
-        while (text[i + 1] !== undefined && /\s/.test(text[i + 1] ?? "")) {
+        while (text[i + 1] !== undefined && isSeparatorWhitespace(text[i + 1] ?? "")) {
           i += 1;
         }
         current += " ";
@@ -62,14 +71,17 @@ function tokenizeDropText(raw: string): string[] {
 
       // Only treat backslash as an escape when it is used to escape whitespace/quotes.
       // This avoids breaking Windows paths like C:\Users\me\cat.png.
-      if (next !== undefined && (/\s/.test(next) || next === `"` || next === "'" || next === "\\")) {
+      if (
+        next !== undefined &&
+        (isSeparatorWhitespace(next) || next === `"` || next === "'" || next === "\\")
+      ) {
         i += 1;
         current += next;
         continue;
       }
     }
 
-    if (/\s/.test(character)) {
+    if (isSeparatorWhitespace(character)) {
       if (current.length > 0) {
         tokens.push(current);
         current = "";
