@@ -207,6 +207,7 @@ export const ChatInput = ({
       setUserInputState(previousState =>
         insertTextAtCursor({ state: previousState, text: filteredInputChunk }),
       );
+      // After inserting, let the paste detector retroactively convert bursts into a paste/drop.
       if (handleInputChunk(filteredInputChunk)) {
         return;
       }

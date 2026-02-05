@@ -248,6 +248,7 @@ export function useBufferedPasteDetection({
 
   const handleInputChunk = useCallback(
     (inputChunk: string) => {
+      // Track small, rapid chunks that may actually be a drop/paste delivered as keystrokes.
       const now = Date.now();
       const sinceLast = now - dropBurstRef.current.lastAt;
       if (sinceLast > DROP_BURST_RESET_MS) {
@@ -269,6 +270,7 @@ export function useBufferedPasteDetection({
       ) {
         const extracted = extractDroppedFilePaths(burstText);
         if (extracted.length > 0) {
+          // This chunk (and prior burst) was inserted already; remove it before treating as a paste.
           const deleteCount = dropBurstRef.current.length;
           dropBurstRef.current.text = "";
           dropBurstRef.current.length = 0;
