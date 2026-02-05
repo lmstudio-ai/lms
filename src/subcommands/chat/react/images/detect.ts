@@ -3,15 +3,30 @@
 
 // Check for common image format magic numbers
 const MAGIC_NUMBERS = [
-  { signatures: [{ offset: 0, bytes: [0xff, 0xd8, 0xff] }], format: "JPEG", mimeType: "image/jpeg", extension: "jpg" },
+  {
+    signatures: [{ offset: 0, bytes: [0xff, 0xd8, 0xff] }],
+    format: "JPEG",
+    mimeType: "image/jpeg",
+    extension: "jpg",
+  },
   {
     signatures: [{ offset: 0, bytes: [0x89, 0x50, 0x4e, 0x47] }],
     format: "PNG",
     mimeType: "image/png",
     extension: "png",
   },
-  { signatures: [{ offset: 0, bytes: [0x47, 0x49, 0x46] }], format: "GIF", mimeType: "image/gif", extension: "gif" },
-  { signatures: [{ offset: 0, bytes: [0x42, 0x4d] }], format: "BMP", mimeType: "image/bmp", extension: "bmp" },
+  {
+    signatures: [{ offset: 0, bytes: [0x47, 0x49, 0x46] }],
+    format: "GIF",
+    mimeType: "image/gif",
+    extension: "gif",
+  },
+  {
+    signatures: [{ offset: 0, bytes: [0x42, 0x4d] }],
+    format: "BMP",
+    mimeType: "image/bmp",
+    extension: "bmp",
+  },
   {
     signatures: [
       { offset: 0, bytes: [0x49, 0x49, 0x2a, 0x00] }, // "II*\0" little-endian TIFF

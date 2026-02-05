@@ -310,6 +310,7 @@ export const ChatComponent = React.memo(
           setUserInputState,
           largePasteThreshold: LARGE_PASTE_THRESHOLD,
           logErrorInChat,
+          imageStore,
         });
       },
       [logErrorInChat, setUserInputState],

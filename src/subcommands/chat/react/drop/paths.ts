@@ -98,7 +98,7 @@ function isLikelyAbsolutePathToken(token: string): boolean {
 }
 
 function normalizeDroppedPath(token: string): string | null {
-  const trimmed = token.trim();
+  const trimmed = decodeUnicodeEscapes(token.trim());
   if (trimmed.length === 0) return null;
 
   // file:// URI (common in some terminals / desktop environments)
@@ -117,6 +117,22 @@ function normalizeDroppedPath(token: string): string | null {
   }
 
   return trimmed;
+}
+
+function decodeUnicodeEscapes(input: string): string {
+  let output = input.replace(/\\u\{([0-9a-fA-F]+)\}/g, (match, hex) => {
+    const codePoint = Number.parseInt(hex, 16);
+    if (!Number.isFinite(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
+      return match;
+    }
+    return String.fromCodePoint(codePoint);
+  });
+  output = output.replace(/\\u([0-9a-fA-F]{4})/g, (match, hex) => {
+    const codePoint = Number.parseInt(hex, 16);
+    if (!Number.isFinite(codePoint)) return match;
+    return String.fromCharCode(codePoint);
+  });
+  return output;
 }
 
 /**

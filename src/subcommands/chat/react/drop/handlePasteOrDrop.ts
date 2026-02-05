@@ -1,8 +1,9 @@
 import type { Dispatch, SetStateAction } from "react";
 
 import { insertImageAtCursor, insertPasteAtCursor } from "../inputReducer.js";
+import type { ImageStore } from "../images/imageStore.js";
 import type { ChatUserInputState } from "../types.js";
-import { readDroppedImageFileAsBase64 } from "./images.js";
+import { readDroppedImageFileAsBase64, resolveExistingFilePath } from "../images/util.js";
 import { extractDroppedFilePaths } from "./paths.js";
 
 export async function handlePasteOrDrop({
@@ -10,11 +11,13 @@ export async function handlePasteOrDrop({
   setUserInputState,
   largePasteThreshold,
   logErrorInChat,
+  imageStore,
 }: {
   normalizedContent: string;
   setUserInputState: Dispatch<SetStateAction<ChatUserInputState>>;
   largePasteThreshold: number;
   logErrorInChat: (message: string) => void;
+  imageStore: ImageStore;
 }): Promise<void> {
   const droppedFilePaths = extractDroppedFilePaths(normalizedContent);
   const looksLikeDrop =
@@ -36,8 +39,12 @@ export async function handlePasteOrDrop({
 
   const imagesToInsert: Array<Awaited<ReturnType<typeof readDroppedImageFileAsBase64>>> = [];
   for (const filePath of droppedFilePaths) {
+    const resolvedPath = resolveExistingFilePath(filePath);
+    if (resolvedPath === null) {
+      continue;
+    }
     try {
-      const image = await readDroppedImageFileAsBase64(filePath);
+      const image = await readDroppedImageFileAsBase64(resolvedPath);
       if (image !== null) {
         imagesToInsert.push(image);
       }
@@ -53,13 +60,18 @@ export async function handlePasteOrDrop({
       let nextState = previousState;
       for (const image of imagesToInsert) {
         if (image === null) continue;
+        const imageHash = imageStore.storeImageBase64(
+          image.base64,
+          image.mimeType,
+          image.fileName,
+        );
         nextState = insertImageAtCursor({
           state: nextState,
           image: {
             source: "base64",
             fileName: image.fileName,
-            contentBase64: image.base64,
             mime: image.mimeType,
+            imageHash,
           },
         });
       }

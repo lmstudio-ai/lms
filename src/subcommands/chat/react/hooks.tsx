@@ -1,22 +1,12 @@
 import type { HubModel } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { measureElement, type DOMElement, useStdin } from "ink";
-import {
-  type Dispatch,
-  type RefObject,
-  type SetStateAction,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
 import { getCachedModelCatalogOrFetch, parseModelKey } from "../catalogHelpers.js";
 import { getDownloadSize } from "../downloadHelpers.js";
 import { estimateMessageLinesCount } from "../util.js";
 import { extractDroppedFilePaths } from "./drop/paths.js";
-import { deleteBeforeCursorCount } from "./inputReducer.js";
 import {
   type ChatUserInputState,
   type InkChatMessage,
@@ -203,15 +193,24 @@ export function useSuggestionsPerPage(messages: InkChatMessage[]): number {
 
 interface UseBufferedPasteDetectionOpts {
   onPaste: (content: string) => void;
-  setUserInputState: Dispatch<SetStateAction<ChatUserInputState>>;
   pasteDelayMs?: number;
 }
 
 export const LARGE_PASTE_THRESHOLD = 512; // Minimum characters to consider input as a paste
 const IMAGE_PATH_REGEX = /\.(png|jpe?g|gif|bmp|webp|tiff?)\b/i;
-const PATH_SEPARATORS_REGEX = /[\\/]/;
 const DROP_BURST_RESET_MS = 120;
 const DROP_BURST_MAX_CHARS = 2048;
+function quoteDroppedPath(filePath: string): string {
+  return `"${filePath.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+function isPathLikeToken(token: string): boolean {
+  if (token.startsWith("file://")) return true;
+  if (token.startsWith("/")) return true;
+  if (token.startsWith("~")) return true;
+  if (token.startsWith("\\\\")) return true;
+  if (/^[A-Za-z]:[\\/]/.test(token)) return true;
+  return false;
+}
 
 /**
  * This hook listens to raw stdin data and uses debouncing to distinguish between normal typing and
@@ -221,18 +220,14 @@ const DROP_BURST_MAX_CHARS = 2048;
  * Returns a ref to signal whether normal input processing should be skipped (i.e., during paste),
  * along with a handler for small input bursts that may represent a drop/paste path.
  */
-export function useBufferedPasteDetection({
-  onPaste,
-  setUserInputState,
-}: UseBufferedPasteDetectionOpts) {
+export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetectionOpts) {
   const { stdin, setRawMode } = useStdin();
 
   // Ref to signal that normal input processing should be bypassed during paste operations
   const skipUseInputRef = useRef(false);
 
-  const dropBurstRef = useRef<{ text: string; length: number; lastAt: number }>({
+  const dropBurstRef = useRef<{ text: string; lastAt: number }>({
     text: "",
-    length: 0,
     lastAt: 0,
   });
 
@@ -253,36 +248,34 @@ export function useBufferedPasteDetection({
       const sinceLast = now - dropBurstRef.current.lastAt;
       if (sinceLast > DROP_BURST_RESET_MS) {
         dropBurstRef.current.text = "";
-        dropBurstRef.current.length = 0;
       }
       dropBurstRef.current.lastAt = now;
       dropBurstRef.current.text += inputChunk;
-      dropBurstRef.current.length += inputChunk.length;
       if (dropBurstRef.current.text.length > DROP_BURST_MAX_CHARS) {
         dropBurstRef.current.text = dropBurstRef.current.text.slice(-DROP_BURST_MAX_CHARS);
       }
 
       const burstText = dropBurstRef.current.text;
-      if (
-        burstText.length > 0 &&
-        IMAGE_PATH_REGEX.test(burstText) &&
-        (burstText.includes("file://") || PATH_SEPARATORS_REGEX.test(burstText))
-      ) {
+      if (burstText.length > 0) {
         const extracted = extractDroppedFilePaths(burstText);
-        if (extracted.length > 0) {
-          // This chunk (and prior burst) was inserted already; remove it before treating as a paste.
-          const deleteCount = dropBurstRef.current.length;
-          dropBurstRef.current.text = "";
-          dropBurstRef.current.length = 0;
-          setUserInputState(previousState => deleteBeforeCursorCount(previousState, deleteCount));
-          onPaste(burstText);
-          return true;
-        }
+        const hasImagePath = extracted.some(filePath => IMAGE_PATH_REGEX.test(filePath));
+        if (!hasImagePath) return false;
+        const pathLikeTokens = extracted.filter(isPathLikeToken);
+        const isLikelyDropQuick =
+          pathLikeTokens.length > 0 &&
+          (burstText.includes("file://") ||
+            burstText.includes("\n") ||
+            burstText.includes("\r") ||
+            extracted.length > 1);
+        if (!isLikelyDropQuick) return false;
+        dropBurstRef.current.text = "";
+        onPaste(pathLikeTokens.map(quoteDroppedPath).join(" "));
+        return true;
       }
 
       return false;
     },
-    [onPaste, setUserInputState],
+    [onPaste],
   );
 
   useEffect(() => {
