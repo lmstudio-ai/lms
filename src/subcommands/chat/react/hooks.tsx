@@ -196,6 +196,7 @@ interface UseBufferedPasteDetectionOpts {
 }
 
 export const LARGE_PASTE_THRESHOLD = 512; // Minimum characters to consider input as a paste
+const DROP_BURST_THRESHOLD = 8; // Minimum chunk length to consider a "drop/paste burst"
 
 /**
  * This hook listens to raw stdin data and uses debouncing to distinguish between normal typing and
@@ -263,10 +264,13 @@ export function useBufferedPasteDetection({ onPaste }: UseBufferedPasteDetection
       // Escape sequences start with ESC character (\x1b)
       const isEscapeSequence = inputText.startsWith("\x1b");
 
-      // Detect paste start: large input (>512 chars) that's not an escape sequence
-      // and we're not already in a paste operation
+      const isDropLikeBurst =
+        inputText.length >= DROP_BURST_THRESHOLD && /[\\/]/.test(inputText) && /\.[a-z0-9]{2,8}/i.test(inputText);
+
+      // Detect paste start: large input (>512 chars) OR a drop-like burst, not an escape sequence,
+      // and we're not already in a paste operation.
       const isPasteStart =
-        inputText.length > LARGE_PASTE_THRESHOLD &&
+        (inputText.length > LARGE_PASTE_THRESHOLD || isDropLikeBurst) &&
         !isEscapeSequence &&
         pasteBufferRef.current.length === 0;
 
