@@ -1,12 +1,5 @@
 import { produce } from "@lmstudio/immer-with-plugins";
-import {
-  type Chat,
-  type ChatMessagePartFileData,
-  type ChatMessagePartTextData,
-  type LLM,
-  type LLMPredictionStats,
-  type LMStudioClient,
-} from "@lmstudio/sdk";
+import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, type DOMElement, useApp, Text } from "ink";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { displayVerboseStats, getChipPreviewText } from "../util.js";
@@ -32,6 +25,7 @@ import type {
   Suggestion,
   UserInputContentPart,
 } from "./types.js";
+import { buildUserMessageParts, ImagePreparationError } from "./buildChat.js";
 
 // Freezes streaming content into static chunks at natural breaks to reduce re-renders.
 // Uses multiple boundaries to handle different content (best effort):
@@ -303,8 +297,8 @@ export const ChatComponent = React.memo(
     }, [modelLoadingProgress]);
 
     const handlePaste = useCallback((content: string) => {
-      const normalizedContent = content.replaceAll("\r\n", "\n").replaceAll("\r", "\n").trimEnd();
-      if (normalizedContent.length === 0) return;
+      const normalizedContent = content.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+      if (normalizedContent.trim().length === 0) return;
       setUserInputState(previousState =>
         insertPasteAtCursor({
           state: previousState,
@@ -429,87 +423,25 @@ export const ChatComponent = React.memo(
       const signal = abortControllerRef.current.signal;
 
       try {
-        const imagesToPrepare =
-          hasImageChip === true
-            ? inputSegments.flatMap(segment => {
-                if (segment.type !== "chip" || segment.data.kind !== "image") {
-                  return [];
-                }
-                return [segment.data];
-              })
-            : [];
-
-        let preparedImages: Awaited<ReturnType<typeof client.files.prepareImage>>[] = [];
+        let parts: Awaited<ReturnType<typeof buildUserMessageParts>>;
         try {
-          preparedImages = hasImageChip
-            ? await Promise.all(
-                imagesToPrepare.map(image => {
-                  return client.files.prepareImageBase64(image.fileName, image.contentBase64);
-                }),
-              )
-            : [];
+          parts = await buildUserMessageParts({ client, inputSegments });
         } catch (error) {
-          setMessages(
-            produce(draftMessages => {
-              const lastMessage = draftMessages.at(-1);
-              if (lastMessage?.type === "user") {
-                draftMessages.pop();
-              }
-            }),
-          );
-          setUserInputState(inputStateSnapshot);
-          const message = error instanceof Error ? error.message : String(error);
-          logErrorInChat(`Failed to attach image: ${message}`);
-          return;
-        }
-        if (preparedImages.some(image => image.type !== "image")) {
-          setMessages(
-            produce(draftMessages => {
-              const lastMessage = draftMessages.at(-1);
-              if (lastMessage?.type === "user") {
-                draftMessages.pop();
-              }
-            }),
-          );
-          setUserInputState(inputStateSnapshot);
-          logErrorInChat(
-            "Failed to attach image: clipboard content was not recognized as an image.",
-          );
-          return;
-        }
-
-        const parts: Array<ChatMessagePartTextData | ChatMessagePartFileData> = [];
-        let preparedImageIndex = 0;
-        for (const segment of inputSegments) {
-          if (segment.type === "text") {
-            parts.push({ type: "text", text: segment.content });
-            continue;
+          if (error instanceof ImagePreparationError) {
+            setMessages(
+              produce(draftMessages => {
+                const lastMessage = draftMessages.at(-1);
+                if (lastMessage?.type === "user") {
+                  draftMessages.pop();
+                }
+              }),
+            );
+            setUserInputState(inputStateSnapshot);
+            logErrorInChat(`Failed to attach image: ${error.message}`);
+            return;
           }
-          if (segment.data.kind === "largePaste") {
-            parts.push({ type: "text", text: segment.data.content });
-            continue;
-          }
-          // image chip
-          const nextImage = preparedImages[preparedImageIndex];
-          if (nextImage === undefined) {
-            continue;
-          }
-          preparedImageIndex += 1;
-          parts.push({
-            type: "file",
-            name: nextImage.name,
-            identifier: nextImage.identifier,
-            sizeBytes: nextImage.sizeBytes,
-            fileType: nextImage.type,
-          });
+          throw error;
         }
-
-        // Ensure there is at least a leading text part. This matches the append(role, content, opts)
-        // behavior and avoids edge cases with image-only messages.
-        if (parts.length === 0 || parts[0]?.type !== "text") {
-          parts.unshift({ type: "text", text: "" });
-        }
-
         chatRef.current.append({ role: "user", content: parts });
         const result = await llmRef.current.respond(chatRef.current, {
           onFirstToken() {
