@@ -19,6 +19,7 @@ import {
 } from "./hooks.js";
 import { insertPasteAtCursor } from "./inputReducer.js";
 import { createSlashCommands } from "./slashCommands.js";
+import { handlePasteOrDrop } from "./drop/handlePasteOrDrop.js";
 import type {
   ChatUserInputState,
   InkChatMessage,
@@ -300,17 +301,20 @@ export const ChatComponent = React.memo(
       setModelLoadingProgress(null);
     }, [modelLoadingProgress]);
 
-    const handlePaste = useCallback((content: string) => {
-      const normalizedContent = content.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
-      if (normalizedContent.trim().length === 0) return;
-      setUserInputState(previousState =>
-        insertPasteAtCursor({
-          state: previousState,
-          content: normalizedContent,
+    const handlePaste = useCallback(
+      (content: string) => {
+        const normalizedContent = content.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+        if (normalizedContent.trim().length === 0) return;
+        void handlePasteOrDrop({
+          normalizedContent,
+          setUserInputState,
           largePasteThreshold: LARGE_PASTE_THRESHOLD,
-        }),
-      );
-    }, []);
+          logErrorInChat,
+        });
+      },
+      [logErrorInChat, setUserInputState],
+    );
+
 
     const handleSubmit = useCallback(async () => {
       const inputStateSnapshot = userInputState;
