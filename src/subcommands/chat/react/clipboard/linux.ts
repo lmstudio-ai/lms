@@ -61,8 +61,22 @@ export async function readClipboardImageAsBase64(opts?: {
         };
       }
     }
+
+    opts?.onError?.(
+      "No image found in the clipboard. Copy an image, then try again.",
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const notFound =
+      message.toLowerCase().includes("enoent") ||
+      message.toLowerCase().includes("not found");
+    if (notFound) {
+      opts?.onError?.(
+        "Clipboard image paste failed. Install `wl-clipboard` (Wayland) or `xclip` (X11), then try again.",
+      );
+      return null;
+    }
+
     opts?.onError?.(`Clipboard image paste failed: ${message}`);
   }
 

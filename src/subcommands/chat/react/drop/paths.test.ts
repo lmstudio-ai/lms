@@ -17,6 +17,23 @@ describe("extractDroppedFilePaths", () => {
     expect(extractDroppedFilePaths('"/a/b.png" "/c/d.jpg"')).toEqual(["/a/b.png", "/c/d.jpg"]);
   });
 
+  it("handles wrapped escaped paths (backslash-newline)", () => {
+    expect(extractDroppedFilePaths("/Users/me/Screenshot\\\n  6.png")).toEqual([
+      "/Users/me/Screenshot 6.png",
+    ]);
+  });
+
+  it("strips literal bracketed paste markers", () => {
+    expect(extractDroppedFilePaths("[200~/a/b.png [201~")).toEqual(["/a/b.png"]);
+  });
+
+  it("splits concatenated duplicate absolute paths", () => {
+    expect(extractDroppedFilePaths("/Users/me/a.png/Users/me/b.png")).toEqual([
+      "/Users/me/a.png",
+      "/Users/me/b.png",
+    ]);
+  });
+
   it("does not break Windows-style paths", () => {
     expect(extractDroppedFilePaths("C:\\Users\\me\\cat.png")).toEqual(["C:\\Users\\me\\cat.png"]);
   });

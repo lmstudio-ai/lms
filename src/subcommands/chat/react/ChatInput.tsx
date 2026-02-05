@@ -12,8 +12,12 @@ import {
 import { renderInputWithCursor } from "./inputRenderer.js";
 import { type ChatUserInputState } from "./types.js";
 import { getChipPreviewText } from "../util.js";
+import { extractDroppedFilePaths } from "./drop/paths.js";
 
 type ChipRange = { start: number; end: number; kind: "largePaste" | "image" };
+
+const IMAGE_PATH_REGEX = /\.(png|jpe?g|gif|bmp|webp|tiff?)\b/i;
+const PATH_SEPARATORS_REGEX = /[\\/]/;
 
 interface ChatInputProps {
   inputState: ChatUserInputState;
@@ -211,6 +215,20 @@ export const ChatInput = ({
       );
       if (filteredInputChunk.length === 0) {
         return;
+      }
+
+      // Fallback: if Ink delivers a drop/paste as a multi-char chunk (not caught by raw paste
+      // detection), treat image-looking paths as a paste so they can attach as chips.
+      if (
+        filteredInputChunk.length > 1 &&
+        IMAGE_PATH_REGEX.test(filteredInputChunk) &&
+        (filteredInputChunk.includes("file://") || PATH_SEPARATORS_REGEX.test(filteredInputChunk))
+      ) {
+        const extracted = extractDroppedFilePaths(filteredInputChunk);
+        if (extracted.length > 0) {
+          onPaste(filteredInputChunk);
+          return;
+        }
       }
 
       setUserInputState(previousState =>
