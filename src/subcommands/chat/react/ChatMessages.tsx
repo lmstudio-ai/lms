@@ -15,9 +15,9 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
     case "user": {
       const contentParts = message.content.map(part => {
         if (part.type === "text") {
-          return { type: "text" as const, text: part.text };
+          return { type: "text", text: part.text };
         }
-        return { type: "chip" as const, kind: part.kind, text: part.displayText };
+        return { type: "chip", kind: part.kind, text: part.displayText };
       });
 
       // Trim only edge newlines on the first/last non-empty parts to keep internal newlines intact.

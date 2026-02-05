@@ -296,8 +296,7 @@ describe("chatInputStateReducers", () => {
       const result = deleteBeforeCursorCount(initialState, 2);
 
       expect(result.segments).toEqual([
-        { type: "text", content: "h" },
-        { type: "text", content: "ok" },
+        { type: "text", content: "hok" },
       ]);
       expect(result.cursorOnSegmentIndex).toBe(0);
       expect(result.cursorInSegmentOffset).toBe(1);
