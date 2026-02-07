@@ -8,7 +8,7 @@ import { type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import columnify from "columnify";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
-import { formatSizeBytes1000 } from "../../formatBytes.js";
+import { formatSizeBytes1024 } from "../../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 
 interface GpuMemoryMetrics {
@@ -27,7 +27,7 @@ function getGpuMemoryMetrics(gpuInfo: RuntimeHardwareGpuInfo): GpuMemoryMetrics 
 
 // For now, we just display total VRAM
 function formatMemoryRatio(memoryMetrics: GpuMemoryMetrics): string {
-  const totalText = formatSizeBytes1000(memoryMetrics.totalBytes);
+  const totalText = formatSizeBytes1024(memoryMetrics.totalBytes);
   return ` ${totalText}`;
 }
 
@@ -69,7 +69,7 @@ function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
 }
 
 function renderRamLine(survey: RuntimeHardwareSurveyEngine): string {
-  const ramCapacityText = formatSizeBytes1000(survey.memoryInfo.ramCapacity);
+  const ramCapacityText = formatSizeBytes1024(survey.memoryInfo.ramCapacity);
 
   return `${chalk.dim("RAM:")} ${ramCapacityText}`;
 }
