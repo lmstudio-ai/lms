@@ -18,7 +18,7 @@ import fuzzy from "fuzzy";
 import { getCliPref } from "../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { formatElapsedTime } from "../formatElapsedTime.js";
-import { formatSizeBytes1000 } from "../formatBytes.js";
+import { formatSizeBytes1000, formatSizeBytes1024 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { Spinner } from "../Spinner.js";
@@ -430,10 +430,10 @@ function printEstimatedResourceUsage(
     logger.info(`GPU Offload: ${gpuOffloadRatio * 100}%`);
   }
   logger.info(
-    `Estimated GPU Memory:   ${colorFunc(formatSizeBytes1000(estimate.memory.totalVramBytes))}`,
+    `Estimated GPU Memory:   ${colorFunc(formatSizeBytes1024(estimate.memory.totalVramBytes))}`,
   );
   logger.info(
-    `Estimated Total Memory: ${colorFunc(formatSizeBytes1000(estimate.memory.totalBytes))}`,
+    `Estimated Total Memory: ${colorFunc(formatSizeBytes1024(estimate.memory.totalBytes))}`,
   );
 
   if (estimate.memory.confidence === "low") {
