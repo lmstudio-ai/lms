@@ -34,7 +34,7 @@ export function formatSizeBytesWithColor1000(sizeBytes: number) {
   }
 }
 
-const units = ["Bytes", "KB", "MB", "GB", "TB"];
+const units = ["Bytes", "KiB", "MiB", "GiB", "TiB"];
 const base = 1024;
 
 /**
@@ -42,7 +42,7 @@ const base = 1024;
  * Use this for RAM/VRAM display. For file/download sizes, use `formatSizeBytes1000()`.
  */
 export function formatSizeBytes1024(bytes: number): string {
-  if (bytes === 0) return "0 GB";
+  if (bytes === 0) return "0 GiB";
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(base)), units.length - 1);
   const size = bytes / Math.pow(base, index);
   const fractionDigits = index === 0 ? 0 : 2;
