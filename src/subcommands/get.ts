@@ -20,7 +20,7 @@ import fuzzy from "fuzzy";
 import { askQuestion } from "../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
-import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatBytes.js";
 import { handleDownloadWithProgressBar } from "../handleDownloadWithProgressBar.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";

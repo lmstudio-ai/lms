@@ -33,3 +33,4 @@ export function formatSizeBytesWithColor1000(sizeBytes: number) {
     return chalk.red(formatSizeBytes1000(sizeBytes));
   }
 }
+

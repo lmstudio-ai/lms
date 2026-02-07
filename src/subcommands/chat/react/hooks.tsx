@@ -2,7 +2,7 @@ import type { HubModel } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { measureElement, type DOMElement, useStdin } from "ink";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formatSizeBytes1000 } from "../../../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../../../formatBytes.js";
 import { getCachedModelCatalogOrFetch, parseModelKey } from "../catalogHelpers.js";
 import { getDownloadSize } from "../downloadHelpers.js";
 import { estimateMessageLinesCount } from "../util.js";

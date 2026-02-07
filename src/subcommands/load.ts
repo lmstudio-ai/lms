@@ -18,7 +18,7 @@ import fuzzy from "fuzzy";
 import { getCliPref } from "../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { formatElapsedTime } from "../formatElapsedTime.js";
-import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { Spinner } from "../Spinner.js";

@@ -6,7 +6,7 @@ import columnify from "columnify";
 import { confirm } from "@inquirer/prompts";
 import { getCliPref, type CliPref } from "../../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
-import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { type SimpleFileData } from "../../SimpleFileData.js";
 import { createRefinedNumberParser } from "../../types/refinedNumber.js";

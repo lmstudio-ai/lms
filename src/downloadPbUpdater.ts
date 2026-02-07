@@ -1,6 +1,6 @@
 import { text } from "@lmstudio/lms-common";
 import { type DownloadProgressUpdate } from "@lmstudio/sdk";
-import { formatSizeBytes1000 } from "./formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "./formatBytes.js";
 import { type ProgressBar } from "./ProgressBar.js";
 
 function formatRemainingTime(timeSeconds: number) {

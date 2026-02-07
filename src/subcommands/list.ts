@@ -6,7 +6,7 @@ import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { formatTimeLean } from "../formatElapsedTime.js";
-import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 function loadedCheck(count: number) {

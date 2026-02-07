@@ -25,7 +25,7 @@ import { addCreateClientOptions, createClient, type CreateClientArgs } from "../
 import { ensureAuthenticated } from "../ensureAuthenticated.js";
 import { exists } from "../exists.js";
 import { findProjectFolderOrExit } from "../findProjectFolder.js";
-import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 const overridesParser = (str: string): any => {

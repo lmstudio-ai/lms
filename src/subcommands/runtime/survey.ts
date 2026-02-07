@@ -8,7 +8,7 @@ import { type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import columnify from "columnify";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
-import { formatSizeBytes1000 } from "../../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 
 interface GpuMemoryMetrics {
