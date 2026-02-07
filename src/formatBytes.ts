@@ -33,3 +33,18 @@ export function formatSizeBytesWithColor1000(sizeBytes: number) {
     return chalk.red(formatSizeBytes1000(sizeBytes));
   }
 }
+
+const units = ["Bytes", "KiB", "MiB", "GiB", "TiB"];
+const base = 1024;
+
+/**
+ * Formats bytes using binary (base-1024) units, matching the GUI's `formatMemoryBytes()`.
+ * Use this for RAM/VRAM display. For file/download sizes, use `formatSizeBytes1000()`.
+ */
+export function formatSizeBytes1024(bytes: number): string {
+  if (bytes === 0) return "0 Bytes";
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(base)), units.length - 1);
+  const size = bytes / Math.pow(base, index);
+  const fractionDigits = index === 0 ? 0 : 2;
+  return `${size.toFixed(fractionDigits)} ${units[index]}`;
+}

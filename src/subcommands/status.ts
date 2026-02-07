@@ -8,7 +8,7 @@ import {
   DEFAULT_SERVER_PORT,
   type CreateClientArgs,
 } from "../createClient.js";
-import { formatSizeBytes1000 } from "../formatSizeBytes1000.js";
+import { formatSizeBytes1000 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { getServerConfig } from "./server.js";
 
