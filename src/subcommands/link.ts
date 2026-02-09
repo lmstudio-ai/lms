@@ -30,10 +30,7 @@ addLogLevelOptions(up);
 up.action(async function () {
   const mergedOptions = this.optsWithGlobals();
   const logger = createLogger(mergedOptions as LogLevelArgs);
-  await using client = await createClient(
-    logger,
-    mergedOptions as CreateClientArgs & LogLevelArgs,
-  );
+  await using client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
 
   // Check current status first
   const currentStatus = await client.repository.lmLink.status();
@@ -87,10 +84,7 @@ addLogLevelOptions(down);
 down.action(async function () {
   const mergedOptions = this.optsWithGlobals();
   const logger = createLogger(mergedOptions as LogLevelArgs);
-  await using client = await createClient(
-    logger,
-    mergedOptions as CreateClientArgs & LogLevelArgs,
-  );
+  await using client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
 
   // Check current status first
   const currentStatus = await client.repository.lmLink.status();
@@ -121,10 +115,7 @@ addLogLevelOptions(status);
 status.action(async function () {
   const mergedOptions = this.optsWithGlobals();
   const logger = createLogger(mergedOptions as LogLevelArgs);
-  await using client = await createClient(
-    logger,
-    mergedOptions as CreateClientArgs & LogLevelArgs,
-  );
+  await using client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
   const { json = false } = mergedOptions;
 
   const lmLinkStatus = await client.repository.lmLink.status();
@@ -172,7 +163,7 @@ status.action(async function () {
     logger.infoText`
       LM Link is currently disabled.
 
-      Use ${chalk.cyan("lms link up")} to enable and start LM Link.
+      Run ${chalk.cyan("lms link up")} to enable it.
     `;
     return;
   }
@@ -263,7 +254,7 @@ link.action(async options => {
 
   const lmLinkStatus = await client.repository.lmLink.status();
   if (lmLinkStatus.enabled !== true) {
-    logger.info("Note: LM Link is not enabled. Run \"lms link up\" to start LM Link.");
+    logger.info('Note: LM Link is not enabled. Run "lms link up" to start LM Link.');
   }
 });
 
