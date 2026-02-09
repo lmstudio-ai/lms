@@ -27,9 +27,13 @@ const up = new Command<[], LinkUpCommandOptions>()
 addCreateClientOptions(up);
 addLogLevelOptions(up);
 
-up.action(async options => {
-  const logger = createLogger(options);
-  await using client = await createClient(logger, options);
+up.action(async function () {
+  const mergedOptions = this.optsWithGlobals();
+  const logger = createLogger(mergedOptions as LogLevelArgs);
+  await using client = await createClient(
+    logger,
+    mergedOptions as CreateClientArgs & LogLevelArgs,
+  );
 
   // Check current status first
   const currentStatus = await client.repository.lmLink.status();
@@ -80,9 +84,13 @@ const down = new Command<[], LinkDownCommandOptions>()
 addCreateClientOptions(down);
 addLogLevelOptions(down);
 
-down.action(async options => {
-  const logger = createLogger(options);
-  await using client = await createClient(logger, options);
+down.action(async function () {
+  const mergedOptions = this.optsWithGlobals();
+  const logger = createLogger(mergedOptions as LogLevelArgs);
+  await using client = await createClient(
+    logger,
+    mergedOptions as CreateClientArgs & LogLevelArgs,
+  );
 
   // Check current status first
   const currentStatus = await client.repository.lmLink.status();
@@ -110,10 +118,14 @@ const status = new Command<[], LinkStatusCommandOptions>()
 addCreateClientOptions(status);
 addLogLevelOptions(status);
 
-status.action(async options => {
-  const logger = createLogger(options);
-  await using client = await createClient(logger, options);
-  const { json = false } = options;
+status.action(async function () {
+  const mergedOptions = this.optsWithGlobals();
+  const logger = createLogger(mergedOptions as LogLevelArgs);
+  await using client = await createClient(
+    logger,
+    mergedOptions as CreateClientArgs & LogLevelArgs,
+  );
+  const { json = false } = mergedOptions;
 
   const lmLinkStatus = await client.repository.lmLink.status();
 
