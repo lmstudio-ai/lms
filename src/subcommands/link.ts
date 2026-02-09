@@ -14,11 +14,7 @@ type LinkStatusCommandOptions = OptionValues &
     json?: boolean;
   };
 
-type LinkCommandOptions = OptionValues &
-  CreateClientArgs &
-  LogLevelArgs & {
-    setDeviceName?: string;
-  };
+type LinkSetDeviceNameCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
 const up = new Command<[], LinkUpCommandOptions>()
   .name("up")
@@ -225,32 +221,21 @@ status.action(async function () {
   logger.info("");
 });
 
-export const link = new Command<[], LinkCommandOptions>()
-  .name("link")
-  .description("Commands for managing LM Link")
-  .option(
-    "--set-device-name <name>",
-    text`
-      Updates the local LM Link device name.
-    `,
-  );
+const setDeviceName = new Command<[], LinkSetDeviceNameCommandOptions>()
+  .name("set-device-name")
+  .description("Set the local LM Link device name")
+  .argument("<name>", "New device name");
 
-addCreateClientOptions(link);
-addLogLevelOptions(link);
+addCreateClientOptions(setDeviceName);
+addLogLevelOptions(setDeviceName);
 
-link.action(async options => {
-  const { setDeviceName } = options;
-  if (setDeviceName === undefined) {
-    link.help();
-    return;
-  }
-
+setDeviceName.action(async (name: string, options: LinkSetDeviceNameCommandOptions) => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
 
-  await client.repository.lmLink.updateDeviceName(setDeviceName);
+  await client.repository.lmLink.updateDeviceName(name);
 
-  logger.info(`Updated device name to "${setDeviceName}".`);
+  logger.info(`Updated device name to "${name}".`);
 
   const lmLinkStatus = await client.repository.lmLink.status();
   if (lmLinkStatus.enabled !== true) {
@@ -258,4 +243,10 @@ link.action(async options => {
   }
 });
 
-link.addCommand(up).addCommand(down).addCommand(status);
+export const link = new Command()
+  .name("link")
+  .description("Commands for managing LM Link")
+  .addCommand(up)
+  .addCommand(down)
+  .addCommand(status)
+  .addCommand(setDeviceName);
