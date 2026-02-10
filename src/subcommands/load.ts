@@ -17,6 +17,7 @@ import chalk from "chalk";
 import fuzzy from "fuzzy";
 import { getCliPref } from "../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
+import { type DeviceNameResolver, createDeviceNameResolver } from "../deviceNameLookup.js";
 import { formatElapsedTime } from "../formatElapsedTime.js";
 import { formatSizeBytes1000, formatSizeBytes1024 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
@@ -59,9 +60,9 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   .name("load")
   .description("Load a model")
   .argument(
-    "[path]",
+    "[model-key]",
     text`
-      The path of the model to load. If not provided, enters an interactive mode to select a model.
+      The model key to load. If not provided, enters an interactive mode to select a model.
     `,
   )
   .addOption(
@@ -104,8 +105,8 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   .option(
     "--exact",
     text`
-      Only load the model if the path provided matches the model exactly. Fails if the path
-      provided does not match any model.
+      Only load the model if the model key provided matches the model exactly. Fails if the model
+      key provided does not match any model.
     `,
   )
   .option(
@@ -125,7 +126,7 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     "-y, --yes",
     text`
       Automatically approve all prompts. Useful for scripting. If there are multiple
-      models matching the path, the first one will be loaded. Fails if the path provided does not
+      models matching the model key, the first one will be loaded. Fails if the model key provided does not
       match any model.
     `,
   );
@@ -133,7 +134,7 @@ const loadCommand = new Command<[], LoadCommandOptions>()
 addCreateClientOptions(loadCommand);
 addLogLevelOptions(loadCommand);
 
-loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
+loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   const {
     ttl: ttlSeconds,
     gpu,
@@ -142,7 +143,7 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
     yes = false,
     exact = false,
     identifier,
-    estimateOnly,
+    estimateOnly = false,
   } = options;
   const loadConfig: LLMLoadModelConfig = {
     contextLength,
@@ -153,32 +154,35 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
       ratio: gpu,
     };
   }
-  let path = pathArg;
+  let modelKey = modelKeyArg;
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
   const cliPref = await getCliPref(logger);
+  const deviceNameResolver = await createDeviceNameResolver(client, logger);
 
   const lastLoadedModels = cliPref.get().lastLoadedModels ?? [];
-  const lastLoadedIndexToPathMap = [...lastLoadedModels.entries()];
-  const lastLoadedMap = new Map(lastLoadedIndexToPathMap.map(([index, path]) => [path, index]));
+  const lastLoadedIndexToModelKeyMap = [...lastLoadedModels.entries()];
+  const lastLoadedMap = new Map(
+    lastLoadedIndexToModelKeyMap.map(([index, modelKey]) => [modelKey, index]),
+  );
   logger.debug(`Last loaded map loaded with ${lastLoadedMap.size} models.`);
 
   const models = (await client.system.listDownloadedModels())
     .filter(model => model.architecture?.toLowerCase().includes("clip") !== true)
     .sort((a, b) => {
-      const aIndex = lastLoadedMap.get(a.path) ?? lastLoadedMap.size + 1;
-      const bIndex = lastLoadedMap.get(b.path) ?? lastLoadedMap.size + 1;
+      const aIndex = lastLoadedMap.get(a.modelKey) ?? lastLoadedMap.size + 1;
+      const bIndex = lastLoadedMap.get(b.modelKey) ?? lastLoadedMap.size + 1;
       return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
     });
 
   if (exact) {
-    const model = models.find(model => model.path === path);
-    if (path === undefined) {
+    const model = models.find(model => model.modelKey === modelKey);
+    if (modelKey === undefined) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(
-          "Path not provided",
+          "Model key not provided",
           text`
-            The parameter ${chalk.cyan("[path]")} is required when using the
+            The parameter ${chalk.cyan("[model-key]")} is required when using the
             ${chalk.yellow("--exact")} flag.
           `,
         ).message,
@@ -191,7 +195,7 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
           makeTitledPrettyError(
             "Model not found",
             text`
-              No model found with path being exactly "${chalk.yellow(path)}".
+              No model found with model key being exactly "${chalk.yellow(modelKey)}".
 
               To disable exact matching, remove the ${chalk.yellow("--exact")} flag.
 
@@ -202,17 +206,17 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
           ).message,
         );
       } else {
-        const shortestName = models.reduce((shortest, model) => {
-          if (model.path.length < shortest.length) {
-            return model.path;
+        const shortestModelKey = models.reduce((shortest, model) => {
+          if (model.modelKey.length < shortest.length) {
+            return model.modelKey;
           }
           return shortest;
-        }, models[0].path);
+        }, models[0].modelKey);
         logger.errorWithoutPrefix(
           makeTitledPrettyError(
             "Model not found",
             text`
-              No model found with path being exactly "${chalk.yellow(path)}".
+              No model found with model key being exactly "${chalk.yellow(modelKey)}".
 
               To disable exact matching, remove the ${chalk.yellow("--exact")} flag.
 
@@ -220,9 +224,9 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
 
                   ${chalk.yellow("lms ls")}
 
-              Note, you need to provide the full model path. For example:
+              Note, you need to provide the full model key. For example:
 
-                lms load --exact ${shortestName}
+                lms load --exact ${shortestModelKey}
             `,
           ).message,
         );
@@ -233,18 +237,28 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
     if (estimateOnly === true) {
       const estimate = await (
         model.type === "llm" ? client.llm : client.embedding
-      ).estimateResourcesUsage(model.modelKey, loadConfig);
+      ).estimateResourcesUsage(model.modelKey, loadConfig, {
+        deviceIdentifier: model.deviceIdentifier ?? null,
+      });
       printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
       return;
     }
 
-    await loadModel(logger, client, model, identifier, loadConfig, ttlSeconds);
+    await loadModel(
+      logger,
+      client,
+      model,
+      deviceNameResolver,
+      identifier,
+      loadConfig,
+      ttlSeconds,
+    );
     return;
   }
 
-  const modelPaths = models.map(model => model.path);
+  const modelKeys = models.map(model => model.modelKey);
 
-  const initialFilteredModels = fuzzy.filter(path ?? "", modelPaths);
+  const initialFilteredModels = fuzzy.filter(modelKey ?? "", modelKeys);
   logger.debug("Initial filtered models length:", initialFilteredModels.length);
 
   let model: ModelInfo;
@@ -254,7 +268,7 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
         makeTitledPrettyError(
           "Model not found",
           text`
-            No model found that matches path "${chalk.yellow(path)}".
+            No model found that matches model key "${chalk.yellow(modelKey)}".
 
             To see a list of all downloaded models, run:
 
@@ -270,23 +284,37 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
     }
     if (initialFilteredModels.length > 1) {
       logger.warnText`
-        ${initialFilteredModels.length} models match the provided path. Loading the first one.
+        ${initialFilteredModels.length} models match the provided model key. Loading the first one.
       `;
     }
     model = models[initialFilteredModels[0].index];
   } else {
     console.info();
-    if (path === undefined) {
-      model = await selectModel(models, modelPaths, "", 4, lastLoadedMap, estimateOnly);
+    if (modelKey === undefined) {
+      model = await selectModel({
+        models,
+        modelKeys,
+        initialSearch: "",
+        leaveEmptyLines: 4,
+        estimateOnly,
+        deviceNameResolver,
+      });
     } else if (initialFilteredModels.length === 0) {
       console.info(
         chalk.red(text`
-          ! Cannot find a model matching the provided path (${chalk.yellow(path)}). Please
+          ! Cannot find a model matching the provided model key (${chalk.yellow(modelKey)}). Please
           select one from the list below.
         `),
       );
-      path = "";
-      model = await selectModel(models, modelPaths, path, 5, lastLoadedMap, estimateOnly);
+      modelKey = "";
+      model = await selectModel({
+        models,
+        modelKeys,
+        initialSearch: modelKey,
+        leaveEmptyLines: 5,
+        estimateOnly,
+        deviceNameResolver,
+      });
     } else if (initialFilteredModels.length === 1) {
       model = models[initialFilteredModels[0].index];
       // console.info(
@@ -298,44 +326,70 @@ loadCommand.action(async (pathArg, options: LoadCommandOptions) => {
     } else {
       console.info(
         text`
-          ! Multiple models match the provided path. Please select one.
+          ! Multiple models match the provided model key. Please select one.
         `,
       );
-      model = await selectModel(models, modelPaths, path ?? "", 5, lastLoadedMap, estimateOnly);
+      model = await selectModel({
+        models,
+        modelKeys,
+        initialSearch: modelKey ?? "",
+        leaveEmptyLines: 5,
+        estimateOnly,
+        deviceNameResolver,
+      });
     }
   }
 
   if (estimateOnly === true) {
     const estimate = await (
       model.type === "llm" ? client.llm : client.embedding
-    ).estimateResourcesUsage(model.modelKey, loadConfig);
+    ).estimateResourcesUsage(model.modelKey, loadConfig, {
+      deviceIdentifier: model.deviceIdentifier ?? null,
+    });
     printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
     return;
   }
 
-  const modelInLastLoadedModelsIndex = lastLoadedModels.indexOf(model.path);
+  const modelInLastLoadedModelsIndex = lastLoadedModels.indexOf(model.modelKey);
   if (modelInLastLoadedModelsIndex !== -1) {
-    logger.debug("Removing model from last loaded models:", model.path);
+    logger.debug("Removing model from last loaded models:", model.modelKey);
     lastLoadedModels.splice(modelInLastLoadedModelsIndex, 1);
   }
-  lastLoadedModels.unshift(model.path);
+  lastLoadedModels.unshift(model.modelKey);
   logger.debug("Updating cliPref");
   cliPref.setWithProducer(draft => {
     // Keep only the last 20 loaded models
     draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
   });
 
-  await loadModel(logger, client, model, identifier, loadConfig, ttlSeconds);
+  await loadModel(
+    logger,
+    client,
+    model,
+    deviceNameResolver,
+    identifier,
+    loadConfig,
+    ttlSeconds,
+  );
 });
 
-async function selectModel(
-  models: ModelInfo[],
-  modelPaths: string[],
-  initialSearch: string,
-  leaveEmptyLines: number,
-  _lastLoadedMap: Map<string, number>,
-  estimateOnly: boolean = false,
-) {
+interface SelectModelOpts {
+  models: Array<ModelInfo>;
+  modelKeys: Array<string>;
+  initialSearch: string;
+  leaveEmptyLines: number;
+  estimateOnly: boolean;
+  deviceNameResolver: DeviceNameResolver;
+}
+
+async function selectModel({
+  models,
+  modelKeys,
+  initialSearch,
+  leaveEmptyLines,
+  estimateOnly,
+  deviceNameResolver,
+}: SelectModelOpts) {
   const pageSize = terminalSize().rows - leaveEmptyLines;
   return await runPromptWithExitHandling(() =>
     search<ModelInfo>(
@@ -348,11 +402,17 @@ async function selectModel(
         source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
           void signal;
           const searchTerm = input ?? initialSearch;
-          const options = fuzzy.filter(searchTerm, modelPaths, fuzzyHighlightOptions);
+          const options = fuzzy.filter(searchTerm, modelKeys, fuzzyHighlightOptions);
           return options.map(option => {
             const model = models[option.index];
+            const deviceSuffix = deviceNameResolver.isLocal(model.deviceIdentifier ?? null)
+              ? ""
+              : chalk.dim(` · ${deviceNameResolver.label(model.deviceIdentifier ?? null)}`);
             const displayName =
-              option.string + " " + chalk.dim(`(${formatSizeBytes1000(model.sizeBytes)})`);
+              option.string +
+              " " +
+              chalk.dim(`(${formatSizeBytes1000(model.sizeBytes)})`) +
+              deviceSuffix;
             return {
               value: model,
               short: option.original,
@@ -370,15 +430,21 @@ async function loadModel(
   logger: SimpleLogger,
   client: LMStudioClient,
   model: ModelInfo,
+  deviceNameResolver: DeviceNameResolver,
   identifier: string | undefined,
   config: LLMLoadModelConfig,
   ttlSeconds: number | undefined,
 ) {
-  const { path, sizeBytes } = model;
+  const { modelKey, sizeBytes } = model;
   logger.debug("Identifier:", identifier);
   logger.debug("Config:", config);
 
-  const spinner = new Spinner(`Loading ${path}`);
+  const deviceIdentifier = model.deviceIdentifier ?? null;
+  const spinner = new Spinner(
+    deviceNameResolver.isLocal(deviceIdentifier)
+      ? `Loading ${modelKey}`
+      : `Loading ${modelKey} on ${deviceNameResolver.label(deviceIdentifier)}`,
+  );
   const startTime = Date.now();
   const abortController = new AbortController();
 
@@ -398,17 +464,26 @@ async function loadModel(
       signal: abortController.signal,
       config,
       identifier,
+      deviceIdentifier: model.deviceIdentifier ?? null,
     });
   } finally {
     process.removeListener("SIGINT", sigintListener);
     spinner.stopIfNotStopped();
   }
   const endTime = Date.now();
+  const info = await llmModel.getModelInfo();
+  const loadedDeviceIdentifier = info?.deviceIdentifier ?? model.deviceIdentifier ?? null;
+  const successLine = deviceNameResolver.isLocal(loadedDeviceIdentifier)
+    ? `Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.`
+    : `Model loaded successfully on ${deviceNameResolver.label(
+        loadedDeviceIdentifier,
+      )} in ${formatElapsedTime(
+        endTime - startTime,
+      )}.`;
   logger.info(text`
-    Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.
+    ${successLine}
     (${formatSizeBytes1000(sizeBytes)})
   `);
-  const info = await llmModel.getModelInfo();
   logger.info(text`
     To use the model in the API/SDK, use the identifier "${chalk.green(info!.identifier)}".
   `);
@@ -422,7 +497,7 @@ function printEstimatedResourceUsage(
   logger: SimpleLogger,
 ) {
   const colorFunc = estimate.passesGuardrails === true ? chalk.green : chalk.yellow;
-  logger.info(`Model: ${model.path}`);
+  logger.info(`Model: ${model.modelKey}`);
   if (contextLength !== undefined) {
     logger.info(`Context Length: ${contextLength.toLocaleString()}`);
   }

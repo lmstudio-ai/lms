@@ -15,7 +15,22 @@ type LinkStatusCommandOptions = OptionValues &
   };
 
 type LinkSetDeviceNameCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
+const linkLoaderFrames = ["● ○ ○ ○", "○ ● ○ ○", "○ ○ ● ○", "○ ○ ○ ●", "○ ○ ● ○", "○ ● ○ ○"];
 
+const startLinkLoader = (intervalMs = 120) => {
+  let frameIndex = 0;
+  const timer = setInterval(() => {
+    const frame = linkLoaderFrames[frameIndex];
+    frameIndex = (frameIndex + 1) % linkLoaderFrames.length;
+    process.stdout.write(`\r${frame}`);
+  }, intervalMs);
+
+  return () => {
+    clearInterval(timer);
+    // Clear the loader line from the terminal
+    process.stdout.write("\r\x1B[K");
+  };
+};
 const enable = new Command<[], LinkEnableCommandOptions>()
   .name("enable")
   .description("Enable LM Link on this device");
@@ -30,8 +45,12 @@ enable.action(async function () {
 
   const currentStatus = await client.repository.lmLink.status();
   const wasDisabled: boolean = currentStatus.issues.includes("deviceDisabled");
-
-  await client.repository.lmLink.setDisabled(false);
+  const stopLoader = startLinkLoader();
+  try {
+    await client.repository.lmLink.setDisabled(false);
+  } finally {
+    stopLoader();
+  }
 
   if (!wasDisabled) {
     logger.infoText`
