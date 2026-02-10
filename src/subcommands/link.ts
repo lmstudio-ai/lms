@@ -14,6 +14,8 @@ type LinkStatusCommandOptions = OptionValues &
     json?: boolean;
   };
 
+type LinkSetDeviceNameCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
+
 const up = new Command<[], LinkUpCommandOptions>()
   .name("up")
   .description("Enable and start LM Link");
@@ -21,9 +23,10 @@ const up = new Command<[], LinkUpCommandOptions>()
 addCreateClientOptions(up);
 addLogLevelOptions(up);
 
-up.action(async options => {
-  const logger = createLogger(options);
-  await using client = await createClient(logger, options);
+up.action(async function () {
+  const mergedOptions = this.optsWithGlobals();
+  const logger = createLogger(mergedOptions as LogLevelArgs);
+  await using client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
 
   // Check current status first
   const currentStatus = await client.repository.lmLink.status();
@@ -50,6 +53,9 @@ up.action(async options => {
     message = "LM Link started successfully";
   }
 
+  logger.info(`This device: ${currentStatus.deviceName}`);
+  logger.info("");
+
   // Display result
   if (result.peers.length === 0) {
     logger.info(`${message}. No devices found.`);
@@ -71,9 +77,10 @@ const down = new Command<[], LinkDownCommandOptions>()
 addCreateClientOptions(down);
 addLogLevelOptions(down);
 
-down.action(async options => {
-  const logger = createLogger(options);
-  await using client = await createClient(logger, options);
+down.action(async function () {
+  const mergedOptions = this.optsWithGlobals();
+  const logger = createLogger(mergedOptions as LogLevelArgs);
+  await using client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
 
   // Check current status first
   const currentStatus = await client.repository.lmLink.status();
@@ -101,10 +108,11 @@ const status = new Command<[], LinkStatusCommandOptions>()
 addCreateClientOptions(status);
 addLogLevelOptions(status);
 
-status.action(async options => {
-  const logger = createLogger(options);
-  await using client = await createClient(logger, options);
-  const { json = false } = options;
+status.action(async function () {
+  const mergedOptions = this.optsWithGlobals();
+  const logger = createLogger(mergedOptions as LogLevelArgs);
+  await using client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
+  const { json = false } = mergedOptions;
 
   const lmLinkStatus = await client.repository.lmLink.status();
 
@@ -130,8 +138,8 @@ status.action(async options => {
     const peersWithModels = lmLinkStatus.peers.map(peer => ({
       ...peer,
       loadedModels: modelInfos
-        .filter(m => m.deviceIdentifier === peer.deviceIdentifier)
-        .map(m => m.identifier),
+        .filter(modelInfo => modelInfo.deviceIdentifier === peer.deviceIdentifier)
+        .map(modelInfo => modelInfo.identifier),
     }));
 
     const jsonOutput = {
@@ -143,12 +151,15 @@ status.action(async options => {
     return;
   }
 
+  logger.info(`This device: ${lmLinkStatus.deviceName}`);
+  logger.info("");
+
   // Human-readable output
   if (!lmLinkStatus.enabled) {
     logger.infoText`
       LM Link is currently disabled.
 
-      Use ${chalk.cyan("lms link up")} to enable and start LM Link.
+      Run ${chalk.cyan("lms link up")} to enable it.
     `;
     return;
   }
@@ -190,13 +201,15 @@ status.action(async options => {
     logger.info(`    Status: ${peer.status}`);
 
     // Filter models for this peer
-    const peerModels = modelInfos.filter(m => m.deviceIdentifier === peer.deviceIdentifier);
+    const peerModels = modelInfos.filter(
+      modelInfo => modelInfo.deviceIdentifier === peer.deviceIdentifier,
+    );
 
     if (peerModels.length > 0) {
       logger.info("    Loaded Models Instances:");
       const displayCount = Math.min(5, peerModels.length);
-      for (let i = 0; i < displayCount; i++) {
-        logger.info(`      - ${peerModels[i].identifier}`);
+      for (let index = 0; index < displayCount; index++) {
+        logger.info(`      - ${peerModels[index].identifier}`);
       }
       if (peerModels.length > 5) {
         const remaining = peerModels.length - 5;
@@ -208,9 +221,32 @@ status.action(async options => {
   logger.info("");
 });
 
+const setDeviceName = new Command<[], LinkSetDeviceNameCommandOptions>()
+  .name("set-device-name")
+  .description("Set the local LM Link device name")
+  .argument("<name>", "New device name");
+
+addCreateClientOptions(setDeviceName);
+addLogLevelOptions(setDeviceName);
+
+setDeviceName.action(async (name: string, options: LinkSetDeviceNameCommandOptions) => {
+  const logger = createLogger(options);
+  await using client = await createClient(logger, options);
+
+  await client.repository.lmLink.updateDeviceName(name);
+
+  logger.info(`Updated device name to "${name}".`);
+
+  const lmLinkStatus = await client.repository.lmLink.status();
+  if (lmLinkStatus.enabled !== true) {
+    logger.info('Note: LM Link is not enabled. Run "lms link up" to start LM Link.');
+  }
+});
+
 export const link = new Command()
   .name("link")
   .description("Commands for managing LM Link")
   .addCommand(up)
   .addCommand(down)
-  .addCommand(status);
+  .addCommand(status)
+  .addCommand(setDeviceName);
