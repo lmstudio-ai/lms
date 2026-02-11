@@ -26,8 +26,8 @@ class DeviceNameResolverImpl implements DeviceNameResolver {
     if (deviceIdentifier === null || deviceIdentifier === this.localDeviceIdentifier) {
       return this.localDeviceName ?? "local";
     }
-    const remoteDeviceName = this.remoteDeviceNameByIdentifier.get(deviceIdentifier) ?? null;
-    if (remoteDeviceName !== null) {
+    const remoteDeviceName = this.remoteDeviceNameByIdentifier.get(deviceIdentifier);
+    if (remoteDeviceName !== undefined) {
       return remoteDeviceName;
     }
     return this.formatUnknownDeviceIdentifier(deviceIdentifier);
@@ -56,9 +56,9 @@ export async function createDeviceNameResolver(
         remoteDeviceNameByIdentifier.set(peer.deviceIdentifier, peer.deviceName);
       }
     }
-    const localDeviceIdentifier = status.deviceIdentifier ?? null;
-    const localDeviceName = status.deviceName ?? null;
-    const preferredDeviceIdentifier = status.preferredDeviceIdentifier ?? null;
+    const localDeviceIdentifier = status.deviceIdentifier;
+    const localDeviceName = status.deviceName;
+    const preferredDeviceIdentifier = status.preferredDeviceIdentifier;
     return new DeviceNameResolverImpl(
       localDeviceIdentifier,
       localDeviceName,

@@ -60,7 +60,7 @@ type LoadCommandOptions = OptionValues &
 function hasDuplicatesOnSameDevice(models: Array<ModelInfo>): boolean {
   const deviceIdentifierCounts = new Map<string | null, number>();
   for (const model of models) {
-    const deviceIdentifier = model.deviceIdentifier ?? null;
+    const deviceIdentifier = model.deviceIdentifier;
     const nextCount = (deviceIdentifierCounts.get(deviceIdentifier) ?? 0) + 1;
     if (nextCount > 1) {
       return true;
@@ -191,7 +191,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
 
   const models = (await client.system.listDownloadedModels())
     .filter(model => model.architecture?.toLowerCase().includes("clip") !== true)
-    .filter(model => (local ? (model.deviceIdentifier ?? null) === null : true))
+    .filter(model => (local ? model.deviceIdentifier === null : true))
     .sort((a, b) => {
       const aIndex = lastLoadedMap.get(a.modelKey) ?? lastLoadedMap.size + 1;
       const bIndex = lastLoadedMap.get(b.modelKey) ?? lastLoadedMap.size + 1;
@@ -424,7 +424,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     const estimate = await (
       model.type === "llm" ? client.llm : client.embedding
     ).estimateResourcesUsage(model.modelKey, loadConfig, {
-      deviceIdentifier: deferToPreferredDevice ? undefined : model.deviceIdentifier ?? null,
+      deviceIdentifier: deferToPreferredDevice ? undefined : model.deviceIdentifier,
     });
     printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
     return;
@@ -451,7 +451,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     identifier,
     config: loadConfig,
     ttlSeconds,
-    deviceIdentifier: deferToPreferredDevice ? undefined : model.deviceIdentifier ?? null,
+    deviceIdentifier: deferToPreferredDevice ? undefined : model.deviceIdentifier,
   });
 });
 
@@ -487,9 +487,9 @@ async function selectModel({
           const options = fuzzy.filter(searchTerm, modelKeys, fuzzyHighlightOptions);
           return options.map(option => {
             const model = models[option.index];
-            const deviceSuffix = deviceNameResolver.isLocal(model.deviceIdentifier ?? null)
+            const deviceSuffix = deviceNameResolver.isLocal(model.deviceIdentifier)
               ? ""
-              : chalk.dim(` · ${deviceNameResolver.label(model.deviceIdentifier ?? null)}`);
+              : chalk.dim(` · ${deviceNameResolver.label(model.deviceIdentifier)}`);
             const displayName =
               option.string +
               " " +
@@ -533,7 +533,7 @@ async function loadModel({
   let spinnerText = `Loading ${modelKey}`;
   // When deviceIdentifier is undefined, the SDK picks the preferred device (if any) or could
   // fallback on some other device. So we don't show any device info in that case.
-  if (deviceIdentifier !== undefined) {
+  if (deviceIdentifier !== undefined && !deviceNameResolver.isLocal(deviceIdentifier)) {
     const deviceLabel = deviceNameResolver.label(deviceIdentifier);
     spinnerText += ` on ${deviceLabel}`;
   }
