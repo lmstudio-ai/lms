@@ -80,6 +80,16 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     return ` · ${deviceNameResolver.label(deviceIdentifier)}`;
   };
 
+  const getPathSuffix = (modelEntry: LLM | EmbeddingModel): string => {
+    if (modelEntry.identifier === modelEntry.path) {
+      return "";
+    }
+    if (modelEntry.identifier.startsWith(modelEntry.path + ":")) {
+      return "";
+    }
+    return ` (${modelEntry.path})`;
+  };
+
   const formatModelTarget = (modelEntry: LLM | EmbeddingModel): string => {
     const deviceIdentifier = getDeviceIdentifier(modelEntry);
     if (deviceNameResolver.isLocal(deviceIdentifier)) {
@@ -88,32 +98,23 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     return `"${modelEntry.identifier}" on ${deviceNameResolver.label(deviceIdentifier)}`;
   };
 
+  const searchDelimiter = "\u0001";
+
   const getModelSearchString = (modelEntry: LLM | EmbeddingModel): string => {
-    // The question mark here is a hack to apply gray color to the path part of the string.
-    // It cannot be a part of the path, so we can find it by .lastIndexOf.
-    // It will be stripped before outputting.
+    const pathSuffix = getPathSuffix(modelEntry);
     const deviceSuffix = getDeviceSuffix(modelEntry);
-    const { identifier: modelIdentifier, path } = modelEntry;
-    if (modelIdentifier === path) {
-      return `${modelIdentifier}?${deviceSuffix}`;
-    }
-    if (modelIdentifier.startsWith(path + ":")) {
-      return `${modelIdentifier}?${deviceSuffix}`;
-    }
-    return `${modelIdentifier} ?(${path})${deviceSuffix}`;
+    const suffix = `${pathSuffix}${deviceSuffix}`;
+    return `${modelEntry.identifier}${searchDelimiter}${suffix}`;
   };
 
   const modelSearchStrings = models.map(modelEntry => getModelSearchString(modelEntry));
 
-  const getDisplayName = (optionString: string): string => {
-    const questionMarkIndex = optionString.lastIndexOf("?");
-    if (questionMarkIndex === -1) {
-      return optionString;
+  const getDisplayNameFromRendered = (rendered: string): string => {
+    const [identifierPart, suffixPart] = rendered.split(searchDelimiter);
+    if (suffixPart === undefined || suffixPart.length === 0) {
+      return identifierPart;
     }
-    return (
-      optionString.slice(0, questionMarkIndex) +
-      chalk.dim(optionString.slice(questionMarkIndex + 1))
-    );
+    return `${identifierPart}${chalk.dim(suffixPart)}`;
   };
 
   const promptForModel = async (
@@ -130,8 +131,8 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
           theme: searchTheme,
           source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
             void signal;
-            const sanitizedInput = (input ?? "").split("?").join("");
-            const options = fuzzy.filter(sanitizedInput, searchStrings, fuzzyHighlightOptions);
+            const searchTerm = input ?? "";
+            const options = fuzzy.filter(searchTerm, searchStrings, fuzzyHighlightOptions);
             return options.map(option => {
               const modelEntry = modelEntries[option.index];
               if (modelEntry === undefined) {
@@ -140,7 +141,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
               return {
                 value: modelEntry,
                 short: modelEntry.identifier,
-                name: getDisplayName(option.string),
+                name: getDisplayNameFromRendered(option.string),
               };
             });
           },
