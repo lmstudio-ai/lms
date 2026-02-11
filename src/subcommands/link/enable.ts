@@ -48,7 +48,11 @@ enable.action(async function () {
     return;
   }
 
-  logger.info(message);
+  if (wasDisabled) {
+    logger.info(message + " Connecting now...");
+  } else {
+    logger.info(message);
+  }
   if (currentStatus.status !== "online" && currentStatus.issues.length === 0) {
     const stopLoader = startLinkLoader();
     try {
