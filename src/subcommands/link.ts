@@ -4,9 +4,9 @@ import chalk from "chalk";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
-type LinkUpCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
+type LinkEnableCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
-type LinkDownCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
+type LinkDisableCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
 type LinkStatusCommandOptions = OptionValues &
   CreateClientArgs &
@@ -16,84 +16,68 @@ type LinkStatusCommandOptions = OptionValues &
 
 type LinkSetDeviceNameCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
-const up = new Command<[], LinkUpCommandOptions>()
-  .name("up")
-  .description("Enable and start LM Link");
+const enable = new Command<[], LinkEnableCommandOptions>()
+  .name("enable")
+  .description("Enable LM Link on this device");
 
-addCreateClientOptions(up);
-addLogLevelOptions(up);
+addCreateClientOptions(enable);
+addLogLevelOptions(enable);
 
-up.action(async function () {
+enable.action(async function () {
   const mergedOptions = this.optsWithGlobals();
   const logger = createLogger(mergedOptions as LogLevelArgs);
   await using client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
 
-  // Check current status first
   const currentStatus = await client.repository.lmLink.status();
+  const wasDisabled: boolean = currentStatus.issues.includes("deviceDisabled");
 
-  let result;
-  let wasAlreadyUp = false;
+  await client.repository.lmLink.setDisabled(false);
 
-  if (currentStatus.enabled && currentStatus.status === "online") {
-    // Already up
-    wasAlreadyUp = true;
-    result = { peers: currentStatus.peers };
+  if (!wasDisabled) {
+    logger.infoText`
+      LM Link was already enabled on this device. Use ${chalk.cyan("lms link status")} to see its current status.
+    `;
   } else {
-    // Start LM Link
-    result = await client.repository.lmLink.up();
-  }
-
-  // Determine message based on previous state
-  let message: string;
-  if (wasAlreadyUp) {
-    message = "LM Link was already up";
-  } else if (currentStatus.enabled) {
-    message = "LM Link reconnected successfully";
-  } else {
-    message = "LM Link started successfully";
-  }
-
-  logger.info(`This device: ${currentStatus.deviceName}`);
-  logger.info("");
-
-  // Display result
-  if (result.peers.length === 0) {
-    logger.info(`${message}. No devices found.`);
-  } else {
-    logger.info(
-      `${message}. Found ${result.peers.length} device${result.peers.length === 1 ? "" : "s"}:`,
-    );
-    logger.info("");
-    for (const peer of result.peers) {
-      logger.info(`  - ${peer.deviceName}`);
-    }
+    logger.infoText`
+      You have re-enabled LM Link on this device. Use ${chalk.cyan("lms link status")} to see its current status.
+    `;
   }
 });
 
-const down = new Command<[], LinkDownCommandOptions>()
-  .name("down")
-  .description("Stop and disable LM Link");
+const disable = new Command<[], LinkDisableCommandOptions>()
+  .name("disable")
+  .description("Disable LM Link on this device");
 
-addCreateClientOptions(down);
-addLogLevelOptions(down);
+addCreateClientOptions(disable);
+addLogLevelOptions(disable);
 
-down.action(async function () {
+disable.action(async function () {
   const mergedOptions = this.optsWithGlobals();
   const logger = createLogger(mergedOptions as LogLevelArgs);
   await using client = await createClient(logger, mergedOptions as CreateClientArgs & LogLevelArgs);
 
-  // Check current status first
   const currentStatus = await client.repository.lmLink.status();
+  const wasAlreadyDisabled: boolean = currentStatus.issues.includes("deviceDisabled");
 
-  if (!currentStatus.enabled) {
-    logger.info("LM Link was already disabled.");
-    return;
+  await client.repository.lmLink.setDisabled(true);
+
+  if (wasAlreadyDisabled) {
+    logger.infoText`
+      LM Link was already disabled on this device. No changes were made. Use ${chalk.cyan("lms link enable")} to re-enable.
+    `;
+  } else {
+    logger.infoText`
+      You have disabled LM Link on this device. Use ${chalk.cyan("lms link enable")} to re-enable.
+    `;
   }
-
-  // Stop LM Link
-  await client.repository.lmLink.down();
-  logger.info("LM Link has been stopped and disabled.");
 });
+
+const statusDisplayLabels = new Map<string, string>([
+  ["offline", "Offline (will attempt to reconnect)"],
+  ["starting", "Connecting"],
+  ["stopping", "Shutting down"],
+  ["online", "Online"],
+]);
 
 const status = new Command<[], LinkStatusCommandOptions>()
   .name("status")
@@ -151,33 +135,41 @@ status.action(async function () {
     return;
   }
 
+  // Human-readable output: check issues in priority order
+  if (lmLinkStatus.issues.includes("deviceDisabled")) {
+    logger.infoText`
+      You have disabled LM Link. To re-enable it, run ${chalk.cyan("lms link enable")}.
+    `;
+    return;
+  }
+
+  if (lmLinkStatus.issues.includes("notLoggedIn")) {
+    logger.infoText`
+      LM Link not running because you are not logged in. Use ${chalk.cyan("lms login")} to login.
+    `;
+    return;
+  }
+
+  if (lmLinkStatus.issues.includes("noAccess")) {
+    logger.infoText`
+      You do not have access to LM Link. Visit ${chalk.cyan("https://lmstudio.ai/lm-link")} to request access.
+    `;
+    return;
+  }
+
+  // No issues — print status + device name + peers
+  const statusLabel = statusDisplayLabels.get(lmLinkStatus.status) ?? lmLinkStatus.status;
+
   logger.info(`This device: ${lmLinkStatus.deviceName}`);
+  logger.info(`Status: ${statusLabel}`);
   logger.info("");
 
-  // Human-readable output
-  if (!lmLinkStatus.enabled) {
-    logger.infoText`
-      LM Link is currently disabled.
-
-      Run ${chalk.cyan("lms link up")} to enable it.
-    `;
-    return;
-  }
-
   if (lmLinkStatus.status !== "online") {
-    logger.infoText`
-      LM Link is enabled but currently disconnected.
-
-      Use ${chalk.cyan("lms link up")} to reconnect.
-    `;
     return;
   }
 
-  // Enabled and connected
   const peerCount = lmLinkStatus.peers.length;
-  logger.info(
-    `LM Link is enabled and connected. Found ${peerCount} device${peerCount === 1 ? "" : "s"}:`,
-  );
+  logger.info(`Found ${peerCount} device${peerCount === 1 ? "" : "s"}:`);
   logger.info("");
 
   // Get loaded models to display per peer
@@ -199,6 +191,7 @@ status.action(async function () {
   for (const peer of lmLinkStatus.peers) {
     logger.info(`  - ${peer.deviceName}`);
     logger.info(`    Status: ${peer.status}`);
+    logger.info(`    Identifier: ${peer.deviceIdentifier}`);
 
     // Filter models for this peer
     const peerModels = modelInfos.filter(
@@ -238,15 +231,17 @@ setDeviceName.action(async (name: string, options: LinkSetDeviceNameCommandOptio
   logger.info(`Updated device name to "${name}".`);
 
   const lmLinkStatus = await client.repository.lmLink.status();
-  if (lmLinkStatus.enabled !== true) {
-    logger.info('Note: LM Link is not enabled. Run "lms link up" to start LM Link.');
+  if (lmLinkStatus.issues.includes("deviceDisabled")) {
+    logger.infoText`
+      Note: LM Link is disabled. Run ${chalk.cyan("lms link enable")} to enable it.
+    `;
   }
 });
 
 export const link = new Command()
   .name("link")
   .description("Commands for managing LM Link")
-  .addCommand(up)
-  .addCommand(down)
+  .addCommand(enable)
+  .addCommand(disable)
   .addCommand(status)
   .addCommand(setDeviceName);
