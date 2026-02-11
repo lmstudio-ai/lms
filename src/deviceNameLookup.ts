@@ -3,9 +3,45 @@ import { type LMStudioClient } from "@lmstudio/sdk";
 
 export interface DeviceNameResolver {
   localDeviceIdentifier: string | null;
+  preferredDeviceIdentifier: string | null;
   localDeviceName: string | null;
   isLocal: (deviceIdentifier: string | null) => boolean;
   label: (deviceIdentifier: string | null) => string;
+  getPreferredDeviceName: () => string;
+}
+
+class DeviceNameResolverImpl implements DeviceNameResolver {
+  constructor(
+    public readonly localDeviceIdentifier: string | null,
+    public readonly localDeviceName: string | null,
+    public readonly preferredDeviceIdentifier: string | null,
+    private readonly remoteDeviceNameByIdentifier: Map<string, string>,
+  ) {}
+
+  isLocal(deviceIdentifier: string | null): boolean {
+    return deviceIdentifier === null || deviceIdentifier === this.localDeviceIdentifier;
+  }
+
+  label(deviceIdentifier: string | null): string {
+    if (deviceIdentifier === null || deviceIdentifier === this.localDeviceIdentifier) {
+      return this.localDeviceName ?? "local";
+    }
+    const remoteDeviceName = this.remoteDeviceNameByIdentifier.get(deviceIdentifier) ?? null;
+    if (remoteDeviceName !== null) {
+      return remoteDeviceName;
+    }
+    return this.formatUnknownDeviceIdentifier(deviceIdentifier);
+  }
+
+  getPreferredDeviceName(): string {
+    return this.label(this.preferredDeviceIdentifier);
+  }
+
+  private formatUnknownDeviceIdentifier(deviceIdentifier: string): string {
+    const prefixLength = 6;
+    const prefix = deviceIdentifier.slice(0, prefixLength);
+    return `remote:${prefix}`;
+  }
 }
 
 export async function createDeviceNameResolver(
@@ -22,40 +58,15 @@ export async function createDeviceNameResolver(
     }
     const localDeviceIdentifier = status.deviceIdentifier ?? null;
     const localDeviceName = status.deviceName ?? null;
-    return buildResolver(localDeviceIdentifier, localDeviceName, remoteDeviceNameByIdentifier);
+    const preferredDeviceIdentifier = status.preferredDeviceIdentifier ?? null;
+    return new DeviceNameResolverImpl(
+      localDeviceIdentifier,
+      localDeviceName,
+      preferredDeviceIdentifier,
+      remoteDeviceNameByIdentifier,
+    );
   } catch (error) {
     logger.debug("Failed to fetch LM Link status:", error);
-    return buildResolver(null, null, new Map<string, string>());
+    return new DeviceNameResolverImpl(null, null, null, new Map<string, string>());
   }
-}
-
-function buildResolver(
-  localDeviceIdentifier: string | null,
-  localDeviceName: string | null,
-  remoteDeviceNameByIdentifier: Map<string, string>,
-): DeviceNameResolver {
-  const isLocal = (deviceIdentifier: string | null) =>
-    deviceIdentifier === null || deviceIdentifier === localDeviceIdentifier;
-  const label = (deviceIdentifier: string | null) => {
-    if (deviceIdentifier === null || deviceIdentifier === localDeviceIdentifier) {
-      return localDeviceName ?? "local";
-    }
-    const remoteDeviceName = remoteDeviceNameByIdentifier.get(deviceIdentifier) ?? null;
-    if (remoteDeviceName !== null) {
-      return remoteDeviceName;
-    }
-    return formatUnknownDeviceIdentifier(deviceIdentifier);
-  };
-  return {
-    localDeviceIdentifier,
-    localDeviceName,
-    isLocal,
-    label,
-  };
-}
-
-function formatUnknownDeviceIdentifier(deviceIdentifier: string): string {
-  const prefixLength = 6;
-  const prefix = deviceIdentifier.slice(0, prefixLength);
-  return `remote:${prefix}`;
 }

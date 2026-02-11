@@ -268,14 +268,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       spinnerDeviceName = deviceNameResolver.label(modelDeviceIdentifier);
     }
     if (!local && matchingModels.length > 1) {
-      const lmLinkStatus = await client.repository.lmLink.status();
-      const preferredDeviceIdentifier = lmLinkStatus.preferredDeviceIdentifier;
-      if (
-        preferredDeviceIdentifier !== undefined &&
-        !deviceNameResolver.isLocal(preferredDeviceIdentifier)
-      ) {
-        spinnerDeviceName = deviceNameResolver.label(preferredDeviceIdentifier);
-      }
+      spinnerDeviceName = deviceNameResolver.getPreferredDeviceName();
     }
     await loadModel({
       logger,
