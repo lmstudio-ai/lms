@@ -70,6 +70,11 @@ function hasDuplicatesOnSameDevice(models: Array<ModelInfo>): boolean {
   return false;
 }
 
+function hasMultipleModelKeys(models: Array<ModelInfo>): boolean {
+  const modelKeys = new Set(models.map(model => model.modelKey));
+  return modelKeys.size > 1;
+}
+
 const loadCommand = new Command<[], LoadCommandOptions>()
   .name("load")
   .description("Load a model")
@@ -398,8 +403,9 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       // model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
     } else {
       const matchingModels = initialFilteredModels.map(option => models[option.index]);
+      const hasMultipleKeys = hasMultipleModelKeys(matchingModels);
       const hasSameDeviceDuplicates = hasDuplicatesOnSameDevice(matchingModels);
-      if (hasSameDeviceDuplicates) {
+      if (hasMultipleKeys || hasSameDeviceDuplicates) {
         console.info(
           text`
             ! Multiple models match the provided model key. Please select one.
