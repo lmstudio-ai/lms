@@ -19,7 +19,7 @@ import { getCliPref } from "../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { type DeviceNameResolver, createDeviceNameResolver } from "../deviceNameLookup.js";
 import { formatElapsedTime } from "../formatElapsedTime.js";
-import { formatSizeBytes1000, formatSizeBytes1024 } from "../formatBytes.js";
+import { formatSizeBytes1024 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { Spinner } from "../Spinner.js";
@@ -51,6 +51,7 @@ type LoadCommandOptions = OptionValues &
     contextLength?: number;
     parallel?: number;
     exact?: boolean;
+    local?: boolean;
     identifier?: string;
     yes?: boolean;
     estimateOnly?: boolean;
@@ -106,7 +107,14 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     "--exact",
     text`
       Only load the model if the model key provided matches the model exactly. Fails if the model
-      key provided does not match any model.
+      key provided does not match any model. If multiple devices have the same model key, the
+      preferred device may be used (if available), otherwise the load will fail.
+    `,
+  )
+  .option(
+    "--local",
+    text`
+      Only use models available locally. Models provided via LM Link will be ignored.
     `,
   )
   .option(
@@ -142,6 +150,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     parallel: maxParallelPredictions,
     yes = false,
     exact = false,
+    local = false,
     identifier,
     estimateOnly = false,
   } = options;
@@ -169,6 +178,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
 
   const models = (await client.system.listDownloadedModels())
     .filter(model => model.architecture?.toLowerCase().includes("clip") !== true)
+    .filter(model => (local ? (model.deviceIdentifier ?? null) === null : true))
     .sort((a, b) => {
       const aIndex = lastLoadedMap.get(a.modelKey) ?? lastLoadedMap.size + 1;
       const bIndex = lastLoadedMap.get(b.modelKey) ?? lastLoadedMap.size + 1;
@@ -176,7 +186,6 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     });
 
   if (exact) {
-    const model = models.find(model => model.modelKey === modelKey);
     if (modelKey === undefined) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(
@@ -189,7 +198,8 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       );
       process.exit(1);
     }
-    if (model === undefined) {
+    const matchingModels = models.filter(model => model.modelKey === modelKey);
+    if (matchingModels.length === 0) {
       if (models.length === 0) {
         logger.errorWithoutPrefix(
           makeTitledPrettyError(
@@ -234,24 +244,32 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       process.exit(1);
     }
 
+    // We use the first match as hopefully if we have multiple exact matches, they will have the
+    // same resource usage and domain. This is the best we can do without prompting the user to
+    // select one.
+    const model = matchingModels[0];
     if (estimateOnly === true) {
       const estimate = await (
         model.type === "llm" ? client.llm : client.embedding
-      ).estimateResourcesUsage(model.modelKey, loadConfig, {
-        deviceIdentifier: model.deviceIdentifier ?? null,
+      ).estimateResourcesUsage(modelKey, loadConfig, {
+        deviceIdentifier: local ? null : undefined,
       });
       printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
       return;
     }
 
-    await loadModel(
+    const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
+    // SDK interprets null as "local-only" and undefined as "no preference".
+    const deviceIdentifier = local ? null : undefined;
+    await loadModelByKey(
       logger,
-      client,
-      model,
+      loadNamespace,
+      modelKey,
       deviceNameResolver,
       identifier,
       loadConfig,
       ttlSeconds,
+      deviceIdentifier,
     );
     return;
   }
@@ -362,15 +380,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
   });
 
-  await loadModel(
-    logger,
-    client,
-    model,
-    deviceNameResolver,
-    identifier,
-    loadConfig,
-    ttlSeconds,
-  );
+  await loadModel(logger, client, model, deviceNameResolver, identifier, loadConfig, ttlSeconds);
 });
 
 interface SelectModelOpts {
@@ -411,7 +421,7 @@ async function selectModel({
             const displayName =
               option.string +
               " " +
-              chalk.dim(`(${formatSizeBytes1000(model.sizeBytes)})`) +
+              chalk.dim(`(${formatSizeBytes1024(model.sizeBytes)})`) +
               deviceSuffix;
             return {
               value: model,
@@ -477,12 +487,67 @@ async function loadModel(
     ? `Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.`
     : `Model loaded successfully on ${deviceNameResolver.label(
         loadedDeviceIdentifier,
-      )} in ${formatElapsedTime(
-        endTime - startTime,
-      )}.`;
+      )} in ${formatElapsedTime(endTime - startTime)}.`;
   logger.info(text`
     ${successLine}
-    (${formatSizeBytes1000(sizeBytes)})
+    (${formatSizeBytes1024(sizeBytes)})
+  `);
+  logger.info(text`
+    To use the model in the API/SDK, use the identifier "${chalk.green(info!.identifier)}".
+  `);
+}
+
+async function loadModelByKey(
+  logger: SimpleLogger,
+  namespace: LMStudioClient["llm"] | LMStudioClient["embedding"],
+  modelKey: string,
+  deviceNameResolver: DeviceNameResolver,
+  identifier: string | undefined,
+  config: LLMLoadModelConfig,
+  ttlSeconds: number | undefined,
+  deviceIdentifier: string | null | undefined,
+) {
+  logger.debug("Identifier:", identifier);
+  logger.debug("Config:", config);
+
+  const spinner = new Spinner(`Loading ${modelKey}`);
+  const startTime = Date.now();
+  const abortController = new AbortController();
+
+  const sigintListener = () => {
+    spinner.stop();
+    abortController.abort();
+    logger.warn("Load cancelled.");
+    process.exit(1);
+  };
+
+  process.addListener("SIGINT", sigintListener);
+  let llmModel;
+  try {
+    llmModel = await namespace.load(modelKey, {
+      verbose: false,
+      ttl: ttlSeconds,
+      signal: abortController.signal,
+      config,
+      identifier,
+      deviceIdentifier,
+    });
+  } finally {
+    process.removeListener("SIGINT", sigintListener);
+    spinner.stopIfNotStopped();
+  }
+  const endTime = Date.now();
+  const info = await llmModel.getModelInfo();
+  const loadedDeviceIdentifier = info?.deviceIdentifier ?? null;
+  const successLine = deviceNameResolver.isLocal(loadedDeviceIdentifier)
+    ? `Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.`
+    : `Model loaded successfully on ${deviceNameResolver.label(
+        loadedDeviceIdentifier,
+      )} in ${formatElapsedTime(endTime - startTime)}.`;
+  const sizeBytes = info?.sizeBytes;
+  const sizeLine = sizeBytes === undefined ? "" : `\n(${formatSizeBytes1024(sizeBytes)})`;
+  logger.info(text`
+    ${successLine}${sizeLine}
   `);
   logger.info(text`
     To use the model in the API/SDK, use the identifier "${chalk.green(info!.identifier)}".

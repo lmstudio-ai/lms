@@ -15,7 +15,7 @@ import { dev } from "./subcommands/dev/index.js";
 import { flags } from "./subcommands/flags.js";
 import { get } from "./subcommands/get.js";
 import { importCmd } from "./subcommands/importCmd.js";
-import { link } from "./subcommands/link.js";
+import { link } from "./subcommands/link/index.js";
 import { ls, ps } from "./subcommands/list.js";
 import { load } from "./subcommands/load.js";
 import { log } from "./subcommands/log.js";
