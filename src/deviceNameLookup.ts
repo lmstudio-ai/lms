@@ -52,9 +52,7 @@ export async function createDeviceNameResolver(
     const status = await client.repository.lmLink.status();
     const remoteDeviceNameByIdentifier = new Map<string, string>();
     for (const peer of status.peers) {
-      if (peer.deviceName) {
-        remoteDeviceNameByIdentifier.set(peer.deviceIdentifier, peer.deviceName);
-      }
+      remoteDeviceNameByIdentifier.set(peer.deviceIdentifier, peer.deviceName);
     }
     const localDeviceIdentifier = status.deviceIdentifier;
     const localDeviceName = status.deviceName;
@@ -62,7 +60,7 @@ export async function createDeviceNameResolver(
     return new DeviceNameResolverImpl(
       localDeviceIdentifier,
       localDeviceName,
-      preferredDeviceIdentifier,
+      preferredDeviceIdentifier ?? null,
       remoteDeviceNameByIdentifier,
     );
   } catch (error) {
