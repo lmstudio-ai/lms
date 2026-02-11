@@ -23,22 +23,32 @@ enable.action(async function () {
 
   await client.repository.lmLink.setDisabled(false);
   currentStatus = await client.repository.lmLink.status();
+  let message: string;
+  if (wasDisabled) {
+    message = "LM Link enabled.";
+  } else {
+    message = "LM Link is already enabled.";
+  }
+
   if (currentStatus.issues.includes("notLoggedIn") === true) {
-    logger.infoText`
-      LM Link could not connect because you are not logged in. Use ${chalk.cyan("lms login")} to login.
-    `;
+    message +=
+      " However, LM Link cannot connect because you are not logged in. Use " +
+      chalk.cyan("lms login") +
+      " to login.";
+    logger.info(message);
     return;
   }
 
   if (currentStatus.issues.includes("noAccess") === true) {
-    logger.infoText`
-      You do not have access to LM Link. Visit ${chalk.cyan("https://lmstudio.ai/lm-link")} to request access.
-    `;
+    message +=
+      " However, you do not have access to LM Link. Visit " +
+      chalk.cyan("https://lmstudio.ai/lm-link") +
+      " to request access.";
+    logger.info(message);
     return;
   }
-  if (wasDisabled) {
-    logger.info("LM Link enabled. Connecting...");
-  }
+
+  logger.info(message);
   if (currentStatus.status !== "online" && currentStatus.issues.length === 0) {
     const stopLoader = startLinkLoader();
     try {
@@ -59,6 +69,7 @@ enable.action(async function () {
     }
   }
 
+  // This should not happen but we still want to handle it just in case
   if (currentStatus.issues.includes("deviceDisabled") === true) {
     logger.error("Failed to enable LM Link on this device.");
     return;
