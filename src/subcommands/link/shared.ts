@@ -10,13 +10,21 @@ export type LinkStatusCommandOptions = LinkCommandOptionsBase & {
   json?: boolean;
 };
 
-const linkLoaderFrames = ["● ○ ○ ○", "○ ● ○ ○", "○ ○ ● ○", "○ ○ ○ ●", "○ ○ ● ○", "○ ● ○ ○"];
+const linkLoaderFrames = [
+  "👾 ● ○ ○ ○ 👾",
+  "👾 ○ ● ○ ○ 👾",
+  "👾 ○ ○ ● ○ 👾",
+  "👾 ○ ○ ○ ● 👾",
+  "👾 ○ ○ ● ○ 👾",
+  "👾 ○ ● ○ ○ 👾",
+];
 
 export const startLinkLoader = (intervalMs = 120) => {
   let frameIndex = 0;
+  process.stdout.write(`\r${linkLoaderFrames[frameIndex]}`); // Show first frame immediately
   const timer = setInterval(() => {
-    const frame = linkLoaderFrames[frameIndex];
     frameIndex = (frameIndex + 1) % linkLoaderFrames.length;
+    const frame = linkLoaderFrames[frameIndex];
     process.stdout.write(`\r${frame}`);
   }, intervalMs);
 
