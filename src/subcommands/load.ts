@@ -261,16 +261,34 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
     // SDK interprets null as "local-only" and undefined as "no preference".
     const deviceIdentifier = local ? null : undefined;
-    await loadModelByKey(
+    // Local loads omit device name; only remote loads show a device suffix.
+    let spinnerDeviceName: string | undefined;
+    const modelDeviceIdentifier = model.deviceIdentifier ?? null;
+    if (!deviceNameResolver.isLocal(modelDeviceIdentifier)) {
+      spinnerDeviceName = deviceNameResolver.label(modelDeviceIdentifier);
+    }
+    if (!local && matchingModels.length > 1) {
+      const lmLinkStatus = await client.repository.lmLink.status();
+      const preferredDeviceIdentifier = lmLinkStatus.preferredDeviceIdentifier;
+      if (
+        preferredDeviceIdentifier !== undefined &&
+        !deviceNameResolver.isLocal(preferredDeviceIdentifier)
+      ) {
+        spinnerDeviceName = deviceNameResolver.label(preferredDeviceIdentifier);
+      }
+    }
+    await loadModel({
       logger,
-      loadNamespace,
+      namespace: loadNamespace,
       modelKey,
+      model,
       deviceNameResolver,
       identifier,
-      loadConfig,
+      config: loadConfig,
       ttlSeconds,
       deviceIdentifier,
-    );
+      spinnerDeviceName,
+    });
     return;
   }
 
@@ -380,7 +398,18 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
   });
 
-  await loadModel(logger, client, model, deviceNameResolver, identifier, loadConfig, ttlSeconds);
+  const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
+  await loadModel({
+    logger,
+    namespace: loadNamespace,
+    modelKey: model.modelKey,
+    model,
+    deviceNameResolver,
+    identifier,
+    config: loadConfig,
+    ttlSeconds,
+    deviceIdentifier: model.deviceIdentifier ?? null,
+  });
 });
 
 interface SelectModelOpts {
@@ -436,81 +465,42 @@ async function selectModel({
   );
 }
 
-async function loadModel(
-  logger: SimpleLogger,
-  client: LMStudioClient,
-  model: ModelInfo,
-  deviceNameResolver: DeviceNameResolver,
-  identifier: string | undefined,
-  config: LLMLoadModelConfig,
-  ttlSeconds: number | undefined,
-) {
-  const { modelKey, sizeBytes } = model;
+async function loadModel({
+  logger,
+  namespace,
+  modelKey,
+  model,
+  deviceNameResolver,
+  identifier,
+  config,
+  ttlSeconds,
+  deviceIdentifier,
+  spinnerDeviceName,
+}: {
+  logger: SimpleLogger;
+  namespace: LMStudioClient["llm"] | LMStudioClient["embedding"];
+  modelKey: string;
+  model?: ModelInfo;
+  deviceNameResolver: DeviceNameResolver;
+  identifier: string | undefined;
+  config: LLMLoadModelConfig;
+  ttlSeconds: number | undefined;
+  deviceIdentifier: string | null | undefined;
+  spinnerDeviceName?: string;
+}) {
   logger.debug("Identifier:", identifier);
   logger.debug("Config:", config);
 
-  const deviceIdentifier = model.deviceIdentifier ?? null;
-  const spinner = new Spinner(
-    deviceNameResolver.isLocal(deviceIdentifier)
-      ? `Loading ${modelKey}`
-      : `Loading ${modelKey} on ${deviceNameResolver.label(deviceIdentifier)}`,
-  );
-  const startTime = Date.now();
-  const abortController = new AbortController();
-
-  const sigintListener = () => {
-    spinner.stop();
-    abortController.abort();
-    logger.warn("Load cancelled.");
-    process.exit(1);
-  };
-
-  process.addListener("SIGINT", sigintListener);
-  let llmModel;
-  try {
-    llmModel = await (model.type === "llm" ? client.llm : client.embedding).load(model.modelKey, {
-      verbose: false,
-      ttl: ttlSeconds,
-      signal: abortController.signal,
-      config,
-      identifier,
-      deviceIdentifier: model.deviceIdentifier ?? null,
-    });
-  } finally {
-    process.removeListener("SIGINT", sigintListener);
-    spinner.stopIfNotStopped();
+  let resolvedSpinnerDeviceName = spinnerDeviceName;
+  if (resolvedSpinnerDeviceName === undefined && model !== undefined) {
+    const modelDeviceIdentifier = model.deviceIdentifier ?? null;
+    if (!deviceNameResolver.isLocal(modelDeviceIdentifier)) {
+      resolvedSpinnerDeviceName = deviceNameResolver.label(modelDeviceIdentifier);
+    }
   }
-  const endTime = Date.now();
-  const info = await llmModel.getModelInfo();
-  const loadedDeviceIdentifier = info?.deviceIdentifier ?? model.deviceIdentifier ?? null;
-  const successLine = deviceNameResolver.isLocal(loadedDeviceIdentifier)
-    ? `Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.`
-    : `Model loaded successfully on ${deviceNameResolver.label(
-        loadedDeviceIdentifier,
-      )} in ${formatElapsedTime(endTime - startTime)}.`;
-  logger.info(text`
-    ${successLine}
-    (${formatSizeBytes1024(sizeBytes)})
-  `);
-  logger.info(text`
-    To use the model in the API/SDK, use the identifier "${chalk.green(info!.identifier)}".
-  `);
-}
-
-async function loadModelByKey(
-  logger: SimpleLogger,
-  namespace: LMStudioClient["llm"] | LMStudioClient["embedding"],
-  modelKey: string,
-  deviceNameResolver: DeviceNameResolver,
-  identifier: string | undefined,
-  config: LLMLoadModelConfig,
-  ttlSeconds: number | undefined,
-  deviceIdentifier: string | null | undefined,
-) {
-  logger.debug("Identifier:", identifier);
-  logger.debug("Config:", config);
-
-  const spinner = new Spinner(`Loading ${modelKey}`);
+  const spinnerDeviceSuffix =
+    resolvedSpinnerDeviceName === undefined ? "" : ` on ${resolvedSpinnerDeviceName}`;
+  const spinner = new Spinner(`Loading ${modelKey}${spinnerDeviceSuffix}`);
   const startTime = Date.now();
   const abortController = new AbortController();
 
@@ -538,13 +528,13 @@ async function loadModelByKey(
   }
   const endTime = Date.now();
   const info = await llmModel.getModelInfo();
-  const loadedDeviceIdentifier = info?.deviceIdentifier ?? null;
+  const loadedDeviceIdentifier = info?.deviceIdentifier ?? model?.deviceIdentifier ?? null;
   const successLine = deviceNameResolver.isLocal(loadedDeviceIdentifier)
     ? `Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.`
     : `Model loaded successfully on ${deviceNameResolver.label(
         loadedDeviceIdentifier,
       )} in ${formatElapsedTime(endTime - startTime)}.`;
-  const sizeBytes = info?.sizeBytes;
+  const sizeBytes = info?.sizeBytes ?? model?.sizeBytes;
   const sizeLine = sizeBytes === undefined ? "" : `\n(${formatSizeBytes1024(sizeBytes)})`;
   logger.info(text`
     ${successLine}${sizeLine}

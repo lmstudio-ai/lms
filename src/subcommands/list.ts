@@ -5,6 +5,7 @@ import chalk from "chalk";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
+import { createDeviceNameResolver, type DeviceNameResolver } from "../deviceNameLookup.js";
 import { formatTimeLean } from "../formatElapsedTime.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
@@ -35,10 +36,21 @@ function formatModelKeyWithVariantCount(model: ModelInfo) {
   return `${model.modelKey}${chalk.dim(` (${variantCount} ${variantLabel})`)}`;
 }
 
+function formatDeviceLabel(
+  deviceNameResolver: DeviceNameResolver,
+  deviceIdentifier: string | null | undefined,
+) {
+  if (deviceNameResolver.isLocal(deviceIdentifier ?? null)) {
+    return "Local";
+  }
+  return deviceNameResolver.label(deviceIdentifier ?? null);
+}
+
 function printDownloadedModelsTable(
   title: string,
   downloadedModels: Array<ModelInfo>,
   loadedModels: Array<{ path: string; identifier: string }>,
+  deviceNameResolver: DeviceNameResolver,
 ) {
   const sortedModels = [...downloadedModels].sort((firstModel, secondModel) =>
     firstModel.modelKey.localeCompare(secondModel.modelKey),
@@ -49,6 +61,7 @@ function printDownloadedModelsTable(
       sizeBytes: formatSizeBytes1000(model.sizeBytes),
       params: model.paramsString,
       arch: architecture(model.architecture),
+      device: formatDeviceLabel(deviceNameResolver, model.deviceIdentifier),
       loaded: loadedCheck(
         loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
       ),
@@ -57,7 +70,7 @@ function printDownloadedModelsTable(
 
   console.info(
     columnify(downloadedModelsAndHeadlines, {
-      columns: ["path", "params", "arch", "sizeBytes", "loaded"],
+      columns: ["path", "params", "arch", "sizeBytes", "device", "loaded"],
       config: {
         loaded: {
           headingTransform: () => "",
@@ -78,6 +91,10 @@ function printDownloadedModelsTable(
           headingTransform: () => chalk.dim("SIZE"),
           align: "left",
         },
+        device: {
+          headingTransform: () => chalk.dim("DEVICE"),
+          align: "left",
+        },
       },
       preserveNewLines: true,
       columnSplitter: "    ",
@@ -90,6 +107,7 @@ interface PrintModelsWithVariantRowsOpts {
   baseModels: Array<ModelInfo>;
   loadedModels: Array<{ path: string; identifier: string }>;
   variantInfosByModelKey: Map<string, Array<ModelInfo>>;
+  deviceNameResolver: DeviceNameResolver;
 }
 
 function printModelsWithVariantRows({
@@ -97,6 +115,7 @@ function printModelsWithVariantRows({
   baseModels,
   loadedModels,
   variantInfosByModelKey,
+  deviceNameResolver,
 }: PrintModelsWithVariantRowsOpts) {
   const sortedBaseModels = [...baseModels].sort((firstModel, secondModel) =>
     firstModel.modelKey.localeCompare(secondModel.modelKey),
@@ -112,6 +131,7 @@ function printModelsWithVariantRows({
             params: model.paramsString,
             arch: architecture(model.architecture),
             sizeBytes: formatSizeBytes1000(model.sizeBytes),
+            device: formatDeviceLabel(deviceNameResolver, model.deviceIdentifier),
             loaded: loadedCheck(
               loadedModels.filter(loadedModel => loadedModel.path === model.path).length,
             ),
@@ -132,6 +152,7 @@ function printModelsWithVariantRows({
         params: variantInfo.paramsString,
         arch: architecture(variantInfo.architecture),
         sizeBytes: formatSizeBytes1000(variantInfo.sizeBytes),
+        device: formatDeviceLabel(deviceNameResolver, variantInfo.deviceIdentifier),
         loaded: loadedCheck(
           loadedModels.filter(loadedModel => loadedModel.path === variantInfo.path).length,
         ),
@@ -143,7 +164,7 @@ function printModelsWithVariantRows({
 
   console.info(
     columnify(rows, {
-      columns: ["path", "params", "arch", "sizeBytes", "loaded"],
+      columns: ["path", "params", "arch", "sizeBytes", "device", "loaded"],
       config: {
         loaded: {
           headingTransform: () => "",
@@ -162,6 +183,10 @@ function printModelsWithVariantRows({
         },
         sizeBytes: {
           headingTransform: () => chalk.dim("SIZE"),
+          align: "left",
+        },
+        device: {
+          headingTransform: () => chalk.dim("DEVICE"),
           align: "left",
         },
       },
@@ -203,6 +228,7 @@ addLogLevelOptions(lsCommand);
 lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
+  const deviceNameResolver = await createDeviceNameResolver(client, logger);
 
   const {
     llm = false,
@@ -238,7 +264,7 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
     console.info();
     console.info(`Listing variants for ${modelKey}:`);
     console.info();
-    printDownloadedModelsTable(variantTitle, variants, loadedModels);
+    printDownloadedModelsTable(variantTitle, variants, loadedModels, deviceNameResolver);
     console.info();
     return;
   }
@@ -332,6 +358,7 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
         baseModels: llmModels,
         loadedModels,
         variantInfosByModelKey,
+        deviceNameResolver,
       });
       console.info();
     }
@@ -343,6 +370,7 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
         baseModels: embeddingModels,
         loadedModels,
         variantInfosByModelKey,
+        deviceNameResolver,
       });
       console.info();
     }
@@ -351,13 +379,13 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
 
   const llmModels = filteredDownloadedModels.filter(model => model.type === "llm");
   if (llmModels.length > 0) {
-    printDownloadedModelsTable("LLM", llmModels, loadedModels);
+    printDownloadedModelsTable("LLM", llmModels, loadedModels, deviceNameResolver);
     console.info();
   }
 
   const embeddingModels = filteredDownloadedModels.filter(model => model.type === "embedding");
   if (embeddingModels.length > 0) {
-    printDownloadedModelsTable("EMBEDDING", embeddingModels, loadedModels);
+    printDownloadedModelsTable("EMBEDDING", embeddingModels, loadedModels, deviceNameResolver);
     console.info();
   }
 });
@@ -373,6 +401,7 @@ addLogLevelOptions(psCommand);
 psCommand.action(async (options: PsCommandOptions) => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
+  const deviceNameResolver = await createDeviceNameResolver(client, logger);
 
   const { json = false } = options;
 
@@ -427,6 +456,7 @@ psCommand.action(async (options: PsCommandOptions) => {
         path: modelInstanceInfo.modelKey,
         sizeBytes: formatSizeBytes1000(modelInstanceInfo.sizeBytes),
         contextLength: contextLength,
+        device: formatDeviceLabel(deviceNameResolver, modelInstanceInfo.deviceIdentifier),
         ttlMs:
           timeLeft !== undefined && modelInstanceInfo.ttlMs !== null
             ? `${formatTimeLean(timeLeft)} ${chalk.dim(`/ ${formatTimeLean(modelInstanceInfo.ttlMs)}`)}`
@@ -441,7 +471,7 @@ psCommand.action(async (options: PsCommandOptions) => {
   console.info();
   console.info(
     columnify(loadedModelsWithInfo, {
-      columns: ["identifier", "path", "status", "sizeBytes", "contextLength", "ttlMs"],
+      columns: ["identifier", "path", "status", "sizeBytes", "contextLength", "device", "ttlMs"],
       config: {
         identifier: {
           headingTransform: () => chalk.dim("IDENTIFIER"),
@@ -461,6 +491,10 @@ psCommand.action(async (options: PsCommandOptions) => {
         },
         contextLength: {
           headingTransform: () => chalk.dim("CONTEXT"),
+          align: "left",
+        },
+        device: {
+          headingTransform: () => chalk.dim("DEVICE"),
           align: "left",
         },
         ttlMs: {
