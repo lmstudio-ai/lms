@@ -19,7 +19,9 @@ const linkLoaderFrames = [
   "👾 ○ ● ○ ○ 👾",
 ];
 
-export const startLinkLoader = (intervalMs = 120) => {
+const LINK_LOADER_INTERVAL_MS = 120;
+
+export const startLinkLoader = (intervalMs = LINK_LOADER_INTERVAL_MS) => {
   let frameIndex = 0;
   process.stdout.write(`\r${linkLoaderFrames[frameIndex]}`); // Show first frame immediately
   const timer = setInterval(() => {

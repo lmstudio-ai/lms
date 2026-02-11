@@ -30,14 +30,14 @@ setPreferredDevice.action(
 
     const lmLinkStatus = await client.repository.lmLink.status();
 
-  if (lmLinkStatus.issues.includes("notLoggedIn") === true) {
+    if (lmLinkStatus.issues.includes("notLoggedIn") === true) {
       logger.infoText`
       LM Link not running because you are not logged in. Use ${chalk.cyan("lms login")} to login.
     `;
       return;
     }
 
-  if (lmLinkStatus.issues.includes("noAccess") === true) {
+    if (lmLinkStatus.issues.includes("noAccess") === true) {
       logger.infoText`
       You do not have access to LM Link. Visit ${chalk.cyan("https://lmstudio.ai/lm-link")} to request access.
     `;
@@ -102,7 +102,7 @@ setPreferredDevice.action(
       `Updated preferred device to "${matchingOption.deviceName}" (${matchingOption.deviceIdentifier}).`,
     );
 
-  if (lmLinkStatus.issues.includes("deviceDisabled") === true) {
+    if (lmLinkStatus.issues.includes("deviceDisabled") === true) {
       logger.infoText`
       Note: LM Link is disabled. Run ${chalk.cyan("lms link enable")} to enable it.
     `;
