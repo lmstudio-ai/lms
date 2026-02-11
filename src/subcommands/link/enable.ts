@@ -23,36 +23,36 @@ enable.action(async function () {
 
   await client.repository.lmLink.setDisabled(false);
   currentStatus = await client.repository.lmLink.status();
-  let message: string;
-  if (wasDisabled) {
-    message = "LM Link enabled.";
-  } else {
-    message = "LM Link is already enabled.";
-  }
-
+  // Check for blocking issues first
   if (currentStatus.issues.includes("notLoggedIn") === true) {
-    message +=
-      " However, LM Link cannot connect because you are not logged in. Use " +
-      chalk.cyan("lms login") +
-      " to login.";
-    logger.info(message);
+    const prefix = wasDisabled ? "LM Link enabled." : "LM Link is already enabled.";
+    logger.info(
+      prefix +
+        " However, LM Link cannot connect because you are not logged in. Use " +
+        chalk.cyan("lms login") +
+        " to login.",
+    );
     return;
   }
 
   if (currentStatus.issues.includes("noAccess") === true) {
-    message +=
-      " However, you do not have access to LM Link. Visit " +
-      chalk.cyan("https://lmstudio.ai/lm-link") +
-      " to request access.";
-    logger.info(message);
+    const prefix = wasDisabled ? "LM Link enabled." : "LM Link is already enabled.";
+    logger.info(
+      prefix +
+        " However, you do not have access to LM Link. Visit " +
+        chalk.cyan("https://lmstudio.ai/lm-link") +
+        " to request access.",
+    );
     return;
   }
 
+  // No blocking issues
   if (wasDisabled) {
-    logger.info(message + " Connecting now...");
+    logger.info("LM Link enabled. Connecting now...");
   } else {
-    logger.info(message);
+    logger.info("LM Link is already enabled.");
   }
+
   if (currentStatus.status !== "online" && currentStatus.issues.length === 0) {
     const stopLoader = startLinkLoader();
     try {
