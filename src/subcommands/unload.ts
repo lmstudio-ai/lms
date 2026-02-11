@@ -158,7 +158,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
         ),
       );
       logger.debug(`Unloading ${formatModelTarget(selected, deviceNameResolver)}...`);
-      await client.llm.unload(selected.identifier, { deviceIdentifier: selected.deviceIdentifier });
+      await selected.unload();
       logger.info(`Model ${formatModelTarget(selected, deviceNameResolver)} unloaded.`);
     }
   } else {
