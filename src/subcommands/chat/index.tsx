@@ -230,7 +230,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       client,
       chat,
       {
-        stats: options.stats,
+        stats: options.stats || options.verbose === true,
         ttl,
       },
       llm,
@@ -246,7 +246,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       process.exit(1);
     }
     await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
-      stats: options.stats,
+      stats: options.stats || options.verbose === true,
       ttl,
     });
   } else {
