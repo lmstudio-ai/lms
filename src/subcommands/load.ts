@@ -152,8 +152,8 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     "-y, --yes",
     text`
       Automatically approve all prompts. Useful for scripting. If there are multiple
-      models matching the model key, the first one will be loaded. Fails if the model key provided does not
-      match any model.
+      models matching the model key, the model will be loaded on the preferred device (if set),
+      or the first matching model will be loaded.
     `,
   );
 
