@@ -2,11 +2,11 @@ import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { search } from "@inquirer/prompts";
 import { makeTitledPrettyError, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
-import { type EmbeddingModel, type LLM } from "@lmstudio/sdk";
+import { type EmbeddingModel, type LLM, type ModelInstanceInfo } from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
-import { createDeviceNameResolver, type DeviceNameResolver } from "../deviceNameLookup.js";
+import { createDeviceNameResolver } from "../deviceNameLookup.js";
 import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
@@ -16,17 +16,6 @@ type UnloadCommandOptions = OptionValues &
   LogLevelArgs & {
     all?: boolean;
   };
-
-const formatModelTarget = (
-  modelEntry: LLM | EmbeddingModel,
-  resolver: DeviceNameResolver,
-): string => {
-  const deviceIdentifier = modelEntry.deviceIdentifier ?? null;
-  if (resolver.isLocal(deviceIdentifier)) {
-    return `"${modelEntry.identifier}"`;
-  }
-  return `"${modelEntry.identifier}" on ${resolver.label(deviceIdentifier)}`;
-};
 
 const unloadCommand = new Command<[], UnloadCommandOptions>()
   .name("unload")
@@ -60,25 +49,106 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
         `,
       ).message,
     );
+    return;
   }
+
   const models: Array<LLM | EmbeddingModel> = (
     await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
   ).flat();
-  const modelSearchStrings = models.map(({ identifier, path, deviceIdentifier }) => {
+
+  const modelInfoEntries = await Promise.all(
+    models.map(async modelEntry => {
+      const modelInfo = await modelEntry.getModelInfo();
+      return [modelEntry, modelInfo] as const;
+    }),
+  );
+  const modelInfoByModel = new Map<LLM | EmbeddingModel, ModelInstanceInfo>(modelInfoEntries);
+
+  const getDeviceIdentifier = (modelEntry: LLM | EmbeddingModel): string | null => {
+    const modelInfo = modelInfoByModel.get(modelEntry);
+    if (modelInfo === undefined) {
+      return null;
+    }
+    return modelInfo.deviceIdentifier ?? null;
+  };
+
+  const getDeviceSuffix = (modelEntry: LLM | EmbeddingModel): string => {
+    const deviceIdentifier = getDeviceIdentifier(modelEntry);
+    if (deviceNameResolver.isLocal(deviceIdentifier)) {
+      return "";
+    }
+    return ` · ${deviceNameResolver.label(deviceIdentifier)}`;
+  };
+
+  const formatModelTarget = (modelEntry: LLM | EmbeddingModel): string => {
+    const deviceIdentifier = getDeviceIdentifier(modelEntry);
+    if (deviceNameResolver.isLocal(deviceIdentifier)) {
+      return `"${modelEntry.identifier}"`;
+    }
+    return `"${modelEntry.identifier}" on ${deviceNameResolver.label(deviceIdentifier)}`;
+  };
+
+  const getModelSearchString = (modelEntry: LLM | EmbeddingModel): string => {
     // The question mark here is a hack to apply gray color to the path part of the string.
     // It cannot be a part of the path, so we can find it by .lastIndexOf.
     // It will be stripped before outputting.
-    const deviceSuffix = deviceNameResolver.isLocal(deviceIdentifier)
-      ? ""
-      : ` · ${deviceNameResolver.label(deviceIdentifier)}`;
-    if (identifier === path) {
-      return `${identifier}?${deviceSuffix}`;
+    const deviceSuffix = getDeviceSuffix(modelEntry);
+    const { identifier: modelIdentifier, path } = modelEntry;
+    if (modelIdentifier === path) {
+      return `${modelIdentifier}?${deviceSuffix}`;
     }
-    if (identifier.startsWith(path + ":")) {
-      return `${identifier}?${deviceSuffix}`;
+    if (modelIdentifier.startsWith(path + ":")) {
+      return `${modelIdentifier}?${deviceSuffix}`;
     }
-    return `${identifier} ?(${path})${deviceSuffix}`;
-  });
+    return `${modelIdentifier} ?(${path})${deviceSuffix}`;
+  };
+
+  const modelSearchStrings = models.map(modelEntry => getModelSearchString(modelEntry));
+
+  const getDisplayName = (optionString: string): string => {
+    const questionMarkIndex = optionString.lastIndexOf("?");
+    if (questionMarkIndex === -1) {
+      return optionString;
+    }
+    return (
+      optionString.slice(0, questionMarkIndex) +
+      chalk.dim(optionString.slice(questionMarkIndex + 1))
+    );
+  };
+
+  const promptForModel = async (
+    promptLabel: string,
+    modelEntries: Array<LLM | EmbeddingModel>,
+    searchStrings: Array<string>,
+  ): Promise<LLM | EmbeddingModel> => {
+    const pageSize = terminalSize().rows - 5;
+    return await runPromptWithExitHandling(() =>
+      search<(typeof modelEntries)[number]>(
+        {
+          message: chalk.green(promptLabel) + chalk.dim(" |"),
+          pageSize,
+          theme: searchTheme,
+          source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
+            void signal;
+            const sanitizedInput = (input ?? "").split("?").join("");
+            const options = fuzzy.filter(sanitizedInput, searchStrings, fuzzyHighlightOptions);
+            return options.map(option => {
+              const modelEntry = modelEntries[option.index];
+              if (modelEntry === undefined) {
+                throw new Error("Search results returned an invalid model index.");
+              }
+              return {
+                value: modelEntry,
+                short: modelEntry.identifier,
+                name: getDisplayName(option.string),
+              };
+            });
+          },
+        },
+        { output: process.stderr },
+      ),
+    );
+  };
 
   if (unloadAll === true) {
     if (models.length === 0) {
@@ -86,8 +156,8 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     } else {
       logger.debug(`Unloading ${models.length} models...`);
       for (const model of models) {
-        logger.info(`Unloading ${formatModelTarget(model, deviceNameResolver)}...`);
-        await client.llm.unload(model.identifier, { deviceIdentifier: model.deviceIdentifier });
+        logger.info(`Unloading ${formatModelTarget(model)}...`);
+        await model.unload();
       }
       if (models.length > 1) {
         logger.info(`Unloaded ${models.length} models.`);
@@ -114,52 +184,22 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     }
     if (matchingModels.length === 1) {
       const modelEntry = matchingModels[0];
-      logger.debug(`Unloading ${formatModelTarget(modelEntry, deviceNameResolver)}...`);
-      await client.llm.unload(identifier, { deviceIdentifier: modelEntry.deviceIdentifier });
-      logger.info(`Model ${formatModelTarget(modelEntry, deviceNameResolver)} unloaded.`);
+      logger.debug(`Unloading ${formatModelTarget(modelEntry)}...`);
+      await modelEntry.unload();
+      logger.info(`Model ${formatModelTarget(modelEntry)} unloaded.`);
     } else {
       // Multiple models with the same identifier - prompt user to select
-      const pageSize = terminalSize().rows - 5;
-      const matchingSearchStrings = matchingModels.map(model => {
-        const deviceSuffix = deviceNameResolver.isLocal(model.deviceIdentifier)
-          ? ""
-          : ` · ${deviceNameResolver.label(model.deviceIdentifier)}`;
-        return `${model.identifier}?${deviceSuffix}`;
-      });
-      const selected = await runPromptWithExitHandling(() =>
-        search<(typeof matchingModels)[number]>(
-          {
-            message: chalk.green("Multiple models found. Select one to unload") + chalk.dim(" |"),
-            pageSize,
-            theme: searchTheme,
-            source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
-              void signal;
-              const sanitizedInput = (input ?? "").split("?").join("");
-              const options = fuzzy.filter(
-                sanitizedInput,
-                matchingSearchStrings,
-                fuzzyHighlightOptions,
-              );
-              return options.map(option => {
-                const model = matchingModels[option.index];
-                const questionMarkIndex = option.string.lastIndexOf("?");
-                const displayName =
-                  option.string.slice(0, questionMarkIndex) +
-                  chalk.dim(option.string.slice(questionMarkIndex + 1));
-                return {
-                  value: model,
-                  short: model.identifier,
-                  name: displayName,
-                };
-              });
-            },
-          },
-          { output: process.stderr },
-        ),
+      const matchingSearchStrings = matchingModels.map(modelEntry =>
+        getModelSearchString(modelEntry),
       );
-      logger.debug(`Unloading ${formatModelTarget(selected, deviceNameResolver)}...`);
+      const selected = await promptForModel(
+        "Multiple models found. Select one to unload",
+        matchingModels,
+        matchingSearchStrings,
+      );
+      logger.debug(`Unloading ${formatModelTarget(selected)}...`);
       await selected.unload();
-      logger.info(`Model ${formatModelTarget(selected, deviceNameResolver)} unloaded.`);
+      logger.info(`Model ${formatModelTarget(selected)} unloaded.`);
     }
   } else {
     if (models.length === 0) {
@@ -169,44 +209,17 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     // If there is exactly one model loaded, unload it automatically without prompting.
     if (models.length === 1) {
       const modelEntry = models[0];
-      logger.debug(`Unloading ${formatModelTarget(modelEntry, deviceNameResolver)}...`);
+      logger.debug(`Unloading ${formatModelTarget(modelEntry)}...`);
       await modelEntry.unload();
-      logger.info(`Model ${formatModelTarget(modelEntry, deviceNameResolver)} unloaded.`);
+      logger.info(`Model ${formatModelTarget(modelEntry)} unloaded.`);
       return;
     }
     console.info(chalk.dim("! To unload all models, use the --all flag."));
     console.info();
-    const pageSize = terminalSize().rows - 5;
-    const selected = await runPromptWithExitHandling(() =>
-      search<(typeof models)[number]>(
-        {
-          message: chalk.green("Select a model to unload") + chalk.dim(" |"),
-          pageSize,
-          theme: searchTheme,
-          source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
-            void signal;
-            const sanitizedInput = (input ?? "").split("?").join("");
-            const options = fuzzy.filter(sanitizedInput, modelSearchStrings, fuzzyHighlightOptions);
-            return options.map(option => {
-              const model = models[option.index];
-              const questionMarkIndex = option.string.lastIndexOf("?");
-              const displayName =
-                option.string.slice(0, questionMarkIndex) +
-                chalk.dim(option.string.slice(questionMarkIndex + 1));
-              return {
-                value: model,
-                short: models[option.index].identifier,
-                name: displayName,
-              };
-            });
-          },
-        },
-        { output: process.stderr },
-      ),
-    );
-    logger.debug(`Unloading ${formatModelTarget(selected, deviceNameResolver)}...`);
+    const selected = await promptForModel("Select a model to unload", models, modelSearchStrings);
+    logger.debug(`Unloading ${formatModelTarget(selected)}...`);
     await selected.unload();
-    logger.info(`Model ${formatModelTarget(selected, deviceNameResolver)} unloaded.`);
+    logger.info(`Model ${formatModelTarget(selected)} unloaded.`);
   }
 });
 
