@@ -121,13 +121,14 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
-  .option(
-    "--exact",
-    text`
-      Only load the model if the model key provided matches the model exactly. Fails if the model
-      key provided does not match any model. If multiple devices have the same model key, the
-      preferred device may be used (if available), otherwise the load will fail.
-    `,
+  .addOption(
+    new Option(
+      "--exact",
+      text`
+        Only load the model if the path provided matches the model exactly. Fails if the path
+        provided does not match any model.
+      `,
+    ).hideHelp(),
   )
   .option(
     "--local",
@@ -207,7 +208,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     if (modelKey === undefined) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(
-          "Model key not provided",
+          "Path not provided",
           text`
             The parameter ${chalk.cyan("[model-key]")} is required when using the
             ${chalk.yellow("--exact")} flag.
@@ -216,14 +217,16 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       );
       process.exit(1);
     }
-    const matchingModels = models.filter(model => model.modelKey === modelKey);
-    if (matchingModels.length === 0) {
+    // In this case, we expect a model path and not a model key
+    const modelPath = modelKey;
+    const model = models.find(model => model.path === modelPath);
+    if (model === undefined) {
       if (models.length === 0) {
         logger.errorWithoutPrefix(
           makeTitledPrettyError(
             "Model not found",
             text`
-              No model found with model key being exactly "${chalk.yellow(modelKey)}".
+              No model found with path being exactly "${chalk.yellow(modelPath)}".
 
               To disable exact matching, remove the ${chalk.yellow("--exact")} flag.
 
@@ -234,17 +237,17 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
           ).message,
         );
       } else {
-        const shortestModelKey = models.reduce((shortest, model) => {
-          if (model.modelKey.length < shortest.length) {
-            return model.modelKey;
+        const shortestPath = models.reduce((shortest, model) => {
+          if (model.path.length < shortest.length) {
+            return model.path;
           }
           return shortest;
-        }, models[0].modelKey);
+        }, models[0].path);
         logger.errorWithoutPrefix(
           makeTitledPrettyError(
             "Model not found",
             text`
-              No model found with model key being exactly "${chalk.yellow(modelKey)}".
+              No model found with path being exactly "${chalk.yellow(modelPath)}".
 
               To disable exact matching, remove the ${chalk.yellow("--exact")} flag.
 
@@ -252,74 +255,35 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
 
                   ${chalk.yellow("lms ls")}
 
-              Note, you need to provide the full model key. For example:
+              Note, you need to provide the full model path. For example:
 
-                lms load --exact ${shortestModelKey}
+                lms load --exact ${shortestPath}
             `,
           ).message,
         );
       }
-      process.exit(1);
-    }
-
-    let model: ModelInfo | undefined;
-    if (matchingModels.length === 1) {
-      model = matchingModels[0];
-    } else {
-      // For --exact we only auto-resolve when a preferred device makes the choice deterministic.
-      const preferredDeviceIdentifier = deviceNameResolver.preferredDeviceIdentifier;
-      if (preferredDeviceIdentifier !== null) {
-        model = matchingModels.find(
-          candidate => candidate.deviceIdentifier === preferredDeviceIdentifier,
-        );
-      }
-      if (model === undefined) {
-        logger.errorWithoutPrefix(
-          makeTitledPrettyError(
-            "Multiple models found",
-            text`
-              Multiple devices provide the model key "${chalk.yellow(modelKey)}".
-
-              To resolve, either set a preferred device with:
-
-                  ${chalk.yellow("lms link set-preferred-device")}
-
-              or limit to local models with:
-
-                  ${chalk.yellow("lms load --exact --local " + modelKey)}
-            `,
-          ).message,
-        );
-        process.exit(1);
-        return;
-      }
-    }
-    // Should not happen since we check for length above
-    if (model === undefined) {
       process.exit(1);
     }
     if (estimateOnly === true) {
       const estimate = await (
         model.type === "llm" ? client.llm : client.embedding
-      ).estimateResourcesUsage(modelKey, loadConfig, {
-        deviceIdentifier: local ? null : undefined,
+      ).estimateResourcesUsage(model.modelKey, loadConfig, {
+        deviceIdentifier: model.deviceIdentifier,
       });
       printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
       return;
     }
 
     const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
-    // SDK interprets null as "local-only" and undefined as "no preference".
-    const deviceIdentifier = local ? null : undefined;
     await loadModel({
       logger,
       namespace: loadNamespace,
-      modelKey,
+      modelKey: model.modelKey,
       deviceNameResolver,
       identifier,
       config: loadConfig,
       ttlSeconds,
-      deviceIdentifier,
+      deviceIdentifier: model.deviceIdentifier,
     });
     return;
   }
