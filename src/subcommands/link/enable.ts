@@ -22,13 +22,25 @@ enable.action(async function () {
   const wasDisabled: boolean = currentStatus.issues.includes("deviceDisabled") === true;
 
   await client.repository.lmLink.setDisabled(false);
-
   currentStatus = await client.repository.lmLink.status();
+  if (currentStatus.issues.includes("notLoggedIn") === true) {
+    logger.infoText`
+      LM Link could not connect because you are not logged in. Use ${chalk.cyan("lms login")} to login.
+    `;
+    return;
+  }
+
+  if (currentStatus.issues.includes("noAccess") === true) {
+    logger.infoText`
+      You do not have access to LM Link. Visit ${chalk.cyan("https://lmstudio.ai/lm-link")} to request access.
+    `;
+    return;
+  }
+  if (wasDisabled) {
+    logger.info("LM Link enabled. Connecting...");
+  }
   if (currentStatus.status !== "online" && currentStatus.issues.length === 0) {
     const stopLoader = startLinkLoader();
-    if (wasDisabled) {
-      logger.info("LM Link enabled. Connecting...");
-    }
     try {
       // Poll status until online or max attempts
       let attempts = 0;
@@ -45,6 +57,11 @@ enable.action(async function () {
     } finally {
       stopLoader();
     }
+  }
+
+  if (currentStatus.issues.includes("deviceDisabled") === true) {
+    logger.error("Failed to enable LM Link on this device.");
+    return;
   }
 
   if (wasDisabled === false) {

@@ -7,10 +7,10 @@ import {
 import { search } from "@inquirer/prompts";
 import { makeTitledPrettyError, type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
-import { type ModelInfo } from "@lmstudio/lms-shared-types";
 import {
   type EstimatedResourcesUsage,
   type LLMLoadModelConfig,
+  type ModelInfo,
   type LMStudioClient,
 } from "@lmstudio/sdk";
 import chalk from "chalk";
@@ -56,6 +56,19 @@ type LoadCommandOptions = OptionValues &
     yes?: boolean;
     estimateOnly?: boolean;
   };
+
+function hasDuplicatesOnSameDevice(models: Array<ModelInfo>): boolean {
+  const deviceIdentifierCounts = new Map<string | null, number>();
+  for (const model of models) {
+    const deviceIdentifier = model.deviceIdentifier ?? null;
+    const nextCount = (deviceIdentifierCounts.get(deviceIdentifier) ?? 0) + 1;
+    if (nextCount > 1) {
+      return true;
+    }
+    deviceIdentifierCounts.set(deviceIdentifier, nextCount);
+  }
+  return false;
+}
 
 const loadCommand = new Command<[], LoadCommandOptions>()
   .name("load")
@@ -244,10 +257,42 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       process.exit(1);
     }
 
-    // We use the first match as hopefully if we have multiple exact matches, they will have the
-    // same resource usage and domain. This is the best we can do without prompting the user to
-    // select one.
-    const model = matchingModels[0];
+    let model: ModelInfo | undefined;
+    if (matchingModels.length === 1) {
+      model = matchingModels[0];
+    } else {
+      // For --exact we only auto-resolve when a preferred device makes the choice deterministic.
+      const preferredDeviceIdentifier = deviceNameResolver.preferredDeviceIdentifier;
+      if (preferredDeviceIdentifier !== null) {
+        model = matchingModels.find(
+          candidate => candidate.deviceIdentifier === preferredDeviceIdentifier,
+        );
+      }
+      if (model === undefined) {
+        logger.errorWithoutPrefix(
+          makeTitledPrettyError(
+            "Multiple models found",
+            text`
+              Multiple devices provide the model key "${chalk.yellow(modelKey)}".
+
+              To resolve, either set a preferred device with:
+
+                  ${chalk.yellow("lms link set-preferred-device")}
+
+              or limit to local models with:
+
+                  ${chalk.yellow("lms load --exact --local " + modelKey)}
+            `,
+          ).message,
+        );
+        process.exit(1);
+        return;
+      }
+    }
+    // Should not happen since we check for length above
+    if (model === undefined) {
+      process.exit(1);
+    }
     if (estimateOnly === true) {
       const estimate = await (
         model.type === "llm" ? client.llm : client.embedding
@@ -261,26 +306,15 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
     // SDK interprets null as "local-only" and undefined as "no preference".
     const deviceIdentifier = local ? null : undefined;
-    // Local loads omit device name; only remote loads show a device suffix.
-    let spinnerDeviceName: string | undefined;
-    const modelDeviceIdentifier = model.deviceIdentifier ?? null;
-    if (!deviceNameResolver.isLocal(modelDeviceIdentifier)) {
-      spinnerDeviceName = deviceNameResolver.label(modelDeviceIdentifier);
-    }
-    if (!local && matchingModels.length > 1) {
-      spinnerDeviceName = deviceNameResolver.getPreferredDeviceName();
-    }
     await loadModel({
       logger,
       namespace: loadNamespace,
       modelKey,
-      model,
       deviceNameResolver,
       identifier,
       config: loadConfig,
       ttlSeconds,
       deviceIdentifier,
-      spinnerDeviceName,
     });
     return;
   }
@@ -291,6 +325,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   logger.debug("Initial filtered models length:", initialFilteredModels.length);
 
   let model: ModelInfo;
+  let deferToPreferredDevice = false;
   if (yes) {
     if (initialFilteredModels.length === 0) {
       logger.errorWithoutPrefix(
@@ -312,11 +347,20 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       process.exit(1);
     }
     if (initialFilteredModels.length > 1) {
-      logger.warnText`
-        ${initialFilteredModels.length} models match the provided model key. Loading the first one.
-      `;
+      const matchingModels = initialFilteredModels.map(option => models[option.index]);
+      const hasSameDeviceDuplicates = hasDuplicatesOnSameDevice(matchingModels);
+      if (hasSameDeviceDuplicates) {
+        logger.warnText`
+          ${initialFilteredModels.length} models match the provided model key on the same device. Loading the first one.
+        `;
+        model = models[initialFilteredModels[0].index];
+      } else {
+        model = matchingModels[0];
+        deferToPreferredDevice = true;
+      }
+    } else {
+      model = models[initialFilteredModels[0].index];
     }
-    model = models[initialFilteredModels[0].index];
   } else {
     console.info();
     if (modelKey === undefined) {
@@ -353,19 +397,26 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       // );
       // model = await selectModelToLoad(models, modelPaths, path ?? "", 5, lastLoadedMap);
     } else {
-      console.info(
-        text`
-          ! Multiple models match the provided model key. Please select one.
-        `,
-      );
-      model = await selectModel({
-        models,
-        modelKeys,
-        initialSearch: modelKey ?? "",
-        leaveEmptyLines: 5,
-        estimateOnly,
-        deviceNameResolver,
-      });
+      const matchingModels = initialFilteredModels.map(option => models[option.index]);
+      const hasSameDeviceDuplicates = hasDuplicatesOnSameDevice(matchingModels);
+      if (hasSameDeviceDuplicates) {
+        console.info(
+          text`
+            ! Multiple models match the provided model key. Please select one.
+          `,
+        );
+        model = await selectModel({
+          models,
+          modelKeys,
+          initialSearch: modelKey ?? "",
+          leaveEmptyLines: 5,
+          estimateOnly,
+          deviceNameResolver,
+        });
+      } else {
+        model = matchingModels[0];
+        deferToPreferredDevice = true;
+      }
     }
   }
 
@@ -373,7 +424,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     const estimate = await (
       model.type === "llm" ? client.llm : client.embedding
     ).estimateResourcesUsage(model.modelKey, loadConfig, {
-      deviceIdentifier: model.deviceIdentifier ?? null,
+      deviceIdentifier: deferToPreferredDevice ? undefined : model.deviceIdentifier ?? null,
     });
     printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
     return;
@@ -396,12 +447,11 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     logger,
     namespace: loadNamespace,
     modelKey: model.modelKey,
-    model,
     deviceNameResolver,
     identifier,
     config: loadConfig,
     ttlSeconds,
-    deviceIdentifier: model.deviceIdentifier ?? null,
+    deviceIdentifier: deferToPreferredDevice ? undefined : model.deviceIdentifier ?? null,
   });
 });
 
@@ -462,38 +512,32 @@ async function loadModel({
   logger,
   namespace,
   modelKey,
-  model,
   deviceNameResolver,
   identifier,
   config,
   ttlSeconds,
   deviceIdentifier,
-  spinnerDeviceName,
 }: {
   logger: SimpleLogger;
   namespace: LMStudioClient["llm"] | LMStudioClient["embedding"];
   modelKey: string;
-  model?: ModelInfo;
   deviceNameResolver: DeviceNameResolver;
   identifier: string | undefined;
   config: LLMLoadModelConfig;
   ttlSeconds: number | undefined;
   deviceIdentifier: string | null | undefined;
-  spinnerDeviceName?: string;
 }) {
   logger.debug("Identifier:", identifier);
   logger.debug("Config:", config);
 
-  let resolvedSpinnerDeviceName = spinnerDeviceName;
-  if (resolvedSpinnerDeviceName === undefined && model !== undefined) {
-    const modelDeviceIdentifier = model.deviceIdentifier ?? null;
-    if (!deviceNameResolver.isLocal(modelDeviceIdentifier)) {
-      resolvedSpinnerDeviceName = deviceNameResolver.label(modelDeviceIdentifier);
-    }
+  let spinnerText = `Loading ${modelKey}`;
+  // When deviceIdentifier is undefined, the SDK picks the preferred device (if any) or could
+  // fallback on some other device. So we don't show any device info in that case.
+  if (deviceIdentifier !== undefined) {
+    const deviceLabel = deviceNameResolver.label(deviceIdentifier);
+    spinnerText += ` on ${deviceLabel}`;
   }
-  const spinnerDeviceSuffix =
-    resolvedSpinnerDeviceName === undefined ? "" : ` on ${resolvedSpinnerDeviceName}`;
-  const spinner = new Spinner(`Loading ${modelKey}${spinnerDeviceSuffix}`);
+  const spinner = new Spinner(spinnerText);
   const startTime = Date.now();
   const abortController = new AbortController();
 
@@ -521,13 +565,13 @@ async function loadModel({
   }
   const endTime = Date.now();
   const info = await llmModel.getModelInfo();
-  const loadedDeviceIdentifier = info?.deviceIdentifier ?? model?.deviceIdentifier ?? null;
+  const loadedDeviceIdentifier = info?.deviceIdentifier ?? null;
   const successLine = deviceNameResolver.isLocal(loadedDeviceIdentifier)
     ? `Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.`
     : `Model loaded successfully on ${deviceNameResolver.label(
         loadedDeviceIdentifier,
       )} in ${formatElapsedTime(endTime - startTime)}.`;
-  const sizeBytes = info?.sizeBytes ?? model?.sizeBytes;
+  const sizeBytes = info?.sizeBytes;
   const sizeLine = sizeBytes === undefined ? "" : `\n(${formatSizeBytes1024(sizeBytes)})`;
   logger.info(text`
     ${successLine}${sizeLine}
