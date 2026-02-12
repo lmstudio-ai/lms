@@ -90,6 +90,15 @@ status.action(async function () {
     return;
   }
 
+  if (lmLinkStatus.issues.includes("badVersion") === true) {
+    const { isDaemon } = await client.system.getInfo();
+    logger.infoText`
+      LM Link cannot connect because the protocol has updated. You need to update
+      ${isDaemon ? "llmster" : "LM Studio"} to continue using LM Link.
+    `;
+    return;
+  }
+
   // No issues — print status + device name + peers
   const statusLabel = statusDisplayLabels.get(lmLinkStatus.status) ?? lmLinkStatus.status;
 
