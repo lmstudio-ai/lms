@@ -91,37 +91,57 @@ export function createSlashCommands({
 
         const modelKey = parsedArgs.modelKey;
         const deviceIdentifier = parsedArgs.deviceIdentifier;
+        const deviceSpecified = parsedArgs.deviceSpecified;
+        const normalizedDeviceIdentifier = deviceSpecified
+          ? deviceNameResolver?.normalizeIdentifier(deviceIdentifier ?? null) ?? deviceIdentifier
+          : undefined;
 
-        if (llmRef.current !== null) {
-          const currentInfo = await llmRef.current.getModelInfo();
-          const currentDeviceIdentifier = currentInfo.deviceIdentifier ?? null;
-
-          // Direct identifier match
-          if (
-            llmRef.current.identifier === modelKey &&
-            (deviceIdentifier === undefined || deviceIdentifier === currentDeviceIdentifier)
-          ) {
-            return;
+        const currentLlm = llmRef.current;
+        if (currentLlm !== null) {
+          let currentInfo: Awaited<ReturnType<LLM["getModelInfo"]>> | null = null;
+          try {
+            currentInfo = await currentLlm.getModelInfo();
+          } catch {
+            llmRef.current = null;
           }
+          if (currentInfo !== null) {
+            const currentDeviceIdentifier = currentInfo.deviceIdentifier ?? null;
+            const normalizedCurrentDeviceIdentifier =
+              deviceNameResolver?.normalizeIdentifier(currentDeviceIdentifier) ??
+              currentDeviceIdentifier;
 
-          // ModelKey match - only return if it's the only loaded instance
-          if (llmRef.current.modelKey === modelKey) {
-            if (deviceIdentifier !== undefined) {
-              if (currentDeviceIdentifier === deviceIdentifier) {
-                return;
-              }
-            } else {
-              const loadedInstancesOfThisModel = downloadedModels.filter(
-                model => model.modelKey === modelKey && model.isLoaded,
-              ).length;
-              if (loadedInstancesOfThisModel === 1) {
-                return;
+            // Direct identifier match
+            if (
+              currentLlm.identifier === modelKey &&
+              (normalizedDeviceIdentifier === undefined ||
+                normalizedDeviceIdentifier === normalizedCurrentDeviceIdentifier)
+            ) {
+              return;
+            }
+
+            // ModelKey match - only return if it's the only loaded instance
+            if (currentLlm.modelKey === modelKey) {
+              if (normalizedDeviceIdentifier !== undefined) {
+                if (normalizedCurrentDeviceIdentifier === normalizedDeviceIdentifier) {
+                  return;
+                }
+              } else {
+                const loadedInstancesOfThisModel = downloadedModels.filter(
+                  model => model.modelKey === modelKey && model.isLoaded,
+                ).length;
+                if (loadedInstancesOfThisModel === 1) {
+                  return;
+                }
               }
             }
           }
         }
 
-        if (deviceIdentifier !== undefined) {
+        if (deviceSpecified) {
+          if (deviceIdentifier === undefined) {
+            logErrorInChat("Multiple devices match the selection. Use the device identifier.");
+            return;
+          }
           const matchingModels = downloadedModels.filter(model => model.modelKey === modelKey);
           if (matchingModels.length > 0) {
             const matchingDevice = matchingModels.find(
@@ -153,7 +173,7 @@ export function createSlashCommands({
               setModelLoadingProgress(progress);
             },
             signal: abortController.signal,
-            deviceIdentifier,
+            deviceIdentifier: deviceSpecified ? deviceIdentifier : undefined,
           });
           const loadedInfo = await llmRef.current.getModelInfo();
           const loadedDeviceIdentifier = loadedInfo.deviceIdentifier ?? null;
@@ -185,6 +205,31 @@ export function createSlashCommands({
       },
       buildSuggestions: ({ argsInput, registerSuggestionMetadata }) => {
         const normalizedFilter = argsInput.trim().toLowerCase();
+        const deviceLabelIds = new Map<string, Set<string>>();
+        const modelKeyDevices = new Map<string, Set<string | null>>();
+        if (deviceNameResolver !== null) {
+          for (const modelState of downloadedModels) {
+            const deviceIdentifier = modelState.deviceIdentifier;
+            const label = deviceNameResolver.label(deviceIdentifier);
+            const normalizedLabel = label.toLowerCase();
+            const identifierKey =
+              deviceIdentifier ?? deviceNameResolver.localDeviceIdentifier ?? "local";
+            const existing = deviceLabelIds.get(normalizedLabel);
+            if (existing === undefined) {
+              deviceLabelIds.set(normalizedLabel, new Set([identifierKey]));
+            } else {
+              existing.add(identifierKey);
+            }
+          }
+        }
+        for (const modelState of downloadedModels) {
+          const existing = modelKeyDevices.get(modelState.modelKey);
+          if (existing === undefined) {
+            modelKeyDevices.set(modelState.modelKey, new Set([modelState.deviceIdentifier]));
+          } else {
+            existing.add(modelState.deviceIdentifier);
+          }
+        }
         const filteredModels = downloadedModels.filter(modelState => {
           const deviceHint =
             deviceNameResolver?.label(modelState.deviceIdentifier) ??
@@ -200,6 +245,8 @@ export function createSlashCommands({
             modelState,
             registerSuggestionMetadata,
             deviceNameResolver,
+            deviceLabelIds,
+            modelKeyDevices,
           }),
         );
       },
@@ -295,28 +342,45 @@ interface CreateModelSuggestionOpts {
   modelState: ModelState;
   registerSuggestionMetadata: SlashCommandSuggestionBuilderArgs["registerSuggestionMetadata"];
   deviceNameResolver: DeviceNameResolver | null;
+  deviceLabelIds: Map<string, Set<string>>;
+  modelKeyDevices: Map<string, Set<string | null>>;
 }
 
 function createModelSuggestion({
   modelState,
   registerSuggestionMetadata,
   deviceNameResolver,
+  deviceLabelIds,
+  modelKeyDevices,
 }: CreateModelSuggestionOpts): Suggestion {
   const priority = modelState.isCurrent ? 3 : modelState.isLoaded ? 2 : 1;
   const args = [modelState.modelKey];
   const deviceIdentifier = modelState.deviceIdentifier;
+  const isLocalDevice = deviceNameResolver?.isLocal(deviceIdentifier) ?? deviceIdentifier === null;
   const deviceName =
-    deviceNameResolver !== null &&
-    deviceNameResolver.label(deviceIdentifier) !== null &&
-    !deviceNameResolver.isLocal(deviceIdentifier)
-      ? deviceNameResolver.label(deviceIdentifier)
-      : null;
+    deviceNameResolver !== null ? deviceNameResolver.label(deviceIdentifier) : null;
+  const normalizedDeviceName = deviceName?.toLowerCase() ?? null;
+  const isDeviceLabelUnique =
+    normalizedDeviceName !== null && (deviceLabelIds.get(normalizedDeviceName)?.size ?? 0) === 1;
+  const modelKeyDeviceCount = modelKeyDevices.get(modelState.modelKey)?.size ?? 0;
+  const shouldForceLocal = isLocalDevice === true && modelKeyDeviceCount > 1;
 
-  if (deviceIdentifier !== null) {
-    if (deviceName !== null && deviceName.length > 0 && deviceName.includes(" ") === false) {
+  if (deviceIdentifier !== null && isLocalDevice !== true) {
+    if (
+      deviceName !== null &&
+      deviceName.length > 0 &&
+      deviceName.includes(" ") === false &&
+      isDeviceLabelUnique
+    ) {
       args.push(deviceName);
     } else {
       args.push(deviceIdentifier);
+    }
+  } else if (shouldForceLocal) {
+    if (deviceName !== null && deviceName.length > 0) {
+      args.push(deviceName);
+    } else {
+      args.push("local");
     }
   }
   const suggestion: Suggestion = {
@@ -344,72 +408,122 @@ function parseModelCommandArguments(
   modelKey: string;
   deviceIdentifier?: string | null;
   error: string | null;
+  deviceSpecified: boolean;
 } {
   const args = commandArguments.map(arg => arg.trim()).filter(arg => arg.length > 0);
-  // If there's only one argument, treat it as the model key and default to local.
-  // This is intentional to avoid auto-selecting a preferred remote device when the user
-  // doesn't specify a target device.
+  // If there's only one argument, treat it as the model key and let the SDK pick
+  // the preferred device when the user doesn't specify a target device.
   if (args.length <= 1) {
     return {
       modelKey: args.join(" ").trim(),
-      deviceIdentifier: null,
-      error: null,
-    };
-  }
-
-  // Last argument is treated as the device selector; everything before it is the model key.
-  const modelKey = args.slice(0, -1).join(" ").trim();
-  const deviceArgument = args[args.length - 1] ?? "";
-
-  // Explicit local device shorthand.
-  if (deviceArgument.toLowerCase() === "local") {
-    return { modelKey, deviceIdentifier: null, error: null };
-  }
-
-  // If the token matches a device identifier directly, use it.
-  const directMatch = downloadedModels.find(
-    model => model.deviceIdentifier !== null && model.deviceIdentifier === deviceArgument,
-  );
-  if (directMatch !== undefined && directMatch.deviceIdentifier !== null) {
-    return {
-      modelKey,
-      deviceIdentifier: directMatch.deviceIdentifier,
-      error: null,
-    };
-  }
-
-  // Otherwise, try to resolve the token as a device label
-  const normalizedDeviceArgument = deviceArgument.toLowerCase();
-  const matchingDeviceIds = new Set<string | null>();
-  for (const model of downloadedModels) {
-    const deviceIdentifier = model.deviceIdentifier;
-    const deviceLabel =
-      deviceNameResolver !== null ? deviceNameResolver.label(deviceIdentifier) : "";
-
-    if (deviceLabel.toLowerCase() === normalizedDeviceArgument) {
-      matchingDeviceIds.add(deviceIdentifier);
-    }
-  }
-
-  // If exactly one device matches the label, use it.
-  if (matchingDeviceIds.size === 1) {
-    const [deviceIdentifier] = matchingDeviceIds;
-    return {
-      modelKey,
-      deviceIdentifier,
-      error: null,
-    };
-  }
-
-  // If multiple devices share the same label, force identifier usage to disambiguate.
-  if (matchingDeviceIds.size > 1) {
-    return {
-      modelKey,
       deviceIdentifier: undefined,
-      error: `Multiple devices match "${deviceArgument}". Use the device identifier instead.`,
+      error: null,
+      deviceSpecified: false,
     };
   }
 
-  // Fall back to treating the token as a device identifier; the load call will validate it.
-  return { modelKey, deviceIdentifier: deviceArgument, error: null };
+  const fullModelKey = args.join(" ").trim();
+
+  const resolveDeviceSelection = (): {
+    matched: boolean;
+    deviceIdentifier?: string | null;
+    error: string | null;
+    deviceSpecified: boolean;
+    tokenCount?: number;
+  } => {
+    const lastToken = args[args.length - 1] ?? "";
+    // Explicit local device shorthand.
+    if (lastToken.toLowerCase() === "local") {
+      return {
+        matched: true,
+        deviceIdentifier: null,
+        error: null,
+        deviceSpecified: true,
+        tokenCount: 1,
+      };
+    }
+
+    // If the token matches a device identifier directly, use it.
+    if (lastToken.length > 0) {
+      const directMatch = downloadedModels.find(
+        model => model.deviceIdentifier !== null && model.deviceIdentifier === lastToken,
+      );
+      if (directMatch !== undefined && directMatch.deviceIdentifier !== null) {
+        return {
+          matched: true,
+          deviceIdentifier: directMatch.deviceIdentifier,
+          error: null,
+          deviceSpecified: true,
+          tokenCount: 1,
+        };
+      }
+    }
+
+    // Otherwise, try to resolve the token as a device label.
+    if (deviceNameResolver !== null) {
+      const labelToDeviceIds = new Map<string, Set<string | null>>();
+      for (const model of downloadedModels) {
+        const deviceIdentifier = model.deviceIdentifier;
+        const deviceLabel = deviceNameResolver.label(deviceIdentifier);
+        const normalizedLabel = deviceLabel.toLowerCase();
+        const existing = labelToDeviceIds.get(normalizedLabel);
+        if (existing === undefined) {
+          labelToDeviceIds.set(normalizedLabel, new Set([deviceIdentifier]));
+        } else {
+          existing.add(deviceIdentifier);
+        }
+      }
+
+      const maxSuffixTokens = args.length - 1;
+      for (let tokenCount = maxSuffixTokens; tokenCount >= 1; tokenCount -= 1) {
+        const suffix = args.slice(-tokenCount).join(" ").trim();
+        if (suffix.length === 0) {
+          continue;
+        }
+        const matchingDeviceIds = labelToDeviceIds.get(suffix.toLowerCase());
+        if (matchingDeviceIds === undefined) {
+          continue;
+        }
+        if (matchingDeviceIds.size === 1) {
+          const [deviceIdentifier] = matchingDeviceIds;
+          return {
+            matched: true,
+            deviceIdentifier,
+            error: null,
+            deviceSpecified: true,
+            tokenCount,
+          };
+        }
+        return {
+          matched: true,
+          deviceIdentifier: undefined,
+          error: `Multiple devices match "${suffix}". Use the device identifier instead.`,
+          deviceSpecified: true,
+          tokenCount,
+        };
+      }
+    }
+
+    return { matched: false, error: null, deviceSpecified: false };
+  };
+
+  const resolvedDevice = resolveDeviceSelection();
+  if (resolvedDevice.matched) {
+    const tokenCount = resolvedDevice.tokenCount ?? 1;
+    const modelKeyWithoutDevice = args.slice(0, -tokenCount).join(" ").trim();
+    return {
+      modelKey: modelKeyWithoutDevice,
+      deviceIdentifier: resolvedDevice.deviceIdentifier,
+      error: resolvedDevice.error,
+      deviceSpecified: resolvedDevice.deviceSpecified,
+    };
+  }
+
+  // If the last token isn't a known device selector, treat the entire input as the model key.
+  return {
+    modelKey: fullModelKey,
+    deviceIdentifier: undefined,
+    error: null,
+    deviceSpecified: false,
+  };
 }

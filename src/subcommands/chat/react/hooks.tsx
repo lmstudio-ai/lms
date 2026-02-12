@@ -2,7 +2,10 @@ import type { HubModel } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { measureElement, type DOMElement, useStdin } from "ink";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type DeviceNameResolver } from "../../../deviceNameLookup.js";
+import {
+  type DeviceNameResolver,
+  extractDeviceIdentifierFromDeviceAwareIdentifier,
+} from "../../../deviceNameLookup.js";
 import { formatSizeBytes1000 } from "../../../formatBytes.js";
 import { getCachedModelCatalogOrFetch, parseModelKey } from "../catalogHelpers.js";
 import { getDownloadSize } from "../downloadHelpers.js";
@@ -134,49 +137,39 @@ export function useDownloadedModels(
       );
       const loadedModels = await client.llm.listLoaded();
 
-      const loadedModelInfoEntries = await Promise.all(
-        loadedModels.map(async model => {
-          const info = await model.getModelInfo();
-          return { model, info };
-        }),
-      );
-
-      const getModelDeviceKey = (modelKey: string, deviceIdentifier: string | null) =>
-        `${modelKey}  ·  ${deviceIdentifier ?? "local"}`;
-
       // Create entry for each loaded model instance
-      const loadedModelStates = loadedModelInfoEntries.map(({ model, info }) => {
-        const deviceIdentifier = info.deviceIdentifier ?? null;
+      const loadedModelStates = loadedModels.map(model => {
+        const deviceIdentifier = extractDeviceIdentifierFromDeviceAwareIdentifier(
+          model.indexedModelIdentifier,
+        );
         const downloadedModel = downloadedModelInfos.find(
-          downloaded =>
-            downloaded.modelKey === info.modelKey &&
-            downloaded.deviceIdentifier === deviceIdentifier,
+          downloaded => downloaded.indexedModelIdentifier === model.indexedModelIdentifier,
         );
         return {
           modelKey: model.identifier,
           isLoaded: true,
-          isCurrent: info.instanceReference === currentModelInstanceReference,
+          isCurrent: model.instanceReference === currentModelInstanceReference,
           displayName: downloadedModel?.displayName ?? model.displayName,
           deviceIdentifier,
         };
       });
 
-      // Get set of paths that are currently loaded
-      const loadedKeys = new Set(
-        loadedModelInfoEntries.map(({ info }) =>
-          getModelDeviceKey(info.modelKey, info.deviceIdentifier ?? null),
-        ),
+      // Get set of model identifiers that are currently loaded
+      const loadedModelsIndexedIdentifiers = new Set(
+        loadedModels.map(model => model.indexedModelIdentifier),
       );
 
       // Add downloaded models that are NOT loaded
       const downloadedOnlyModels = downloadedModelInfos
-        .filter(model => !loadedKeys.has(getModelDeviceKey(model.modelKey, model.deviceIdentifier)))
+        .filter(model => !loadedModelsIndexedIdentifiers.has(model.indexedModelIdentifier))
         .map(model => ({
           modelKey: model.modelKey,
           isLoaded: false,
           isCurrent: false,
           displayName: model.displayName,
-          deviceIdentifier: model.deviceIdentifier,
+          deviceIdentifier: extractDeviceIdentifierFromDeviceAwareIdentifier(
+            model.indexedModelIdentifier,
+          ),
         }));
 
       setDownloadedModels([...loadedModelStates, ...downloadedOnlyModels]);

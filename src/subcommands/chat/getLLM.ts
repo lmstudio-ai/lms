@@ -53,6 +53,10 @@ export async function maybeGetLLM(
       return downloadedModel;
     }
   } else {
+    if (yes === true) {
+      logger.error("No loaded model found, load with:\n       lms load");
+      process.exit(1);
+    }
     return undefined;
   }
 
@@ -146,7 +150,7 @@ async function getModelCatalogModels(
   if (!shouldFetchModelCatalog) {
     return [];
   }
-  return getCachedModelCatalogOrFetch(client, logger);
+  return await getCachedModelCatalogOrFetch(client, logger);
 }
 
 function sortDownloadedModelsByLastLoaded(

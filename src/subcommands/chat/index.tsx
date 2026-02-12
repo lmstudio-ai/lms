@@ -227,11 +227,6 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     logger,
   );
 
-  if (shouldFetchModelCatalog) {
-    // Pre-fetch model catalog to speed up later model selection
-    await getCachedModelCatalogOrFetch(client);
-  }
-
   const llm = await maybeGetLLM(
     client,
     model,
@@ -245,6 +240,10 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
   // We intentionally do not check for a model being loaded here, as that is handled
   // inside startInteractiveChat to allow model selection inside the interactive chat flow
   if (process.stdin.isTTY && providedPrompt.length === 0) {
+    if (shouldFetchModelCatalog) {
+      // Pre-fetch model catalog to speed up later model selection without blocking startup.
+      void getCachedModelCatalogOrFetch(client, logger);
+    }
     await startInteractiveChat(
       client,
       chat,

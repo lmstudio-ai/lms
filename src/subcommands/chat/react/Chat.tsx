@@ -20,7 +20,10 @@ import {
 import { insertPasteAtCursor } from "./inputReducer.js";
 import { createSlashCommands } from "./slashCommands.js";
 import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
-import { type DeviceNameResolver } from "../../../deviceNameLookup.js";
+import {
+  type DeviceNameResolver,
+  extractDeviceIdentifierFromDeviceAwareIdentifier,
+} from "../../../deviceNameLookup.js";
 
 // Freezes streaming content into static chunks at natural breaks to reduce re-renders.
 // Uses multiple boundaries to handle different content (best effort):
@@ -548,7 +551,13 @@ export const ChatComponent = React.memo(
         if (error instanceof Error) {
           const errorMessage = error.message.toLowerCase();
           if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
-            const currentModelKey = llmRef.current.modelKey;
+            const currentLlm = llmRef.current;
+            if (currentLlm === null) {
+              logErrorInChat(`${error.message}`);
+              return;
+            }
+            const currentModelKey = currentLlm.modelKey;
+            const currentIndexedModelIdentifier = currentLlm.indexedModelIdentifier;
             logErrorInChat(`${error.message}`);
             logInChat(`Would you like to reload the model?`);
             requestConfirmation({
@@ -557,6 +566,11 @@ export const ChatComponent = React.memo(
                 setModelLoadingProgress(0);
                 let isReloadActive = true;
                 try {
+                  const reloadDeviceIdentifier = deviceNameResolver.normalizeIdentifier(
+                    extractDeviceIdentifierFromDeviceAwareIdentifier(
+                      currentIndexedModelIdentifier,
+                    ),
+                  );
                   llmRef.current = await client.llm.model(currentModelKey, {
                     verbose: false,
                     ttl,
@@ -566,6 +580,7 @@ export const ChatComponent = React.memo(
                       }
                       setModelLoadingProgress(progress);
                     },
+                    deviceIdentifier: reloadDeviceIdentifier,
                   });
                   logInChat(`Model reloaded: ${llmRef.current.displayName}`);
                 } catch (reloadError) {

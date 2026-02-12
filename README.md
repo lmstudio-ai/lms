@@ -33,6 +33,7 @@ For details about each subcommand, run `lms <subcommand> --help`.
 Here are some frequently used commands:
 
 - `lms status` - To check the status of LM Studio.
+- `lms chat` - To start an interactive chat session.
 - `lms server start` - To start the local API server.
 - `lms server stop` - To stop the local API server.
 - `lms ls` - To list all downloaded models.

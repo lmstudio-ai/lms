@@ -1,5 +1,6 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type LMStudioClient } from "@lmstudio/sdk";
+import os from "os";
 
 export interface DeviceNameResolver {
   localDeviceIdentifier: string | null;
@@ -7,7 +8,19 @@ export interface DeviceNameResolver {
   localDeviceName: string | null;
   isLocal: (deviceIdentifier: string | null) => boolean;
   label: (deviceIdentifier: string | null) => string;
+  normalizeIdentifier(deviceIdentifier: string | null): string | null;
   getPreferredDeviceName: () => string;
+}
+
+/**
+ * Extracts the device identifier from a device-aware identifier. If not remote, returns null.
+ */
+export function extractDeviceIdentifierFromDeviceAwareIdentifier(deviceAwareIdentifier: string) {
+  const split = deviceAwareIdentifier.split(":");
+  if (split.length < 2) {
+    return null;
+  }
+  return split[0];
 }
 
 class DeviceNameResolverImpl implements DeviceNameResolver {
@@ -31,6 +44,10 @@ class DeviceNameResolverImpl implements DeviceNameResolver {
       return remoteDeviceName;
     }
     return this.formatUnknownDeviceIdentifier(deviceIdentifier);
+  }
+
+  normalizeIdentifier(deviceIdentifier: string | null): string | null {
+    return this.isLocal(deviceIdentifier) ? null : deviceIdentifier;
   }
 
   getPreferredDeviceName(): string {
@@ -65,6 +82,6 @@ export async function createDeviceNameResolver(
     );
   } catch (error) {
     logger.debug("Failed to fetch LM Link status:", error);
-    return new DeviceNameResolverImpl(null, null, null, new Map<string, string>());
+    return new DeviceNameResolverImpl(null, os.hostname(), null, new Map<string, string>());
   }
 }
