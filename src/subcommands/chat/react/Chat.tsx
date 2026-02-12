@@ -555,23 +555,28 @@ export const ChatComponent = React.memo(
               onConfirm: async () => {
                 logInChat("Reloading model...");
                 setModelLoadingProgress(0);
+                let isReloadActive = true;
                 try {
                   llmRef.current = await client.llm.model(currentModelKey, {
                     verbose: false,
                     ttl,
                     onProgress(progress) {
+                      if (isReloadActive === false) {
+                        return;
+                      }
                       setModelLoadingProgress(progress);
                     },
                   });
                   logInChat(`Model reloaded: ${llmRef.current.displayName}`);
-                  setModelLoadingProgress(null);
                 } catch (reloadError) {
-                  setModelLoadingProgress(null);
                   const reloadErrorMessage =
                     reloadError instanceof Error && reloadError.message !== undefined
                       ? reloadError.message
                       : String(reloadError);
                   logErrorInChat(`Failed to reload model: ${reloadErrorMessage}`);
+                } finally {
+                  isReloadActive = false;
+                  setModelLoadingProgress(null);
                 }
               },
               onCancel: () => {

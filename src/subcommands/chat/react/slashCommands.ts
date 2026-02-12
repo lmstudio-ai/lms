@@ -140,12 +140,16 @@ export function createSlashCommands({
 
         setModelLoadingProgress(0);
         const abortController = new AbortController();
+        let isModelLoadActive = true;
         modelLoadingAbortControllerRef.current = abortController;
         try {
           llmRef.current = await client.llm.model(modelKey, {
             verbose: false,
             ttl: ttl,
             onProgress(progress) {
+              if (abortController.signal.aborted || isModelLoadActive === false) {
+                return;
+              }
               setModelLoadingProgress(progress);
             },
             signal: abortController.signal,
@@ -162,6 +166,10 @@ export function createSlashCommands({
         } catch (error) {
           const errorMessage =
             error instanceof Error && error.message !== undefined ? error.message : String(error);
+          if (abortController.signal.aborted) {
+            logInChat("Model loading cancelled.");
+            return;
+          }
           if (errorMessage.includes("Cannot find a model with path")) {
             logErrorInChat(
               `Model "${modelKey}" not found. Use /download to download it or /model to list available models.`,
@@ -170,6 +178,7 @@ export function createSlashCommands({
           }
           logErrorInChat(`Failed to load model: ${errorMessage}`);
         } finally {
+          isModelLoadActive = false;
           setModelLoadingProgress(null);
           modelLoadingAbortControllerRef.current = null;
         }
@@ -178,7 +187,8 @@ export function createSlashCommands({
         const normalizedFilter = argsInput.trim().toLowerCase();
         const filteredModels = downloadedModels.filter(modelState => {
           const deviceHint =
-            modelState.deviceLabel ?? (modelState.deviceIdentifier === null ? "local" : "");
+            deviceNameResolver?.label(modelState.deviceIdentifier) ??
+            (modelState.deviceIdentifier === null ? "local" : "");
           return (
             modelState.modelKey.toLowerCase().includes(normalizedFilter) ||
             modelState.displayName.toLowerCase().includes(normalizedFilter) ||
@@ -189,6 +199,7 @@ export function createSlashCommands({
           createModelSuggestion({
             modelState,
             registerSuggestionMetadata,
+            deviceNameResolver,
           }),
         );
       },
@@ -283,19 +294,27 @@ export function createSlashCommands({
 interface CreateModelSuggestionOpts {
   modelState: ModelState;
   registerSuggestionMetadata: SlashCommandSuggestionBuilderArgs["registerSuggestionMetadata"];
+  deviceNameResolver: DeviceNameResolver | null;
 }
 
 function createModelSuggestion({
   modelState,
   registerSuggestionMetadata,
+  deviceNameResolver,
 }: CreateModelSuggestionOpts): Suggestion {
   const priority = modelState.isCurrent ? 3 : modelState.isLoaded ? 2 : 1;
   const args = [modelState.modelKey];
   const deviceIdentifier = modelState.deviceIdentifier;
-  const deviceLabel = modelState.deviceLabel ?? (deviceIdentifier === null ? "local" : null);
+  const deviceName =
+    deviceNameResolver !== null &&
+    deviceNameResolver.label(deviceIdentifier) !== null &&
+    !deviceNameResolver.isLocal(deviceIdentifier)
+      ? deviceNameResolver.label(deviceIdentifier)
+      : null;
+
   if (deviceIdentifier !== null) {
-    if (deviceLabel !== null && deviceLabel.length > 0 && deviceLabel.includes(" ") === false) {
-      args.push(deviceLabel);
+    if (deviceName !== null && deviceName.length > 0 && deviceName.includes(" ") === false) {
+      args.push(deviceName);
     } else {
       args.push(deviceIdentifier);
     }
@@ -306,10 +325,10 @@ function createModelSuggestion({
     priority,
   };
   const statusLabel = modelState.isCurrent ? " (current)" : modelState.isLoaded ? " (loaded)" : "";
-  const deviceSuffix = deviceLabel !== null ? chalk.dim(` · ${deviceLabel}`) : "";
-  const offlineWarning = modelState.isOnline ? "" : chalk.yellow(" !");
+  const deviceSuffix =
+    deviceName !== null && deviceName.length > 0 ? chalk.dim(` · ${deviceName}`) : "";
   registerSuggestionMetadata(suggestion, {
-    label: `${modelState.modelKey}${statusLabel}${deviceSuffix}${offlineWarning}`,
+    label: `${modelState.modelKey}${statusLabel}${deviceSuffix}`,
   });
   return suggestion;
 }
@@ -363,10 +382,9 @@ function parseModelCommandArguments(
   for (const model of downloadedModels) {
     const deviceIdentifier = model.deviceIdentifier;
     const deviceLabel =
-      deviceNameResolver !== null
-        ? deviceNameResolver.label(deviceIdentifier)
-        : model.deviceLabel ?? (deviceIdentifier === null ? "local" : null);
-    if (deviceLabel !== null && deviceLabel.toLowerCase() === normalizedDeviceArgument) {
+      deviceNameResolver !== null ? deviceNameResolver.label(deviceIdentifier) : "";
+
+    if (deviceLabel.toLowerCase() === normalizedDeviceArgument) {
       matchingDeviceIds.add(deviceIdentifier);
     }
   }

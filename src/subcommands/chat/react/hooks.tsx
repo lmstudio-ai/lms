@@ -129,7 +129,6 @@ export function useDownloadedModels(
 
   useEffect(() => {
     const fetchModels = async () => {
-      await deviceNameResolver.refresh();
       const downloadedModelInfos = (await client.system.listDownloadedModels()).filter(
         model => model.type === "llm",
       );
@@ -157,10 +156,8 @@ export function useDownloadedModels(
           modelKey: model.identifier,
           isLoaded: true,
           isCurrent: info.instanceReference === currentModelInstanceReference,
-          isOnline: deviceNameResolver.isOnline(deviceIdentifier),
           displayName: downloadedModel?.displayName ?? model.displayName,
           deviceIdentifier,
-          deviceLabel: deviceNameResolver.label(deviceIdentifier),
         };
       });
 
@@ -178,10 +175,8 @@ export function useDownloadedModels(
           modelKey: model.modelKey,
           isLoaded: false,
           isCurrent: false,
-          isOnline: deviceNameResolver.isOnline(model.deviceIdentifier),
           displayName: model.displayName,
           deviceIdentifier: model.deviceIdentifier,
-          deviceLabel: deviceNameResolver.label(model.deviceIdentifier),
         }));
 
       setDownloadedModels([...loadedModelStates, ...downloadedOnlyModels]);

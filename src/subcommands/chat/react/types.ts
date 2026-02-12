@@ -42,7 +42,6 @@ export type ModelState = {
   isCurrent: boolean;
   displayName: string;
   deviceIdentifier: string | null;
-  deviceLabel: string | null;
 };
 
 export interface Suggestion {
