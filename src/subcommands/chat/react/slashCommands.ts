@@ -347,6 +347,8 @@ function parseModelCommandArguments(
 } {
   const args = commandArguments.map(arg => arg.trim()).filter(arg => arg.length > 0);
   // If there's only one argument, treat it as the model key and default to local.
+  // This is intentional to avoid auto-selecting a preferred remote device when the user
+  // doesn't specify a target device.
   if (args.length <= 1) {
     return {
       modelKey: args.join(" ").trim(),
