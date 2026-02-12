@@ -1,34 +1,36 @@
-import { type SimpleLogger } from "@lmstudio/lms-common";
-import { type LLM, type LMStudioClient } from "@lmstudio/sdk";
-import { getOwnerNameFromModelName, loadModelWithProgress } from "./util.js";
-import { downloadArtifact } from "../get.js";
-import { createModelDisplayOptions } from "./index.js";
-import { runPromptWithExitHandling } from "../../prompt.js";
 import { search } from "@inquirer/prompts";
-import type { HubModel } from "@lmstudio/lms-shared-types";
+import { type SimpleLogger } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
+import type { HubModel } from "@lmstudio/lms-shared-types";
+import { type LLM, type LMStudioClient } from "@lmstudio/sdk";
 import fuzzy from "fuzzy";
-import { getCachedModelCatalogOrFetch } from "./catalogHelpers.js";
 import { getCliPref } from "../../cliPref.js";
+import { type DeviceNameResolver } from "../../deviceNameLookup.js";
+import { runPromptWithExitHandling } from "../../prompt.js";
+import { downloadArtifact } from "../get.js";
+import { getCachedModelCatalogOrFetch } from "./catalogHelpers.js";
+import { createModelDisplayOptions } from "./index.js";
+import { getOwnerNameFromModelName, loadModelWithProgress } from "./util.js";
 
 const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
 
 export async function maybeGetLLM(
   client: LMStudioClient,
-  modelName: string | undefined,
+  modelKey: string | undefined,
   ttl: number,
   shouldFetchModelCatalog: boolean,
   logger: SimpleLogger,
   yes: boolean | undefined,
+  deviceNameResolver: DeviceNameResolver,
 ): Promise<LLM | undefined> {
   let llm: LLM;
-  const isModelRequested = modelName !== undefined && modelName !== "";
+  const isModelRequested = modelKey !== undefined && modelKey !== "";
   const cliPref = await getCliPref(logger);
 
   try {
     if (isModelRequested) {
       // Load the requested model if specified
-      llm = await loadModelWithProgress(client, modelName, ttl, logger);
+      llm = await loadModelWithProgress(client, modelKey, ttl, logger);
     } else {
       // Try to use a loaded model if no model is specified
       llm = await client.llm.model();
@@ -39,25 +41,29 @@ export async function maybeGetLLM(
       if (isModelRequested !== true) {
         logger.error("No loaded model found, load with:\n       lms load");
       } else {
-        logger.error(`Model "${modelName}" not found, load with:\n       lms load ${modelName}`);
+        logger.error(`Model "${modelKey}" not found, load with:\n       lms load ${modelKey}`);
       }
       process.exit(1);
     }
     // Try downloading the model directly if requested
     if (isModelRequested) {
-      const getOwnerNameResult = getOwnerNameFromModelName(modelName);
+      const getOwnerNameResult = getOwnerNameFromModelName(modelKey);
       if (getOwnerNameResult !== null) {
         const { owner, name } = getOwnerNameResult;
         try {
           await downloadArtifact(client, logger, owner, name, yes ?? false);
-          llm = await loadModelWithProgress(client, modelName, ttl, logger);
+          // Downloads are always local for now; force loading on local device.
+          // TODO: Change this when we have remote downloads supported
+          llm = await loadModelWithProgress(client, modelKey, ttl, logger, {
+            deviceIdentifier: null,
+          });
           return llm;
         } catch (e) {
           // No op, will fall back to model selection below
         }
       } else {
         logger.errorText`
-          Invalid model name '${modelName}'. Please provide a model name in the format
+          Invalid model name '${modelKey}'. Please provide a model name in the format
           'owner/model-name'.
         `;
         process.exit(1);
@@ -71,7 +77,7 @@ export async function maybeGetLLM(
       if (isModelRequested) {
         // User requested a specific model but it could not be loaded or downloaded
         logger.errorText`
-          Unable to download or load the requested model '${modelName}'. Please check the model name
+          Unable to download or load the requested model '${modelKey}'. Please check the model name
           and try downloading it first with 'lms get'.
         `;
       } else {
@@ -103,25 +109,76 @@ export async function maybeGetLLM(
         return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
       });
     const filteredModels = models.filter(m => modelCatalogModelNames.includes(m.modelKey) !== true);
-    const modelKeys = models.map(model => model.modelKey);
+    const downloadedDevicesByModelKey = new Map<string, Array<string | null>>();
+    for (const model of models) {
+      const deviceIdentifier = model.deviceIdentifier ?? null;
+      const entry = downloadedDevicesByModelKey.get(model.modelKey);
+      if (entry === undefined) {
+        downloadedDevicesByModelKey.set(model.modelKey, [deviceIdentifier]);
+      } else {
+        entry.push(deviceIdentifier);
+      }
+    }
 
-    const modelsMap = [
+    const getSelectionKey = (key: string, deviceIdentifier: string | null) =>
+      `${key}::${deviceIdentifier ?? "local"}`;
+
+    const getDownloadedDevices = (modelKey: string): Array<string | null> => {
+      const devices = downloadedDevicesByModelKey.get(modelKey);
+      if (devices === undefined || devices.length === 0) {
+        return [];
+      }
+      return Array.from(new Set(devices));
+    };
+
+    type ModelEntry = {
+      name: string;
+      isDownloaded: boolean;
+      size: number;
+      inModelCatalog: boolean;
+      selectionKey: string;
+      deviceName: string | null;
+      deviceIdentifier: string | null;
+    };
+
+    const modelsMap: ModelEntry[] = [
       ...modelCatalogModels
-        .map(m => {
-          return {
-            name: m.owner + "/" + m.name,
-            isDownloaded: modelKeys.includes(m.owner + "/" + m.name),
+        .flatMap<ModelEntry>(m => {
+          const modelKey = m.owner + "/" + m.name;
+          const downloadedDevices = getDownloadedDevices(modelKey);
+          if (downloadedDevices.length === 0) {
+            return [
+              {
+                name: modelKey,
+                isDownloaded: false,
+                size: m.metadata.minMemoryUsageBytes,
+                inModelCatalog: true,
+                selectionKey: getSelectionKey(modelKey, null),
+                deviceName: null,
+                deviceIdentifier: null,
+              },
+            ];
+          }
+          return downloadedDevices.map(deviceIdentifier => ({
+            name: modelKey,
+            isDownloaded: true,
             size: m.metadata.minMemoryUsageBytes,
             inModelCatalog: true,
-          };
+            selectionKey: getSelectionKey(modelKey, deviceIdentifier),
+            deviceName: deviceNameResolver.label(deviceIdentifier),
+            deviceIdentifier,
+          }));
         })
         .sort(m => (m.isDownloaded === true ? -1 : 1)),
       ...filteredModels.map(m => {
         return {
-          name: m.path,
+          name: m.modelKey,
           isDownloaded: true,
           size: m.sizeBytes,
           inModelCatalog: false,
+          selectionKey: getSelectionKey(m.modelKey, m.deviceIdentifier),
+          deviceName: deviceNameResolver.label(m.deviceIdentifier),
+          deviceIdentifier: m.deviceIdentifier,
         };
       }),
     ];
@@ -129,7 +186,7 @@ export async function maybeGetLLM(
     // Pre-compute all display options to avoid recreation on each keystroke
     const displayOptions = createModelDisplayOptions(modelsMap, !shouldFetchModelCatalog);
 
-    const selectedModelName = await runPromptWithExitHandling(() =>
+    const selectedModelKey = await runPromptWithExitHandling(() =>
       search<string>(
         {
           message: MODEL_SELECTION_MESSAGE,
@@ -149,7 +206,9 @@ export async function maybeGetLLM(
       ),
     );
 
-    const selectedModel = modelsMap.find(modelEntry => modelEntry.name === selectedModelName);
+    const selectedModel = modelsMap.find(
+      modelEntry => modelEntry.selectionKey === selectedModelKey,
+    );
 
     if (selectedModel === undefined) {
       logger.error("No model selected, exiting.");
@@ -169,7 +228,11 @@ export async function maybeGetLLM(
         process.exit(1);
       }
     }
-    llm = await loadModelWithProgress(client, selectedModel.name, ttl, logger);
+    const loadDeviceIdentifier = selectedModel.isDownloaded ? selectedModel.deviceIdentifier : null;
+    llm = await loadModelWithProgress(client, selectedModel.name, ttl, logger, {
+      deviceIdentifier: loadDeviceIdentifier,
+      deviceName: selectedModel.deviceName ?? undefined,
+    });
   }
   return llm;
 }

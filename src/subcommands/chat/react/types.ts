@@ -41,6 +41,8 @@ export type ModelState = {
   isLoaded: boolean;
   isCurrent: boolean;
   displayName: string;
+  deviceIdentifier: string | null;
+  deviceLabel: string | null;
 };
 
 export interface Suggestion {

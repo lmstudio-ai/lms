@@ -6,11 +6,19 @@ import { type InkChatMessage } from "./react/types.js";
 
 export async function loadModelWithProgress(
   client: LMStudioClient,
-  modelName: string,
+  modelKey: string,
   ttl: number,
   logger: SimpleLogger,
+  opts: {
+    deviceIdentifier?: string | null;
+    deviceName?: string;
+  } = {},
 ): Promise<LLM> {
-  const spinner = new Spinner(`Loading ${modelName}`);
+  const spinnerText =
+    opts.deviceName !== undefined
+      ? `Loading ${modelKey} on ${opts.deviceName}`
+      : `Loading ${modelKey}`;
+  const spinner = new Spinner(spinnerText);
   const abortController = new AbortController();
 
   const sigintListener = () => {
@@ -22,10 +30,11 @@ export async function loadModelWithProgress(
 
   process.addListener("SIGINT", sigintListener);
   try {
-    const llmModel = await client.llm.model(modelName, {
+    const llmModel = await client.llm.model(modelKey, {
       verbose: false,
       signal: abortController.signal,
       ttl,
+      deviceIdentifier: opts.deviceIdentifier,
     });
     return llmModel;
   } finally {

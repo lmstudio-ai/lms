@@ -20,6 +20,7 @@ import {
 import { insertPasteAtCursor } from "./inputReducer.js";
 import { createSlashCommands } from "./slashCommands.js";
 import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
+import { type DeviceNameResolver } from "../../../deviceNameLookup.js";
 
 // Freezes streaming content into static chunks at natural breaks to reduce re-renders.
 // Uses multiple boundaries to handle different content (best effort):
@@ -40,6 +41,7 @@ interface ChatComponentProps {
   stats?: true;
   ttl?: number;
   shouldFetchModelCatalog?: boolean;
+  deviceNameResolver: DeviceNameResolver;
 }
 
 export const emptyChatInputState: ChatUserInputState = {
@@ -49,7 +51,16 @@ export const emptyChatInputState: ChatUserInputState = {
 };
 
 export const ChatComponent = React.memo(
-  ({ client, llm, chat, onExit, stats, ttl, shouldFetchModelCatalog }: ChatComponentProps) => {
+  ({
+    client,
+    llm,
+    chat,
+    onExit,
+    stats,
+    ttl,
+    shouldFetchModelCatalog,
+    deviceNameResolver,
+  }: ChatComponentProps) => {
     const { exit } = useApp();
     const rootUiRef = useRef<DOMElement | null>(null);
     const [messages, setMessages] = useState<InkChatMessage[]>([
@@ -83,10 +94,6 @@ export const ChatComponent = React.memo(
     const modelLoadingAbortControllerRef = useRef<AbortController | null>(null);
     const chatRef = useRef<Chat>(chat);
     const llmRef = useRef<LLM | null>(llm ?? null);
-    const { downloadedModels, refreshDownloadedModels } = useDownloadedModels(
-      client,
-      llmRef.current !== null ? llmRef.current.identifier : null,
-    );
     const modelCatalog = useModelCatalog(client, shouldFetchModelCatalog);
     const handleExit = useCallback(() => {
       if (abortControllerRef.current?.signal.aborted === false) {
@@ -125,7 +132,11 @@ export const ChatComponent = React.memo(
       },
       [addMessage],
     );
-
+    const { downloadedModels, refreshDownloadedModels } = useDownloadedModels(
+      client,
+      llmRef.current !== null ? llmRef.current.instanceReference : null,
+      deviceNameResolver,
+    );
     const { handleDownloadCommand } = useDownloadCommand({
       client,
       logInChat,
@@ -160,6 +171,7 @@ export const ChatComponent = React.memo(
         setModelLoadingProgress,
         modelLoadingAbortControllerRef,
         lastPredictionStatsRef,
+        deviceNameResolver,
       });
       handler.setCommands(commands);
       return handler;
@@ -174,6 +186,7 @@ export const ChatComponent = React.memo(
       logInChat,
       logErrorInChat,
       shouldFetchModelCatalog,
+      deviceNameResolver,
     ]);
 
     const suggestions = useMemo<Suggestion[]>(() => {

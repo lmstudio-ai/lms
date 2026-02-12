@@ -16,6 +16,7 @@ import { render } from "ink";
 import { ChatComponent } from "./react/Chat.js";
 import { getCachedModelCatalogOrFetch } from "./catalogHelpers.js";
 import { maybeGetLLM } from "./getLLM.js";
+import { createDeviceNameResolver, type DeviceNameResolver } from "../../deviceNameLookup.js";
 
 interface StartPredictionOpts {
   stats?: true;
@@ -72,21 +73,29 @@ export async function getOrAskShouldFetchModelCatalog(
 }
 
 export function createModelDisplayOptions(
-  modelsMap: Array<{ name: string; isDownloaded: boolean; size: number; inModelCatalog: boolean }>,
+  modelsMap: Array<{
+    name: string;
+    isDownloaded: boolean;
+    size: number;
+    inModelCatalog: boolean;
+    selectionKey: string;
+    deviceName: string | null;
+  }>,
   dontFetchCatalog: boolean,
 ) {
   return modelsMap.map((model, index) => {
     const status = model.isDownloaded === false ? "DOWNLOAD" : "";
     const size = formatSizeBytes1000(model.size);
+    const deviceSuffix = model.deviceName !== null ? chalk.dim(` · ${model.deviceName}`) : "";
 
     const displayName = dontFetchCatalog
-      ? `${model.name} ${chalk.dim(`(${size})`)}`
+      ? `${model.name} ${chalk.dim(`(${size})`)}${deviceSuffix}`
       : // uses columnify to align text in columns because we have both downloaded and local models
         // here.
         columnify(
           [
             {
-              name: model.name,
+              name: model.name + deviceSuffix,
               size: chalk.dim(`(min. ${size})`),
               status: chalk.dim(status),
             },
@@ -103,8 +112,8 @@ export function createModelDisplayOptions(
 
     return {
       name: displayName,
-      value: model.name,
-      searchText: model.name,
+      value: model.selectionKey,
+      searchText: model.deviceName !== null ? `${model.name} ${model.deviceName}` : model.name,
       originalIndex: index,
     };
   });
@@ -148,6 +157,7 @@ export async function startInteractiveChat(
   opts: StartPredictionOpts,
   llm: LLM | undefined,
   shouldFetchModelCatalog: boolean,
+  deviceNameResolver: DeviceNameResolver,
 ): Promise<void> {
   return new Promise<void>(resolve => {
     render(
@@ -161,6 +171,7 @@ export async function startInteractiveChat(
           resolve();
         }}
         shouldFetchModelCatalog={shouldFetchModelCatalog}
+        deviceNameResolver={deviceNameResolver}
       />,
       {
         exitOnCtrlC: false,
@@ -191,7 +202,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
   const { dontFetchCatalog, yes } = options;
-
+  const deviceNameResolver = await createDeviceNameResolver(client, logger);
   let providedPrompt = "";
   if (options.prompt !== undefined && options.prompt !== "") {
     providedPrompt = options.prompt;
@@ -221,7 +232,15 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     await getCachedModelCatalogOrFetch(client);
   }
 
-  const llm = await maybeGetLLM(client, model, ttl, shouldFetchModelCatalog, logger, yes);
+  const llm = await maybeGetLLM(
+    client,
+    model,
+    ttl,
+    shouldFetchModelCatalog,
+    logger,
+    yes,
+    deviceNameResolver,
+  );
 
   // We intentionally do not check for a model being loaded here, as that is handled
   // inside startInteractiveChat to allow model selection inside the interactive chat flow
@@ -235,6 +254,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       },
       llm,
       shouldFetchModelCatalog,
+      deviceNameResolver,
     );
     return;
   }
