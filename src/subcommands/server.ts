@@ -194,13 +194,15 @@ status.action(async options => {
   if (port !== undefined) {
     running = await checkHttpServer(logger, port, networkInterface);
   }
+  if (json) {
+    process.stdout.write(JSON.stringify({ running, port }) + "\n");
+    return;
+  }
+
   if (running) {
     logger.info(`The server is running on port ${port}.`);
   } else {
     logger.info(`The server is not running.`);
-  }
-  if (json) {
-    process.stdout.write(JSON.stringify({ running, port }) + "\n");
   }
 });
 
