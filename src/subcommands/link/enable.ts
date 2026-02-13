@@ -4,8 +4,8 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { type LinkCommandOptions, startLinkLoader } from "./shared.js";
 
-const MAX_CONNECTION_WAIT_MS = 5000;
-const POLL_INTERVAL_MS = 100;
+const MAX_CONNECTION_WAIT_MS = 10000; // 10 seconds
+const POLL_INTERVAL_MS = 100; // 100 ms
 
 export const enable = new Command<[], LinkCommandOptions>()
   .name("enable")
@@ -29,17 +29,16 @@ enable.action(async function () {
   // Check for blocking issues
   if (currentStatus.issues.includes("notLoggedIn")) {
     logger.info(
-      (wasDisabled ? "LM Link enabled, but cannot" : "Cannot") +
-        " connect: not logged in. Use " +
-        chalk.cyan("lms login"),
+      "LM Link enabled, but you are not authenticated. Run " +
+        chalk.cyan("lms login") +
+        " to continue.",
     );
     return;
   }
 
   if (currentStatus.issues.includes("noAccess")) {
     logger.info(
-      (wasDisabled ? "LM Link enabled, but you do" : "You do") +
-        " not have access. Visit " +
+      "LM Link enabled, but you do not have access. Visit " +
         chalk.cyan("https://lmstudio.ai/lm-link"),
     );
     return;
@@ -48,7 +47,7 @@ enable.action(async function () {
   if (currentStatus.issues.includes("badVersion")) {
     const { isDaemon } = await client.system.getInfo();
     logger.infoText`
-      ${wasDisabled ? "LM Link enabled." : "LM Link is already enabled."} However, LM Link cannot connect because the protocol has updated. You need to update
+      LM Link is enabled. However, LM Link cannot connect because the protocol has updated. You need to update
       ${isDaemon ? "llmster" : "LM Studio"} to continue using LM Link.
     `;
     if (isDaemon) {
@@ -61,17 +60,13 @@ enable.action(async function () {
 
   // Already online
   if (currentStatus.status === "online") {
-    logger.info(
-      wasDisabled ? "LM Link enabled and is now online." : "LM Link is already enabled and online.",
-    );
+    logger.info("LM Link is enabled and online.");
     return;
   }
 
   // Need to connect
   if (currentStatus.issues.length === 0) {
-    if (!wasDisabled) {
-      logger.info("LM Link is already enabled. Connecting...");
-    }
+    logger.info("LM Link enabled. Connecting...");
     const stopLoader = startLinkLoader();
     try {
       // Poll status until online or max attempts
@@ -91,9 +86,13 @@ enable.action(async function () {
     }
 
     if (currentStatus.status === "online") {
-      logger.info(wasDisabled ? "LM Link enabled and is now online." : "LM Link is now online.");
+      logger.info("LM Link is now online.");
     } else {
-      logger.warn("Could not connect. Use " + chalk.cyan("lms link status") + " for details.");
+      logger.info(
+        "LM Link enabled but could not connect. Use " +
+          chalk.cyan("lms link status") +
+          " for details.",
+      );
     }
   } else {
     // That means we still see it as disabled, which is unexpected. Error out just in case. This
