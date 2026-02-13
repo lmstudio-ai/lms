@@ -24,12 +24,27 @@ logoutCommand.action(async options => {
     return;
   }
 
-  const spinner =
-    options.logLevel !== "none" && options.quiet !== true ? new Spinner("Logging out") : null;
+  const shouldShowSpinner =
+    process.stdout.isTTY && options.logLevel !== "none" && options.quiet !== true;
+
+  const spinner = shouldShowSpinner ? new Spinner("Logging out") : null;
+
+  const sigintHandler = () => {
+    spinner?.stopIfNotStopped();
+    process.exit(130);
+  };
+
+  if (spinner) {
+    process.on("SIGINT", sigintHandler);
+  }
+
   try {
     await client.repository.deauthenticate();
   } finally {
-    spinner?.stopIfNotStopped();
+    if (spinner) {
+      process.off("SIGINT", sigintHandler);
+      spinner.stopIfNotStopped();
+    }
   }
   logger.info("Successfully logged out.");
 });
