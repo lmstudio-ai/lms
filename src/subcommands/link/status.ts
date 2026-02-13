@@ -109,10 +109,10 @@ status.action(async function () {
   const statusLabel = statusDisplayLabels.get(lmLinkStatus.status) ?? lmLinkStatus.status;
 
   const lastError = lmLinkStatus.lastError;
-  if (lmLinkStatus.status === "offline" && lastError !== undefined && lastError !== null) {
+  if (lmLinkStatus.status === "offline" && lastError !== undefined) {
     const reconnectInSeconds = lmLinkStatus.reconnectInSeconds;
     let offlineStatusLabel = "Offline";
-    if (reconnectInSeconds !== undefined && reconnectInSeconds !== null) {
+    if (reconnectInSeconds !== undefined) {
       offlineStatusLabel = `Offline (Reconnect in ${reconnectInSeconds}s)`;
     }
     const secondsSinceError = Math.max(0, Math.floor((Date.now() - lastError.timestamp) / 1000));
