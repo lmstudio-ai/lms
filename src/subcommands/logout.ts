@@ -24,11 +24,11 @@ logoutCommand.action(async options => {
     return;
   }
 
-  const spinner = new Spinner("Logging out");
+  const spinner = options.quiet !== true ? new Spinner("Logging out") : null;
   try {
     await client.repository.deauthenticate();
   } finally {
-    spinner.stopIfNotStopped();
+    spinner?.stopIfNotStopped();
   }
   logger.info("Successfully logged out.");
 });
