@@ -45,6 +45,20 @@ enable.action(async function () {
     return;
   }
 
+  if (currentStatus.issues.includes("badVersion")) {
+    const { isDaemon } = await client.system.getInfo();
+    logger.infoText`
+      ${wasDisabled ? "LM Link enabled." : "LM Link is already enabled."} However, LM Link cannot connect because the protocol has updated. You need to update
+      ${isDaemon ? "llmster" : "LM Studio"} to continue using LM Link.
+    `;
+    if (isDaemon) {
+      logger.infoText`
+        Run ${chalk.cyan("lms daemon update")} to update.
+      `;
+    }
+    return;
+  }
+
   // Already online
   if (currentStatus.status === "online") {
     logger.info(
