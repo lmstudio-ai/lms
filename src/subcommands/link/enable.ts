@@ -74,6 +74,7 @@ enable.action(async function () {
     }
     const stopLoader = startLinkLoader();
     try {
+      // Poll status until online or max attempts
       let attempts = 0;
       const maxAttempts = MAX_CONNECTION_WAIT_MS / POLL_INTERVAL_MS;
 
