@@ -18,13 +18,9 @@ enable.action(async function () {
   const mergedOptions = this.optsWithGlobals();
   const logger = createLogger(mergedOptions);
   await using client = await createClient(logger, mergedOptions);
-  let currentStatus = await client.repository.lmLink.status();
-  const wasDisabled = currentStatus.issues.includes("deviceDisabled");
 
-  if (wasDisabled) {
-    await client.repository.lmLink.setDisabled(false);
-    currentStatus = await client.repository.lmLink.status();
-  }
+  await client.repository.lmLink.setDisabled(false);
+  let currentStatus = await client.repository.lmLink.status();
 
   // Check for blocking issues
   if (currentStatus.issues.includes("notLoggedIn")) {
