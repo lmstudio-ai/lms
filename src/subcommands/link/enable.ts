@@ -53,6 +53,11 @@ enable.action(async function () {
       ${prefix} However, LM Link cannot connect because the protocol has updated. You need to update
       ${isDaemon ? "llmster" : "LM Studio"} to continue using LM Link.
     `;
+    if (isDaemon) {
+      logger.infoText`
+        Run ${chalk.cyan("lms daemon update")} to update.
+      `;
+    }
     return;
   }
 
