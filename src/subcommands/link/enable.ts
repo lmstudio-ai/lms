@@ -46,6 +46,21 @@ enable.action(async function () {
     return;
   }
 
+  if (currentStatus.issues.includes("badVersion") === true) {
+    const prefix = wasDisabled ? "LM Link enabled." : "LM Link is already enabled.";
+    const { isDaemon } = await client.system.getInfo();
+    logger.infoText`
+      ${prefix} However, LM Link cannot connect because the protocol has updated. You need to update
+      ${isDaemon ? "llmster" : "LM Studio"} to continue using LM Link.
+    `;
+    if (isDaemon) {
+      logger.infoText`
+        Run ${chalk.cyan("lms daemon update")} to update.
+      `;
+    }
+    return;
+  }
+
   // No blocking issues
   if (wasDisabled) {
     logger.info("LM Link enabled. Connecting now...");
