@@ -85,7 +85,8 @@ status.action(async function () {
 
   if (lmLinkStatus.issues.includes("noAccess") === true) {
     logger.infoText`
-      You do not have access to LM Link. Visit ${chalk.cyan("https://lmstudio.ai/lm-link")} to request access.
+      You do not have access to LM Link. Visit ${chalk.cyan("https://lmstudio.ai/lm-link")} to
+      request access.
     `;
     return;
   }
@@ -107,16 +108,34 @@ status.action(async function () {
   // No issues — print status + device name + peers
   const statusLabel = statusDisplayLabels.get(lmLinkStatus.status) ?? lmLinkStatus.status;
 
+  const lastError = lmLinkStatus.lastError;
+  if (lmLinkStatus.status === "offline" && lastError !== undefined && lastError !== null) {
+    const reconnectInSeconds = lmLinkStatus.reconnectInSeconds;
+    let offlineStatusLabel = "Offline";
+    if (reconnectInSeconds !== undefined && reconnectInSeconds !== null) {
+      offlineStatusLabel = `Offline (Reconnect in ${reconnectInSeconds}s)`;
+    }
+    const secondsSinceError = Math.max(0, Math.floor((Date.now() - lastError.timestamp) / 1000));
+    logger.info(`This device: ${lmLinkStatus.deviceName}`);
+    logger.info(`Status: ${offlineStatusLabel}`);
+    logger.info(`Last error: ${lastError.message} (${secondsSinceError}s ago)`);
+    return;
+  }
+
   logger.info(`This device: ${lmLinkStatus.deviceName}`);
   logger.info(`Status: ${statusLabel}`);
-  logger.info("");
 
   if (lmLinkStatus.status !== "online") {
     return;
   }
+  logger.info("");
 
   const peerCount = lmLinkStatus.peers.length;
   logger.info(`Found ${peerCount} device${peerCount === 1 ? "" : "s"}:`);
+
+  if (peerCount === 0) {
+    return;
+  }
   logger.info("");
 
   // Get loaded models to display per peer
@@ -157,6 +176,4 @@ status.action(async function () {
       }
     }
   }
-
-  logger.info("");
 });
