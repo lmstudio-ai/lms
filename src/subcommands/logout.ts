@@ -24,7 +24,8 @@ logoutCommand.action(async options => {
     return;
   }
 
-  const spinner = options.quiet !== true ? new Spinner("Logging out") : null;
+  const spinner =
+    options.logLevel !== "none" && options.quiet !== true ? new Spinner("Logging out") : null;
   try {
     await client.repository.deauthenticate();
   } finally {
