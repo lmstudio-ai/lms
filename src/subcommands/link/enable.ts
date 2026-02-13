@@ -18,13 +18,9 @@ enable.action(async function () {
   const mergedOptions = this.optsWithGlobals();
   const logger = createLogger(mergedOptions);
   await using client = await createClient(logger, mergedOptions);
-  let currentStatus = await client.repository.lmLink.status();
-  const wasDisabled = currentStatus.issues.includes("deviceDisabled");
 
-  if (wasDisabled) {
-    await client.repository.lmLink.setDisabled(false);
-    currentStatus = await client.repository.lmLink.status();
-  }
+  await client.repository.lmLink.setDisabled(false);
+  let currentStatus = await client.repository.lmLink.status();
 
   // Check for blocking issues
   if (currentStatus.issues.includes("notLoggedIn")) {
@@ -68,18 +64,32 @@ enable.action(async function () {
   if (currentStatus.issues.length === 0) {
     logger.info("LM Link enabled. Connecting...");
     const stopLoader = startLinkLoader();
+    const initialLastErrorTimestamp =
+      currentStatus.lastError !== undefined ? currentStatus.lastError.timestamp : undefined;
+    let updatedLastError: { message: string; timestamp: number } | null = null;
     try {
       // Poll status until online or max attempts
-      let attempts = 0;
+      let attemptCount = 0;
       const maxAttempts = MAX_CONNECTION_WAIT_MS / POLL_INTERVAL_MS;
 
-      while (attempts < maxAttempts) {
+      while (attemptCount < maxAttempts) {
         currentStatus = await client.repository.lmLink.status();
+        const lastError = currentStatus.lastError;
+        if (currentStatus.status === "offline" && lastError !== undefined) {
+          const lastErrorTimestamp = lastError.timestamp;
+          if (
+            initialLastErrorTimestamp === undefined ||
+            lastErrorTimestamp !== initialLastErrorTimestamp
+          ) {
+            updatedLastError = lastError;
+            break;
+          }
+        }
         if (currentStatus.status === "online" || currentStatus.issues.length > 0) {
           break;
         }
         await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-        attempts++;
+        attemptCount++;
       }
     } finally {
       stopLoader();
@@ -87,6 +97,13 @@ enable.action(async function () {
 
     if (currentStatus.status === "online") {
       logger.info("LM Link is now online.");
+    } else if (updatedLastError !== null) {
+      logger.info(`Failed to connect: ${updatedLastError.message}`);
+      logger.info(
+        "LM Link will continue to retry connection in the background. Use " +
+          chalk.cyan("lms link status") +
+          " to check current status.",
+      );
     } else {
       logger.info(
         "LM Link enabled but could not connect. Use " +
