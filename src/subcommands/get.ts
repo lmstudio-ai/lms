@@ -222,38 +222,41 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
 
   const normalizedSearchTerm = searchTerm?.toLowerCase().trim() ?? "";
 
+  const shouldSkipModelCatalog = gguf === true || mlx === true;
   let staffPickResults: Array<SearchResultItem> = [];
-  try {
-    const modelCatalogModels = await client.repository.unstable.getModelCatalog();
-    staffPickResults = modelCatalogModels
-      .filter(model => {
-        if (compatibilityTypes === undefined) {
-          return true;
-        }
-        return model.metadata.compatibilityTypes.some(type => compatibilityTypes!.includes(type));
-      })
-      .filter(model => {
-        if (normalizedSearchTerm === "") {
-          return true;
-        }
-        const fullName = `${model.owner}/${model.name}`.toLowerCase();
-        return (
-          fullName.includes(normalizedSearchTerm) ||
-          model.name.toLowerCase().includes(normalizedSearchTerm)
-        );
-      })
-      .map(model => ({
-        kind: "staffPick" as const,
-        model,
-        isExactMatch:
-          normalizedSearchTerm !== "" &&
-          (model.name.toLowerCase() === normalizedSearchTerm ||
-            `${model.owner}/${model.name}`.toLowerCase() === normalizedSearchTerm),
-        displayName: `${model.owner}/${model.name}`,
-      }));
-    logger.debug(`Found ${staffPickResults.length} staff pick result(s)`);
-  } catch (error) {
-    logger.warn("Failed to load staff picks, continuing with HF search only.", error);
+  if (!shouldSkipModelCatalog) {
+    try {
+      const modelCatalogModels = await client.repository.unstable.getModelCatalog();
+      staffPickResults = modelCatalogModels
+        .filter(model => {
+          if (compatibilityTypes === undefined) {
+            return true;
+          }
+          return model.metadata.compatibilityTypes.some(type => compatibilityTypes!.includes(type));
+        })
+        .filter(model => {
+          if (normalizedSearchTerm === "") {
+            return true;
+          }
+          const fullName = `${model.owner}/${model.name}`.toLowerCase();
+          return (
+            fullName.includes(normalizedSearchTerm) ||
+            model.name.toLowerCase().includes(normalizedSearchTerm)
+          );
+        })
+        .map(model => ({
+          kind: "staffPick" as const,
+          model,
+          isExactMatch:
+            normalizedSearchTerm !== "" &&
+            (model.name.toLowerCase() === normalizedSearchTerm ||
+              `${model.owner}/${model.name}`.toLowerCase() === normalizedSearchTerm),
+          displayName: `${model.owner}/${model.name}`,
+        }));
+      logger.debug(`Found ${staffPickResults.length} staff pick result(s)`);
+    } catch (error) {
+      logger.warn("Failed to load staff picks, continuing with HF search only.", error);
+    }
   }
 
   const combinedResults: Array<SearchResultItem> = [
