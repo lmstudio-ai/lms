@@ -27,7 +27,7 @@ logoutCommand.action(async options => {
   const shouldShowSpinner =
     process.stdout.isTTY && options.logLevel !== "none" && options.quiet !== true;
 
-  const spinner = shouldShowSpinner ? new Spinner("Logging out") : null;
+  const spinner = shouldShowSpinner ? new Spinner("Logging out...") : null;
 
   const sigintHandler = () => {
     spinner?.stopIfNotStopped();
