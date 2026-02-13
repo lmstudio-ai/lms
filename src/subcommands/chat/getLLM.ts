@@ -16,6 +16,8 @@ const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
 
 type ModelEntry = {
   name: string;
+  modelKey: string;
+  loadKey: string;
   isDownloaded: boolean;
   size: number;
   inModelCatalog: boolean;
@@ -86,7 +88,7 @@ export async function maybeGetLLM(
     yes,
   );
 
-  return loadModelWithProgress(client, selectedModel.name, ttl, logger, {
+  return loadModelWithProgress(client, selectedModel.loadKey, ttl, logger, {
     deviceIdentifier: selectedModel.deviceIdentifier,
     deviceName: deviceNameResolver.label(selectedModel.deviceIdentifier),
   });
@@ -181,6 +183,8 @@ function buildModelEntries(
       const modelKey = m.owner + "/" + m.name;
       return {
         name: modelKey,
+        modelKey,
+        loadKey: modelKey,
         isDownloaded: false,
         size: m.metadata.minMemoryUsageBytes,
         inModelCatalog: true,
@@ -191,11 +195,13 @@ function buildModelEntries(
     });
 
   const downloadedEntries: ModelEntry[] = downloadedModels.map(model => ({
-    name: model.modelKey,
+    name: model.displayName,
+    modelKey: model.modelKey,
+    loadKey: model.path ?? model.modelKey,
     isDownloaded: true,
     size: model.sizeBytes,
     inModelCatalog: false,
-    selectionKey: selectionKey(model.modelKey, model.deviceIdentifier),
+    selectionKey: selectionKey(model.path ?? model.modelKey, model.deviceIdentifier),
     deviceName: deviceNameResolver.label(model.deviceIdentifier),
     deviceIdentifier: model.deviceIdentifier,
   }));

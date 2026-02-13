@@ -79,6 +79,7 @@ export function createModelDisplayOptions(
     size: number;
     inModelCatalog: boolean;
     selectionKey: string;
+    modelKey: string;
     deviceName: string | null;
   }>,
   dontFetchCatalog: boolean,
@@ -87,6 +88,7 @@ export function createModelDisplayOptions(
     const status = model.isDownloaded === false ? "DOWNLOAD" : "";
     const size = formatSizeBytes1000(model.size);
     const deviceSuffix = model.deviceName !== null ? chalk.dim(` · ${model.deviceName}`) : "";
+    const nameWithSuffixes = `${model.name}${deviceSuffix}`;
 
     const displayName = dontFetchCatalog
       ? `${model.name} ${chalk.dim(`(${size})`)}${deviceSuffix}`
@@ -95,7 +97,7 @@ export function createModelDisplayOptions(
         columnify(
           [
             {
-              name: model.name + deviceSuffix,
+              name: nameWithSuffixes,
               size: chalk.dim(`(min. ${size})`),
               status: chalk.dim(status),
             },
@@ -110,10 +112,12 @@ export function createModelDisplayOptions(
           },
         ).trim();
 
+    const searchText = [model.name, model.deviceName ?? ""].join(" ").trim();
+
     return {
       name: displayName,
       value: model.selectionKey,
-      searchText: model.deviceName !== null ? `${model.name} ${model.deviceName}` : model.name,
+      searchText,
       originalIndex: index,
     };
   });
