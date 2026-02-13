@@ -2,6 +2,7 @@ import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import { Spinner } from "../Spinner.js";
 
 type LogoutCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
@@ -23,7 +24,12 @@ logoutCommand.action(async options => {
     return;
   }
 
-  await client.repository.deauthenticate();
+  const spinner = new Spinner("Logging out");
+  try {
+    await client.repository.deauthenticate();
+  } finally {
+    spinner.stopIfNotStopped();
+  }
   logger.info("Successfully logged out.");
 });
 
