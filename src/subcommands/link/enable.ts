@@ -4,8 +4,8 @@ import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { type LinkCommandOptions, startLinkLoader } from "./shared.js";
 
-const MAX_CONNECTION_WAIT_MS = 5000;
-const POLL_INTERVAL_MS = 100;
+const MAX_CONNECTION_WAIT_MS = 10000; // 10 seconds
+const POLL_INTERVAL_MS = 100; // 100 ms
 
 export const enable = new Command<[], LinkCommandOptions>()
   .name("enable")
@@ -19,38 +19,35 @@ enable.action(async function () {
   const logger = createLogger(mergedOptions);
   await using client = await createClient(logger, mergedOptions);
   let currentStatus = await client.repository.lmLink.status();
-  const wasDisabled: boolean = currentStatus.issues.includes("deviceDisabled") === true;
+  const wasDisabled = currentStatus.issues.includes("deviceDisabled");
 
-  await client.repository.lmLink.setDisabled(false);
-  currentStatus = await client.repository.lmLink.status();
-  // Check for blocking issues first
-  if (currentStatus.issues.includes("notLoggedIn") === true) {
-    const prefix = wasDisabled ? "LM Link enabled." : "LM Link is already enabled.";
+  if (wasDisabled) {
+    await client.repository.lmLink.setDisabled(false);
+    currentStatus = await client.repository.lmLink.status();
+  }
+
+  // Check for blocking issues
+  if (currentStatus.issues.includes("notLoggedIn")) {
     logger.info(
-      prefix +
-        " However, LM Link cannot connect because you are not logged in. Use " +
+      "LM Link enabled, but you are not authenticated. Run " +
         chalk.cyan("lms login") +
-        " to login.",
+        " to continue.",
     );
     return;
   }
 
-  if (currentStatus.issues.includes("noAccess") === true) {
-    const prefix = wasDisabled ? "LM Link enabled." : "LM Link is already enabled.";
+  if (currentStatus.issues.includes("noAccess")) {
     logger.info(
-      prefix +
-        " However, you do not have access to LM Link. Visit " +
-        chalk.cyan("https://lmstudio.ai/lm-link") +
-        " to request access.",
+      "LM Link enabled, but you do not have access. Visit " +
+        chalk.cyan("https://lmstudio.ai/lm-link"),
     );
     return;
   }
 
-  if (currentStatus.issues.includes("badVersion") === true) {
-    const prefix = wasDisabled ? "LM Link enabled." : "LM Link is already enabled.";
+  if (currentStatus.issues.includes("badVersion")) {
     const { isDaemon } = await client.system.getInfo();
     logger.infoText`
-      ${prefix} However, LM Link cannot connect because the protocol has updated. You need to update
+      LM Link is enabled. However, LM Link cannot connect because the protocol has updated. You need to update
       ${isDaemon ? "llmster" : "LM Studio"} to continue using LM Link.
     `;
     if (isDaemon) {
@@ -61,14 +58,15 @@ enable.action(async function () {
     return;
   }
 
-  // No blocking issues
-  if (wasDisabled) {
-    logger.info("LM Link enabled. Connecting now...");
-  } else {
-    logger.info("LM Link is already enabled.");
+  // Already online
+  if (currentStatus.status === "online") {
+    logger.info("LM Link is enabled and online.");
+    return;
   }
 
-  if (currentStatus.status !== "online" && currentStatus.issues.length === 0) {
+  // Need to connect
+  if (currentStatus.issues.length === 0) {
+    logger.info("LM Link enabled. Connecting...");
     const stopLoader = startLinkLoader();
     try {
       // Poll status until online or max attempts
@@ -86,21 +84,19 @@ enable.action(async function () {
     } finally {
       stopLoader();
     }
-  }
 
-  // This should not happen but we still want to handle it just in case
-  if (currentStatus.issues.includes("deviceDisabled") === true) {
-    logger.error("Failed to enable LM Link on this device.");
-    return;
-  }
-
-  if (wasDisabled === false) {
-    logger.infoText`
-      LM Link was already enabled on this device. Use ${chalk.cyan("lms link status")} to see its current status.
-    `;
+    if (currentStatus.status === "online") {
+      logger.info("LM Link is now online.");
+    } else {
+      logger.info(
+        "LM Link enabled but could not connect. Use " +
+          chalk.cyan("lms link status") +
+          " for details.",
+      );
+    }
   } else {
-    logger.infoText`
-      You have re-enabled LM Link on this device. Use ${chalk.cyan("lms link status")} to see its current status.
-    `;
+    // That means we still see it as disabled, which is unexpected. Error out just in case. This
+    // should never happen since setDisabled should have thrown if it failed, but just in case.
+    logger.error("Something went wrong enabling LM Link. Please try again");
   }
 });
