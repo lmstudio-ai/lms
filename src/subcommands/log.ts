@@ -1,5 +1,4 @@
 import { Command, Option, type OptionValues } from "@commander-js/extra-typings";
-import { text } from "@lmstudio/lms-common";
 import {
   type DiagnosticsLogEvent,
   type DiagnosticsLogEventData,
@@ -128,16 +127,21 @@ function shouldShowLogEvent(
 }
 
 function printFormattedLog(log: DiagnosticsLogEvent, stats: boolean): void {
+  const deviceLabel = getLogDeviceLabel(log);
   if (log.data.type === "server.log") {
-    console.log(log.data.content);
+    const prefix = deviceLabel === undefined ? "" : `[${deviceLabel}] `;
+    console.log(`${prefix}${log.data.content}`);
     return;
   }
 
   if (log.data.type === "runtime.log") {
-    printRuntimeLogEvent(log.data);
+    printRuntimeLogEvent(log.data, deviceLabel);
     return;
   }
 
+  if (deviceLabel !== undefined) {
+    console.log("device: " + chalk.green(deviceLabel));
+  }
   console.log("timestamp: " + chalk.green(new Date(log.timestamp).toLocaleString()));
   console.log("type: " + chalk.green(log.data.type));
   printLlmPredictionLogEvent(log.data, stats);
@@ -145,12 +149,26 @@ function printFormattedLog(log: DiagnosticsLogEvent, stats: boolean): void {
   console.log();
 }
 
-function printRuntimeLogEvent(data: DiagnosticsLogRuntimeEventData): void {
+function printRuntimeLogEvent(
+  data: DiagnosticsLogRuntimeEventData,
+  deviceLabel: string | undefined,
+): void {
   const engineDescriptor = `${data.engineName}@${data.engineVersion}`;
   const modelDescriptor = data.modelIdentifier !== undefined ? ` ${data.modelIdentifier}` : "";
   const pidDescriptor = data.pid !== undefined ? ` pid=${data.pid}` : "";
   const header = `[${data.level.toUpperCase()}] ${engineDescriptor} (${data.engineType})${modelDescriptor}${pidDescriptor}`;
-  console.log(`${header} ${data.message}`);
+  const prefix = deviceLabel === undefined ? "" : `[${deviceLabel}] `;
+  console.log(`${prefix}${header} ${data.message}`);
+}
+
+function getLogDeviceLabel(log: DiagnosticsLogEvent): string | undefined {
+  if (log.deviceName !== undefined) {
+    return log.deviceName;
+  }
+  if (log.deviceIdentifier !== undefined) {
+    return log.deviceIdentifier;
+  }
+  return undefined;
 }
 
 function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolean) {
