@@ -429,7 +429,6 @@ addLogLevelOptions(psCommand);
 psCommand.action(async (options: PsCommandOptions) => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
-  const deviceNameResolver = await createDeviceNameResolver(client, logger);
 
   const { json = false } = options;
 
@@ -484,7 +483,6 @@ psCommand.action(async (options: PsCommandOptions) => {
         path: modelInstanceInfo.modelKey,
         sizeBytes: formatSizeBytes1000(modelInstanceInfo.sizeBytes),
         contextLength: contextLength,
-        device: formatDeviceLabel(deviceNameResolver, modelInstanceInfo.deviceIdentifier),
         ttlMs:
           timeLeft !== undefined && modelInstanceInfo.ttlMs !== null
             ? `${formatTimeLean(timeLeft)} ${chalk.dim(`/ ${formatTimeLean(modelInstanceInfo.ttlMs)}`)}`
