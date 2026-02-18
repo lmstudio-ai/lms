@@ -111,8 +111,7 @@ function createHelpConfiguration(maxWidth: number, helpMessageGap: number): Help
   return {
     helpWidth: maxWidth,
     commandUsage: command => chalk.bold(`${getCommandPath(command)} ${command.usage()}`),
-    subcommandTerm: (command: CommandUnknownOpts) =>
-      formatCommandTerm(command, helpMessageGap),
+    subcommandTerm: (command: CommandUnknownOpts) => formatCommandTerm(command, helpMessageGap),
     subcommandDescription: (command: { description(): string }) => command.description(),
     visibleOptions: command =>
       command.options.filter(
@@ -177,7 +176,7 @@ program.addCommand(daemon, { hidden: true });
 program.addCommand(flags, { hidden: true });
 program.addCommand(status, { hidden: true });
 program.addCommand(version, { hidden: true });
-program.addCommand(link, { hidden: true });
+// program.addCommand(link, { hidden: true });
 
 applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig);
 
