@@ -106,7 +106,7 @@ function printDownloadedModelsTable(
 
   console.info(
     columnify(downloadedModelsAndHeadlines, {
-      columns: ["path", "params", "arch", "sizeBytes", "device", "loaded"],
+      columns: ["path", "params", "arch", "sizeBytes", "loaded"],
       config: {
         loaded: {
           headingTransform: () => "",
@@ -125,10 +125,6 @@ function printDownloadedModelsTable(
         },
         sizeBytes: {
           headingTransform: () => chalk.dim("SIZE"),
-          align: "left",
-        },
-        device: {
-          headingTransform: () => chalk.dim("DEVICE"),
           align: "left",
         },
       },
@@ -200,7 +196,7 @@ function printModelsWithVariantRows({
 
   console.info(
     columnify(rows, {
-      columns: ["path", "params", "arch", "sizeBytes", "device", "loaded"],
+      columns: ["path", "params", "arch", "sizeBytes", "loaded"],
       config: {
         loaded: {
           headingTransform: () => "",
@@ -219,10 +215,6 @@ function printModelsWithVariantRows({
         },
         sizeBytes: {
           headingTransform: () => chalk.dim("SIZE"),
-          align: "left",
-        },
-        device: {
-          headingTransform: () => chalk.dim("DEVICE"),
           align: "left",
         },
       },
@@ -507,7 +499,7 @@ psCommand.action(async (options: PsCommandOptions) => {
   console.info();
   console.info(
     columnify(loadedModelsWithInfo, {
-      columns: ["identifier", "path", "status", "sizeBytes", "contextLength", "device", "ttlMs"],
+      columns: ["identifier", "path", "status", "sizeBytes", "contextLength", "ttlMs"],
       config: {
         identifier: {
           headingTransform: () => chalk.dim("IDENTIFIER"),
@@ -527,10 +519,6 @@ psCommand.action(async (options: PsCommandOptions) => {
         },
         contextLength: {
           headingTransform: () => chalk.dim("CONTEXT"),
-          align: "left",
-        },
-        device: {
-          headingTransform: () => chalk.dim("DEVICE"),
           align: "left",
         },
         ttlMs: {
