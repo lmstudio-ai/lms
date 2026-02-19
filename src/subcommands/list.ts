@@ -104,7 +104,7 @@ function printDownloadedModelsTable(
 
   console.info(
     columnify(downloadedModelsAndHeadlines, {
-      columns: ["path", "params", "arch", "sizeBytes", "loaded"],
+      columns: ["path", "params", "arch", "sizeBytes", "device", "loaded"],
       config: {
         loaded: {
           headingTransform: () => "",
