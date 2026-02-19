@@ -176,7 +176,7 @@ program.addCommand(daemon, { hidden: true });
 program.addCommand(flags, { hidden: true });
 program.addCommand(status, { hidden: true });
 program.addCommand(version, { hidden: true });
-// program.addCommand(link, { hidden: true });
+program.addCommand(link, { hidden: true });
 
 applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig);
 
