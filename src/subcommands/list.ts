@@ -52,7 +52,9 @@ type LoadedModelInfo = {
   deviceIdentifier: string | null;
 };
 
-async function listLoadedModels(client: LMStudioClient): Promise<Array<LoadedModelInfo>> {
+async function listLoadedModels(
+  client: LMStudioClient,
+): Promise<Array<LoadedModelInfo>> {
   const loadedModels = [
     ...(await client.llm.listLoaded()),
     ...(await client.embedding.listLoaded()),
@@ -104,7 +106,7 @@ function printDownloadedModelsTable(
 
   console.info(
     columnify(downloadedModelsAndHeadlines, {
-      columns: ["path", "params", "arch", "sizeBytes", "device", "loaded"],
+      columns: ["path", "params", "arch", "sizeBytes", "loaded"],
       config: {
         loaded: {
           headingTransform: () => "",
@@ -123,10 +125,6 @@ function printDownloadedModelsTable(
         },
         sizeBytes: {
           headingTransform: () => chalk.dim("SIZE"),
-          align: "left",
-        },
-        device: {
-          headingTransform: () => chalk.dim("DEVICE"),
           align: "left",
         },
       },
@@ -198,7 +196,7 @@ function printModelsWithVariantRows({
 
   console.info(
     columnify(rows, {
-      columns: ["path", "params", "arch", "sizeBytes", "device", "loaded"],
+      columns: ["path", "params", "arch", "sizeBytes", "loaded"],
       config: {
         loaded: {
           headingTransform: () => "",
@@ -217,10 +215,6 @@ function printModelsWithVariantRows({
         },
         sizeBytes: {
           headingTransform: () => chalk.dim("SIZE"),
-          align: "left",
-        },
-        device: {
-          headingTransform: () => chalk.dim("DEVICE"),
           align: "left",
         },
       },
@@ -435,7 +429,7 @@ addLogLevelOptions(psCommand);
 psCommand.action(async (options: PsCommandOptions) => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
-  const deviceNameResolver = await createDeviceNameResolver(client, logger);
+
   const { json = false } = options;
 
   const loadedModels = [
@@ -493,7 +487,6 @@ psCommand.action(async (options: PsCommandOptions) => {
           timeLeft !== undefined && modelInstanceInfo.ttlMs !== null
             ? `${formatTimeLean(timeLeft)} ${chalk.dim(`/ ${formatTimeLean(modelInstanceInfo.ttlMs)}`)}`
             : "",
-        device: formatDeviceLabel(deviceNameResolver, modelInstanceInfo.deviceIdentifier),
         status: processingState.status.toUpperCase(),
       };
     }),
@@ -504,7 +497,7 @@ psCommand.action(async (options: PsCommandOptions) => {
   console.info();
   console.info(
     columnify(loadedModelsWithInfo, {
-      columns: ["identifier", "path", "status", "sizeBytes", "contextLength", "device", "ttlMs"],
+      columns: ["identifier", "path", "status", "sizeBytes", "contextLength", "ttlMs"],
       config: {
         identifier: {
           headingTransform: () => chalk.dim("IDENTIFIER"),
@@ -524,10 +517,6 @@ psCommand.action(async (options: PsCommandOptions) => {
         },
         contextLength: {
           headingTransform: () => chalk.dim("CONTEXT"),
-          align: "left",
-        },
-        device: {
-          headingTransform: () => chalk.dim("DEVICE"),
           align: "left",
         },
         ttlMs: {
