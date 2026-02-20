@@ -130,11 +130,13 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       `,
     ).hideHelp(),
   )
-  .option(
-    "--local",
-    text`
-      Only use models available locally. Models provided via LM Link will be ignored.
-    `,
+  .addOption(
+    new Option(
+      "--local",
+      text`
+        Only use models available locally. Models provided via LM Link will be ignored.
+      `,
+    ).hideHelp(),
   )
   .option(
     "--identifier <identifier>",
