@@ -11,7 +11,9 @@ import {
 } from "./inputReducer.js";
 import { renderInputWithCursor } from "./inputRenderer.js";
 import { type ChatUserInputState } from "./types.js";
-import { getLargePastePlaceholderText } from "../util.js";
+import { getChipPreviewText } from "../util.js";
+
+type ChipRange = { start: number; end: number; kind: "largePaste" | "image" };
 
 interface ChatInputProps {
   inputState: ChatUserInputState;
@@ -150,10 +152,18 @@ export const ChatInput = ({
         return;
       }
 
-      const currentText = inputState.segments.map(segment => segment.content).join("");
+      const currentText = inputState.segments
+        .map(segment => (segment.type === "text" ? segment.content : ""))
+        .join("");
 
       // Check if input is a slash command without arguments that has suggestions
-      if (currentText.startsWith("/") && currentText.includes(" ") === false) {
+      // Only auto-insert space if input is a single text segment (no chips)
+      if (
+        currentText.startsWith("/") &&
+        currentText.includes(" ") === false &&
+        inputState.segments.length === 1 &&
+        inputState.segments[0]?.type === "text"
+      ) {
         const commandName = currentText.slice(1);
         if (commandHasSuggestions(commandName)) {
           setUserInputState(previousState =>
@@ -197,16 +207,16 @@ export const ChatInput = ({
     }
   });
 
-  const { fullText, cursorPosition, pasteRanges } = useMemo(() => {
+  const { fullText, cursorPosition, chipRanges } = useMemo(() => {
     let fullText = "";
     let cursorPosition = 0;
-    const pasteRanges: Array<{ start: number; end: number }> = [];
+    const chipRanges: ChipRange[] = [];
 
     for (let index = 0; index < inputState.segments.length; index++) {
       const segment = inputState.segments[index];
 
-      if (segment.type === "largePaste") {
-        const placeholder = getLargePastePlaceholderText(segment.content);
+      if (segment.type === "chip") {
+        const placeholder = getChipPreviewText(segment.data);
         const startPos = fullText.length;
 
         if (index < inputState.cursorOnSegmentIndex) {
@@ -216,7 +226,7 @@ export const ChatInput = ({
         }
 
         fullText += placeholder;
-        pasteRanges.push({ start: startPos, end: fullText.length });
+        chipRanges.push({ start: startPos, end: fullText.length, kind: segment.data.kind });
       } else {
         if (index < inputState.cursorOnSegmentIndex) {
           cursorPosition += segment.content.length;
@@ -228,7 +238,7 @@ export const ChatInput = ({
       }
     }
 
-    return { fullText, cursorPosition, pasteRanges };
+    return { fullText, cursorPosition, chipRanges };
   }, [inputState]);
 
   const lines = fullText.split("\n");
@@ -266,7 +276,7 @@ export const ChatInput = ({
                   {renderInputWithCursor({
                     fullText: lineText,
                     cursorPosition: isCursorLine ? cursorColumnIndex : -1,
-                    pasteRanges,
+                    chipRanges,
                     lineStartPos,
                   })}
                 </Text>
