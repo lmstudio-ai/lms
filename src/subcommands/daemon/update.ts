@@ -1,5 +1,5 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import * as readline from "readline";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { readInstallLocationOrExit } from "./shared.js";
@@ -9,6 +9,16 @@ type DaemonUpdateCommandOptions = OptionValues &
     beta?: boolean;
     channel?: string;
   };
+
+function hasLinuxLibatomic(): boolean {
+  try {
+    const ldconfigResult = spawnSync("ldconfig", ["-p"], { encoding: "utf-8" });
+    const stdoutText = ldconfigResult.stdout ?? "";
+    return stdoutText.includes("libatomic.so.1") === true;
+  } catch {
+    return false;
+  }
+}
 
 const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
   .name("update")
@@ -28,6 +38,21 @@ const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
     }
     if (options.verbose === true || options.logLevel === "debug") {
       upgradeArgs.push("--verbose");
+    }
+
+    if (process.platform === "linux") {
+      const isLibatomicAvailable = hasLinuxLibatomic();
+      if (isLibatomicAvailable === false) {
+        logger.error(
+          "Cannot stage daemon update because libatomic.so.1 is missing. This library is now a pre-requisite to use the daemon.\n" +
+            "Install libatomic.so.1, then retry `lms daemon update`:\n" +
+            "  Debian/Ubuntu: sudo apt-get update && sudo apt-get install -y libatomic1\n" +
+            "  Fedora/RHEL:  sudo dnf install -y libatomic\n\n" +
+            "If this libatomic check is not working as expected on your system, update with:\n" +
+            "  curl -fsSL https://lmstudio.ai/install.sh | bash",
+        );
+        process.exit(1);
+      }
     }
 
     logger.info(`Starting llmster upgrade using ${installLocation.executablePath}...`);
