@@ -43,14 +43,19 @@ const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
     if (process.platform === "linux") {
       const isLibatomicAvailable = hasLinuxLibatomic();
       if (isLibatomicAvailable === false) {
-        logger.error(
-          "Cannot stage daemon update because libatomic.so.1 is missing. This library is now a pre-requisite to use the daemon.\n" +
-            "Install libatomic.so.1, then retry `lms daemon update`:\n" +
-            "  Debian/Ubuntu: sudo apt-get update && sudo apt-get install -y libatomic1\n" +
-            "  Fedora/RHEL:  sudo dnf install -y libatomic\n\n" +
-            "If this libatomic check is not working as expected on your system, update with:\n" +
-            "  curl -fsSL https://lmstudio.ai/install.sh | bash",
-        );
+        logger.info(`📣 Notice: One-time dependency update needed.
+
+The next version of llmster requires "libatomic", which is not currently installed on your system.
+
+1. To install it:
+
+      Debian/Ubuntu: sudo apt-get update && sudo apt-get install -y libatomic1
+      Fedora/RHEL:  sudo dnf install -y libatomic
+
+2. Afterwards, run this again:
+
+      lms daemon update
+`);
         process.exit(1);
       }
     }
