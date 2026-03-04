@@ -62,9 +62,9 @@ const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
     if (process.platform === "linux") {
       const libatomicCheck = checkLinuxLibatomic();
       if (libatomicCheck.status === "ldconfig-unavailable") {
-        logger.error(`"ldconfig" must be available on your PATH before updating.
+        logger.info(`Could not update: "ldconfig" must be available on your PATH before updating.
 
-Please ensure ldconfig is installed and on your PATH, then run this again:
+Please ensure ldconfig is installed and in your PATH, then run this again:
 
       lms daemon update
 
