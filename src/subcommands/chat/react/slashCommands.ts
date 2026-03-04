@@ -29,6 +29,8 @@ export interface CreateSlashCommandsOpts {
   setModelLoadingProgress: Dispatch<SetStateAction<number | null>>;
   modelLoadingAbortControllerRef: RefObject<AbortController | null>;
   lastPredictionStatsRef: RefObject<LLMPredictionStats | null>;
+  systemAsUser: boolean;
+  setSystemAsUser: Dispatch<SetStateAction<boolean>>;
 }
 
 export function createSlashCommands({
@@ -50,6 +52,8 @@ export function createSlashCommands({
   setModelLoadingProgress,
   modelLoadingAbortControllerRef,
   lastPredictionStatsRef,
+  systemAsUser,
+  setSystemAsUser,
 }: CreateSlashCommandsOpts): SlashCommand[] {
   return [
     {
@@ -150,9 +154,12 @@ export function createSlashCommands({
           cursorInSegmentOffset: 0,
         });
         console.clear();
-        const systemPrompt = chatRef.current.getSystemPrompt();
+        const systemPrompt = systemAsUser
+          ? chatRef.current.at(0).getText()
+          : chatRef.current.getSystemPrompt();
+        const role = systemAsUser ? "user" : "system";
         chatRef.current = Chat.empty();
-        chatRef.current.append("system", systemPrompt);
+        chatRef.current.append(role, systemPrompt);
         lastPredictionStatsRef.current = null;
       },
     },
@@ -168,6 +175,23 @@ export function createSlashCommands({
 
         chatRef.current.replaceSystemPrompt(prompt);
         logInChat("System prompt updated to: " + prompt);
+      },
+    },
+    {
+      name: "system-as-user",
+      description: "Toggle sending system messages as user messages",
+      handler: async () => {
+        setSystemAsUser(!systemAsUser);
+
+        const systemPrompt = systemAsUser
+          ? chatRef.current.at(0).getText()
+          : chatRef.current.getSystemPrompt();
+        const role = !systemAsUser ? "user" : "system";
+
+        chatRef.current = Chat.empty();
+        chatRef.current.append(role, systemPrompt);
+
+        logInChat(`System messages will now be sent as ${role} messages.`);
       },
     },
     {
