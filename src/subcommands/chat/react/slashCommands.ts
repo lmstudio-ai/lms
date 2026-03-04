@@ -181,6 +181,13 @@ export function createSlashCommands({
       name: "system-as-user",
       description: "Toggle sending system messages as user messages",
       handler: async () => {
+        setMessages([]);
+        setUserInputState({
+          segments: [{ type: "text", content: "" }],
+          cursorOnSegmentIndex: 0,
+          cursorInSegmentOffset: 0,
+        });
+        console.clear();
         setSystemAsUser(!systemAsUser);
 
         const systemPrompt = systemAsUser
