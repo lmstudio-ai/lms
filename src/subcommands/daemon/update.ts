@@ -21,6 +21,16 @@ function checkLinuxLibatomic(): LibatomicCheckResult {
     if (result.error !== undefined) {
       return { status: "ldconfig-unavailable", error: result.error.message };
     }
+    if (result.status !== 0) {
+      const statusDescription =
+        result.signal !== null ? `signal ${result.signal}` : `exit code ${result.status}`;
+      const stderr = (result.stderr ?? "").trim();
+      const details = stderr.length > 0 ? `: ${stderr}` : "";
+      return {
+        status: "ldconfig-unavailable",
+        error: `"ldconfig -p" failed with ${statusDescription}${details}`,
+      };
+    }
     return (result.stdout ?? "").includes("libatomic.so.1")
       ? { status: "ok" }
       : { status: "no-libatomic" };
