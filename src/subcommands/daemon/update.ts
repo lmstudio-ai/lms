@@ -58,7 +58,7 @@ Please ensure ldconfig is installed and on your PATH, then run this again:
 
       lms daemon update
 
-Error: ${libatomicCheck.error}
+Error details: ${libatomicCheck.error}
 `);
         process.exit(1);
       } else if (libatomicCheck.status === "no-libatomic") {
