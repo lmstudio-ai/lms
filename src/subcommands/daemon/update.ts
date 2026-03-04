@@ -10,13 +10,22 @@ type DaemonUpdateCommandOptions = OptionValues &
     channel?: string;
   };
 
-function hasLinuxLibatomic(): boolean {
+type LibatomicCheckResult =
+  | { status: "ok" }
+  | { status: "ldconfig-unavailable"; error: string }
+  | { status: "no-libatomic" };
+
+function checkLinuxLibatomic(): LibatomicCheckResult {
   try {
-    const ldconfigResult = spawnSync("ldconfig", ["-p"], { encoding: "utf-8" });
-    const stdoutText = ldconfigResult.stdout ?? "";
-    return stdoutText.includes("libatomic.so.1") === true;
-  } catch {
-    return false;
+    const result = spawnSync("ldconfig", ["-p"], { encoding: "utf-8" });
+    if (result.error !== undefined) {
+      return { status: "ldconfig-unavailable", error: result.error.message };
+    }
+    return (result.stdout ?? "").includes("libatomic.so.1")
+      ? { status: "ok" }
+      : { status: "no-libatomic" };
+  } catch (error) {
+    return { status: "ldconfig-unavailable", error: String(error) };
   }
 }
 
@@ -41,8 +50,18 @@ const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
     }
 
     if (process.platform === "linux") {
-      const isLibatomicAvailable = hasLinuxLibatomic();
-      if (isLibatomicAvailable === false) {
+      const libatomicCheck = checkLinuxLibatomic();
+      if (libatomicCheck.status === "ldconfig-unavailable") {
+        logger.error(`"ldconfig" must be available on your PATH before updating.
+
+Please ensure ldconfig is installed and on your PATH, then run this again:
+
+      lms daemon update
+
+Error: ${libatomicCheck.error}
+`);
+        process.exit(1);
+      } else if (libatomicCheck.status === "no-libatomic") {
         logger.info(`📣 Notice: One-time dependency update needed.
 
 The next version of llmster requires "libatomic", which is not currently installed on your system.
