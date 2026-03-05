@@ -1,6 +1,10 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import {
+  type RuntimeHardwareCpuArchitecture,
+  type RuntimeHardwareGpuDetectionPlatform,
   type RuntimeHardwareGpuInfo,
+  type RuntimeHardwareGpuIntegrationType,
+  type RuntimeHardwareSurveyCompatibilityStatus,
   type RuntimeHardwareSurveyEngine,
   type RuntimeHardwareSurveyResult,
 } from "@lmstudio/lms-shared-types";
@@ -25,6 +29,112 @@ function getGpuMemoryMetrics(gpuInfo: RuntimeHardwareGpuInfo): GpuMemoryMetrics 
   };
 }
 
+function getBackendCompatibilityStatusLabel(
+  status: RuntimeHardwareSurveyCompatibilityStatus,
+): string {
+  switch (status) {
+    case "compatible":
+      return "Compatible";
+    case "incompatibleAppVersion":
+      return "Incompatible app version";
+    case "incompatibleBackendVersion":
+      return "Incompatible backend version";
+    case "invalidCpuArchitecture":
+      return "Invalid CPU architecture";
+    case "invalidCpuInstructionSetExtensions":
+      return "Invalid CPU instruction set extensions";
+    case "cpuSurveyUnsuccessful":
+      return "CPU survey unsuccessful";
+    case "gpuSurveyUnsuccessful":
+      return "GPU survey unsuccessful";
+    case "gpuRequiredButNoneFound":
+      return "GPU required but none found";
+    case "gpuTargetsRequiredButNoneSpecified":
+      return "GPU targets required but none specified";
+    case "gpuDriverUnsupported":
+      return "GPU driver unsupported";
+    case "noSupportedGpus":
+      return "No supported GPUs";
+    case "incompatiblePlatform":
+      return "Incompatible platform";
+    case "libraryOutdated":
+      return "Library outdated";
+    case "invalidLibraryVersionFormat":
+      return "Invalid library version format";
+    case "missingLibraries":
+      return "Missing libraries";
+    case "errorSurveyingHardware":
+      return "Error surveying hardware";
+    case "errorCheckingCompatibility":
+      return "Error checking compatibility";
+    case "unknown":
+      return "Unknown";
+    default: {
+      const exhaustiveCheck: never = status;
+      return exhaustiveCheck;
+    }
+  }
+}
+
+function getRuntimeHardwareCpuArchitectureLabel(
+  architecture: RuntimeHardwareCpuArchitecture,
+): string {
+  switch (architecture) {
+    case "x86_64":
+      return "x86_64";
+    case "ARM64":
+      return "ARM64";
+    case "unknown":
+      return "Unknown";
+    default: {
+      const exhaustiveCheck: never = architecture;
+      return exhaustiveCheck;
+    }
+  }
+}
+
+function getRuntimeHardwareGpuDetectionPlatformLabel(
+  detectionPlatform: RuntimeHardwareGpuDetectionPlatform,
+): string {
+  switch (detectionPlatform) {
+    case "unknown":
+      return "Unknown";
+    case "shell":
+      return "Shell";
+    case "ROCm":
+      return "ROCm";
+    case "CUDA":
+      return "CUDA";
+    case "OpenCl":
+      return "OpenCl";
+    case "Metal":
+      return "Metal";
+    case "Vulkan":
+      return "Vulkan";
+    default: {
+      const exhaustiveCheck: never = detectionPlatform;
+      return exhaustiveCheck;
+    }
+  }
+}
+
+function getRuntimeHardwareGpuIntegrationTypeLabel(
+  integrationType: RuntimeHardwareGpuIntegrationType,
+): string {
+  switch (integrationType) {
+    case "unknown":
+      return "Unknown";
+    case "integrated":
+      return "Integrated";
+    case "discrete":
+      return "Discrete";
+    default: {
+      const exhaustiveCheck: never = integrationType;
+      return exhaustiveCheck;
+    }
+  }
+}
+
 // For now, we just display total VRAM
 function formatMemoryRatio(memoryMetrics: GpuMemoryMetrics): string {
   const totalText = formatSizeBytes1024(memoryMetrics.totalBytes);
@@ -39,7 +149,11 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
 
   const rows = gpus.map(gpuInfo => {
     const memoryMetrics = getGpuMemoryMetrics(gpuInfo);
-    const deviceDescriptor = `${gpuInfo.name} (${gpuInfo.detectionPlatform}, ${gpuInfo.integrationType})`;
+    const detectionPlatformLabel = getRuntimeHardwareGpuDetectionPlatformLabel(
+      gpuInfo.detectionPlatform,
+    );
+    const integrationTypeLabel = getRuntimeHardwareGpuIntegrationTypeLabel(gpuInfo.integrationType);
+    const deviceDescriptor = `${gpuInfo.name} (${detectionPlatformLabel}, ${integrationTypeLabel})`;
     return {
       device: deviceDescriptor,
       vram: formatMemoryRatio(memoryMetrics),
@@ -65,7 +179,8 @@ function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
     cpuInfo.supportedInstructionSetExtensions.length > 0
       ? ` (${cpuInfo.supportedInstructionSetExtensions.join(", ")})`
       : "";
-  return `${chalk.dim("CPU:")} ${cpuInfo.architecture}${instructionSetExtensions}`;
+  const architectureLabel = getRuntimeHardwareCpuArchitectureLabel(cpuInfo.architecture);
+  return `${chalk.dim("CPU:")} ${architectureLabel}${instructionSetExtensions}`;
 }
 
 function renderRamLine(survey: RuntimeHardwareSurveyEngine): string {
@@ -75,13 +190,14 @@ function renderRamLine(survey: RuntimeHardwareSurveyEngine): string {
 }
 
 function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | undefined {
-  if (survey.compatibility.status === "Compatible") {
+  if (survey.compatibility.status === "compatible") {
     return undefined;
   }
+  const statusLabel = getBackendCompatibilityStatusLabel(survey.compatibility.status);
   if (survey.compatibility.message === undefined) {
-    return `Compatibility: ${survey.compatibility.status}`;
+    return `Compatibility: ${statusLabel}`;
   }
-  return `Compatibility: ${survey.compatibility.status} — ${survey.compatibility.message}`;
+  return `Compatibility: ${statusLabel} - ${survey.compatibility.message}`;
 }
 
 function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine) {
