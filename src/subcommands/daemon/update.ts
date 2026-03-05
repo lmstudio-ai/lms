@@ -1,5 +1,5 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import * as readline from "readline";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { readInstallLocationOrExit } from "./shared.js";
@@ -9,6 +9,35 @@ type DaemonUpdateCommandOptions = OptionValues &
     beta?: boolean;
     channel?: string;
   };
+
+type LibatomicCheckResult =
+  | { status: "ok" }
+  | { status: "ldconfig-unavailable"; error: string }
+  | { status: "no-libatomic" };
+
+function checkLinuxLibatomic(): LibatomicCheckResult {
+  try {
+    const result = spawnSync("ldconfig", ["-p"], { encoding: "utf-8" });
+    if (result.error !== undefined) {
+      return { status: "ldconfig-unavailable", error: result.error.message };
+    }
+    if (result.status !== 0) {
+      const statusDescription =
+        result.signal !== null ? `signal ${result.signal}` : `exit code ${result.status}`;
+      const stderr = (result.stderr ?? "").trim();
+      const details = stderr.length > 0 ? `: ${stderr}` : "";
+      return {
+        status: "ldconfig-unavailable",
+        error: `"ldconfig -p" failed with ${statusDescription}${details}`,
+      };
+    }
+    return (result.stdout ?? "").includes("libatomic.so.1")
+      ? { status: "ok" }
+      : { status: "no-libatomic" };
+  } catch (error) {
+    return { status: "ldconfig-unavailable", error: String(error) };
+  }
+}
 
 const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
   .name("update")
@@ -28,6 +57,36 @@ const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
     }
     if (options.verbose === true || options.logLevel === "debug") {
       upgradeArgs.push("--verbose");
+    }
+
+    if (process.platform === "linux") {
+      const libatomicCheck = checkLinuxLibatomic();
+      if (libatomicCheck.status === "ldconfig-unavailable") {
+        logger.info(`Could not update: "ldconfig" must be available on your PATH before updating.
+
+Please ensure ldconfig is installed and in your PATH, then run this again:
+
+      lms daemon update
+
+Error details: ${libatomicCheck.error}
+`);
+        process.exit(1);
+      } else if (libatomicCheck.status === "no-libatomic") {
+        logger.info(`📣 Notice: One-time dependency update needed.
+
+The next version of llmster requires "libatomic", which is not currently installed on your system.
+
+1. To install it:
+
+      Debian/Ubuntu: sudo apt-get update && sudo apt-get install -y libatomic1
+      Fedora/RHEL:  sudo dnf install -y libatomic
+
+2. Afterwards, run this again:
+
+      lms daemon update
+`);
+        process.exit(1);
+      }
     }
 
     logger.info(`Starting llmster upgrade using ${installLocation.executablePath}...`);
