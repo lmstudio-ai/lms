@@ -2,8 +2,8 @@ import { Command, type OptionValues } from "@commander-js/extra-typings";
 import {
   type RuntimeHardwareCpuArchitecture,
   type RuntimeHardwareGpuDetectionPlatform,
-  type RuntimeHardwareGpuIntegrationType,
   type RuntimeHardwareGpuInfo,
+  type RuntimeHardwareGpuIntegrationType,
   type RuntimeHardwareSurveyCompatibilityStatus,
   type RuntimeHardwareSurveyEngine,
   type RuntimeHardwareSurveyResult,
@@ -152,9 +152,7 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
     const detectionPlatformLabel = getRuntimeHardwareGpuDetectionPlatformLabel(
       gpuInfo.detectionPlatform,
     );
-    const integrationTypeLabel = getRuntimeHardwareGpuIntegrationTypeLabel(
-      gpuInfo.integrationType,
-    );
+    const integrationTypeLabel = getRuntimeHardwareGpuIntegrationTypeLabel(gpuInfo.integrationType);
     const deviceDescriptor = `${gpuInfo.name} (${detectionPlatformLabel}, ${integrationTypeLabel})`;
     return {
       device: deviceDescriptor,
@@ -199,7 +197,7 @@ function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | 
   if (survey.compatibility.message === undefined) {
     return `Compatibility: ${statusLabel}`;
   }
-  return `Compatibility: ${statusLabel} — ${survey.compatibility.message}`;
+  return `Compatibility: ${statusLabel} - ${survey.compatibility.message}`;
 }
 
 function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine) {
