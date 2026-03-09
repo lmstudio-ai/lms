@@ -5,9 +5,9 @@ import {
   type SimpleLogger,
   type StripNotAvailable,
 } from "@lmstudio/lms-common";
-import { existsSync, writeFileSync } from "node:fs";
-import { mkdir, readFile, watch } from "node:fs/promises";
-import path from "node:path";
+import { existsSync, writeFileSync } from "fs";
+import { mkdir, readFile, watch } from "fs/promises";
+import path from "path";
 import { type ZodSchema } from "zod";
 
 const fileDataGlobalCache: Map<string, FileData<any, any>> = new Map();

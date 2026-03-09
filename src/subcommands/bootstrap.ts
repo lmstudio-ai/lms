@@ -1,6 +1,6 @@
 import { Command } from "@commander-js/extra-typings";
 import { installCli } from "@lmstudio/lms-lmstudio/install-cli";
-import { platform } from "node:os";
+import { platform } from "os";
 
 export const bootstrap = new Command()
   .name("bootstrap")

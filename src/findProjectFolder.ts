@@ -1,6 +1,6 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
-import { access } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { access } from "fs/promises";
+import { dirname, join, resolve } from "path";
 
 /**
  * From the given folder, recursively travels back up, until finds one folder that contains a file

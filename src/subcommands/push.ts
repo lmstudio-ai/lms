@@ -16,9 +16,9 @@ import {
   virtualModelDefinitionSchema,
 } from "@lmstudio/lms-shared-types";
 import chalk from "chalk";
-import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { cwd } from "node:process";
+import { readFile, writeFile } from "fs/promises";
+import { join } from "path";
+import { cwd } from "process";
 import YAML from "yaml";
 import { askQuestion } from "../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
