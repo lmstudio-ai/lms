@@ -5,9 +5,9 @@ import { NodePluginRunnerWatcher } from "@lmstudio/lms-es-plugin-runner/node-run
 import { UtilBinary } from "@lmstudio/lms-es-plugin-runner/util-binary";
 import { pluginManifestSchema } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient, type PluginManifest } from "@lmstudio/sdk";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { cwd } from "node:process";
+import { readFile } from "fs/promises";
+import { join } from "path";
+import { cwd } from "process";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
 import { exists } from "../../exists.js";
 import { findProjectFolderOrExit } from "../../findProjectFolder.js";

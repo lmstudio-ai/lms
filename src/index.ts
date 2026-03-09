@@ -5,7 +5,7 @@ import {
   type HelpConfiguration,
 } from "@commander-js/extra-typings";
 import chalk from "chalk";
-import { resolve as resolvePath } from "node:path";
+import { resolve as resolvePath } from "path";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
 import { clone } from "./subcommands/clone.js";

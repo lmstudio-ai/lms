@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import { kebabCaseRegex, kebabCaseWithDotsRegex } from "@lmstudio/lms-shared-types";
-import { resolve } from "node:path";
+import { resolve } from "path";
 import { addCreateClientOptions, createClient } from "../createClient.js";
 import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
 import { exists } from "../exists.js";

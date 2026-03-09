@@ -1,6 +1,6 @@
 import { Command, Option, type OptionValues } from "@commander-js/extra-typings";
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
-import { readFile } from "node:fs/promises";
+import { readFile } from "fs/promises";
 import {
   checkHttpServer,
   createClient,

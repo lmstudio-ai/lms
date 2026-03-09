@@ -10,11 +10,11 @@ import {
 import { findLMStudioHome } from "@lmstudio/lms-common-server";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
-import { existsSync, statSync } from "node:fs";
-import { access, copyFile, link, mkdir, readFile, rename, symlink } from "node:fs/promises";
+import { existsSync, statSync } from "fs";
+import { access, copyFile, link, mkdir, readFile, rename, symlink } from "fs/promises";
 import fuzzy from "fuzzy";
-import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { homedir } from "os";
+import { basename, dirname, join } from "path";
 import { z } from "zod";
 import { getCliPref } from "../cliPref.js";
 import { defaultModelsFolder } from "../lmstudioPaths.js";

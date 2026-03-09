@@ -1,5 +1,5 @@
 import { findLMStudioHome } from "@lmstudio/lms-common-server";
-import { join } from "node:path";
+import { join } from "path";
 
 const lmstudioHome = findLMStudioHome();
 export const pluginsFolderPath = join(lmstudioHome, "extensions", "plugins");
