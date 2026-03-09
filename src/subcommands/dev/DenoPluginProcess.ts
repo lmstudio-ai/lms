@@ -1,7 +1,7 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { UtilBinary } from "@lmstudio/lms-es-plugin-runner";
 import { type LMStudioClient, type PluginManifest, type PluginRunnerType } from "@lmstudio/sdk";
-import { join } from "path";
+import { join } from "node:path";
 import { PluginProcess, type PluginProcessOpts } from "./PluginProcess.js";
 
 export class DenoPluginProcess extends PluginProcess {

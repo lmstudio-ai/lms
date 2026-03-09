@@ -2,8 +2,8 @@ import { SimpleLogger } from "@lmstudio/lms-common";
 import { type UtilBinary } from "@lmstudio/lms-es-plugin-runner";
 import { pluginManifestSchema } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient, type PluginManifest, type PluginRunnerType } from "@lmstudio/sdk";
-import { type ChildProcessWithoutNullStreams } from "child_process";
-import { readFile } from "fs/promises";
+import { type ChildProcessWithoutNullStreams } from "node:child_process";
+import { readFile } from "node:fs/promises";
 
 type PluginProcessStatus = "stopped" | "starting" | "running" | "restarting";
 export interface PluginProcessOpts {

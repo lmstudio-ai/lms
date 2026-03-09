@@ -1,7 +1,7 @@
 import { Option, type Command, type OptionValues } from "@commander-js/extra-typings";
 import { makePrettyError, SimpleLogger, text } from "@lmstudio/lms-common";
 import chalk from "chalk";
-import { Console } from "console";
+import { Console } from "node:console";
 
 const levels = ["debug", "info", "warn", "error", "none"] as const;
 

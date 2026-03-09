@@ -1,6 +1,6 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
-import { spawn, spawnSync } from "child_process";
-import * as readline from "readline";
+import { spawn, spawnSync } from "node:child_process";
+import * as readline from "node:readline";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { readInstallLocationOrExit } from "./shared.js";
 

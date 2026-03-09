@@ -1,6 +1,6 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
-import { existsSync, readFileSync } from "fs";
-import { dirname } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { llmsterInstallLocationFilePath } from "../../lmstudioPaths.js";
 
 export interface InstallLocationFileContent {
