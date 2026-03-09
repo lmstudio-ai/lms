@@ -1,5 +1,5 @@
 import { Cleaner, makePromise } from "@lmstudio/lms-common";
-import { createInterface, type Interface } from "readline/promises";
+import { createInterface, type Interface } from "node:readline/promises";
 
 const interrupted = Symbol("interrupted");
 
