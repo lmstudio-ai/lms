@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn } from "node:child_process";
 
 function getCommandForPlatform(): string {
   switch (process.platform) {

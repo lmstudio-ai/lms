@@ -1,4 +1,4 @@
-import { clearLine, cursorTo } from "readline";
+import { clearLine, cursorTo } from "node:readline";
 import { SPINNER_FRAMES } from "./Spinner.js";
 
 export class ProgressBar {
