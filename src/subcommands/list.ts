@@ -1,6 +1,6 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
-import { type LMStudioClient, type ModelInfo } from "@lmstudio/sdk";
+import { LLM, type LMStudioClient, type ModelInfo } from "@lmstudio/sdk";
 import chalk from "chalk";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
@@ -9,6 +9,7 @@ import { createDeviceNameResolver, type DeviceNameResolver } from "../deviceName
 import { formatTimeLean } from "../formatElapsedTime.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import { modelInfoBaseSchema } from "../../../lms-shared-types/dist/types/ModelInfoBase.js";
 
 function loadedCheck(count: number) {
   if (count === 0) {
@@ -448,11 +449,19 @@ psCommand.action(async (options: PsCommandOptions) => {
       loadedModels.map(async model => {
         const info = await model.getModelInfo();
         const { instanceReference: _, ...filteredInfo } = info;
+        let parallel: number | null = null;
+        if (model instanceof LLM) {
+          const loadConfig = await model.getLoadConfig();
+          parallel = loadConfig.maxParallelPredictions ?? null;
+        } else {
+          parallel = null;
+        }
         const instanceProcessingState = await model.getInstanceProcessingState();
         return {
           ...filteredInfo,
           status: instanceProcessingState.status,
           queued: instanceProcessingState.queued,
+          parallel,
         };
       }),
     );
@@ -476,6 +485,13 @@ psCommand.action(async (options: PsCommandOptions) => {
       const { identifier } = loadedModel;
       const contextLength = await loadedModel.getContextLength();
       const modelInstanceInfo = await loadedModel.getModelInfo();
+      let parallel: number | "-" = "-";
+      if (loadedModel instanceof LLM) {
+        const loadConfig = await loadedModel.getLoadConfig();
+        parallel = loadConfig.maxParallelPredictions ?? "-";
+      } else {
+        parallel = "-";
+      }
       const timeLeft =
         modelInstanceInfo.ttlMs !== null
           ? modelInstanceInfo.lastUsedTime === null
@@ -489,6 +505,7 @@ psCommand.action(async (options: PsCommandOptions) => {
         path: modelInstanceInfo.modelKey,
         sizeBytes: formatSizeBytes1000(modelInstanceInfo.sizeBytes),
         contextLength: contextLength,
+        parallel,
         ttlMs:
           timeLeft !== undefined && modelInstanceInfo.ttlMs !== null
             ? `${formatTimeLean(timeLeft)} ${chalk.dim(`/ ${formatTimeLean(modelInstanceInfo.ttlMs)}`)}`
@@ -504,7 +521,16 @@ psCommand.action(async (options: PsCommandOptions) => {
   console.info();
   console.info(
     columnify(loadedModelsWithInfo, {
-      columns: ["identifier", "path", "status", "sizeBytes", "contextLength", "device", "ttlMs"],
+      columns: [
+        "identifier",
+        "path",
+        "status",
+        "sizeBytes",
+        "contextLength",
+        "parallel",
+        "device",
+        "ttlMs",
+      ],
       config: {
         identifier: {
           headingTransform: () => chalk.dim("IDENTIFIER"),
@@ -524,6 +550,10 @@ psCommand.action(async (options: PsCommandOptions) => {
         },
         contextLength: {
           headingTransform: () => chalk.dim("CONTEXT"),
+          align: "left",
+        },
+        parallel: {
+          headingTransform: () => chalk.dim("PARALLEL"),
           align: "left",
         },
         device: {
