@@ -452,8 +452,6 @@ psCommand.action(async (options: PsCommandOptions) => {
         if (model instanceof LLM) {
           const loadConfig = await model.getLoadConfig();
           parallel = loadConfig.maxParallelPredictions ?? null;
-        } else {
-          parallel = null;
         }
         const instanceProcessingState = await model.getInstanceProcessingState();
         return {
@@ -488,8 +486,6 @@ psCommand.action(async (options: PsCommandOptions) => {
       if (loadedModel instanceof LLM) {
         const loadConfig = await loadedModel.getLoadConfig();
         parallel = loadConfig.maxParallelPredictions ?? "-";
-      } else {
-        parallel = "-";
       }
       const timeLeft =
         modelInstanceInfo.ttlMs !== null
