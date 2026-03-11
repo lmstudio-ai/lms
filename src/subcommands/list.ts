@@ -6,10 +6,9 @@ import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { createDeviceNameResolver, type DeviceNameResolver } from "../deviceNameLookup.js";
-import { formatTimeLean } from "../formatElapsedTime.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
+import { formatTimeLean } from "../formatElapsedTime.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
-import { modelInfoBaseSchema } from "../../../lms-shared-types/dist/types/ModelInfoBase.js";
 
 function loadedCheck(count: number) {
   if (count === 0) {
