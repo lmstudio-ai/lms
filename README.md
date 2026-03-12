@@ -28,12 +28,23 @@ lms
 
 You can use `lms --help` to see a list of all available subcommands.
 
+## Server Configuration
+
+By default, the LMS server only accepts connections from localhost (`127.0.0.1`). To serve to your local network:
+
+```bash
+lms server start --bind 0.0.0.0
+```
+
 For details about each subcommand, run `lms <subcommand> --help`.
 
 Here are some frequently used commands:
 
 - `lms status` - To check the status of LM Studio.
 - `lms server start` - To start the local API server.
+  - Use `--bind 0.0.0.0` to serve to the local network (default: localhost only)
+  - Use `--port <port>` to specify a custom port
+  - Use `--cors` to enable CORS for web development
 - `lms server stop` - To stop the local API server.
 - `lms ls` - To list all downloaded models.
   - `lms ls --json` - To list all downloaded models in machine-readable JSON format.
