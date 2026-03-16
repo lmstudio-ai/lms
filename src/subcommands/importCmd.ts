@@ -10,11 +10,11 @@ import {
 import { findLMStudioHome } from "@lmstudio/lms-common-server";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
-import { existsSync, statSync } from "fs";
-import { access, copyFile, link, mkdir, readFile, rename, symlink } from "fs/promises";
+import { existsSync, realpathSync, statSync } from "fs";
+import { access, copyFile, cp, link, mkdir, readFile, rename, symlink } from "fs/promises";
 import fuzzy from "fuzzy";
 import { homedir } from "os";
-import { basename, dirname, join } from "path";
+import { basename, dirname, join, resolve as resolvePath } from "path";
 import { z } from "zod";
 import { getCliPref } from "../cliPref.js";
 import { defaultModelsFolder } from "../lmstudioPaths.js";
@@ -33,18 +33,38 @@ function parseUserRepo(value: string): [string, string] {
   return parts as [string, string];
 }
 
+const mlxMarkerFileName = "model.safetensors";
+
 /**
- * Validate that a file path exists and is a file (not directory)
+ * Validate that a path exists and is a model file or an MLX model folder.
  */
-function validateFilePath(filePath: string): void {
-  if (!existsSync(filePath)) {
-    throw new InvalidArgumentError(`File does not exist`);
+function validateImportPath(importPath: string): void {
+  if (!existsSync(importPath)) {
+    throw new InvalidArgumentError(`File or folder does not exist`);
   }
 
-  const stats = statSync(filePath);
-  if (!stats.isFile()) {
-    throw new InvalidArgumentError(`Path is not a file`);
+  const stats = statSync(importPath);
+  if (stats.isFile()) {
+    return;
   }
+
+  if (stats.isDirectory()) {
+    const markerPath = join(importPath, mlxMarkerFileName);
+    if (!existsSync(markerPath)) {
+      throw new InvalidArgumentError(
+        `Folder does not look like an MLX model (missing ${mlxMarkerFileName})`,
+      );
+    }
+    const markerStats = statSync(markerPath);
+    if (!markerStats.isFile()) {
+      throw new InvalidArgumentError(
+        `Folder does not look like an MLX model (missing ${mlxMarkerFileName})`,
+      );
+    }
+    return;
+  }
+
+  throw new InvalidArgumentError(`Path must be a file or folder`);
 }
 
 type ImportCommandOptions = OptionValues &
@@ -58,25 +78,26 @@ type ImportCommandOptions = OptionValues &
   };
 
 const missingFilePathHelpMessage = text`
-  Provide the path to the model file you downloaded (e.g. .gguf).
+  Provide the path to the model file or folder you downloaded (e.g. .gguf or MLX).
 
-  Example:
+  Examples:
 
       ${chalk.yellow("lms import ~/Downloads/mistral-7b-instruct.Q4_K_M.gguf")}
+      ${chalk.yellow("lms import ~/Downloads/Qwen3-VL-4B-Instruct-MLX-4bit")}
 `;
 
 const importCommand = new Command<[], ImportCommandOptions>()
   .name("import")
-  .description("Import a model file into LM Studio")
-  .argument("<file-path>", "Path to the model file to import", value => {
-    validateFilePath(value);
+  .description("Import a model file or folder into LM Studio")
+  .argument("<file-path>", "Path to the model file or folder to import", value => {
+    validateImportPath(value);
     return value;
   })
   .option(
     "-y, --yes",
     text`
       Automatically approve all prompts. Will also attempt to automatically resolve the
-      user and repository from the file name.
+      user and repository from the file or folder name.
     `,
   )
   .option(
@@ -141,7 +162,20 @@ importCommand.action(async (path, options: ImportCommandOptions) => {
     dryRun: dryRunOption,
   } = options;
   let { userRepo } = options;
-  logger.debug("Importing model file", path);
+  logger.debug("Importing model path", path);
+
+  const sourceStats = statSync(path);
+  const isDirectory = sourceStats.isDirectory();
+  const isMlxModelDir = isDirectory && doesDirectoryContainMlxMarker(path);
+  if (isDirectory && !isMlxModelDir) {
+    logger.error(
+      makeTitledPrettyError(
+        "Invalid Usage",
+        `Folder does not look like an MLX model (missing ${mlxMarkerFileName})`,
+      ),
+    );
+    process.exit(1);
+  }
 
   const isCopy = copyOption === true;
   const isHardLink = hardLinkOption === true;
@@ -158,22 +192,33 @@ importCommand.action(async (path, options: ImportCommandOptions) => {
     process.exit(1);
   }
   const move = isCopy !== true && isHardLink !== true && isSymbolicLink !== true;
-  await validateModelNameOrWarn(logger, path, yes);
+  if (isHardLink && isDirectory) {
+    logger.error(
+      makeTitledPrettyError(
+        "Invalid Usage",
+        "Cannot create a hard link for a folder. Use --symbolic-link or --copy instead.",
+      ),
+    );
+    process.exit(1);
+  }
+
+  await validateModelPathOrWarn(logger, path, yes, isMlxModelDir);
   if (isSymbolicLink === true) {
-    await maybeWarnAboutWindowsSymlink(logger);
+    await maybeWarnAboutWindowsSymlink(logger, isDirectory);
   }
   const modelsFolderPath = await resolveModelsFolderPath(logger);
   if (move) {
-    await warnAboutMove(logger, yes, modelsFolderPath);
+    await warnAboutMove(logger, yes, modelsFolderPath, isDirectory);
   }
 
   if (userRepo === undefined) {
-    userRepo = await resolveUserRepo(logger, path, yes);
+    userRepo = await resolveUserRepo(logger, path, yes, isMlxModelDir);
   }
 
   const [user, repo] = userRepo;
 
-  const targetPath = join(modelsFolderPath, user, repo, basename(path));
+  const baseTargetPath = join(modelsFolderPath, user, repo);
+  const targetPath = isMlxModelDir ? baseTargetPath : join(baseTargetPath, basename(path));
 
   logger.debug("Target path", targetPath);
   try {
@@ -186,9 +231,9 @@ importCommand.action(async (path, options: ImportCommandOptions) => {
 
   if (isDryRun === true) {
     if (move) {
-      logger.info("Would move the file to", targetPath);
+      logger.info("Would move to", targetPath);
     } else if (isCopy === true) {
-      logger.info("Would copy the file to", targetPath);
+      logger.info("Would copy to", targetPath);
     } else if (isHardLink === true) {
       logger.info("Would create a hard link at", targetPath);
     } else if (isSymbolicLink === true) {
@@ -197,13 +242,13 @@ importCommand.action(async (path, options: ImportCommandOptions) => {
     logger.info(`But not actually doing it because of ${chalk.yellow("--dry-run")}`);
   } else {
     if (move) {
-      await importViaMove(logger, path, targetPath);
+      await importViaMove(logger, path, targetPath, isDirectory);
     } else if (isCopy === true) {
-      await importViaCopy(logger, path, targetPath);
+      await importViaCopy(logger, path, targetPath, isDirectory);
     } else if (isHardLink === true) {
       await importViaHardLink(logger, path, targetPath);
     } else if (isSymbolicLink === true) {
-      await importViaSymbolicLink(logger, path, targetPath);
+      await importViaSymbolicLink(logger, path, targetPath, isDirectory);
     }
   }
 });
@@ -216,10 +261,15 @@ importCommand.action(async (path, options: ImportCommandOptions) => {
  * @param targetPath - The target path of the file.
  * @returns A promise that resolves when the file is moved.
  */
-async function importViaMove(logger: SimpleLogger, sourcePath: string, targetPath: string) {
+async function importViaMove(
+  logger: SimpleLogger,
+  sourcePath: string,
+  targetPath: string,
+  isDirectory: boolean,
+) {
   await mkdir(dirname(targetPath), { recursive: true });
   await rename(sourcePath, targetPath);
-  logger.info("File moved to", targetPath);
+  logger.info(isDirectory ? "Folder moved to" : "File moved to", targetPath);
 }
 
 /**
@@ -230,10 +280,20 @@ async function importViaMove(logger: SimpleLogger, sourcePath: string, targetPat
  * @param targetPath - The target path of the file.
  * @returns A promise that resolves when the file is copied.
  */
-async function importViaCopy(logger: SimpleLogger, sourcePath: string, targetPath: string) {
+async function importViaCopy(
+  logger: SimpleLogger,
+  sourcePath: string,
+  targetPath: string,
+  isDirectory: boolean,
+) {
   await mkdir(dirname(targetPath), { recursive: true });
-  await copyFile(sourcePath, targetPath);
-  logger.info("File copied to", targetPath);
+  if (isDirectory) {
+    await cp(sourcePath, targetPath, { recursive: true });
+    logger.info("Folder copied to", targetPath);
+  } else {
+    await copyFile(sourcePath, targetPath);
+    logger.info("File copied to", targetPath);
+  }
 }
 
 /**
@@ -258,9 +318,32 @@ async function importViaHardLink(logger: SimpleLogger, sourcePath: string, targe
  * @param targetPath - The target path of the file.
  * @returns A promise that resolves when the symbolic link is created.
  */
-async function importViaSymbolicLink(logger: SimpleLogger, sourcePath: string, targetPath: string) {
+async function importViaSymbolicLink(
+  logger: SimpleLogger,
+  sourcePath: string,
+  targetPath: string,
+  isDirectory: boolean,
+) {
   await mkdir(dirname(targetPath), { recursive: true });
-  await symlink(sourcePath, targetPath);
+  const linkSourcePath = resolveSymlinkTargetPath(sourcePath);
+  const resolvedTargetPath = resolvePath(targetPath);
+  const realSourcePath = resolvePathForSelfLinkCheck(linkSourcePath);
+  if (realSourcePath === resolvedTargetPath) {
+    logger.error(
+      makeTitledPrettyError(
+        "Invalid Usage",
+        "Cannot create a symbolic link to the same path. The model is already in the target location.",
+      ),
+    );
+    process.exit(1);
+  }
+  if (isDirectory && process.platform === "win32") {
+    await symlink(linkSourcePath, targetPath, "junction");
+  } else if (isDirectory) {
+    await symlink(linkSourcePath, targetPath, "dir");
+  } else {
+    await symlink(linkSourcePath, targetPath, "file");
+  }
   logger.info("Symbolic link created at", targetPath);
 }
 
@@ -272,7 +355,15 @@ async function importViaSymbolicLink(logger: SimpleLogger, sourcePath: string, t
  * @param yes - Whether to suppress warnings.
  * @returns A promise that resolves when the user confirms to continue.
  */
-async function validateModelNameOrWarn(logger: SimpleLogger, path: string, yes: boolean) {
+async function validateModelPathOrWarn(
+  logger: SimpleLogger,
+  path: string,
+  yes: boolean,
+  isMlxModelDir: boolean,
+) {
+  if (isMlxModelDir) {
+    return;
+  }
   if (!doesFileNameIndicateModel(path)) {
     if (yes) {
       logger.warn("The file name does not look like a model file. This may not work.");
@@ -308,8 +399,8 @@ async function validateModelNameOrWarn(logger: SimpleLogger, path: string, yes: 
  *
  * @param logger - The logger to use.
  */
-async function maybeWarnAboutWindowsSymlink(logger: SimpleLogger) {
-  if (process.platform === "win32") {
+async function maybeWarnAboutWindowsSymlink(logger: SimpleLogger, isDirectory: boolean) {
+  if (process.platform === "win32" && !isDirectory) {
     logger.warnText`
       Due to Windows usually require administrator privileges to create symbolic links, this
       operation may fail.
@@ -403,7 +494,12 @@ async function resolveModelsFolderPath(logger: SimpleLogger) {
  * @param yes - Whether to suppress warnings.
  * @param modelsFolderPath - The path to the models folder.
  */
-async function warnAboutMove(logger: SimpleLogger, yes: boolean, modelsFolderPath: string) {
+async function warnAboutMove(
+  logger: SimpleLogger,
+  yes: boolean,
+  modelsFolderPath: string,
+  isDirectory: boolean,
+) {
   const cliPref = await getCliPref(logger);
   if (cliPref.get().importWillMoveWarned === true) {
     return;
@@ -412,22 +508,26 @@ async function warnAboutMove(logger: SimpleLogger, yes: boolean, modelsFolderPat
     logger.warn("Warning about move suppressed by the --yes flag.");
   }
   logger.debug("Asking user to confirm moving the file");
-  process.stderr.write(text`
-    ${"\n"}${chalk.green.underline(" Importing model file into LM Studio ")}
+  const hardLinkLine = isDirectory
+    ? ""
+    : text`
 
-    By default, ${chalk.yellow("lms import")} will ${chalk.cyan("move")} the file to LM
+        If you want to create a ${chalk.cyan("hard link")} instead, use the
+        ${chalk.yellow("--hard-link")} flag.
+      `;
+  process.stderr.write(text`
+    ${"\n"}${chalk.green.underline(" Importing model into LM Studio ")}
+
+    By default, ${chalk.yellow("lms import")} will ${chalk.cyan("move")} the model to LM
     Studio's models folder:
 
         ${chalk.dim(modelsFolderPath)}
 
-    If you want to ${chalk.cyan("copy")} the file instead, use the ${chalk.yellow("--copy")}
+    If you want to ${chalk.cyan("copy")} the model instead, use the ${chalk.yellow("--copy")}
     flag.
 
     If you want to create a ${chalk.cyan("symbolic link")} instead, use the
-    ${chalk.yellow("--symbolic-link")} flag.
-
-    If you want to create a ${chalk.cyan("hard link")} instead, use the
-    ${chalk.yellow("--hard-link")} flag.
+    ${chalk.yellow("--symbolic-link")} flag.${hardLinkLine}
 
     This message will only show up once. You can always look up the usage via the
     ${chalk.yellow("--help")} flag.${"\n\n"}
@@ -499,7 +599,7 @@ function isValidFolderName(fieldName: string, value: string): true | string {
 type ResolutionMethod = "custom" | "huggingFace" | "uncategorized";
 
 /**
- * Resolve the user and repository of the model file.
+ * Resolve the user and repository of the model file or folder.
  *
  * @param logger - The logger to use.
  * @param path - The path of the file.
@@ -509,11 +609,19 @@ async function resolveUserRepo(
   logger: SimpleLogger,
   path: string,
   yes: boolean,
+  isMlxModelDir: boolean,
 ): Promise<[string, string]> {
   const fileName = basename(path);
+  const defaultRepoName = isMlxModelDir ? fileName : autoNameRepo(fileName);
+  const searchName = fileName;
+  const requiredFilename = isMlxModelDir ? mlxMarkerFileName : fileName;
   if (yes) {
     logger.info("Attempting to find the model on Hugging Face...");
-    const candidates = await findCandidateHuggingFaceUserRepos(logger, fileName);
+    const candidates = await findCandidateHuggingFaceUserRepos(
+      logger,
+      searchName,
+      requiredFilename,
+    );
     if (candidates.length > 0) {
       return candidates[0];
     }
@@ -521,7 +629,7 @@ async function resolveUserRepo(
 
     // Use user name as user
     // Use file name without extension as repo
-    return [getDefaultUserName(), autoNameRepo(fileName)];
+    return [getDefaultUserName(), defaultRepoName];
   }
   const resolutionMethod: ResolutionMethod = await runPromptWithExitHandling(() =>
     select<ResolutionMethod>(
@@ -545,7 +653,7 @@ async function resolveUserRepo(
           {
             name: text`
               Don't categorize
-              ${chalk.dim("(will put the model under imported-models/uncategorized)")}
+              ${chalk.dim(`(will put the model under imported-models/${defaultRepoName})`)}
             `,
             value: "uncategorized",
           },
@@ -555,11 +663,16 @@ async function resolveUserRepo(
     ),
   );
   if (resolutionMethod === "custom") {
-    return await resolveByAskUserRepo(logger, path);
+    return await resolveByAskUserRepo(logger, defaultRepoName);
   } else if (resolutionMethod === "huggingFace") {
-    return await resolveByHuggingFaceInteractive(logger, fileName);
+    return await resolveByHuggingFaceInteractive(
+      logger,
+      searchName,
+      requiredFilename,
+      defaultRepoName,
+    );
   } else {
-    return ["imported-models", "uncategorized"];
+    return ["imported-models", defaultRepoName];
   }
 }
 
@@ -569,7 +682,10 @@ async function resolveUserRepo(
  * @param logger - The logger to use.
  * @param path - The path of the file.
  */
-async function resolveByAskUserRepo(logger: SimpleLogger, path: string): Promise<[string, string]> {
+async function resolveByAskUserRepo(
+  logger: SimpleLogger,
+  defaultRepoName: string,
+): Promise<[string, string]> {
   const user = await runPromptWithExitHandling(() =>
     promptInput(
       {
@@ -584,7 +700,7 @@ async function resolveByAskUserRepo(logger: SimpleLogger, path: string): Promise
     promptInput(
       {
         message: chalk.green("What is the model name?"),
-        default: autoNameRepo(basename(path)),
+        default: defaultRepoName,
         validate: (inputValue: string) => isValidFolderName("Repository", inputValue),
       },
       { output: process.stderr },
@@ -597,25 +713,34 @@ async function resolveByAskUserRepo(logger: SimpleLogger, path: string): Promise
 }
 
 /**
- * Resolve the user and repository of the model file by searching Hugging Face.
+ * Resolve the user and repository of the model by searching Hugging Face.
  *
  * @param logger - The logger to use.
- * @param fileName - The file name.
+ * @param searchName - The file or folder name to search with.
+ * @param requiredFilename - The required file name that must exist in the repo.
+ * @param defaultRepoName - The default repo name to use when falling back.
  */
 async function resolveByHuggingFaceInteractive(
   logger: SimpleLogger,
-  fileName: string,
+  searchName: string,
+  requiredFilename: string,
+  defaultRepoName: string,
 ): Promise<[string, string]> {
-  logger.info("Searching for the model on Hugging Face using the file name...");
-  const candidates = (await findCandidateHuggingFaceUserRepos(logger, fileName)).slice(0, 25);
+  logger.info("Searching for the model on Hugging Face using the model name...");
+  const candidates = (
+    await findCandidateHuggingFaceUserRepos(logger, searchName, requiredFilename)
+  ).slice(0, 25);
   if (candidates.length === 0) {
     logger.warnText`
       Cannot find the model on Hugging Face, you need to manually specify the user/repo.
     `;
-    return await resolveByAskUserRepo(logger, fileName);
+    return await resolveByAskUserRepo(logger, defaultRepoName);
   }
   const candidatesJoined = candidates.map(([user, repo]) => `${user}/${repo}`);
-  logger.info("Found the following repositories on Hugging Face containing this file:");
+  logger.info(
+    "Found the following repositories on Hugging Face containing the file:",
+    requiredFilename,
+  );
   const pageSize = terminalSize().rows - 3;
   const selected = await runPromptWithExitHandling(() =>
     search<[string, string] | null>(
@@ -643,7 +768,7 @@ async function resolveByHuggingFaceInteractive(
   );
   if (selected === null) {
     logger.info("Please specify the user and repository manually.");
-    return await resolveByAskUserRepo(logger, fileName);
+    return await resolveByAskUserRepo(logger, defaultRepoName);
   } else {
     return selected;
   }
@@ -677,6 +802,32 @@ async function findFileNameBreakPoints(fileName: string) {
 
 async function cleanFileName(fileName: string) {
   return fileName.replace(/-I?Q\d[_0-9A-Za-z]{0,6}/, "");
+}
+
+function doesDirectoryContainMlxMarker(path: string): boolean {
+  const markerPath = join(path, mlxMarkerFileName);
+  if (!existsSync(markerPath)) {
+    return false;
+  }
+  try {
+    const stats = statSync(markerPath);
+    return stats.isFile();
+  } catch {
+    return false;
+  }
+}
+
+function resolveSymlinkTargetPath(sourcePath: string): string {
+  const resolvedPath = resolvePath(sourcePath);
+  return resolvedPath;
+}
+
+function resolvePathForSelfLinkCheck(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
 }
 
 const searchResultSchema = z.array(
@@ -723,11 +874,16 @@ const userScores = new Map([
  * Find candidate user and repository names on Hugging Face.
  *
  * @param logger - The logger to use.
- * @param fileName - The file name.
+ * @param searchName - The file or folder name to search with.
+ * @param requiredFilename - The required file name that must exist in the repo.
  * @returns A promise that resolves with the candidate user and repository names.
  */
-async function findCandidateHuggingFaceUserRepos(logger: SimpleLogger, fileName: string) {
-  const fullSearchTerm = await cleanFileName(fileName);
+async function findCandidateHuggingFaceUserRepos(
+  logger: SimpleLogger,
+  searchName: string,
+  requiredFilename: string,
+) {
+  const fullSearchTerm = await cleanFileName(searchName);
   const breakingPoints = await findFileNameBreakPoints(fullSearchTerm);
   breakingPoints.push(fullSearchTerm.length);
 
@@ -738,7 +894,9 @@ async function findCandidateHuggingFaceUserRepos(logger: SimpleLogger, fileName:
     const repos = await queryHuggingFace(logger, term);
     for (const repo of repos) {
       if (
-        repo.siblings.some(sibling => sibling.rfilename.toLowerCase() === fileName.toLowerCase())
+        repo.siblings.some(
+          sibling => sibling.rfilename.toLowerCase() === requiredFilename.toLowerCase(),
+        )
       ) {
         const split = repo.id.split("/");
         if (split.length === 2) {
