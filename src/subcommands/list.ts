@@ -1,6 +1,6 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
-import { LLM, type LMStudioClient, type ModelInfo } from "@lmstudio/sdk";
+import { type EmbeddingModel, type LLM, type LMStudioClient, type ModelInfo } from "@lmstudio/sdk";
 import chalk from "chalk";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
@@ -438,31 +438,43 @@ psCommand.action(async (options: PsCommandOptions) => {
   const deviceNameResolver = await createDeviceNameResolver(client, logger);
   const { json = false } = options;
 
-  const loadedModels = [
-    ...(await client.llm.listLoaded()),
-    ...(await client.embedding.listLoaded()),
-  ];
+  const [llmModels, embeddingModels] = await Promise.all([
+    client.llm.listLoaded(),
+    client.embedding.listLoaded(),
+  ]);
+  const loadedModels = [...llmModels, ...embeddingModels];
 
   if (json) {
-    const modelInfos = await Promise.all(
-      loadedModels.map(async model => {
-        const info = await model.getModelInfo();
-        const { instanceReference: _, ...filteredInfo } = info;
-        let parallel: number | null = null;
-        if (model instanceof LLM) {
+    const [llmInfos, embeddingInfos] = await Promise.all([
+      Promise.all(
+        llmModels.map(async model => {
+          const info = await model.getModelInfo();
+          const { instanceReference: _, ...filteredInfo } = info;
           const loadConfig = await model.getLoadConfig();
-          parallel = loadConfig.maxParallelPredictions ?? null;
-        }
-        const instanceProcessingState = await model.getInstanceProcessingState();
-        return {
-          ...filteredInfo,
-          status: instanceProcessingState.status,
-          queued: instanceProcessingState.queued,
-          parallel,
-        };
-      }),
-    );
-    console.info(JSON.stringify(modelInfos));
+          const instanceProcessingState = await model.getInstanceProcessingState();
+          return {
+            ...filteredInfo,
+            status: instanceProcessingState.status,
+            queued: instanceProcessingState.queued,
+            parallel: loadConfig.maxParallelPredictions ?? null,
+          };
+        }),
+      ),
+      Promise.all(
+        embeddingModels.map(async model => {
+          const info = await model.getModelInfo();
+          const { instanceReference: _, ...filteredInfo } = info;
+          const instanceProcessingState = await model.getInstanceProcessingState();
+          return {
+            ...filteredInfo,
+            status: instanceProcessingState.status,
+            queued: instanceProcessingState.queued,
+            parallel: null,
+          };
+        }),
+      ),
+    ]);
+    console.info(JSON.stringify([...llmInfos, ...embeddingInfos]));
     return;
   }
 
@@ -477,39 +489,40 @@ psCommand.action(async (options: PsCommandOptions) => {
     return;
   }
 
-  const loadedModelsWithInfo = await Promise.all(
-    loadedModels.map(async loadedModel => {
-      const { identifier } = loadedModel;
-      const contextLength = await loadedModel.getContextLength();
-      const modelInstanceInfo = await loadedModel.getModelInfo();
-      let parallel: number | "-" = "-";
-      if (loadedModel instanceof LLM) {
-        const loadConfig = await loadedModel.getLoadConfig();
-        parallel = loadConfig.maxParallelPredictions ?? "-";
-      }
-      const timeLeft =
-        modelInstanceInfo.ttlMs !== null
-          ? modelInstanceInfo.lastUsedTime === null
-            ? modelInstanceInfo.ttlMs
-            : modelInstanceInfo.ttlMs - (Date.now() - modelInstanceInfo.lastUsedTime)
-          : undefined;
+  const mapModel = async (loadedModel: LLM | EmbeddingModel, parallel: number | "-") => {
+    const { identifier } = loadedModel;
+    const contextLength = await loadedModel.getContextLength();
+    const modelInstanceInfo = await loadedModel.getModelInfo();
+    const timeLeft =
+      modelInstanceInfo.ttlMs !== null
+        ? modelInstanceInfo.lastUsedTime === null
+          ? modelInstanceInfo.ttlMs
+          : modelInstanceInfo.ttlMs - (Date.now() - modelInstanceInfo.lastUsedTime)
+        : undefined;
 
-      const processingState = await loadedModel.getInstanceProcessingState();
-      return {
-        identifier,
-        path: modelInstanceInfo.modelKey,
-        sizeBytes: formatSizeBytes1000(modelInstanceInfo.sizeBytes),
-        contextLength: contextLength,
-        parallel,
-        ttlMs:
-          timeLeft !== undefined && modelInstanceInfo.ttlMs !== null
-            ? `${formatTimeLean(timeLeft)} ${chalk.dim(`/ ${formatTimeLean(modelInstanceInfo.ttlMs)}`)}`
-            : "",
-        device: formatDeviceLabel(deviceNameResolver, modelInstanceInfo.deviceIdentifier),
-        status: processingState.status.toUpperCase(),
-      };
+    const processingState = await loadedModel.getInstanceProcessingState();
+    return {
+      identifier,
+      path: modelInstanceInfo.modelKey,
+      sizeBytes: formatSizeBytes1000(modelInstanceInfo.sizeBytes),
+      contextLength: contextLength,
+      parallel,
+      ttlMs:
+        timeLeft !== undefined && modelInstanceInfo.ttlMs !== null
+          ? `${formatTimeLean(timeLeft)} ${chalk.dim(`/ ${formatTimeLean(modelInstanceInfo.ttlMs)}`)}`
+          : "",
+      device: formatDeviceLabel(deviceNameResolver, modelInstanceInfo.deviceIdentifier),
+      status: processingState.status.toUpperCase(),
+    };
+  };
+
+  const loadedModelsWithInfo = await Promise.all([
+    ...llmModels.map(async model => {
+      const loadConfig = await model.getLoadConfig();
+      return mapModel(model, loadConfig.maxParallelPredictions ?? "-");
     }),
-  );
+    ...embeddingModels.map(model => mapModel(model, "-")),
+  ]);
 
   loadedModelsWithInfo.sort((a, b) => a.identifier.localeCompare(b.identifier));
 
