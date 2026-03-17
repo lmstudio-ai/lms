@@ -8,7 +8,7 @@ export class DenoPluginProcess extends PluginProcess {
   protected override binary = new UtilBinary("deno");
   protected override runnerType: PluginRunnerType = "deno";
   protected override getArgs(pluginManifest: PluginManifest): Array<string> {
-    const args = ["run", "--quiet", "--unstable-node-globals"];
+    const args = ["run", "--quiet"];
     if (pluginManifest.sandbox === undefined || !pluginManifest.sandbox.enabled) {
       args.push("--allow-all");
     } else {
