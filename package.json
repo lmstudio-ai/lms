@@ -15,7 +15,7 @@
     "postinstall": "patch-package"
   },
   "engines": {
-    "node": "^22.21.1",
+    "node": "^25.5.0",
     "npm": ">=8"
   },
   "author": "LM Studio <team@lmstudio.ai> (https://lmstudio.ai)",
