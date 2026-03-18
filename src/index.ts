@@ -203,3 +203,34 @@ await program.parseAsync(["node", "lms", ...commandArguments]).catch((error: unk
   }
   process.exit(1);
 });
+
+// Debug: log when top-level await completes — if the process hangs after this, something is
+// keeping the event loop alive (likely a ref'd socket or timer).
+console.error("[ref-debug] CLI: parseAsync resolved, top-level code complete. Process should exit now.");
+
+// Heartbeat: if the process is still alive 3s after the command finishes, log what's holding it
+const heartbeatTimer = setTimeout(() => {
+  console.error("[ref-debug] CLI: process still alive 3s after command completed!");
+  console.error("[ref-debug] CLI: this means something is keeping the event loop alive");
+  // On Deno, try to list open resources
+  if (typeof (globalThis as any).Deno !== "undefined") {
+    try {
+      // @ts-expect-error - Deno global API
+      const resources = (globalThis as any).Deno.resources();
+      console.error("[ref-debug] CLI: Deno.resources():", JSON.stringify(resources));
+    } catch (resourceError) {
+      console.error("[ref-debug] CLI: could not enumerate Deno resources:", resourceError);
+    }
+  }
+}, 3000);
+// Unref the heartbeat timer so it doesn't itself keep the process alive
+if (typeof heartbeatTimer === "object" && "unref" in heartbeatTimer) {
+  heartbeatTimer.unref();
+} else if (typeof (globalThis as any).Deno !== "undefined") {
+  try {
+    // @ts-expect-error - Deno global API
+    (globalThis as any).Deno.unrefTimer(heartbeatTimer);
+  } catch {
+    // ignore
+  }
+}
