@@ -6,7 +6,7 @@ import {
   type StripNotAvailable,
 } from "@lmstudio/lms-common";
 import { existsSync, writeFileSync } from "fs";
-import { mkdir, readFile, watch } from "fs/promises";
+import { mkdir, readFile } from "fs/promises";
 import path from "path";
 import { type ZodSchema } from "zod";
 
@@ -82,24 +82,6 @@ export class FileData<TData, TSerialized> {
       data = this.defaultData;
     }
     this.setData(data as StripNotAvailable<TData>);
-    this.startWatcher().catch(e => {
-      this.logger?.error(`Watcher failed: ${e}`);
-    });
-  }
-
-  private async startWatcher() {
-    const watcher = watch(this.filePath, {
-      persistent: false,
-    });
-    for await (const event of watcher) {
-      if (event.eventType === "change") {
-        this.logger?.debug("File changed, reading data");
-        const data: TData | null = await this.readData();
-        if (data !== null && isAvailable(data)) {
-          this.setData(data as any);
-        }
-      }
-    }
   }
 
   private async readData(): Promise<TData | null> {
