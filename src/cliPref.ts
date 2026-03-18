@@ -27,6 +27,6 @@ export async function getCliPref(logger?: SimpleLogger): Promise<SimpleFileData<
     cliPrefSchema,
     new SimpleLogger("CliPref", logger),
   );
-  await cliPref.init();
+  await cliPref.init({ watch: false });
   return cliPref;
 }

@@ -53,7 +53,7 @@ export class FileData<TData, TSerialized> {
     fileDataGlobalCache.set(filePath, this);
   }
 
-  public async init() {
+  public async init({ watch: shouldWatch = true }: { watch?: boolean } = {}) {
     if (this.initializationState.type === "initializing") {
       await this.initializationState.promise;
       return;
@@ -61,13 +61,13 @@ export class FileData<TData, TSerialized> {
     if (this.initializationState.type === "initialized") {
       return;
     }
-    const initPromise = this.initInternal();
+    const initPromise = this.initInternal(shouldWatch);
     this.initializationState = { type: "initializing", promise: initPromise };
     await initPromise;
     this.initializationState = { type: "initialized" };
   }
 
-  private async initInternal() {
+  private async initInternal(shouldWatch: boolean) {
     this.logger?.debug("Initializing FileData");
     const dir = path.dirname(this.filePath);
     await mkdir(dir, { recursive: true });
@@ -82,9 +82,11 @@ export class FileData<TData, TSerialized> {
       data = this.defaultData;
     }
     this.setData(data as StripNotAvailable<TData>);
-    this.startWatcher().catch(e => {
-      this.logger?.error(`Watcher failed: ${e}`);
-    });
+    if (shouldWatch) {
+      this.startWatcher().catch(error => {
+        this.logger?.error(`Watcher failed: ${error}`);
+      });
+    }
   }
 
   private async startWatcher() {
