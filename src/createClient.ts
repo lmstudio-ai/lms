@@ -21,8 +21,16 @@ export async function checkHttpServer(logger: SimpleLogger, port: number, host?:
   logger.debug(`Checking server at ${url}`);
   try {
     const abortController = new AbortController();
-    setTimeout(() => abortController.abort(new Error("Connection timed out.")), 500).unref();
-    const response = await fetch(url, { signal: abortController.signal });
+    const timeout = setTimeout(
+      () => abortController.abort(new Error("Connection timed out.")),
+      500,
+    );
+    let response;
+    try {
+      response = await fetch(url, { signal: abortController.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
     if (response.status !== 200) {
       logger.debug(`Status is not 200: ${response.status}`);
       return false;
