@@ -6,7 +6,7 @@ import {
   type StripNotAvailable,
 } from "@lmstudio/lms-common";
 import { existsSync, writeFileSync } from "fs";
-import { mkdir, readFile, watch } from "fs/promises";
+import { mkdir, readFile } from "fs/promises";
 import path from "path";
 import { type ZodSchema } from "zod";
 
@@ -53,7 +53,7 @@ export class FileData<TData, TSerialized> {
     fileDataGlobalCache.set(filePath, this);
   }
 
-  public async init({ watch: shouldWatch = true }: { watch?: boolean } = {}) {
+  public async init() {
     if (this.initializationState.type === "initializing") {
       await this.initializationState.promise;
       return;
@@ -61,13 +61,13 @@ export class FileData<TData, TSerialized> {
     if (this.initializationState.type === "initialized") {
       return;
     }
-    const initPromise = this.initInternal(shouldWatch);
+    const initPromise = this.initInternal();
     this.initializationState = { type: "initializing", promise: initPromise };
     await initPromise;
     this.initializationState = { type: "initialized" };
   }
 
-  private async initInternal(shouldWatch: boolean) {
+  private async initInternal() {
     this.logger?.debug("Initializing FileData");
     const dir = path.dirname(this.filePath);
     await mkdir(dir, { recursive: true });
@@ -82,26 +82,6 @@ export class FileData<TData, TSerialized> {
       data = this.defaultData;
     }
     this.setData(data as StripNotAvailable<TData>);
-    if (shouldWatch) {
-      this.startWatcher().catch(error => {
-        this.logger?.error(`Watcher failed: ${error}`);
-      });
-    }
-  }
-
-  private async startWatcher() {
-    const watcher = watch(this.filePath, {
-      persistent: false,
-    });
-    for await (const event of watcher) {
-      if (event.eventType === "change") {
-        this.logger?.debug("File changed, reading data");
-        const data: TData | null = await this.readData();
-        if (data !== null && isAvailable(data)) {
-          this.setData(data as any);
-        }
-      }
-    }
   }
 
   private async readData(): Promise<TData | null> {
