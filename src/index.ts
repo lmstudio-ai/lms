@@ -215,7 +215,6 @@ const heartbeatTimer = setTimeout(() => {
   // On Deno, try to list open resources
   if (typeof (globalThis as any).Deno !== "undefined") {
     try {
-      // @ts-expect-error - Deno global API
       const resources = (globalThis as any).Deno.resources();
       console.error("[ref-debug] CLI: Deno.resources():", JSON.stringify(resources));
     } catch (resourceError) {
@@ -228,7 +227,6 @@ if (typeof heartbeatTimer === "object" && "unref" in heartbeatTimer) {
   heartbeatTimer.unref();
 } else if (typeof (globalThis as any).Deno !== "undefined") {
   try {
-    // @ts-expect-error - Deno global API
     (globalThis as any).Deno.unrefTimer(heartbeatTimer);
   } catch {
     // ignore
