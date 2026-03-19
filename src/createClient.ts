@@ -25,20 +25,19 @@ export async function checkHttpServer(logger: SimpleLogger, port: number, host?:
       () => abortController.abort(new Error("Connection timed out.")),
       500,
     );
-    let response;
     try {
-      response = await fetch(url, { signal: abortController.signal });
+      const response = await fetch(url, { signal: abortController.signal });
+      if (response.status !== 200) {
+        logger.debug(`Status is not 200: ${response.status}`);
+        return false;
+      }
+      const json = await response.json();
+      if (json?.lmstudio !== true) {
+        logger.debug(`Not an LM Studio server:`, json);
+        return false;
+      }
     } finally {
       clearTimeout(timeout);
-    }
-    if (response.status !== 200) {
-      logger.debug(`Status is not 200: ${response.status}`);
-      return false;
-    }
-    const json = await response.json();
-    if (json?.lmstudio !== true) {
-      logger.debug(`Not an LM Studio server:`, json);
-      return false;
     }
   } catch (e) {
     logger.debug(`Failed to check server:`, e);
