@@ -601,11 +601,7 @@ function getSelectedDownloadOptionIndexFromArtifactModelSelectionValue(
 }
 
 function artifactPlanModelNodeNeedsSelectionPrompt(modelNode: ArtifactDownloadPlanModelNode) {
-  const downloadOptions = modelNode.downloadOptions ?? [];
-  if (modelNode.alreadyOwned !== undefined) {
-    return downloadOptions.length > 0;
-  }
-  return downloadOptions.length > 1;
+  return getArtifactSelectionChoiceCount(modelNode) > 1;
 }
 
 function getEditableArtifactPlanModelNodeIndexes(plan: ArtifactDownloadPlan): Array<number> {
@@ -617,6 +613,21 @@ function getEditableArtifactPlanModelNodeIndexes(plan: ArtifactDownloadPlan): Ar
   });
 }
 
+function shouldShowAlreadyOwnedArtifactSelectionChoice(modelNode: ArtifactDownloadPlanModelNode) {
+  if (modelNode.alreadyOwned === undefined) {
+    return false;
+  }
+  return !(modelNode.downloadOptions ?? []).some(
+    downloadOption => downloadOption.availability === "downloaded",
+  );
+}
+
+function getArtifactSelectionChoiceCount(modelNode: ArtifactDownloadPlanModelNode) {
+  const downloadOptionCount = (modelNode.downloadOptions ?? []).length;
+  const alreadyOwnedChoiceCount = shouldShowAlreadyOwnedArtifactSelectionChoice(modelNode) ? 1 : 0;
+  return downloadOptionCount + alreadyOwnedChoiceCount;
+}
+
 function getDefaultArtifactModelSelectionValue(
   modelNode: ArtifactDownloadPlanModelNode,
 ): ArtifactModelSelectionValue {
@@ -626,8 +637,14 @@ function getDefaultArtifactModelSelectionValue(
   ) {
     return makeArtifactModelSelectionValue(modelNode.selectedDownloadOptionIndex);
   }
-  if (modelNode.alreadyOwned !== undefined) {
+  if (shouldShowAlreadyOwnedArtifactSelectionChoice(modelNode)) {
     return "alreadyOwned";
+  }
+  const firstDownloadedOptionIndex = (modelNode.downloadOptions ?? []).findIndex(
+    downloadOption => downloadOption.availability === "downloaded",
+  );
+  if (firstDownloadedOptionIndex !== -1) {
+    return makeArtifactModelSelectionValue(firstDownloadedOptionIndex);
   }
   if (
     modelNode.recommendedDownloadOptionIndex !== undefined &&
@@ -665,20 +682,18 @@ interface ArtifactDownloadOptionChoiceData {
   quantText: string;
   sizeText: string;
   nameText: string;
-  statusText: string;
-  statusType: "alreadyOwned" | "fitEstimation";
+  fitText: string;
+  availabilityText: string;
+  availabilityType: "alreadyOwned" | "downloaded" | "downloading" | "none";
   fitEstimation?: ModelSearchResultDownloadOptionFitEstimation;
   recommendedText: string;
 }
 
-function colorArtifactDownloadOptionStatusText(
-  choiceData: ArtifactDownloadOptionChoiceData,
+function colorArtifactDownloadOptionFitText(
+  fitEstimation: ModelSearchResultDownloadOptionFitEstimation | undefined,
   text: string,
 ) {
-  if (choiceData.statusType === "alreadyOwned") {
-    return chalk.green(text);
-  }
-  switch (choiceData.fitEstimation) {
+  switch (fitEstimation) {
     case "willNotFit":
       return chalk.red(text);
     case "fitWithoutGPU":
@@ -692,17 +707,33 @@ function colorArtifactDownloadOptionStatusText(
   }
 }
 
+function colorArtifactDownloadOptionAvailabilityText(
+  availabilityType: ArtifactDownloadOptionChoiceData["availabilityType"],
+  text: string,
+) {
+  switch (availabilityType) {
+    case "alreadyOwned":
+    case "downloaded":
+      return chalk.green(text);
+    case "downloading":
+      return chalk.yellow(text);
+    case "none":
+      return text;
+  }
+}
+
 function createArtifactDownloadOptionChoiceData(modelNode: ArtifactDownloadPlanModelNode) {
   const choiceData: Array<ArtifactDownloadOptionChoiceData> = [];
-  if (modelNode.alreadyOwned !== undefined) {
+  if (shouldShowAlreadyOwnedArtifactSelectionChoice(modelNode)) {
     choiceData.push({
       value: "alreadyOwned",
-      short: modelToString(modelNode.alreadyOwned),
-      quantText: modelNode.alreadyOwned.quantName ?? "",
-      sizeText: formatSizeBytes1000(modelNode.alreadyOwned.sizeBytes),
-      nameText: formatModelDisplayNameWithCompatibility(modelNode.alreadyOwned),
-      statusText: "[Already downloaded]",
-      statusType: "alreadyOwned",
+      short: modelToString(modelNode.alreadyOwned!),
+      quantText: modelNode.alreadyOwned!.quantName ?? "",
+      sizeText: formatSizeBytes1000(modelNode.alreadyOwned!.sizeBytes),
+      nameText: formatModelDisplayNameWithCompatibility(modelNode.alreadyOwned!),
+      fitText: "",
+      availabilityText: "[Already downloaded]",
+      availabilityType: "alreadyOwned",
       recommendedText: "",
     });
   }
@@ -713,8 +744,19 @@ function createArtifactDownloadOptionChoiceData(modelNode: ArtifactDownloadPlanM
       quantText: downloadOption.quantName ?? "",
       sizeText: formatSizeBytes1000(downloadOption.sizeBytes),
       nameText: formatModelDisplayNameWithCompatibility(downloadOption),
-      statusText: getFitEstimationLabelText(downloadOption.fitEstimation),
-      statusType: "fitEstimation",
+      fitText: getFitEstimationLabelText(downloadOption.fitEstimation),
+      availabilityText:
+        downloadOption.availability === "downloaded"
+          ? "[Already downloaded]"
+          : downloadOption.availability === "downloading"
+            ? "[Download in progress]"
+            : "",
+      availabilityType:
+        downloadOption.availability === "downloaded"
+          ? "downloaded"
+          : downloadOption.availability === "downloading"
+            ? "downloading"
+            : "none",
       fitEstimation: downloadOption.fitEstimation,
       recommendedText: downloadOption.recommended === true ? "Recommended" : "",
     });
@@ -732,7 +774,11 @@ async function askToChooseArtifactDownloadSelection(
   const quantColumnWidth = Math.max(0, ...choiceData.map(choice => choice.quantText.length));
   const sizeColumnWidth = Math.max(0, ...choiceData.map(choice => choice.sizeText.length));
   const nameColumnWidth = Math.max(0, ...choiceData.map(choice => choice.nameText.length));
-  const statusColumnWidth = Math.max(0, ...choiceData.map(choice => choice.statusText.length));
+  const fitColumnWidth = Math.max(0, ...choiceData.map(choice => choice.fitText.length));
+  const availabilityColumnWidth = Math.max(
+    0,
+    ...choiceData.map(choice => choice.availabilityText.length),
+  );
   const recommendedColumnWidth = Math.max(
     0,
     ...choiceData.map(choice => choice.recommendedText.length),
@@ -744,12 +790,23 @@ async function askToChooseArtifactDownloadSelection(
     }
     name += `${choice.sizeText.padStart(sizeColumnWidth)}  `;
     name += chalk.dim(choice.nameText.padEnd(nameColumnWidth));
-    if (statusColumnWidth > 0) {
-      const paddedStatusText = choice.statusText.padEnd(statusColumnWidth);
-      if (choice.statusText === "") {
-        name += `  ${"".padEnd(statusColumnWidth)}`;
+    if (fitColumnWidth > 0) {
+      const paddedFitText = choice.fitText.padEnd(fitColumnWidth);
+      if (choice.fitText === "") {
+        name += `  ${"".padEnd(fitColumnWidth)}`;
       } else {
-        name += `  ${colorArtifactDownloadOptionStatusText(choice, paddedStatusText)}`;
+        name += `  ${colorArtifactDownloadOptionFitText(choice.fitEstimation, paddedFitText)}`;
+      }
+    }
+    if (availabilityColumnWidth > 0) {
+      const paddedAvailabilityText = choice.availabilityText.padEnd(availabilityColumnWidth);
+      if (choice.availabilityText === "") {
+        name += `  ${"".padEnd(availabilityColumnWidth)}`;
+      } else {
+        name += `  ${colorArtifactDownloadOptionAvailabilityText(
+          choice.availabilityType,
+          paddedAvailabilityText,
+        )}`;
       }
     }
     if (recommendedColumnWidth > 0) {
@@ -947,11 +1004,11 @@ function artifactDownloadPlanToString(
           break;
         }
         case "satisfied": {
-          const owned = node.alreadyOwned;
-          if (owned === undefined) {
+          const satisfiedModel = node.selected ?? node.alreadyOwned;
+          if (satisfiedModel === undefined) {
             message = `${chalk.green("✓ Satisfied")} Unknown`;
           } else {
-            message = `${chalk.green("✓ Satisfied")} ${modelToString(owned)}`;
+            message = `${chalk.green("✓ Satisfied")} ${modelToString(satisfiedModel)}`;
           }
           break;
         }
@@ -992,7 +1049,7 @@ function buildArtifactDownloadPlanLines(
   yes = false,
   footerLines: Array<string> = [],
 ) {
-  const lines: Array<string> = [];
+  const lines: Array<string> = [""];
   const spinnerFrame = Math.floor(Date.now() / 100) % spinnerFrames.length;
   artifactDownloadPlanToString(plan, lines, spinnerFrame, 0, "   ", "  ", highlightedNodeIndex);
   lines.push("");
@@ -1040,7 +1097,6 @@ function printArtifactDownloadPlanScreen(
 ) {
   if (clearScreen) {
     console.clear();
-    process.stdout.write("\n");
   }
   const lines = buildArtifactDownloadPlanLines(
     plan,
@@ -1074,6 +1130,7 @@ export async function downloadArtifact(
       },
     ],
     downloadSizeBytes: 0,
+    version: 0,
   };
   let linesToClear: number = 0;
   let shouldRenderPlanUpdates = true;
