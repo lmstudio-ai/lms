@@ -5,19 +5,22 @@ import { terminalSize } from "@lmstudio/lms-isomorphic";
 import {
   type ArtifactDownloadPlan,
   type ArtifactDownloadPlanModelInfo,
+  type ArtifactDownloadPlanNode,
   type HubModel,
   kebabCaseRegex,
   kebabCaseWithDotsRegex,
   type ModelCompatibilityType,
+  type ModelSearchResultDownloadOptionFitEstimation,
 } from "@lmstudio/lms-shared-types";
 import {
+  type ArtifactDownloadPlanner,
   type LMStudioClient,
   type ModelSearchResultDownloadOption,
   type ModelSearchResultEntry,
 } from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
-import { askQuestion } from "../confirm.js";
+import { askQuestion, askQuestionWithChoices } from "../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
 import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatBytes.js";
@@ -50,6 +53,10 @@ type SearchResultItem =
       kind: "hf";
       model: ModelSearchResultEntry;
     };
+
+type ArtifactDownloadPlanModelNode = Extract<ArtifactDownloadPlanNode, { type: "model" }>;
+type ArtifactModelSelectionValue = "alreadyOwned" | `download:${number}`;
+type ArtifactConfirmationChoice = "Y" | "N" | "E";
 
 const getCommand = new Command<[], GetCommandOptions>()
   .name("get")
@@ -519,20 +526,7 @@ async function askToChooseDownloadOption(
           }
           name += `${formatSizeBytes1000(option.sizeBytes)} `.padStart(11);
           name += chalk.dim(option.name) + " ";
-          switch (option.fitEstimation) {
-            case "willNotFit":
-              name += chalk.red("[Likely too large for this machine]");
-              break;
-            case "fitWithoutGPU":
-              name += chalk.green("[Likely fit]");
-              break;
-            case "partialGPUOffload":
-              name += chalk.yellow("[Partial GPU offload possible]");
-              break;
-            case "fullGPUOffload":
-              name += chalk.green("[Full GPU offload possible]");
-              break;
-          }
+          name += formatFitEstimationLabel(option.fitEstimation);
           if (option.isRecommended()) {
             name += " " + chalk.green(" Recommended ");
           }
@@ -558,6 +552,296 @@ function formatOptionShortName(option: ModelSearchResultDownloadOption) {
   return name;
 }
 
+function getFitEstimationLabelText(
+  fitEstimation: ModelSearchResultDownloadOptionFitEstimation | undefined,
+) {
+  switch (fitEstimation) {
+    case "willNotFit":
+      return "[Likely too large for this machine]";
+    case "fitWithoutGPU":
+      return "[Likely fit]";
+    case "partialGPUOffload":
+      return "[Partial GPU offload possible]";
+    case "fullGPUOffload":
+      return "[Full GPU offload possible]";
+    default:
+      return "";
+  }
+}
+
+function formatFitEstimationLabel(
+  fitEstimation: ModelSearchResultDownloadOptionFitEstimation | undefined,
+) {
+  const fitEstimationLabelText = getFitEstimationLabelText(fitEstimation);
+  switch (fitEstimation) {
+    case "willNotFit":
+      return chalk.red(fitEstimationLabelText);
+    case "fitWithoutGPU":
+      return chalk.green(fitEstimationLabelText);
+    case "partialGPUOffload":
+      return chalk.yellow(fitEstimationLabelText);
+    case "fullGPUOffload":
+      return chalk.green(fitEstimationLabelText);
+    default:
+      return fitEstimationLabelText;
+  }
+}
+
+function makeArtifactModelSelectionValue(downloadOptionIndex: number): ArtifactModelSelectionValue {
+  return `download:${downloadOptionIndex}` as ArtifactModelSelectionValue;
+}
+
+function getSelectedDownloadOptionIndexFromArtifactModelSelectionValue(
+  selectionValue: ArtifactModelSelectionValue,
+): number | null {
+  if (selectionValue === "alreadyOwned") {
+    return null;
+  }
+  return Number.parseInt(selectionValue.slice("download:".length), 10);
+}
+
+function artifactPlanModelNodeNeedsSelectionPrompt(modelNode: ArtifactDownloadPlanModelNode) {
+  const downloadOptions = modelNode.downloadOptions ?? [];
+  if (modelNode.alreadyOwned !== undefined) {
+    return downloadOptions.length > 0;
+  }
+  return downloadOptions.length > 1;
+}
+
+function getEditableArtifactPlanModelNodeIndexes(plan: ArtifactDownloadPlan): Array<number> {
+  return plan.nodes.flatMap((node, nodeIndex) => {
+    if (node.type !== "model" || !artifactPlanModelNodeNeedsSelectionPrompt(node)) {
+      return [];
+    }
+    return [nodeIndex];
+  });
+}
+
+function getDefaultArtifactModelSelectionValue(
+  modelNode: ArtifactDownloadPlanModelNode,
+): ArtifactModelSelectionValue {
+  if (
+    modelNode.selectedDownloadOptionIndex !== undefined &&
+    modelNode.selectedDownloadOptionIndex !== null
+  ) {
+    return makeArtifactModelSelectionValue(modelNode.selectedDownloadOptionIndex);
+  }
+  if (modelNode.alreadyOwned !== undefined) {
+    return "alreadyOwned";
+  }
+  if (
+    modelNode.recommendedDownloadOptionIndex !== undefined &&
+    modelNode.recommendedDownloadOptionIndex !== null
+  ) {
+    return makeArtifactModelSelectionValue(modelNode.recommendedDownloadOptionIndex);
+  }
+  return makeArtifactModelSelectionValue(0);
+}
+
+function formatCompatibilityTypeSuffix(compatibilityType: ModelCompatibilityType) {
+  if (compatibilityType === "gguf") {
+    return "[GGUF]";
+  }
+  if (compatibilityType === "safetensors") {
+    return "[MLX]";
+  }
+  return "";
+}
+
+function formatModelDisplayNameWithCompatibility(model: {
+  displayName: string;
+  compatibilityType: ModelCompatibilityType;
+}) {
+  const compatibilityTypeSuffix = formatCompatibilityTypeSuffix(model.compatibilityType);
+  if (compatibilityTypeSuffix === "") {
+    return model.displayName;
+  }
+  return `${model.displayName} ${compatibilityTypeSuffix}`;
+}
+
+interface ArtifactDownloadOptionChoiceData {
+  value: ArtifactModelSelectionValue;
+  short: string;
+  quantText: string;
+  sizeText: string;
+  nameText: string;
+  statusText: string;
+  statusType: "alreadyOwned" | "fitEstimation";
+  fitEstimation?: ModelSearchResultDownloadOptionFitEstimation;
+  recommendedText: string;
+}
+
+function colorArtifactDownloadOptionStatusText(
+  choiceData: ArtifactDownloadOptionChoiceData,
+  text: string,
+) {
+  if (choiceData.statusType === "alreadyOwned") {
+    return chalk.green(text);
+  }
+  switch (choiceData.fitEstimation) {
+    case "willNotFit":
+      return chalk.red(text);
+    case "fitWithoutGPU":
+      return chalk.green(text);
+    case "partialGPUOffload":
+      return chalk.yellow(text);
+    case "fullGPUOffload":
+      return chalk.green(text);
+    default:
+      return text;
+  }
+}
+
+function createArtifactDownloadOptionChoiceData(modelNode: ArtifactDownloadPlanModelNode) {
+  const choiceData: Array<ArtifactDownloadOptionChoiceData> = [];
+  if (modelNode.alreadyOwned !== undefined) {
+    choiceData.push({
+      value: "alreadyOwned",
+      short: modelToString(modelNode.alreadyOwned),
+      quantText: modelNode.alreadyOwned.quantName ?? "",
+      sizeText: formatSizeBytes1000(modelNode.alreadyOwned.sizeBytes),
+      nameText: formatModelDisplayNameWithCompatibility(modelNode.alreadyOwned),
+      statusText: "[Already downloaded]",
+      statusType: "alreadyOwned",
+      recommendedText: "",
+    });
+  }
+  for (const [downloadOptionIndex, downloadOption] of (modelNode.downloadOptions ?? []).entries()) {
+    choiceData.push({
+      value: makeArtifactModelSelectionValue(downloadOptionIndex),
+      short: modelToString(downloadOption),
+      quantText: downloadOption.quantName ?? "",
+      sizeText: formatSizeBytes1000(downloadOption.sizeBytes),
+      nameText: formatModelDisplayNameWithCompatibility(downloadOption),
+      statusText: getFitEstimationLabelText(downloadOption.fitEstimation),
+      statusType: "fitEstimation",
+      fitEstimation: downloadOption.fitEstimation,
+      recommendedText: downloadOption.recommended === true ? "Recommended" : "",
+    });
+  }
+  return choiceData;
+}
+
+async function askToChooseArtifactDownloadSelection(
+  modelNode: ArtifactDownloadPlanModelNode,
+  pageSize: number,
+): Promise<ArtifactModelSelectionValue> {
+  console.info(chalk.dim("! Use the arrow keys to navigate, and press enter to select."));
+
+  const choiceData = createArtifactDownloadOptionChoiceData(modelNode);
+  const quantColumnWidth = Math.max(0, ...choiceData.map(choice => choice.quantText.length));
+  const sizeColumnWidth = Math.max(0, ...choiceData.map(choice => choice.sizeText.length));
+  const nameColumnWidth = Math.max(0, ...choiceData.map(choice => choice.nameText.length));
+  const statusColumnWidth = Math.max(0, ...choiceData.map(choice => choice.statusText.length));
+  const recommendedColumnWidth = Math.max(
+    0,
+    ...choiceData.map(choice => choice.recommendedText.length),
+  );
+  const choices = choiceData.map(choice => {
+    let name = "";
+    if (quantColumnWidth > 0) {
+      name += `${choice.quantText.padEnd(quantColumnWidth)}  `;
+    }
+    name += `${choice.sizeText.padStart(sizeColumnWidth)}  `;
+    name += chalk.dim(choice.nameText.padEnd(nameColumnWidth));
+    if (statusColumnWidth > 0) {
+      const paddedStatusText = choice.statusText.padEnd(statusColumnWidth);
+      if (choice.statusText === "") {
+        name += `  ${"".padEnd(statusColumnWidth)}`;
+      } else {
+        name += `  ${colorArtifactDownloadOptionStatusText(choice, paddedStatusText)}`;
+      }
+    }
+    if (recommendedColumnWidth > 0) {
+      if (choice.recommendedText === "") {
+        name += `  ${"".padEnd(recommendedColumnWidth)}`;
+      } else {
+        name += `  ${chalk.green(choice.recommendedText.padEnd(recommendedColumnWidth))}`;
+      }
+    }
+    return {
+      name,
+      value: choice.value,
+      short: choice.short,
+    };
+  });
+
+  return await runPromptWithExitHandling(() =>
+    select<ArtifactModelSelectionValue>(
+      {
+        message: chalk.green(`Select a concrete model for ${modelNode.dependencyLabel}`),
+        loop: false,
+        pageSize,
+        default: getDefaultArtifactModelSelectionValue(modelNode),
+        choices,
+      },
+      { output: process.stderr },
+    ),
+  );
+}
+
+async function applyArtifactModelSelection(
+  downloadPlanner: ArtifactDownloadPlanner,
+  nodeIndex: number,
+  currentPlanNode: ArtifactDownloadPlanModelNode,
+  selectionValue: ArtifactModelSelectionValue,
+) {
+  const selectedDownloadOptionIndex =
+    getSelectedDownloadOptionIndexFromArtifactModelSelectionValue(selectionValue);
+  if (selectedDownloadOptionIndex === null) {
+    if (currentPlanNode.selectedDownloadOptionIndex === null) {
+      return false;
+    }
+    await downloadPlanner.selectAlreadyOwnedModel({ nodeIndex });
+    return true;
+  }
+  if (currentPlanNode.selectedDownloadOptionIndex === selectedDownloadOptionIndex) {
+    return false;
+  }
+  await downloadPlanner.selectModelDownloadOption({
+    nodeIndex,
+    downloadOptionIndex: selectedDownloadOptionIndex,
+  });
+  return true;
+}
+
+function getArtifactSelectionPromptPageSize(renderedLineCount: number) {
+  return Math.max(5, terminalSize().rows - renderedLineCount - 4);
+}
+
+async function openArtifactDownloadSelectionEditor(
+  downloadPlanner: ArtifactDownloadPlanner,
+): Promise<boolean> {
+  let selectionChanged = false;
+  const editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlanner.getPlan());
+  for (const nodeIndex of editableNodeIndexes) {
+    const refreshedPlan = downloadPlanner.getPlan();
+    const currentPlanNode = refreshedPlan.nodes[nodeIndex];
+    if (currentPlanNode === undefined || currentPlanNode.type !== "model") {
+      continue;
+    }
+
+    const renderedLineCount = printArtifactDownloadPlanScreen(refreshedPlan, {
+      highlightedNodeIndex: nodeIndex,
+    });
+    const selectionValue = await askToChooseArtifactDownloadSelection(
+      currentPlanNode,
+      getArtifactSelectionPromptPageSize(renderedLineCount),
+    );
+    const changed = await applyArtifactModelSelection(
+      downloadPlanner,
+      nodeIndex,
+      currentPlanNode,
+      selectionValue,
+    );
+    if (changed) {
+      selectionChanged = true;
+    }
+  }
+  printArtifactDownloadPlanScreen(downloadPlanner.getPlan(), { clearScreen: true });
+  return selectionChanged;
+}
+
 const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const tableVerticalLine = chalk.dim("│");
 const tableBranch = chalk.dim("├");
@@ -569,23 +853,29 @@ function modelToString(model: ArtifactDownloadPlanModelInfo) {
   if (model.quantName !== undefined) {
     result += ` ${model.quantName}`;
   }
-  if (model.compatibilityType === "gguf") {
-    result += " [GGUF]";
-  } else if (model.compatibilityType === "safetensors") {
-    result += " [MLX]";
+  const compatibilityTypeSuffix = formatCompatibilityTypeSuffix(model.compatibilityType);
+  if (compatibilityTypeSuffix !== "") {
+    result += ` ${compatibilityTypeSuffix}`;
   }
   return result;
 }
 
 const toDownloadText = chalk.yellow("↓ To download:");
 
-async function artifactDownloadPlanToString(
+interface ArtifactPlanScreenOpts {
+  clearScreen?: boolean;
+  highlightedNodeIndex?: number;
+  footerLines?: Array<string>;
+}
+
+function artifactDownloadPlanToString(
   plan: ArtifactDownloadPlan,
   lines: Array<string>,
   spinnerFrame: number,
   currentNodeIndex = 0,
   selfPrefix = "",
   subSequentPrefix = "",
+  highlightedNodeIndex?: number,
 ) {
   const node = plan.nodes[currentNodeIndex];
   if (node === undefined) {
@@ -624,6 +914,9 @@ async function artifactDownloadPlanToString(
           throw new Error(`Unexpected node state: ${exhaustiveCheck}`);
         }
       }
+      if (highlightedNodeIndex === currentNodeIndex) {
+        message += " " + chalk.yellowBright("[Editing]");
+      }
       lines.push(selfPrefix + message);
       for (let i = 0; i < node.dependencyNodes.length; i++) {
         const isLast = i === node.dependencyNodes.length - 1;
@@ -636,6 +929,7 @@ async function artifactDownloadPlanToString(
             ? subSequentPrefix + " " + tableLastBranch + tableHorizontalLine + " "
             : subSequentPrefix + " " + tableBranch + tableHorizontalLine + " ",
           isLast ? subSequentPrefix + "   " : subSequentPrefix + " " + tableVerticalLine + " ",
+          highlightedNodeIndex,
         );
       }
       break;
@@ -678,6 +972,9 @@ async function artifactDownloadPlanToString(
           throw new Error(`Unexpected node state: ${exhaustiveCheck}`);
         }
       }
+      if (highlightedNodeIndex === currentNodeIndex) {
+        message = chalk.yellowBright("▶ ") + message + " " + chalk.yellowBright("[Editing]");
+      }
       lines.push(selfPrefix + message);
       break;
     }
@@ -686,6 +983,77 @@ async function artifactDownloadPlanToString(
       throw new Error(`Unexpected node type: ${exhaustiveCheck}`);
     }
   }
+}
+
+function buildArtifactDownloadPlanLines(
+  plan: ArtifactDownloadPlan,
+  isFinished: boolean,
+  highlightedNodeIndex?: number,
+  yes = false,
+  footerLines: Array<string> = [],
+) {
+  const lines: Array<string> = [];
+  const spinnerFrame = Math.floor(Date.now() / 100) % spinnerFrames.length;
+  artifactDownloadPlanToString(plan, lines, spinnerFrame, 0, "   ", "  ", highlightedNodeIndex);
+  lines.push("");
+
+  if (isFinished) {
+    if (plan.downloadSizeBytes !== 0) {
+      if (yes) {
+        lines.push(
+          chalk.yellow(
+            `Resolution completed. Downloading ${formatSizeBytes1000(plan.downloadSizeBytes)}...`,
+          ),
+        );
+      } else {
+        lines.push(
+          chalk.yellow(`About to download ${formatSizeBytes1000(plan.downloadSizeBytes)}.`),
+        );
+      }
+    }
+  } else if (plan.downloadSizeBytes > 0) {
+    lines.push(
+      chalk.dim(
+        spinnerFrames[spinnerFrame] +
+          ` Resolving download plan... (${formatSizeBytes1000(plan.downloadSizeBytes)})`,
+      ),
+    );
+  } else {
+    lines.push(
+      chalk.dim(
+        spinnerFrames[(spinnerFrame + 5) % spinnerFrames.length] + " Resolving download plan...",
+      ),
+    );
+  }
+
+  if (footerLines.length > 0) {
+    lines.push("");
+    lines.push(...footerLines);
+  }
+
+  return lines;
+}
+
+function printArtifactDownloadPlanScreen(
+  plan: ArtifactDownloadPlan,
+  { clearScreen = true, highlightedNodeIndex, footerLines = [] }: ArtifactPlanScreenOpts = {},
+) {
+  if (clearScreen) {
+    console.clear();
+    process.stdout.write("\n");
+  }
+  const lines = buildArtifactDownloadPlanLines(
+    plan,
+    true,
+    highlightedNodeIndex,
+    false,
+    footerLines,
+  );
+  for (const line of lines) {
+    process.stdout.write(line + "\n");
+  }
+  process.stdout.write("\n");
+  return lines.length + 1;
 }
 
 export async function downloadArtifact(
@@ -708,51 +1076,14 @@ export async function downloadArtifact(
     downloadSizeBytes: 0,
   };
   let linesToClear: number = 0;
+  let shouldRenderPlanUpdates = true;
   const reprintDownloadPlan = (isFinished: boolean) => {
     // Check if we can move the cursor up (Not available in non TTY environments)
     if (process.stdout.moveCursor !== undefined) {
       // Move cursor up by lastLines
       process.stdout.moveCursor(0, -linesToClear);
     }
-    const lines: Array<string> = [];
-    const spinnerFrame = Math.floor(Date.now() / 100) % spinnerFrames.length;
-    artifactDownloadPlanToString(downloadPlan, lines, spinnerFrame, 0, "   ", "  ");
-    lines.push("");
-
-    if (isFinished) {
-      if (downloadPlan.downloadSizeBytes !== 0) {
-        if (yes) {
-          lines.push(
-            chalk.yellow(
-              `Resolution completed. Downloading ${formatSizeBytes1000(downloadPlan.downloadSizeBytes)}...`,
-            ),
-          );
-        } else {
-          lines.push(
-            chalk.yellow(
-              `About to download ${formatSizeBytes1000(downloadPlan.downloadSizeBytes)}.`,
-            ),
-          );
-        }
-      }
-    } else {
-      if (downloadPlan.downloadSizeBytes > 0) {
-        lines.push(
-          chalk.dim(
-            spinnerFrames[spinnerFrame] +
-              ` Resolving download plan... (${formatSizeBytes1000(downloadPlan.downloadSizeBytes)})`,
-          ),
-        );
-      } else {
-        lines.push(
-          chalk.dim(
-            spinnerFrames[(spinnerFrame + 5) % spinnerFrames.length] +
-              " Resolving download plan...",
-          ),
-        );
-      }
-    }
-
+    const lines = buildArtifactDownloadPlanLines(downloadPlan, isFinished, undefined, yes);
     linesToClear = Math.max(lines.length, linesToClear);
     for (const line of lines) {
       process.stdout.write("\r" + line + "\x1b[0K\n");
@@ -765,7 +1096,9 @@ export async function downloadArtifact(
     name,
     onPlanUpdated: newPlan => {
       downloadPlan = newPlan;
-      reprintDownloadPlan(false);
+      if (shouldRenderPlanUpdates) {
+        reprintDownloadPlan(false);
+      }
     },
   });
   try {
@@ -774,6 +1107,8 @@ export async function downloadArtifact(
       reprintDownloadPlan(false);
     }, 50);
     await downloadPlanner.untilReady();
+    downloadPlan = downloadPlanner.getPlan();
+    shouldRenderPlanUpdates = false;
     reprintDownloadPlan(true);
   } finally {
     process.stdout.write("\x1B[?25h");
@@ -782,14 +1117,41 @@ export async function downloadArtifact(
     }
   }
 
-  if (downloadPlan.downloadSizeBytes === 0) {
+  if (yes && downloadPlan.downloadSizeBytes === 0) {
     process.exit(0);
   }
   if (!yes) {
-    const confirmed = await askQuestion("Continue?");
-    if (!confirmed) {
-      process.exit(1);
+    while (true) {
+      downloadPlan = downloadPlanner.getPlan();
+      const editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlan);
+      if (downloadPlan.downloadSizeBytes === 0 && editableNodeIndexes.length === 0) {
+        process.exit(0);
+      }
+
+      const continueChoices =
+        editableNodeIndexes.length === 0 ? (["Y", "N"] as const) : (["Y", "N", "E"] as const);
+      const confirmationChoice = await askQuestionWithChoices<ArtifactConfirmationChoice>(
+        "Continue?",
+        continueChoices as readonly [
+          ArtifactConfirmationChoice,
+          ...Array<ArtifactConfirmationChoice>,
+        ],
+        { choiceLabel: "Y/N, or E to select quantization" },
+      );
+      if (confirmationChoice === null || confirmationChoice === "N") {
+        process.exit(1);
+      }
+      if (confirmationChoice === "Y") {
+        break;
+      }
+
+      await openArtifactDownloadSelectionEditor(downloadPlanner);
     }
+  }
+
+  downloadPlan = downloadPlanner.getPlan();
+  if (downloadPlan.downloadSizeBytes === 0) {
+    process.exit(0);
   }
 
   // Duplicated logic for downloading artifact. Will be cleaned up when we move to artifact download

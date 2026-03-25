@@ -5,9 +5,14 @@ const interrupted = Symbol("interrupted");
 
 interface AskQuestionOpts {
   rl?: Interface;
+  choiceLabel?: string;
 }
 
-export async function askQuestion(prompt: string, opts: AskQuestionOpts = {}): Promise<boolean> {
+export async function askQuestionWithChoices<TChoice extends string>(
+  prompt: string,
+  choices: readonly [TChoice, ...Array<TChoice>],
+  opts: AskQuestionOpts = {},
+): Promise<TChoice | null> {
   using cleaner = new Cleaner();
   let rl = opts.rl;
   if (rl === undefined) {
@@ -26,20 +31,36 @@ export async function askQuestion(prompt: string, opts: AskQuestionOpts = {}): P
   cleaner.register(() => {
     rl.removeListener("SIGINT", sigintListener);
   });
-  let answer: boolean | undefined;
+
+  const normalizedChoiceMap = new Map<string, TChoice>();
+  for (const choice of choices) {
+    normalizedChoiceMap.set(choice.toUpperCase(), choice);
+  }
+
+  const choiceLabel = opts.choiceLabel ?? choices.join("/");
+  let answer: TChoice | undefined;
   do {
-    const userResult = await Promise.race([rl.question(prompt + " (Y/N): "), sigintPromise]);
+    const userResult = await Promise.race([
+      rl.question(prompt + ` (${choiceLabel}): `),
+      sigintPromise,
+    ]);
     if (userResult === interrupted) {
       console.info();
-      return false;
+      return null;
     }
-    if (userResult.toUpperCase() === "Y") {
-      answer = true;
-    } else if (userResult.toUpperCase() === "N") {
-      answer = false;
+
+    const normalizedUserResult = userResult.trim().toUpperCase();
+    const matchedChoice = normalizedChoiceMap.get(normalizedUserResult);
+    if (matchedChoice !== undefined) {
+      answer = matchedChoice;
     } else {
-      process.stderr.write("Invalid selection. Please enter Y or N.\n");
+      process.stderr.write(`Invalid selection. Please enter ${choiceLabel}.\n`);
     }
   } while (answer === undefined);
   return answer;
+}
+
+export async function askQuestion(prompt: string, opts: AskQuestionOpts = {}): Promise<boolean> {
+  const answer = await askQuestionWithChoices(prompt, ["Y", "N"], opts);
+  return answer === "Y";
 }
