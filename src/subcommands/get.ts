@@ -682,43 +682,27 @@ interface ArtifactDownloadOptionChoiceData {
   quantText: string;
   sizeText: string;
   nameText: string;
-  fitText: string;
-  availabilityText: string;
-  availabilityType: "alreadyOwned" | "downloaded" | "downloading" | "none";
-  fitEstimation?: ModelSearchResultDownloadOptionFitEstimation;
-  recommendedText: string;
+  tags: Array<string>;
 }
 
-function colorArtifactDownloadOptionFitText(
-  fitEstimation: ModelSearchResultDownloadOptionFitEstimation | undefined,
-  text: string,
+function createArtifactDownloadOptionTag(
+  type: "recommended" | "downloaded" | "downloading" | ModelSearchResultDownloadOptionFitEstimation,
 ) {
-  switch (fitEstimation) {
+  switch (type) {
     case "willNotFit":
-      return chalk.red(text);
+      return chalk.white.bgRed(" Won't Fit ");
     case "fitWithoutGPU":
-      return chalk.green(text);
+      return chalk.black.bgGreen(" CPU Fit ");
     case "partialGPUOffload":
-      return chalk.yellow(text);
+      return chalk.black.bgYellow(" Partial GPU ");
     case "fullGPUOffload":
-      return chalk.green(text);
-    default:
-      return text;
-  }
-}
-
-function colorArtifactDownloadOptionAvailabilityText(
-  availabilityType: ArtifactDownloadOptionChoiceData["availabilityType"],
-  text: string,
-) {
-  switch (availabilityType) {
-    case "alreadyOwned":
+      return chalk.black.bgGreen(" Full GPU ");
+    case "recommended":
+      return chalk.black.bgYellow(" ★ Recommended ");
     case "downloaded":
-      return chalk.green(text);
+      return chalk.black.bgGreen(" ✓ Downloaded ");
     case "downloading":
-      return chalk.yellow(text);
-    case "none":
-      return text;
+      return chalk.black.bgBlueBright(" ⌛ Downloading ");
   }
 }
 
@@ -731,34 +715,26 @@ function createArtifactDownloadOptionChoiceData(modelNode: ArtifactDownloadPlanM
       quantText: modelNode.alreadyOwned!.quantName ?? "",
       sizeText: formatSizeBytes1000(modelNode.alreadyOwned!.sizeBytes),
       nameText: formatModelDisplayNameWithCompatibility(modelNode.alreadyOwned!),
-      fitText: "",
-      availabilityText: "[Already downloaded]",
-      availabilityType: "alreadyOwned",
-      recommendedText: "",
+      tags: [createArtifactDownloadOptionTag("downloaded")],
     });
   }
   for (const [downloadOptionIndex, downloadOption] of (modelNode.downloadOptions ?? []).entries()) {
+    const tags: Array<string> = [createArtifactDownloadOptionTag(downloadOption.fitEstimation)];
+    if (downloadOption.recommended === true) {
+      tags.push(createArtifactDownloadOptionTag("recommended"));
+    }
+    if (downloadOption.availability === "downloaded") {
+      tags.push(createArtifactDownloadOptionTag("downloaded"));
+    } else if (downloadOption.availability === "downloading") {
+      tags.push(createArtifactDownloadOptionTag("downloading"));
+    }
     choiceData.push({
       value: makeArtifactModelSelectionValue(downloadOptionIndex),
       short: modelToString(downloadOption),
       quantText: downloadOption.quantName ?? "",
       sizeText: formatSizeBytes1000(downloadOption.sizeBytes),
       nameText: formatModelDisplayNameWithCompatibility(downloadOption),
-      fitText: getFitEstimationLabelText(downloadOption.fitEstimation),
-      availabilityText:
-        downloadOption.availability === "downloaded"
-          ? "[Already downloaded]"
-          : downloadOption.availability === "downloading"
-            ? "[Download in progress]"
-            : "",
-      availabilityType:
-        downloadOption.availability === "downloaded"
-          ? "downloaded"
-          : downloadOption.availability === "downloading"
-            ? "downloading"
-            : "none",
-      fitEstimation: downloadOption.fitEstimation,
-      recommendedText: downloadOption.recommended === true ? "Recommended" : "",
+      tags,
     });
   }
   return choiceData;
@@ -774,15 +750,6 @@ async function askToChooseArtifactDownloadSelection(
   const quantColumnWidth = Math.max(0, ...choiceData.map(choice => choice.quantText.length));
   const sizeColumnWidth = Math.max(0, ...choiceData.map(choice => choice.sizeText.length));
   const nameColumnWidth = Math.max(0, ...choiceData.map(choice => choice.nameText.length));
-  const fitColumnWidth = Math.max(0, ...choiceData.map(choice => choice.fitText.length));
-  const availabilityColumnWidth = Math.max(
-    0,
-    ...choiceData.map(choice => choice.availabilityText.length),
-  );
-  const recommendedColumnWidth = Math.max(
-    0,
-    ...choiceData.map(choice => choice.recommendedText.length),
-  );
   const choices = choiceData.map(choice => {
     let name = "";
     if (quantColumnWidth > 0) {
@@ -790,31 +757,8 @@ async function askToChooseArtifactDownloadSelection(
     }
     name += `${choice.sizeText.padStart(sizeColumnWidth)}  `;
     name += chalk.dim(choice.nameText.padEnd(nameColumnWidth));
-    if (fitColumnWidth > 0) {
-      const paddedFitText = choice.fitText.padEnd(fitColumnWidth);
-      if (choice.fitText === "") {
-        name += `  ${"".padEnd(fitColumnWidth)}`;
-      } else {
-        name += `  ${colorArtifactDownloadOptionFitText(choice.fitEstimation, paddedFitText)}`;
-      }
-    }
-    if (availabilityColumnWidth > 0) {
-      const paddedAvailabilityText = choice.availabilityText.padEnd(availabilityColumnWidth);
-      if (choice.availabilityText === "") {
-        name += `  ${"".padEnd(availabilityColumnWidth)}`;
-      } else {
-        name += `  ${colorArtifactDownloadOptionAvailabilityText(
-          choice.availabilityType,
-          paddedAvailabilityText,
-        )}`;
-      }
-    }
-    if (recommendedColumnWidth > 0) {
-      if (choice.recommendedText === "") {
-        name += `  ${"".padEnd(recommendedColumnWidth)}`;
-      } else {
-        name += `  ${chalk.green(choice.recommendedText.padEnd(recommendedColumnWidth))}`;
-      }
+    if (choice.tags.length > 0) {
+      name += `  ${choice.tags.join(" ")}`;
     }
     return {
       name,
