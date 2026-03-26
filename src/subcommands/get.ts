@@ -6,30 +6,28 @@ import {
   type ArtifactDownloadPlan,
   type ArtifactDownloadPlanModelInfo,
   type ArtifactDownloadPlanNode,
-  type HubModel,
   kebabCaseRegex,
   kebabCaseWithDotsRegex,
   type ModelCompatibilityType,
+  type ModelDownloadSource,
   type ModelSearchResultDownloadOptionFitEstimation,
 } from "@lmstudio/lms-shared-types";
 import {
   type ArtifactDownloadPlanner,
+  type FuzzyFindStaffPickResult,
   type LMStudioClient,
-  type ModelSearchResultDownloadOption,
-  type ModelSearchResultEntry,
+  type RepositoryDownloadPlannerResolutionPreference,
 } from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
-import { askQuestion, askQuestionWithChoices } from "../confirm.js";
+import { askQuestionWithChoices } from "../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
-import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
 import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatBytes.js";
 import { handleDownloadWithProgressBar } from "../handleDownloadWithProgressBar.js";
+import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
-import { ProgressBar } from "../ProgressBar.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
-import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 
 type GetCommandOptions = OptionValues &
   CreateClientArgs &
@@ -37,26 +35,36 @@ type GetCommandOptions = OptionValues &
     mlx?: boolean;
     gguf?: boolean;
     limit?: number;
-    alwaysShowAllResults?: boolean;
-    alwaysShowDownloadOptions?: boolean;
     yes?: boolean;
   };
-
-type SearchResultItem =
-  | {
-      kind: "staffPick";
-      model: HubModel;
-      isExactMatch: boolean;
-      displayName: string;
-    }
-  | {
-      kind: "hf";
-      model: ModelSearchResultEntry;
-    };
 
 type ArtifactDownloadPlanModelNode = Extract<ArtifactDownloadPlanNode, { type: "model" }>;
 type ArtifactModelSelectionValue = "alreadyOwned" | `download:${number}`;
 type ArtifactConfirmationChoice = "Y" | "N" | "E";
+
+type GetCommandTarget =
+  | {
+      type: "artifact";
+      owner: string;
+      name: string;
+    }
+  | {
+      type: "model";
+      source: ModelDownloadSource;
+      displayName: string;
+      fileNamePreference?: string;
+    }
+  | {
+      type: "staffPickSearch";
+      searchTerm?: string;
+    };
+
+interface DownloadPlannerCliOpts {
+  yes: boolean;
+  resolutionPreference?: Array<RepositoryDownloadPlannerResolutionPreference>;
+  compatibilityTypes?: Array<ModelCompatibilityType>;
+  requestedQuantName?: string;
+}
 
 const getCommand = new Command<[], GetCommandOptions>()
   .name("get")
@@ -64,26 +72,27 @@ const getCommand = new Command<[], GetCommandOptions>()
   .argument(
     "[modelName]",
     text`
-      The model to download. If not provided, staff picked models will be shown. For models that
-      have multiple quantizations, you can specify the quantization by appending it with "@". For
-      example, use "llama-3.1-8b@q4_k_m" to download the llama-3.1-8b model with the specified
-      quantization.
+      The model to download. If the input is "owner/name", it is treated as an LM Studio Hub
+      artifact. If the input is a "https://huggingface.co/owner/repo" URL, it is treated as a
+      direct Hugging Face model download. Otherwise, LM Studio searches staff picks only. For
+      models that have multiple quantizations, you can specify the quantization by appending it
+      with "@". For example, use "llama-3.1-8b@q4_k_m".
     `,
   )
   .option(
     "--mlx",
     text`
-      Whether to include MLX models in the search results. If any of "--mlx" or "--gguf" flag is
-      specified, only models that match the specified flags will be shown; Otherwise only models
-      supported by your installed LM Runtimes will be shown.
+      Restrict concrete model resolution to MLX-compatible options. If any of "--mlx" or "--gguf"
+      is specified, only matching formats will be considered. Otherwise only options supported by
+      your installed LM Runtimes will be considered.
     `,
   )
   .option(
     "--gguf",
     text`
-      Whether to include GGUF models in the search results. If any of "--mlx" or "--gguf" flag
-      is specified, only models that match the specified flags will be shown; Otherwise only
-      models supported by your installed LM Runtimes will be shown.
+      Restrict concrete model resolution to GGUF-compatible options. If any of "--mlx" or
+      "--gguf" is specified, only matching formats will be considered. Otherwise only options
+      supported by your installed LM Runtimes will be considered.
     `,
   )
   .addOption(
@@ -92,381 +101,273 @@ const getCommand = new Command<[], GetCommandOptions>()
     ),
   )
   .option(
-    "--always-show-all-results",
-    text`
-      By default, an exact model match to the query is automatically selected. If this flag is
-      specified, you're prompted to choose from the model results, even when there's an exact
-      match.
-    `,
-  )
-  .option(
-    "-a, --always-show-download-options",
-    text`
-      By default, if there an exact match for your query, the system will automatically select a
-      quantization based on your hardware. Specifying this flag will always prompt you to choose
-      a download option.
-    `,
-  )
-  .option(
     "-y, --yes",
     text`
       Automatically approve all prompts. Useful for scripting. If there are multiple
-      models matching the search term, the first one will be used. If there are multiple download
-      options, the recommended one based on your hardware will be chosen. Fails if you have
-      specified a quantization via the "@" syntax and the quantization does not exist in the
-      options.
+      staff picks matching the search term, the first one will be used. If there are multiple
+      download options, the recommended one based on your hardware will be chosen unless a file or
+      quantization preference selects something else.
     `,
   );
 
 addCreateClientOptions(getCommand);
 addLogLevelOptions(getCommand);
 
+function getRequestedCompatibilityTypes({
+  mlx,
+  gguf,
+}: {
+  mlx: boolean;
+  gguf: boolean;
+}): Array<ModelCompatibilityType> | undefined {
+  if (!mlx && !gguf) {
+    return undefined;
+  }
+  const compatibilityTypes: Array<ModelCompatibilityType> = [];
+  if (mlx) {
+    compatibilityTypes.push("safetensors");
+  }
+  if (gguf) {
+    compatibilityTypes.push("gguf");
+  }
+  return compatibilityTypes;
+}
+
+function splitModelNameAndQuantization(modelName: string | undefined) {
+  let normalizedModelName = modelName?.trim();
+  let specifiedQuantName: string | undefined;
+  if (normalizedModelName === undefined || normalizedModelName === "") {
+    return {
+      modelNameWithoutQuantization: normalizedModelName,
+      specifiedQuantName,
+    };
+  }
+
+  const splitByAt = normalizedModelName.split("@");
+  if (splitByAt.length >= 3) {
+    throw new Error("You cannot have more than 2 @'s in the model name argument.");
+  }
+  normalizedModelName = splitByAt[0]?.trim();
+  if (splitByAt.length === 2) {
+    specifiedQuantName = splitByAt[1]?.trim();
+  }
+  return {
+    modelNameWithoutQuantization: normalizedModelName,
+    specifiedQuantName,
+  };
+}
+
+function tryParseHuggingFaceUrl(modelName: string): GetCommandTarget | null {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(modelName);
+  } catch {
+    return null;
+  }
+
+  if (parsedUrl.hostname !== "huggingface.co") {
+    return null;
+  }
+  if (parsedUrl.protocol !== "https:") {
+    throw new Error("Only https://huggingface.co URLs are supported.");
+  }
+
+  const pathSegments = parsedUrl.pathname.split("/").filter(segment => segment !== "");
+  const [user, repo] = pathSegments;
+  if (user === undefined || repo === undefined) {
+    throw new Error(
+      "Invalid Hugging Face model URL. Expected https://huggingface.co/owner/repo[/*].",
+    );
+  }
+
+  const trailingSegments = pathSegments.slice(2);
+  const lastTrailingSegment = trailingSegments[trailingSegments.length - 1];
+  const fileNamePreference =
+    trailingSegments.length === 0 || lastTrailingSegment === undefined
+      ? undefined
+      : lastTrailingSegment;
+  return {
+    type: "model",
+    source: {
+      type: "huggingface",
+      user,
+      repo,
+    },
+    displayName: `${user}/${repo}`,
+    fileNamePreference,
+  };
+}
+
+function getCommandTarget(modelName: string | undefined): GetCommandTarget {
+  if (modelName === undefined || modelName === "") {
+    return {
+      type: "staffPickSearch",
+    };
+  }
+
+  const huggingFaceUrlTarget = tryParseHuggingFaceUrl(modelName);
+  if (huggingFaceUrlTarget !== null) {
+    return huggingFaceUrlTarget;
+  }
+
+  const pathSegments = modelName.split("/");
+  if (pathSegments.length === 2) {
+    const [owner, name] = modelName.toLowerCase().split("/");
+    return {
+      type: "artifact",
+      owner,
+      name,
+    };
+  }
+
+  return {
+    type: "staffPickSearch",
+    searchTerm: modelName,
+  };
+}
+
+function makeResolutionPreferences({
+  fileNamePreference,
+  quantNamePreference,
+}: {
+  fileNamePreference?: string;
+  quantNamePreference?: string;
+}): Array<RepositoryDownloadPlannerResolutionPreference> | undefined {
+  const resolutionPreference: Array<RepositoryDownloadPlannerResolutionPreference> = [];
+  if (fileNamePreference !== undefined && fileNamePreference !== "") {
+    resolutionPreference.push({
+      type: "fileName",
+      fileName: fileNamePreference,
+    });
+  }
+  if (quantNamePreference !== undefined && quantNamePreference !== "") {
+    resolutionPreference.push({
+      type: "quantName",
+      quantName: quantNamePreference,
+    });
+  }
+  return resolutionPreference.length === 0 ? undefined : resolutionPreference;
+}
+
 getCommand.action(async (modelName, options: GetCommandOptions) => {
-  const {
-    mlx = false,
-    gguf = false,
-    limit,
-    alwaysShowAllResults = false,
-    alwaysShowDownloadOptions = false,
-    yes = false,
-  } = options;
+  const { mlx = false, gguf = false, limit, yes = false } = options;
   const logger = createLogger(options);
-  if (yes === true && alwaysShowAllResults === true) {
-    logger.error("You cannot use the --yes flag with the --always-show-all-results flag.");
+  let modelNameWithoutQuantization: string | undefined;
+  let specifiedQuantName: string | undefined;
+  try {
+    const parsedModelName = splitModelNameAndQuantization(modelName);
+    modelNameWithoutQuantization = parsedModelName.modelNameWithoutQuantization;
+    specifiedQuantName = parsedModelName.specifiedQuantName;
+  } catch (error) {
+    logger.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
-  if (yes === true && alwaysShowDownloadOptions === true) {
-    logger.error("You cannot use the --yes flag with the --always-show-download-options flag.");
+  const compatibilityTypes = getRequestedCompatibilityTypes({ mlx, gguf });
+  let target: GetCommandTarget;
+  try {
+    target = getCommandTarget(modelNameWithoutQuantization);
+  } catch (error) {
+    logger.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
+
+  const requestedQuantName =
+    specifiedQuantName === undefined || specifiedQuantName === "" ? undefined : specifiedQuantName;
   await using client = await createClient(logger, options);
 
-  if (modelName !== undefined && modelName.split("/").length === 2) {
-    // New lms get behavior: download artifact
-    if (mlx) {
-      logger.error("You cannot use the --mlx flag when an exact artifact is specified.");
-      process.exit(1);
-    }
-    if (gguf) {
-      logger.error("You cannot use the --gguf flag when an exact artifact is specified.");
-      process.exit(1);
-    }
-    if (limit !== undefined) {
-      logger.error("You cannot use the --limit flag when an exact artifact is specified.");
-      process.exit(1);
-    }
-    if (alwaysShowAllResults) {
-      logger.error(
-        "You cannot use the --always-show-all-results flag when a exact artifact is specified.",
-      );
-      process.exit(1);
-    }
-    if (alwaysShowDownloadOptions) {
-      logger.errorText`
-        You cannot use the --always-show-download-options flag when a exact artifact is specified.
-      `;
-      process.exit(1);
-    }
-    const [owner, name] = modelName.toLowerCase().split("/");
-    if (!kebabCaseRegex.test(owner)) {
-      logger.error("Invalid artifact owner:", owner);
-      process.exit(1);
-    }
-    if (!kebabCaseWithDotsRegex.test(name)) {
-      logger.error("Invalid artifact name:", name);
-      process.exit(1);
-    }
-    await downloadArtifact(client, logger, owner, name, yes);
-    return;
-  }
-
-  // Legacy lms get behavior
-
-  let compatibilityTypes: Array<ModelCompatibilityType> | undefined = undefined;
-  if (mlx || gguf) {
-    compatibilityTypes = [];
-    if (mlx) {
-      compatibilityTypes.push("safetensors");
-    }
-    if (gguf) {
-      compatibilityTypes.push("gguf");
-    }
-  }
-  let searchTerm: string | undefined;
-  let specifiedQuantName: string | undefined;
-  if (modelName !== undefined) {
-    const splitByAt = modelName.split("@");
-    if (splitByAt.length >= 3) {
-      logger.error("You cannot have more than 2 @'s in the model name argument.");
-      process.exit(1);
-    }
-    searchTerm = splitByAt[0];
-    if (splitByAt.length === 2) {
-      specifiedQuantName = splitByAt[1];
-    }
-  }
-
-  if (specifiedQuantName !== undefined && alwaysShowDownloadOptions) {
-    logger.errorText`
-      You cannot specify a quantization and use the "--always-show-download-options" flag at the
-      same time.
-    `;
-    process.exit(1);
-  }
-
-  if (searchTerm !== undefined) {
-    logger.info("Searching for models with the term", chalk.yellow(searchTerm));
-  }
-
-  const opts = {
-    searchTerm,
-    compatibilityTypes,
-    limit,
-  };
-  logger.debug("Searching for models with options", opts);
-  const hfResults = await client.repository.searchModels(opts);
-  logger.debug(`Found ${hfResults.length} HF result(s)`);
-
-  const normalizedSearchTerm = searchTerm?.toLowerCase().trim() ?? "";
-
-  let staffPickResults: Array<SearchResultItem> = [];
-  try {
-    const modelCatalogModels = await client.repository.unstable.getModelCatalog();
-    staffPickResults = modelCatalogModels
-      .filter(model => {
-        if (compatibilityTypes === undefined) {
-          return true;
-        }
-        return model.metadata.compatibilityTypes.some(type => compatibilityTypes!.includes(type));
-      })
-      .filter(model => {
-        if (normalizedSearchTerm === "") {
-          return true;
-        }
-        const fullName = `${model.owner}/${model.name}`.toLowerCase();
-        return (
-          fullName.includes(normalizedSearchTerm) ||
-          model.name.toLowerCase().includes(normalizedSearchTerm)
-        );
-      })
-      .map(model => ({
-        kind: "staffPick" as const,
-        model,
-        isExactMatch:
-          normalizedSearchTerm !== "" &&
-          (model.name.toLowerCase() === normalizedSearchTerm ||
-            `${model.owner}/${model.name}`.toLowerCase() === normalizedSearchTerm),
-        displayName: `${model.owner}/${model.name}`,
-      }));
-    logger.debug(`Found ${staffPickResults.length} staff pick result(s)`);
-  } catch (error) {
-    logger.warn("Failed to load staff picks, continuing with HF search only.", error);
-  }
-
-  const combinedResults: Array<SearchResultItem> = [
-    ...staffPickResults,
-    ...hfResults.map(result => ({ kind: "hf" as const, model: result })),
-  ];
-
-  if (combinedResults.length === 0) {
-    logger.error("No models found with the specified search criteria.");
-    process.exit(1);
-  }
-
-  const exactMatchIndex = combinedResults.findIndex(result => {
-    return result.kind === "hf" ? result.model.isExactMatch() : result.isExactMatch;
-  });
-  const hasExactMatch = exactMatchIndex !== -1;
-  let result: SearchResultItem;
-  if (hasExactMatch && !alwaysShowAllResults) {
-    logger.debug("Automatically selecting an exact match model at index", exactMatchIndex);
-    result = combinedResults[exactMatchIndex];
-  } else {
-    if (yes) {
-      logger.info("Multiple models found. Automatically selecting the first one due to --yes.");
-      result = combinedResults[0];
-    } else {
-      logger.debug("Prompting user to choose a model");
-      if (!hasExactMatch && searchTerm !== undefined) {
-        logger.info("No exact match found. Please choose a model from the list below.");
-      }
-      logger.infoWithoutPrefix();
-      result = await askToChooseModel(combinedResults, 2);
-    }
-  }
-  if (result.kind === "staffPick") {
-    const { owner, name } = result.model;
-    await downloadArtifact(client, logger, owner, name, yes);
-    return;
-  }
-
-  const downloadOptions = await result.model.getDownloadOptions();
-  if (downloadOptions.length === 0) {
-    logger.error("No compatible download options available for this model.");
-    process.exit(1);
-  }
-
-  const recommendedOptionIndex = downloadOptions.findIndex(option => option.isRecommended());
-  let option: ModelSearchResultDownloadOption;
-  let shouldShowOptions = true;
-  let additionalRowsToReserve = 0;
-  let currentChoiceIndex: number = 0;
-  /**
-   * If set to true, meaning we absolutely cannot make a decision if the user does not intervene.
-   * This is triggered by specifying a quantization that does not exist in the options.
-   */
-  let noDeterminantOption = false;
-
-  if (specifiedQuantName !== undefined) {
-    const specifiedQuantLower = specifiedQuantName.toLowerCase();
-    const specifiedQuantOptionIndex = downloadOptions.findIndex(
-      option => (option.quantization ?? "").toLowerCase() === specifiedQuantLower,
-    );
-    if (specifiedQuantOptionIndex === -1) {
-      if (!yes) {
-        logger.warnWithoutPrefix();
-        logger.warnText`
-          Cannot find a download option with quantization "${specifiedQuantName}". Please choose
-          one from the following options.
-        `;
-        logger.warnWithoutPrefix();
-      }
-      additionalRowsToReserve += 2;
-      noDeterminantOption = true;
-      shouldShowOptions = true;
-    } else {
-      currentChoiceIndex = specifiedQuantOptionIndex;
-      shouldShowOptions = false;
-    }
-  } else {
-    if (recommendedOptionIndex !== -1) {
-      currentChoiceIndex = recommendedOptionIndex;
-    }
-    if (hasExactMatch && !alwaysShowDownloadOptions) {
-      logger.info(
-        "Based on your hardware, choosing the recommended option:",
-        formatOptionShortName(downloadOptions[currentChoiceIndex]),
-      );
-      shouldShowOptions = false;
-    } else {
-      shouldShowOptions = true;
-    }
-  }
-
-  if (alwaysShowDownloadOptions) {
-    shouldShowOptions = true;
-  }
-
-  if (yes) {
-    if (noDeterminantOption) {
-      logger.error(
-        "You have specified a quantization that does not exist. Here are the available options:",
-      );
-      for (const option of downloadOptions) {
-        logger.error(`- ${formatOptionShortName(option)}`);
-      }
-      logger.error("Exiting because of the --yes flag.");
-      process.exit(1);
-    }
-    shouldShowOptions = false;
-  }
-
-  if (shouldShowOptions) {
-    logger.debug("Prompting user to choose a download option");
-    option = await askToChooseDownloadOption(
-      downloadOptions,
-      currentChoiceIndex,
-      additionalRowsToReserve,
-    );
-  } else {
-    logger.debug(`Automatically selecting option at ${currentChoiceIndex}`);
-    option = downloadOptions[currentChoiceIndex];
-  }
-
-  logger.info("Downloading", formatOptionShortName(option));
-
-  let isAskingExitingBehavior = false;
-  let canceled = false;
-  const pb = new ProgressBar(0, "", 22);
-  const updatePb = createDownloadPbUpdater(pb);
-  const abortController = new AbortController();
-  const sigintListener = () => {
-    process.removeListener("SIGINT", sigintListener);
-    process.once("SIGINT", () => {
-      process.exit(1);
-    });
-    pb.stopWithoutClear();
-    isAskingExitingBehavior = true;
-    logger.infoWithoutPrefix();
-    process.stdin.resume();
-    askQuestion("Continue to download in the background?").then(confirmed => {
-      if (confirmed) {
-        logger.info("Download will continue in the background.");
+  switch (target.type) {
+    case "artifact": {
+      if (limit !== undefined) {
+        logger.error("You cannot use the --limit flag when an exact artifact is specified.");
         process.exit(1);
-      } else {
-        logger.warn("Download canceled.");
-        abortController.abort();
-        canceled = true;
       }
-    });
-  };
-  process.addListener("SIGINT", sigintListener);
-  try {
-    let alreadyExisted = true;
-    const defaultIdentifier = await option.download({
-      onProgress: update => {
-        alreadyExisted = false;
-        if (isAskingExitingBehavior) {
-          return;
-        }
-        updatePb(update);
-      },
-      onStartFinalizing: () => {
-        alreadyExisted = false;
-        if (isAskingExitingBehavior) {
-          return;
-        }
-        pb.stop();
-        logger.info("Finalizing download...");
-      },
-      signal: abortController.signal,
-    });
-    pb.stopIfNotStopped();
-    if (canceled) {
-      process.exit(1);
+      if (!kebabCaseRegex.test(target.owner)) {
+        logger.error("Invalid artifact owner:", target.owner);
+        process.exit(1);
+      }
+      if (!kebabCaseWithDotsRegex.test(target.name)) {
+        logger.error("Invalid artifact name:", target.name);
+        process.exit(1);
+      }
+      await downloadArtifact(client, logger, target.owner, target.name, {
+        yes,
+        compatibilityTypes,
+        requestedQuantName,
+        resolutionPreference: makeResolutionPreferences({
+          quantNamePreference: requestedQuantName,
+        }),
+      });
+      return;
     }
-    process.removeListener("SIGINT", sigintListener);
-    if (alreadyExisted) {
-      logger.infoText`
-        You already have this model. You can load it with:
-        ${chalk.yellow("\n\n    lms load " + defaultIdentifier)}
-      `;
-    } else {
-      logger.infoText`
-        Download completed. You can load the model with:
-        ${chalk.yellow("\n\n    lms load " + defaultIdentifier)}
-      `;
+    case "model": {
+      if (limit !== undefined) {
+        logger.error("You cannot use the --limit flag with a direct Hugging Face model URL.");
+        process.exit(1);
+      }
+      await downloadModelSource(client, logger, target.source, target.displayName, {
+        yes,
+        compatibilityTypes,
+        requestedQuantName,
+        resolutionPreference: makeResolutionPreferences({
+          fileNamePreference: target.fileNamePreference,
+          quantNamePreference: requestedQuantName,
+        }),
+      });
+      return;
     }
-    logger.info();
-  } catch (e: any) {
-    if (e.name === "AbortError") {
-      process.exit(1);
-    } else {
-      throw e;
+    case "staffPickSearch": {
+      if (target.searchTerm !== undefined && target.searchTerm !== "") {
+        logger.info("Searching staff picks with the term", chalk.yellow(target.searchTerm));
+      }
+      const staffPickResults = await client.repository.unstable.fuzzyFindStaffPicks({
+        searchTerm: target.searchTerm,
+        limit,
+      });
+      if (staffPickResults.length === 0) {
+        logger.error("No staff picks found with the specified search criteria.");
+        process.exit(1);
+      }
+
+      const exactMatchIndex = staffPickResults.findIndex(result => result.exact);
+      let selectedResult: FuzzyFindStaffPickResult;
+      if (exactMatchIndex !== -1) {
+        selectedResult = staffPickResults[exactMatchIndex];
+      } else if (yes) {
+        logger.info(
+          "Multiple staff picks found. Automatically selecting the first one due to --yes.",
+        );
+        selectedResult = staffPickResults[0];
+      } else {
+        logger.info("No exact match found. Please choose a model from the list below.");
+        logger.infoWithoutPrefix();
+        selectedResult = await askToChooseStaffPick(staffPickResults, 2);
+      }
+
+      await downloadArtifact(client, logger, selectedResult.owner, selectedResult.name, {
+        yes,
+        compatibilityTypes,
+        requestedQuantName,
+        resolutionPreference: makeResolutionPreferences({
+          quantNamePreference: requestedQuantName,
+        }),
+      });
+      return;
+    }
+    default: {
+      const exhaustiveCheck: never = target;
+      throw new Error(`Unexpected target: ${exhaustiveCheck}`);
     }
   }
 });
 
-async function askToChooseModel(
-  models: Array<SearchResultItem>,
+async function askToChooseStaffPick(
+  staffPicks: Array<FuzzyFindStaffPickResult>,
   additionalRowsToReserve = 0,
-): Promise<SearchResultItem> {
-  const modelNames = models.map(model =>
-    model.kind === "hf" ? model.model.name : model.displayName,
-  );
+): Promise<FuzzyFindStaffPickResult> {
+  const modelNames = staffPicks.map(staffPick => `${staffPick.owner}/${staffPick.name}`);
   const pageSize = terminalSize().rows - 4 - additionalRowsToReserve;
   return await runPromptWithExitHandling(() =>
-    search<SearchResultItem>(
+    search<FuzzyFindStaffPickResult>(
       {
         message: "Select a model to download",
         pageSize,
@@ -476,24 +377,22 @@ async function askToChooseModel(
           const searchTerm = term ?? "";
           const options = fuzzy.filter(searchTerm, modelNames, fuzzyHighlightOptions);
           return options.map(option => {
-            const model = models[option.index];
+            const staffPick = staffPicks[option.index];
             let name: string = "";
-            const isExact =
-              model.kind === "staffPick" ? model.isExactMatch : model.model.isExactMatch();
-            if (isExact) {
+            if (staffPick.exact) {
               name += chalk.yellow("[Exact Match] ");
             }
             name += option.string;
-            if (model.kind === "staffPick" && model.model.description !== undefined) {
+            if (staffPick.description !== undefined) {
               const truncated =
-                model.model.description.length > 80
-                  ? `${model.model.description.slice(0, 55)}...`
-                  : model.model.description;
+                staffPick.description.length > 80
+                  ? `${staffPick.description.slice(0, 55)}...`
+                  : staffPick.description;
               name += chalk.dim(` — ${truncated}`);
             }
             return {
               name,
-              value: model,
+              value: staffPick,
               short: option.original,
             };
           });
@@ -503,90 +402,6 @@ async function askToChooseModel(
     ),
   );
 }
-async function askToChooseDownloadOption(
-  downloadOptions: Array<ModelSearchResultDownloadOption>,
-  defaultIndex: number,
-  additionalRowsToReserve = 0,
-): Promise<ModelSearchResultDownloadOption> {
-  console.info(chalk.dim("! Use the arrow keys to navigate, and press enter to select."));
-
-  const pageSize = terminalSize().rows - 4 - additionalRowsToReserve;
-  const choiceDefault = downloadOptions[defaultIndex] ?? downloadOptions[0];
-  return await runPromptWithExitHandling(() =>
-    select<ModelSearchResultDownloadOption>(
-      {
-        message: chalk.green("Select an option to download"),
-        loop: false,
-        pageSize,
-        default: choiceDefault,
-        choices: downloadOptions.map(option => {
-          let name = "";
-          if (option.quantization !== undefined && option.quantization !== "") {
-            name += `${option.quantization} `.padEnd(9);
-          }
-          name += `${formatSizeBytes1000(option.sizeBytes)} `.padStart(11);
-          name += chalk.dim(option.name) + " ";
-          name += formatFitEstimationLabel(option.fitEstimation);
-          if (option.isRecommended()) {
-            name += " " + chalk.green(" Recommended ");
-          }
-          return {
-            name,
-            value: option,
-            short: formatOptionShortName(option),
-          };
-        }),
-      },
-      { output: process.stderr },
-    ),
-  );
-}
-
-function formatOptionShortName(option: ModelSearchResultDownloadOption) {
-  let name = "";
-  name += option.name;
-  if (option.quantization !== undefined && option.quantization !== "") {
-    name += ` [${option.quantization}]`;
-  }
-  name += ` (${formatSizeBytes1000(option.sizeBytes)})`;
-  return name;
-}
-
-function getFitEstimationLabelText(
-  fitEstimation: ModelSearchResultDownloadOptionFitEstimation | undefined,
-) {
-  switch (fitEstimation) {
-    case "willNotFit":
-      return "[Likely too large for this machine]";
-    case "fitWithoutGPU":
-      return "[Likely fit]";
-    case "partialGPUOffload":
-      return "[Partial GPU offload possible]";
-    case "fullGPUOffload":
-      return "[Full GPU offload possible]";
-    default:
-      return "";
-  }
-}
-
-function formatFitEstimationLabel(
-  fitEstimation: ModelSearchResultDownloadOptionFitEstimation | undefined,
-) {
-  const fitEstimationLabelText = getFitEstimationLabelText(fitEstimation);
-  switch (fitEstimation) {
-    case "willNotFit":
-      return chalk.red(fitEstimationLabelText);
-    case "fitWithoutGPU":
-      return chalk.green(fitEstimationLabelText);
-    case "partialGPUOffload":
-      return chalk.yellow(fitEstimationLabelText);
-    case "fullGPUOffload":
-      return chalk.green(fitEstimationLabelText);
-    default:
-      return fitEstimationLabelText;
-  }
-}
-
 function makeArtifactModelSelectionValue(downloadOptionIndex: number): ArtifactModelSelectionValue {
   return `download:${downloadOptionIndex}` as ArtifactModelSelectionValue;
 }
@@ -1056,26 +871,178 @@ function printArtifactDownloadPlanScreen(
   return lines.length + 1;
 }
 
-export async function downloadArtifact(
-  client: LMStudioClient,
-  logger: SimpleLogger,
-  owner: string,
-  name: string,
-  yes: boolean,
-) {
-  let downloadPlan: ArtifactDownloadPlan = {
+type DownloadPlanRequest =
+  | {
+      type: "artifact";
+      owner: string;
+      name: string;
+    }
+  | {
+      type: "model";
+      source: ModelDownloadSource;
+      displayName: string;
+    };
+
+function normalizeDownloadPlannerCliOpts(
+  yesOrOpts: boolean | DownloadPlannerCliOpts,
+): DownloadPlannerCliOpts {
+  if (typeof yesOrOpts === "boolean") {
+    return {
+      yes: yesOrOpts,
+    };
+  }
+  return yesOrOpts;
+}
+
+function makeInitialDownloadPlan(request: DownloadPlanRequest): ArtifactDownloadPlan {
+  if (request.type === "artifact") {
+    return {
+      nodes: [
+        {
+          type: "artifact",
+          owner: request.owner,
+          name: request.name,
+          state: "pending",
+          dependencyNodes: [],
+        },
+      ],
+      downloadSizeBytes: 0,
+      version: 0,
+    };
+  }
+
+  return {
     nodes: [
       {
-        type: "artifact",
-        owner,
-        name,
+        type: "model",
         state: "pending",
-        dependencyNodes: [],
+        dependencyLabel: request.displayName,
       },
     ],
     downloadSizeBytes: 0,
     version: 0,
   };
+}
+
+function createDownloadPlanner(
+  client: LMStudioClient,
+  request: DownloadPlanRequest,
+  opts: DownloadPlannerCliOpts,
+  onPlanUpdated: (newPlan: ArtifactDownloadPlan) => void,
+) {
+  if (request.type === "artifact") {
+    return client.repository.createArtifactDownloadPlanner({
+      owner: request.owner,
+      name: request.name,
+      compatibilityTypes: opts.compatibilityTypes,
+      resolutionPreference: opts.resolutionPreference,
+      onPlanUpdated,
+    });
+  }
+
+  return client.repository.createModelDownloadPlanner({
+    source: request.source,
+    compatibilityTypes: opts.compatibilityTypes,
+    resolutionPreference: opts.resolutionPreference,
+    onPlanUpdated,
+  });
+}
+
+function planContainsRequestedQuant(
+  plan: ArtifactDownloadPlan,
+  requestedQuantName: string,
+): boolean {
+  const normalizedRequestedQuantName = requestedQuantName.toLowerCase();
+  return plan.nodes.some(node => {
+    if (node.type !== "model") {
+      return false;
+    }
+    if (
+      node.alreadyOwned?.quantName !== undefined &&
+      node.alreadyOwned.quantName.toLowerCase() === normalizedRequestedQuantName
+    ) {
+      return true;
+    }
+    return (node.downloadOptions ?? []).some(downloadOption => {
+      return (
+        downloadOption.quantName !== undefined &&
+        downloadOption.quantName.toLowerCase() === normalizedRequestedQuantName
+      );
+    });
+  });
+}
+
+function getAvailableQuantNames(plan: ArtifactDownloadPlan): Array<string> {
+  const availableQuantNames = new Set<string>();
+  for (const node of plan.nodes) {
+    if (node.type !== "model") {
+      continue;
+    }
+    if (node.alreadyOwned?.quantName !== undefined && node.alreadyOwned.quantName !== "") {
+      availableQuantNames.add(node.alreadyOwned.quantName);
+    }
+    for (const downloadOption of node.downloadOptions ?? []) {
+      if (downloadOption.quantName !== undefined && downloadOption.quantName !== "") {
+        availableQuantNames.add(downloadOption.quantName);
+      }
+    }
+  }
+  return [...availableQuantNames].sort((leftValue, rightValue) => {
+    return leftValue.localeCompare(rightValue);
+  });
+}
+
+async function maybeHandleMissingRequestedQuant({
+  downloadPlan,
+  downloadPlanner,
+  logger,
+  requestedQuantName,
+  yes,
+}: {
+  downloadPlan: ArtifactDownloadPlan;
+  downloadPlanner: ArtifactDownloadPlanner;
+  logger: SimpleLogger;
+  requestedQuantName: string | undefined;
+  yes: boolean;
+}) {
+  if (
+    requestedQuantName === undefined ||
+    requestedQuantName === "" ||
+    planContainsRequestedQuant(downloadPlan, requestedQuantName)
+  ) {
+    return;
+  }
+
+  const availableQuantNames = getAvailableQuantNames(downloadPlan);
+  if (yes) {
+    logger.error(
+      `Cannot find a concrete model with quantization "${requestedQuantName}" in this plan.`,
+    );
+    if (availableQuantNames.length > 0) {
+      logger.error("Available quantizations:");
+      for (const quantName of availableQuantNames) {
+        logger.error(`- ${quantName}`);
+      }
+    }
+    process.exit(1);
+  }
+
+  logger.warnText`
+    Cannot find a concrete model with quantization "${requestedQuantName}". Please choose one from
+    the resolved options.
+  `;
+  await openArtifactDownloadSelectionEditor(downloadPlanner);
+}
+
+async function downloadWithPlanner(
+  client: LMStudioClient,
+  logger: SimpleLogger,
+  request: DownloadPlanRequest,
+  yesOrOpts: boolean | DownloadPlannerCliOpts,
+) {
+  const opts = normalizeDownloadPlannerCliOpts(yesOrOpts);
+  const { yes, requestedQuantName } = opts;
+  let downloadPlan = makeInitialDownloadPlan(request);
   let linesToClear: number = 0;
   let shouldRenderPlanUpdates = true;
   const reprintDownloadPlan = (isFinished: boolean) => {
@@ -1092,15 +1059,11 @@ export async function downloadArtifact(
   };
   process.stdout.write("\x1B[?25l");
   let autoReprintInterval: NodeJS.Timeout | undefined = undefined;
-  using downloadPlanner = client.repository.createArtifactDownloadPlanner({
-    owner,
-    name,
-    onPlanUpdated: newPlan => {
-      downloadPlan = newPlan;
-      if (shouldRenderPlanUpdates) {
-        reprintDownloadPlan(false);
-      }
-    },
+  using downloadPlanner = createDownloadPlanner(client, request, opts, newPlan => {
+    downloadPlan = newPlan;
+    if (shouldRenderPlanUpdates) {
+      reprintDownloadPlan(false);
+    }
   });
   try {
     reprintDownloadPlan(false);
@@ -1117,6 +1080,15 @@ export async function downloadArtifact(
       clearInterval(autoReprintInterval);
     }
   }
+
+  await maybeHandleMissingRequestedQuant({
+    downloadPlan,
+    downloadPlanner,
+    logger,
+    requestedQuantName,
+    yes,
+  });
+  downloadPlan = downloadPlanner.getPlan();
 
   if (yes && downloadPlan.downloadSizeBytes === 0) {
     process.exit(0);
@@ -1161,6 +1133,44 @@ export async function downloadArtifact(
   await handleDownloadWithProgressBar(logger, async opts => {
     return await downloadPlanner.download(opts);
   });
+}
+
+export async function downloadArtifact(
+  client: LMStudioClient,
+  logger: SimpleLogger,
+  owner: string,
+  name: string,
+  yesOrOpts: boolean | DownloadPlannerCliOpts,
+) {
+  return await downloadWithPlanner(
+    client,
+    logger,
+    {
+      type: "artifact",
+      owner,
+      name,
+    },
+    yesOrOpts,
+  );
+}
+
+async function downloadModelSource(
+  client: LMStudioClient,
+  logger: SimpleLogger,
+  source: ModelDownloadSource,
+  displayName: string,
+  opts: DownloadPlannerCliOpts,
+) {
+  return await downloadWithPlanner(
+    client,
+    logger,
+    {
+      type: "model",
+      source,
+      displayName,
+    },
+    opts,
+  );
 }
 
 export const get = getCommand;
