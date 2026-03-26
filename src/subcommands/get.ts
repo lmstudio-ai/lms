@@ -580,7 +580,7 @@ async function askToChooseArtifactDownloadSelection(
   return await runPromptWithExitHandling(() =>
     select<ArtifactModelSelectionValue>(
       {
-        message: chalk.green(`Select a concrete model for ${modelNode.dependencyLabel}`),
+        message: chalk.green(`Select a quantization`),
         loop: false,
         pageSize,
         default: getDefaultArtifactModelSelectionValue(modelNode),
@@ -620,11 +620,21 @@ function getArtifactSelectionPromptPageSize(renderedLineCount: number) {
   return Math.max(5, terminalSize().rows - renderedLineCount - 4);
 }
 
+interface OpenArtifactDownloadSelectionEditorOpts {
+  clearScreenBeforeSelection?: boolean;
+  clearScreenAfterSelection?: boolean;
+}
+
 async function openArtifactDownloadSelectionEditor(
   downloadPlanner: ArtifactDownloadPlanner,
+  {
+    clearScreenBeforeSelection = true,
+    clearScreenAfterSelection = true,
+  }: OpenArtifactDownloadSelectionEditorOpts = {},
 ): Promise<boolean> {
   let selectionChanged = false;
   const editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlanner.getPlan());
+  const hasSingleEditableNode = editableNodeIndexes.length === 1;
   for (const nodeIndex of editableNodeIndexes) {
     const refreshedPlan = downloadPlanner.getPlan();
     const currentPlanNode = refreshedPlan.nodes[nodeIndex];
@@ -632,9 +642,12 @@ async function openArtifactDownloadSelectionEditor(
       continue;
     }
 
-    const renderedLineCount = printArtifactDownloadPlanScreen(refreshedPlan, {
-      highlightedNodeIndex: nodeIndex,
-    });
+    const renderedLineCount = hasSingleEditableNode
+      ? buildArtifactDownloadPlanLines(refreshedPlan, true, undefined, false).length + 1
+      : printArtifactDownloadPlanScreen(refreshedPlan, {
+          clearScreen: clearScreenBeforeSelection,
+          highlightedNodeIndex: nodeIndex,
+        });
     const selectionValue = await askToChooseArtifactDownloadSelection(
       currentPlanNode,
       getArtifactSelectionPromptPageSize(renderedLineCount),
@@ -649,7 +662,9 @@ async function openArtifactDownloadSelectionEditor(
       selectionChanged = true;
     }
   }
-  printArtifactDownloadPlanScreen(downloadPlanner.getPlan(), { clearScreen: true });
+  printArtifactDownloadPlanScreen(downloadPlanner.getPlan(), {
+    clearScreen: hasSingleEditableNode ? false : clearScreenAfterSelection,
+  });
   return selectionChanged;
 }
 
@@ -676,7 +691,6 @@ const toDownloadText = chalk.yellow("↓ To download:");
 interface ArtifactPlanScreenOpts {
   clearScreen?: boolean;
   highlightedNodeIndex?: number;
-  footerLines?: Array<string>;
 }
 
 function artifactDownloadPlanToString(
@@ -801,7 +815,6 @@ function buildArtifactDownloadPlanLines(
   isFinished: boolean,
   highlightedNodeIndex?: number,
   yes = false,
-  footerLines: Array<string> = [],
 ) {
   const lines: Array<string> = [""];
   const spinnerFrame = Math.floor(Date.now() / 100) % spinnerFrames.length;
@@ -837,28 +850,17 @@ function buildArtifactDownloadPlanLines(
     );
   }
 
-  if (footerLines.length > 0) {
-    lines.push("");
-    lines.push(...footerLines);
-  }
-
   return lines;
 }
 
 function printArtifactDownloadPlanScreen(
   plan: ArtifactDownloadPlan,
-  { clearScreen = true, highlightedNodeIndex, footerLines = [] }: ArtifactPlanScreenOpts = {},
+  { clearScreen = true, highlightedNodeIndex }: ArtifactPlanScreenOpts = {},
 ) {
   if (clearScreen) {
     console.clear();
   }
-  const lines = buildArtifactDownloadPlanLines(
-    plan,
-    true,
-    highlightedNodeIndex,
-    false,
-    footerLines,
-  );
+  const lines = buildArtifactDownloadPlanLines(plan, true, highlightedNodeIndex, false);
   for (const line of lines) {
     process.stdout.write(line + "\n");
   }
@@ -949,26 +951,6 @@ function planHasPreselectedRequestedQuant(
   });
 }
 
-function getAvailableQuantNames(plan: ArtifactDownloadPlan): Array<string> {
-  const availableQuantNames = new Set<string>();
-  for (const node of plan.nodes) {
-    if (node.type !== "model") {
-      continue;
-    }
-    if (node.alreadyOwned?.quantName !== undefined && node.alreadyOwned.quantName !== "") {
-      availableQuantNames.add(node.alreadyOwned.quantName);
-    }
-    for (const downloadOption of node.downloadOptions ?? []) {
-      if (downloadOption.quantName !== undefined && downloadOption.quantName !== "") {
-        availableQuantNames.add(downloadOption.quantName);
-      }
-    }
-  }
-  return [...availableQuantNames].sort((leftValue, rightValue) => {
-    return leftValue.localeCompare(rightValue);
-  });
-}
-
 async function maybeHandleMissingRequestedQuant({
   downloadPlan,
   downloadPlanner,
@@ -990,31 +972,19 @@ async function maybeHandleMissingRequestedQuant({
     return;
   }
 
-  const availableQuantNames = getAvailableQuantNames(downloadPlan);
   const editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlan);
   if (yes || editableNodeIndexes.length === 0) {
-    logger.error(
-      `The preselected concrete model does not match quantization "${requestedQuantName}".`,
-    );
-    if (availableQuantNames.length > 0) {
-      logger.error("Available quantizations:");
-      for (const quantName of availableQuantNames) {
-        logger.error(`- ${quantName}`);
-      }
-    }
+    logger.error(`Cannot find quantization ${requestedQuantName}.`);
     process.exit(1);
   }
 
-  logger.error(
-    `The preselected concrete model does not match quantization "${requestedQuantName}".`,
+  logger.infoWithoutPrefix(
+    chalk.red(`Cannot find quantization ${requestedQuantName}, please select one from below.`),
   );
-  if (availableQuantNames.length > 0) {
-    logger.error("Available quantizations:");
-    for (const quantName of availableQuantNames) {
-      logger.error(`- ${quantName}`);
-    }
-  }
-  await openArtifactDownloadSelectionEditor(downloadPlanner);
+  await openArtifactDownloadSelectionEditor(downloadPlanner, {
+    clearScreenBeforeSelection: false,
+    clearScreenAfterSelection: false,
+  });
 }
 
 async function downloadWithPlanner(
