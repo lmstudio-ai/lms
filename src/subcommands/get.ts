@@ -18,7 +18,6 @@ import {
 } from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
-import { askQuestionWithChoices } from "../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatBytes.js";
 import { handleDownloadWithProgressBar } from "../handleDownloadWithProgressBar.js";
@@ -31,12 +30,13 @@ type GetCommandOptions = OptionValues &
   LogLevelArgs & {
     mlx?: boolean;
     gguf?: boolean;
+    select?: boolean;
     yes?: boolean;
   };
 
 type ArtifactDownloadPlanModelNode = Extract<ArtifactDownloadPlanNode, { type: "model" }>;
 type ArtifactModelSelectionValue = "alreadyOwned" | `download:${number}`;
-type ArtifactConfirmationChoice = "Y" | "N" | "E";
+type DownloadConfirmationAction = "download" | "selectVariants" | "cancel";
 
 type DownloadPlanRequest =
   | {
@@ -58,14 +58,18 @@ interface ParsedHuggingFaceTarget {
 
 interface ResolvedGetRequest {
   request: DownloadPlanRequest;
+  commandTarget: string;
   fileNamePreference?: string;
 }
 
 interface DownloadPlannerCliOpts {
   yes: boolean;
+  select?: boolean;
   resolutionPreference?: Array<RepositoryDownloadPlannerResolutionPreference>;
   compatibilityTypes?: Array<ModelCompatibilityType>;
   requestedQuantName?: string;
+  commandTarget?: string;
+  loadTarget?: string;
 }
 
 const getCommand = new Command<[], GetCommandOptions>()
@@ -74,11 +78,12 @@ const getCommand = new Command<[], GetCommandOptions>()
   .argument(
     "[modelName]",
     text`
-      The model to download. If the input is "owner/name", it is treated as an LM Studio Hub
-      artifact. If the input is a "https://huggingface.co/owner/repo" URL, it is treated as a
-      direct Hugging Face model download. Otherwise, LM Studio searches staff picks. For models
-      that have multiple quantizations, you can specify the quantization by appending it with
-      "@". For example, use "llama-3.1-8b@q4_k_m".
+      The model to download. If the input is "owner/name" or "https://lmstudio.ai/owner/name", it
+      is treated as an LM Studio Hub artifact. If the input is a
+      "https://huggingface.co/owner/repo" URL, it is treated as a direct Hugging Face model
+      download. Otherwise, LM Studio searches staff picks. For models that have multiple variants,
+      you can specify a preferred quantization by appending it with "@". For example, use
+      "qwen/qwen3.5-9b@q8_0".
     `,
   )
   .option(
@@ -103,6 +108,13 @@ const getCommand = new Command<[], GetCommandOptions>()
       Automatically approve all prompts. Useful for scripting. If there are multiple
       staff picks matching the search term, the first one will be used. If there are multiple
       download options, the preselected option based on your hardware and preferences will be used.
+    `,
+  )
+  .option(
+    "--select",
+    text`
+      Open variant selection before downloading. Useful if the default variant is already
+      downloaded and you want to choose a different one.
     `,
   );
 
@@ -190,6 +202,40 @@ function tryParseHuggingFaceUrl(modelName: string): ParsedHuggingFaceTarget | nu
     },
     displayName: `${user}/${repo}`,
     fileNamePreference,
+  };
+}
+
+function tryParseLmStudioUrl(
+  modelName: string,
+): Extract<DownloadPlanRequest, { type: "artifact" }> | null {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(modelName);
+  } catch {
+    return null;
+  }
+
+  if (parsedUrl.hostname !== "lmstudio.ai" && parsedUrl.hostname !== "www.lmstudio.ai") {
+    return null;
+  }
+  if (parsedUrl.protocol !== "https:") {
+    throw new Error("Only https://lmstudio.ai URLs are supported.");
+  }
+
+  const pathSegments = parsedUrl.pathname.split("/").filter(segment => segment !== "");
+  if (pathSegments.length !== 2) {
+    throw new Error("Invalid LM Studio artifact URL. Expected https://lmstudio.ai/owner/name.");
+  }
+
+  const [owner, name] = pathSegments;
+  if (owner === undefined || owner === "" || name === undefined || name === "") {
+    throw new Error("Invalid LM Studio artifact URL. Expected https://lmstudio.ai/owner/name.");
+  }
+
+  return {
+    type: "artifact",
+    owner: owner.toLowerCase(),
+    name: name.toLowerCase(),
   };
 }
 
@@ -298,7 +344,16 @@ async function resolveGetRequest({
           source: huggingFaceTarget.source,
           displayName: huggingFaceTarget.displayName,
         },
+        commandTarget: modelName,
         fileNamePreference: huggingFaceTarget.fileNamePreference,
+      };
+    }
+
+    const lmStudioArtifactRequest = tryParseLmStudioUrl(modelName);
+    if (lmStudioArtifactRequest !== null) {
+      return {
+        request: lmStudioArtifactRequest,
+        commandTarget: `${lmStudioArtifactRequest.owner}/${lmStudioArtifactRequest.name}`,
       };
     }
 
@@ -306,24 +361,34 @@ async function resolveGetRequest({
     if (artifactRequest !== null) {
       return {
         request: artifactRequest,
+        commandTarget: `${artifactRequest.owner}/${artifactRequest.name}`,
       };
     }
   }
 
+  const staffPickRequest = await resolveStaffPickDownloadRequest({
+    client,
+    logger,
+    searchTerm: modelName,
+    yes,
+  });
   return {
-    request: await resolveStaffPickDownloadRequest({
-      client,
-      logger,
-      searchTerm: modelName,
-      yes,
-    }),
+    request: staffPickRequest,
+    commandTarget: `${staffPickRequest.owner}/${staffPickRequest.name}`,
   };
 }
 
 getCommand.action(async (modelName, options: GetCommandOptions) => {
-  const { mlx = false, gguf = false, yes = false } = options;
+  const { mlx = false, gguf = false, select = false, yes = false } = options;
   const logger = createLogger(options);
   try {
+    if (select && yes) {
+      throw new Error("The --select flag cannot be used with --yes.");
+    }
+    if (select && process.stdin.isTTY !== true) {
+      throw new Error("The --select flag requires an interactive terminal.");
+    }
+
     const { modelNameWithoutQuantization, specifiedQuantName } =
       splitModelNameAndQuantization(modelName);
     const requestedQuantName =
@@ -342,8 +407,14 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
 
     await downloadWithPlanner(client, logger, resolvedGetRequest.request, {
       yes,
+      select,
       compatibilityTypes,
       requestedQuantName,
+      commandTarget: resolvedGetRequest.commandTarget,
+      loadTarget:
+        resolvedGetRequest.request.type === "model"
+          ? resolvedGetRequest.request.displayName
+          : undefined,
       resolutionPreference: makeResolutionPreferences({
         fileNamePreference: resolvedGetRequest.fileNamePreference,
         quantNamePreference: requestedQuantName,
@@ -458,7 +529,9 @@ function getDefaultArtifactModelSelectionValue(
   }
   if (
     modelNode.recommendedDownloadOptionIndex !== undefined &&
-    modelNode.recommendedDownloadOptionIndex !== null
+    modelNode.recommendedDownloadOptionIndex !== null &&
+    modelNode.downloadOptions?.[modelNode.recommendedDownloadOptionIndex]?.fitEstimation !==
+      "willNotFit"
   ) {
     return makeArtifactModelSelectionValue(modelNode.recommendedDownloadOptionIndex);
   }
@@ -530,13 +603,13 @@ function createArtifactDownloadOptionChoiceData(modelNode: ArtifactDownloadPlanM
   }
   for (const [downloadOptionIndex, downloadOption] of (modelNode.downloadOptions ?? []).entries()) {
     const tags: Array<string> = [createArtifactDownloadOptionTag(downloadOption.fitEstimation)];
-    if (downloadOption.recommended === true) {
-      tags.push(createArtifactDownloadOptionTag("recommended"));
-    }
     if (downloadOption.availability === "downloaded") {
       tags.push(createArtifactDownloadOptionTag("downloaded"));
     } else if (downloadOption.availability === "downloading") {
       tags.push(createArtifactDownloadOptionTag("downloading"));
+    }
+    if (downloadOption.recommended === true && downloadOption.fitEstimation !== "willNotFit") {
+      tags.push(createArtifactDownloadOptionTag("recommended"));
     }
     choiceData.push({
       value: makeArtifactModelSelectionValue(downloadOptionIndex),
@@ -580,7 +653,7 @@ async function askToChooseArtifactDownloadSelection(
   return await runPromptWithExitHandling(() =>
     select<ArtifactModelSelectionValue>(
       {
-        message: chalk.green(`Select a quantization`),
+        message: chalk.green(`Select a variant`),
         loop: false,
         pageSize,
         default: getDefaultArtifactModelSelectionValue(modelNode),
@@ -879,6 +952,132 @@ function normalizeDownloadPlannerCliOpts(
   return yesOrOpts;
 }
 
+function getRequestCommandTarget(
+  request: DownloadPlanRequest,
+  commandTarget: string | undefined,
+): string {
+  if (commandTarget !== undefined && commandTarget !== "") {
+    return commandTarget;
+  }
+  if (request.type === "artifact") {
+    return `${request.owner}/${request.name}`;
+  }
+  return request.displayName;
+}
+
+function getRequestLoadTarget(
+  request: DownloadPlanRequest,
+  loadTarget: string | undefined,
+): string {
+  if (loadTarget !== undefined && loadTarget !== "") {
+    return loadTarget;
+  }
+  if (request.type === "artifact") {
+    return `${request.owner}/${request.name}`;
+  }
+  return request.displayName;
+}
+
+function quoteCommandArgument(argumentValue: string): string {
+  if (argumentValue.includes(" ") || argumentValue.includes('"')) {
+    return JSON.stringify(argumentValue);
+  }
+  return argumentValue;
+}
+
+function requestRefersToModel(plan: ArtifactDownloadPlan, request: DownloadPlanRequest): boolean {
+  if (request.type === "model") {
+    return true;
+  }
+  const rootNode = plan.nodes[0];
+  return rootNode?.type === "artifact" && rootNode.artifactType === "model";
+}
+
+function maybeExitIfNothingToDownload({
+  logger,
+  request,
+  downloadPlan,
+  commandTarget,
+  loadTarget,
+  showSelectHint,
+}: {
+  logger: SimpleLogger;
+  request: DownloadPlanRequest;
+  downloadPlan: ArtifactDownloadPlan;
+  commandTarget: string;
+  loadTarget: string;
+  showSelectHint: boolean;
+}) {
+  if (downloadPlan.downloadSizeBytes !== 0) {
+    return;
+  }
+
+  if (requestRefersToModel(downloadPlan, request)) {
+    logger.infoWithoutPrefix(
+      text`
+        Model already downloaded. To use, run:
+        ${chalk.yellowBright(`lms load ${quoteCommandArgument(loadTarget)}`)}
+      `,
+    );
+  } else {
+    logger.infoWithoutPrefix("Everything is already downloaded");
+  }
+
+  if (showSelectHint) {
+    logger.infoWithoutPrefix(
+      text`
+        If you wish to download a variant, run:
+        ${chalk.yellowBright(`lms get ${quoteCommandArgument(commandTarget)} --select`)}
+      `,
+    );
+  }
+
+  process.exit(0);
+}
+
+async function askToChooseDownloadAction({
+  canSelectVariants,
+}: {
+  canSelectVariants: boolean;
+  downloadSizeBytes: number;
+}): Promise<DownloadConfirmationAction> {
+  const choices: Array<{
+    name: string;
+    value: DownloadConfirmationAction;
+    short: string;
+  }> = [
+    {
+      name: `Start download`,
+      value: "download",
+      short: "start download",
+    },
+  ];
+  if (canSelectVariants) {
+    choices.push({
+      name: "Select variants",
+      value: "selectVariants",
+      short: "select variants",
+    });
+  }
+  choices.push({
+    name: "Cancel",
+    value: "cancel",
+    short: "cancel",
+  });
+  console.info();
+  return await runPromptWithExitHandling(() =>
+    select<DownloadConfirmationAction>(
+      {
+        message: "Choose an action",
+        loop: false,
+        pageSize: choices.length,
+        choices,
+      },
+      { output: process.stderr },
+    ),
+  );
+}
+
 function makeInitialDownloadPlan(request: DownloadPlanRequest): ArtifactDownloadPlan {
   if (request.type === "artifact") {
     return {
@@ -963,28 +1162,29 @@ async function maybeHandleMissingRequestedQuant({
   logger: SimpleLogger;
   requestedQuantName: string | undefined;
   yes: boolean;
-}) {
+}): Promise<boolean> {
   if (
     requestedQuantName === undefined ||
     requestedQuantName === "" ||
     planHasPreselectedRequestedQuant(downloadPlan, requestedQuantName)
   ) {
-    return;
+    return false;
   }
 
   const editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlan);
   if (yes || editableNodeIndexes.length === 0) {
-    logger.error(`Cannot find quantization ${requestedQuantName}.`);
+    logger.error(`Cannot find variant ${requestedQuantName}.`);
     process.exit(1);
   }
 
   logger.infoWithoutPrefix(
-    chalk.red(`Cannot find quantization ${requestedQuantName}, please select one from below.`),
+    chalk.red(`Cannot find variant ${requestedQuantName}, please select one from below.`),
   );
   await openArtifactDownloadSelectionEditor(downloadPlanner, {
     clearScreenBeforeSelection: false,
     clearScreenAfterSelection: false,
   });
+  return true;
 }
 
 async function downloadWithPlanner(
@@ -994,7 +1194,9 @@ async function downloadWithPlanner(
   yesOrOpts: boolean | DownloadPlannerCliOpts,
 ) {
   const opts = normalizeDownloadPlannerCliOpts(yesOrOpts);
-  const { yes, requestedQuantName } = opts;
+  const { yes, requestedQuantName, select = false } = opts;
+  const commandTarget = getRequestCommandTarget(request, opts.commandTarget);
+  const loadTarget = getRequestLoadTarget(request, opts.loadTarget);
   let downloadPlan = makeInitialDownloadPlan(request);
   let linesToClear: number = 0;
   let shouldRenderPlanUpdates = true;
@@ -1034,7 +1236,7 @@ async function downloadWithPlanner(
     }
   }
 
-  await maybeHandleMissingRequestedQuant({
+  let hasOpenedVariantSelection = await maybeHandleMissingRequestedQuant({
     downloadPlan,
     downloadPlanner,
     logger,
@@ -1043,45 +1245,62 @@ async function downloadWithPlanner(
   });
   downloadPlan = downloadPlanner.getPlan();
 
-  if (yes && downloadPlan.downloadSizeBytes === 0) {
-    process.exit(0);
-  }
-  if (!yes) {
-    while (true) {
-      downloadPlan = downloadPlanner.getPlan();
-      const editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlan);
-      if (downloadPlan.downloadSizeBytes === 0 && editableNodeIndexes.length === 0) {
-        process.exit(0);
-      }
-
-      const continueChoices =
-        editableNodeIndexes.length === 0 ? (["Y", "N"] as const) : (["Y", "N", "E"] as const);
-      const confirmationChoice = await askQuestionWithChoices<ArtifactConfirmationChoice>(
-        "Continue?",
-        continueChoices as readonly [
-          ArtifactConfirmationChoice,
-          ...Array<ArtifactConfirmationChoice>,
-        ],
-        { choiceLabel: "Y/N, or E to select quantization" },
-      );
-      if (confirmationChoice === null || confirmationChoice === "N") {
-        process.exit(1);
-      }
-      if (confirmationChoice === "Y") {
-        break;
-      }
-
+  if (select && !hasOpenedVariantSelection) {
+    const editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlan);
+    if (editableNodeIndexes.length > 0) {
       await openArtifactDownloadSelectionEditor(downloadPlanner);
+      hasOpenedVariantSelection = true;
+      downloadPlan = downloadPlanner.getPlan();
+    }
+  }
+
+  let editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlan);
+  maybeExitIfNothingToDownload({
+    logger,
+    request,
+    downloadPlan,
+    commandTarget,
+    loadTarget,
+    showSelectHint: editableNodeIndexes.length > 0 && !select,
+  });
+
+  if (!yes && !hasOpenedVariantSelection) {
+    const downloadConfirmationAction = await askToChooseDownloadAction({
+      canSelectVariants: editableNodeIndexes.length > 0,
+      downloadSizeBytes: downloadPlan.downloadSizeBytes,
+    });
+    if (downloadConfirmationAction === "cancel") {
+      process.exit(1);
+    }
+    if (downloadConfirmationAction === "selectVariants") {
+      await openArtifactDownloadSelectionEditor(downloadPlanner);
+      downloadPlan = downloadPlanner.getPlan();
+      editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlan);
+      maybeExitIfNothingToDownload({
+        logger,
+        request,
+        downloadPlan,
+        commandTarget,
+        loadTarget,
+        showSelectHint: false,
+      });
     }
   }
 
   downloadPlan = downloadPlanner.getPlan();
   if (downloadPlan.downloadSizeBytes === 0) {
-    process.exit(0);
+    maybeExitIfNothingToDownload({
+      logger,
+      request,
+      downloadPlan,
+      commandTarget,
+      loadTarget,
+      showSelectHint: false,
+    });
   }
 
-  await handleDownloadWithProgressBar(logger, async opts => {
-    return await downloadPlanner.download(opts);
+  await handleDownloadWithProgressBar(logger, async downloadOpts => {
+    return await downloadPlanner.download(downloadOpts);
   });
 }
 
