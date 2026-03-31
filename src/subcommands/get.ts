@@ -48,12 +48,10 @@ type DownloadPlanRequest =
   | {
       type: "model";
       source: ModelDownloadSource;
-      displayName: string;
     };
 
 interface ParsedHuggingFaceTarget {
   source: ModelDownloadSource;
-  displayName: string;
   fileNamePreference?: string;
 }
 
@@ -70,7 +68,6 @@ interface DownloadPlannerCliOpts {
   compatibilityTypes?: Array<ModelCompatibilityType>;
   requestedQuantName?: string;
   commandTarget?: string;
-  loadTarget?: string;
 }
 
 const getCommand = new Command<[], GetCommandOptions>()
@@ -199,7 +196,6 @@ function tryParseHuggingFaceUrl(modelName: string): ParsedHuggingFaceTarget | nu
       user,
       repo,
     },
-    displayName: `${user}/${repo}`,
     fileNamePreference,
   };
 }
@@ -312,7 +308,6 @@ async function resolveGetRequest({
         request: {
           type: "model",
           source: huggingFaceTarget.source,
-          displayName: huggingFaceTarget.displayName,
         },
         commandTarget: modelName,
         fileNamePreference: huggingFaceTarget.fileNamePreference,
@@ -387,10 +382,6 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
       compatibilityTypes,
       requestedQuantName,
       commandTarget: resolvedGetRequest.commandTarget,
-      loadTarget:
-        resolvedGetRequest.request.type === "model"
-          ? resolvedGetRequest.request.displayName
-          : undefined,
       resolutionPreference: makeResolutionPreferences({
         fileNamePreference: resolvedGetRequest.fileNamePreference,
         quantNamePreference: requestedQuantName,
@@ -940,20 +931,7 @@ function getRequestCommandTarget(
   if (request.type === "artifact") {
     return `${request.owner}/${request.name}`;
   }
-  return request.displayName;
-}
-
-function getRequestLoadTarget(
-  request: DownloadPlanRequest,
-  loadTarget: string | undefined,
-): string {
-  if (loadTarget !== undefined && loadTarget !== "") {
-    return loadTarget;
-  }
-  if (request.type === "artifact") {
-    return `${request.owner}/${request.name}`;
-  }
-  return request.displayName;
+  return `${request.source.user}/${request.source.repo}`;
 }
 
 function quoteCommandArgument(argumentValue: string): string {
@@ -976,14 +954,12 @@ function maybeExitIfNothingToDownload({
   request,
   downloadPlan,
   commandTarget,
-  loadTarget,
   showSelectHint,
 }: {
   logger: SimpleLogger;
   request: DownloadPlanRequest;
   downloadPlan: ArtifactDownloadPlan;
   commandTarget: string;
-  loadTarget: string;
   showSelectHint: boolean;
 }) {
   if (downloadPlan.downloadAction !== "none") {
@@ -991,12 +967,34 @@ function maybeExitIfNothingToDownload({
   }
 
   if (requestRefersToModel(downloadPlan, request)) {
-    logger.infoWithoutPrefix(
-      text`
-        Model already downloaded. To use, run:
-        ${chalk.yellowBright(`lms load ${quoteCommandArgument(loadTarget)}`)}
-      `,
-    );
+    if (request.type === "artifact") {
+      logger.infoWithoutPrefix(
+        text`
+          Model already downloaded. To use, run:
+          ${chalk.yellowBright(`lms load ${quoteCommandArgument(commandTarget)}`)}
+        `,
+      );
+    } else {
+      const rootNode = downloadPlan.nodes[0];
+      if (rootNode === undefined || rootNode.type !== "model") {
+        // Unexpected: direct planner model downloads should always resolve to a model root here.
+        logger.infoWithoutPrefix("Model already downloaded.");
+      } else {
+        const modelKey = rootNode.selected?.modelKey ?? rootNode.alreadyOwned?.modelKey;
+        if (modelKey !== undefined) {
+          logger.infoWithoutPrefix(
+            text`
+              Model already downloaded. To use, run:
+              ${chalk.yellowBright(`lms load ${quoteCommandArgument(modelKey)}`)}
+            `,
+          );
+        } else {
+          // Unexpected: no-download direct model plans should usually expose the selected or
+          // already-owned model key. Avoid printing a broken `lms load` hint when they do not.
+          logger.infoWithoutPrefix("Model already downloaded.");
+        }
+      }
+    }
   } else {
     logger.infoWithoutPrefix("Everything is already downloaded");
   }
@@ -1082,7 +1080,7 @@ function makeInitialDownloadPlan(request: DownloadPlanRequest): ArtifactDownload
       {
         type: "model",
         state: "pending",
-        dependencyLabel: request.displayName,
+        dependencyLabel: `${request.source.user}/${request.source.repo}`,
       },
     ],
     downloadSizeBytes: 0,
@@ -1179,7 +1177,6 @@ async function downloadWithPlanner(
   const opts = normalizeDownloadPlannerCliOpts(yesOrOpts);
   const { yes, requestedQuantName, select = false } = opts;
   const commandTarget = getRequestCommandTarget(request, opts.commandTarget);
-  const loadTarget = getRequestLoadTarget(request, opts.loadTarget);
   let downloadPlan = makeInitialDownloadPlan(request);
   let linesToClear: number = 0;
   let shouldRenderPlanUpdates = true;
@@ -1243,7 +1240,6 @@ async function downloadWithPlanner(
     request,
     downloadPlan,
     commandTarget,
-    loadTarget,
     showSelectHint: editableNodeIndexes.length > 0 && !select,
   });
 
@@ -1264,7 +1260,6 @@ async function downloadWithPlanner(
         request,
         downloadPlan,
         commandTarget,
-        loadTarget,
         showSelectHint: false,
       });
     }
@@ -1277,7 +1272,6 @@ async function downloadWithPlanner(
       request,
       downloadPlan,
       commandTarget,
-      loadTarget,
       showSelectHint: false,
     });
   }
