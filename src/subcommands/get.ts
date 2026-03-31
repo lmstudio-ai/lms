@@ -252,11 +252,13 @@ async function resolveStaffPickDownloadRequest({
   logger,
   searchTerm,
   yes,
+  compatibilityTypes,
 }: {
   client: LMStudioClient;
   logger: SimpleLogger;
   searchTerm: string | undefined;
   yes: boolean;
+  compatibilityTypes: Array<ModelCompatibilityType> | undefined;
 }): Promise<Extract<DownloadPlanRequest, { type: "artifact" }>> {
   if (searchTerm !== undefined && searchTerm !== "") {
     logger.info("Searching staff picks with the term", chalk.yellow(searchTerm));
@@ -264,6 +266,7 @@ async function resolveStaffPickDownloadRequest({
 
   const staffPickResults = await client.repository.unstable.fuzzyFindStaffPicks({
     searchTerm,
+    compatibilityTypes,
   });
   if (staffPickResults.length === 0) {
     throw new Error("No staff picks found with the specified search criteria.");
@@ -294,11 +297,13 @@ async function resolveGetRequest({
   logger,
   modelName,
   yes,
+  compatibilityTypes,
 }: {
   client: LMStudioClient;
   logger: SimpleLogger;
   modelName: string | undefined;
   yes: boolean;
+  compatibilityTypes: Array<ModelCompatibilityType> | undefined;
 }): Promise<ResolvedGetRequest> {
   if (modelName !== undefined && modelName !== "") {
     const huggingFaceTarget = tryParseHuggingFaceUrl(modelName);
@@ -340,6 +345,7 @@ async function resolveGetRequest({
     logger,
     searchTerm: modelName,
     yes,
+    compatibilityTypes,
   });
   return {
     request: staffPickRequest,
@@ -372,6 +378,7 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
       logger,
       modelName: modelNameWithoutQuantization,
       yes,
+      compatibilityTypes,
     });
 
     await downloadWithPlanner(client, logger, resolvedGetRequest.request, {
