@@ -24,6 +24,7 @@ import { handleDownloadWithProgressBar } from "../handleDownloadWithProgressBar.
 import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
+import { tryParseLmStudioArtifactUrl } from "./parseLmStudioArtifactUrl.js";
 
 type GetCommandOptions = OptionValues &
   CreateClientArgs &
@@ -78,8 +79,9 @@ const getCommand = new Command<[], GetCommandOptions>()
   .argument(
     "[modelName]",
     text`
-      The model to download. If the input is "owner/name" or "https://lmstudio.ai/owner/name", it
-      is treated as an LM Studio Hub artifact. If the input is a
+      The model to download. If the input is "owner/name",
+      "https://lmstudio.ai/models/owner/name", or "https://lmstudio.ai/owner/name", it is treated
+      as an LM Studio Hub artifact. If the input is a
       "https://huggingface.co/owner/repo" URL, it is treated as a direct Hugging Face model
       download. Otherwise, LM Studio searches staff picks. For models that have multiple variants,
       you can specify a preferred quantization by appending it with "@". For example, use
@@ -205,40 +207,6 @@ function tryParseHuggingFaceUrl(modelName: string): ParsedHuggingFaceTarget | nu
   };
 }
 
-function tryParseLmStudioUrl(
-  modelName: string,
-): Extract<DownloadPlanRequest, { type: "artifact" }> | null {
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(modelName);
-  } catch {
-    return null;
-  }
-
-  if (parsedUrl.hostname !== "lmstudio.ai" && parsedUrl.hostname !== "www.lmstudio.ai") {
-    return null;
-  }
-  if (parsedUrl.protocol !== "https:") {
-    throw new Error("Only https://lmstudio.ai URLs are supported.");
-  }
-
-  const pathSegments = parsedUrl.pathname.split("/").filter(segment => segment !== "");
-  if (pathSegments.length !== 2) {
-    throw new Error("Invalid LM Studio artifact URL. Expected https://lmstudio.ai/owner/name.");
-  }
-
-  const [owner, name] = pathSegments;
-  if (owner === undefined || owner === "" || name === undefined || name === "") {
-    throw new Error("Invalid LM Studio artifact URL. Expected https://lmstudio.ai/owner/name.");
-  }
-
-  return {
-    type: "artifact",
-    owner: owner.toLowerCase(),
-    name: name.toLowerCase(),
-  };
-}
-
 function tryParseArtifactIdentifier(
   modelName: string,
 ): Extract<DownloadPlanRequest, { type: "artifact" }> | null {
@@ -349,11 +317,15 @@ async function resolveGetRequest({
       };
     }
 
-    const lmStudioArtifactRequest = tryParseLmStudioUrl(modelName);
-    if (lmStudioArtifactRequest !== null) {
+    const lmStudioArtifactTarget = tryParseLmStudioArtifactUrl(modelName);
+    if (lmStudioArtifactTarget !== null) {
       return {
-        request: lmStudioArtifactRequest,
-        commandTarget: `${lmStudioArtifactRequest.owner}/${lmStudioArtifactRequest.name}`,
+        request: {
+          type: "artifact",
+          owner: lmStudioArtifactTarget.owner,
+          name: lmStudioArtifactTarget.name,
+        },
+        commandTarget: `${lmStudioArtifactTarget.owner}/${lmStudioArtifactTarget.name}`,
       };
     }
 
