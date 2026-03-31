@@ -895,7 +895,9 @@ function buildArtifactDownloadPlanLines(
   lines.push("");
 
   if (isFinished) {
-    if (plan.downloadSizeBytes !== 0) {
+    if (plan.downloadAction === "attachToExistingDownload") {
+      lines.push(chalk.yellow("This download is already in progress."));
+    } else if (plan.downloadSizeBytes !== 0) {
       if (yes) {
         lines.push(
           chalk.yellow(
@@ -1037,38 +1039,41 @@ function maybeExitIfNothingToDownload({
 
 async function askToChooseDownloadAction({
   canSelectVariants,
+  downloadAction,
 }: {
   canSelectVariants: boolean;
-  downloadSizeBytes: number;
+  downloadAction: ArtifactDownloadPlan["downloadAction"];
 }): Promise<DownloadConfirmationAction> {
+  const message =
+    downloadAction === "attachToExistingDownload" ? "Follow the download?" : "Start download?";
   const choices: Array<{
     name: string;
     value: DownloadConfirmationAction;
     short: string;
   }> = [
     {
-      name: `Start download`,
+      name: `Yes`,
       value: "download",
-      short: "start download",
+      short: "yes",
+    },
+    {
+      name: "No",
+      value: "cancel",
+      short: "no",
     },
   ];
   if (canSelectVariants) {
     choices.push({
-      name: "Select variants",
+      name: "Change variant selection",
       value: "selectVariants",
-      short: "select variants",
+      short: "change variant selection",
     });
   }
-  choices.push({
-    name: "Cancel",
-    value: "cancel",
-    short: "cancel",
-  });
   console.info();
   return await runPromptWithExitHandling(() =>
     select<DownloadConfirmationAction>(
       {
-        message: "Choose an action",
+        message,
         loop: false,
         pageSize: choices.length,
         choices,
@@ -1269,7 +1274,7 @@ async function downloadWithPlanner(
   if (!yes && !hasOpenedVariantSelection) {
     const downloadConfirmationAction = await askToChooseDownloadAction({
       canSelectVariants: editableNodeIndexes.length > 0,
-      downloadSizeBytes: downloadPlan.downloadSizeBytes,
+      downloadAction: downloadPlan.downloadAction,
     });
     if (downloadConfirmationAction === "cancel") {
       process.exit(1);
