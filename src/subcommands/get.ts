@@ -4,6 +4,7 @@ import { type SimpleLogger, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import {
   type ArtifactDownloadPlan,
+  type ArtifactDownloadPlanDownloadAction,
   type ArtifactDownloadPlanModelInfo,
   type ArtifactDownloadPlanNode,
   type ModelCompatibilityType,
@@ -993,6 +994,35 @@ function requestRefersToModel(plan: ArtifactDownloadPlan, request: DownloadPlanR
   return rootNode?.type === "artifact" && rootNode.artifactType === "model";
 }
 
+function getLegacyArtifactDownloadPlanDownloadAction(
+  downloadPlan: ArtifactDownloadPlan,
+): ArtifactDownloadPlanDownloadAction {
+  if (downloadPlan.downloadSizeBytes !== 0) {
+    return "startNewDownload";
+  }
+  const hasSelectedDownloadingModel = downloadPlan.nodes.some(node => {
+    if (node.type !== "model") {
+      return false;
+    }
+    const selectedDownloadOptionIndex = node.selectedDownloadOptionIndex;
+    if (selectedDownloadOptionIndex === undefined || selectedDownloadOptionIndex === null) {
+      return false;
+    }
+    const selectedDownloadOption = node.downloadOptions?.[selectedDownloadOptionIndex];
+    return selectedDownloadOption?.availability === "downloading";
+  });
+  if (hasSelectedDownloadingModel) {
+    return "attachToExistingDownload";
+  }
+  return "none";
+}
+
+function getEffectiveArtifactDownloadPlanDownloadAction(
+  downloadPlan: ArtifactDownloadPlan,
+): ArtifactDownloadPlanDownloadAction {
+  return downloadPlan.downloadAction ?? getLegacyArtifactDownloadPlanDownloadAction(downloadPlan);
+}
+
 function maybeExitIfNothingToDownload({
   logger,
   request,
@@ -1008,7 +1038,7 @@ function maybeExitIfNothingToDownload({
   loadTarget: string;
   showSelectHint: boolean;
 }) {
-  if (downloadPlan.downloadSizeBytes !== 0) {
+  if (getEffectiveArtifactDownloadPlanDownloadAction(downloadPlan) !== "none") {
     return;
   }
 
@@ -1288,7 +1318,7 @@ async function downloadWithPlanner(
   }
 
   downloadPlan = downloadPlanner.getPlan();
-  if (downloadPlan.downloadSizeBytes === 0) {
+  if (getEffectiveArtifactDownloadPlanDownloadAction(downloadPlan) === "none") {
     maybeExitIfNothingToDownload({
       logger,
       request,
