@@ -1018,6 +1018,10 @@ async function askToChooseDownloadAction({
   canSelectVariants: boolean;
   downloadAction: ArtifactDownloadPlan["downloadAction"];
 }): Promise<DownloadConfirmationAction> {
+  if (process.stdin.isTTY !== true) {
+    return "download";
+  }
+
   const message =
     downloadAction === "attachToExistingDownload" ? "Follow the download?" : "Start download?";
   const choices: Array<{
