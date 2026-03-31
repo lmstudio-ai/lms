@@ -75,33 +75,30 @@ interface DownloadPlannerCliOpts {
 
 const getCommand = new Command<[], GetCommandOptions>()
   .name("get")
-  .description(text`Search and download local models`)
+  .description(text`Search and download local models or presets`)
   .argument(
-    "[modelName]",
+    "[name]",
     text`
-      The model to download. If the input is "owner/name",
-      "https://lmstudio.ai/models/owner/name", or "https://lmstudio.ai/owner/name", it is treated
-      as an LM Studio Hub artifact. If the input is a
-      "https://huggingface.co/owner/repo" URL, it is treated as a direct Hugging Face model
-      download. Otherwise, LM Studio searches staff picks. For models that have multiple variants,
-      you can specify a preferred quantization by appending it with "@". For example, use
-      "qwen/qwen3.5-9b@q8_0".
+      The model to download, for example "openai/gpt-oss-20b". If you want to download a specific
+      quantization of a model, you can append the quantization name with "@", for example
+      "qwen/qwen3.5-9b@q8_0". If you wish to download from Hugging Face directly, use the full
+      URL of the model.
     `,
   )
   .option(
     "--mlx",
     text`
-      Restrict concrete model resolution to MLX-compatible options. If any of "--mlx" or "--gguf"
-      is specified, only matching formats will be considered. Otherwise only options supported by
-      your installed LM Runtimes will be considered.
+      Restrict model resolution to MLX-compatible options. If any of "--mlx" or "--gguf" is
+      specified, only matching formats will be considered. Otherwise only options supported by your
+      system will be considered.
     `,
   )
   .option(
     "--gguf",
     text`
-      Restrict concrete model resolution to GGUF-compatible options. If any of "--mlx" or
-      "--gguf" is specified, only matching formats will be considered. Otherwise only options
-      supported by your installed LM Runtimes will be considered.
+      Restrict model resolution to GGUF-compatible options. If any of "--mlx" or "--gguf" is
+      specified, only matching formats will be considered. Otherwise only options supported by your
+      system will be considered.
     `,
   )
   .option(
