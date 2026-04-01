@@ -60,10 +60,7 @@ export async function handleDownloadWithProgressBar(
       process.exit(1);
     }
     process.removeListener("SIGINT", sigintListener);
-    logger.infoText`
-      Download completed.
-    `;
-    logger.info();
+    logger.info("Download completed.");
   } catch (e: any) {
     if (e.name === "AbortError") {
       process.exit(1);
