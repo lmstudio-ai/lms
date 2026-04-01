@@ -61,6 +61,7 @@ export const ChatComponent = React.memo(
     const [userInputState, setUserInputState] = useState<ChatUserInputState>(emptyChatInputState);
     const [isPredicting, setIsPredicting] = useState(false);
     const [showPredictionSpinner, setShowPredictionSpinner] = useState(false);
+    const [systemAsUser, setSystemAsUser] = useState(false);
     const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [flickerCount, setFlickerCount] = useState(0);
@@ -160,6 +161,8 @@ export const ChatComponent = React.memo(
         setModelLoadingProgress,
         modelLoadingAbortControllerRef,
         lastPredictionStatsRef,
+        systemAsUser,
+        setSystemAsUser,
       });
       handler.setCommands(commands);
       return handler;
@@ -174,6 +177,7 @@ export const ChatComponent = React.memo(
       logInChat,
       logErrorInChat,
       shouldFetchModelCatalog,
+      systemAsUser,
     ]);
 
     const suggestions = useMemo<Suggestion[]>(() => {
