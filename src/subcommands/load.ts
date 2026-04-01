@@ -10,24 +10,27 @@ import { terminalSize } from "@lmstudio/lms-isomorphic";
 import {
   type EstimatedResourcesUsage,
   type LLMLoadModelConfig,
-  type ModelInfo,
   type LMStudioClient,
+  type ModelInfo,
 } from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
 import { getCliPref } from "../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
-import { type DeviceNameResolver, createDeviceNameResolver } from "../deviceNameLookup.js";
-import { formatElapsedTime } from "../formatElapsedTime.js";
+import { createDeviceNameResolver, type DeviceNameResolver } from "../deviceNameLookup.js";
 import { formatSizeBytes1024 } from "../formatBytes.js";
+import { formatElapsedTime } from "../formatElapsedTime.js";
+import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { Spinner } from "../Spinner.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
-import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 
-const gpuOptionParser = (str: string): number => {
+const gpuOptionParser = (str: string): number | "auto" => {
   str = str.trim().toLowerCase();
+  if (str === "auto") {
+    return "auto";
+  }
   if (str === "off") {
     return 0;
   } else if (str === "max") {
@@ -47,7 +50,7 @@ type LoadCommandOptions = OptionValues &
   CreateClientArgs &
   LogLevelArgs & {
     ttl?: number;
-    gpu?: number;
+    gpu?: number | "auto";
     contextLength?: number;
     parallel?: number;
     exact?: boolean;
@@ -88,9 +91,9 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     new Option(
       "--gpu <offload-ratio>",
       text`
-        GPU offload ratio. Valid values: "off" (disable GPU), "max" (full offload), or a number
-        between 0 and 1 (e.g., "0.5" for 50% offload). By default, LM Studio automatically
-        determines the optimal offload ratio.
+        GPU offload. Valid values: "auto" (decide automatically), "off" (disable GPU), "max" (full
+        offload), or a number between 0 and 1 (e.g., "0.5" for 50% offload).
+        Defaults to "auto".
       `,
     ).argParser(gpuOptionParser),
   )
@@ -180,9 +183,11 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     maxParallelPredictions,
   };
   if (gpu !== undefined) {
-    loadConfig.gpu = {
-      ratio: gpu,
-    };
+    if (gpu === "auto") {
+      loadConfig.gpu = { fit: true };
+    } else {
+      loadConfig.gpu = { fit: false, ratio: gpu };
+    }
   }
   let modelKey = modelKeyArg;
   const logger = createLogger(options);
@@ -556,7 +561,7 @@ async function loadModel({
 function printEstimatedResourceUsage(
   model: ModelInfo,
   contextLength: number | undefined,
-  gpuOffloadRatio: number | undefined,
+  gpuOffloadRatio: number | "auto" | undefined,
   estimate: EstimatedResourcesUsage,
   logger: SimpleLogger,
 ) {
@@ -566,7 +571,11 @@ function printEstimatedResourceUsage(
     logger.info(`Context Length: ${contextLength.toLocaleString()}`);
   }
   if (gpuOffloadRatio !== undefined) {
-    logger.info(`GPU Offload: ${gpuOffloadRatio * 100}%`);
+    if (gpuOffloadRatio === "auto") {
+      logger.info(`GPU Offload: Auto`);
+    } else {
+      logger.info(`GPU Offload: ${gpuOffloadRatio * 100}%`);
+    }
   }
   logger.info(
     `Estimated GPU Memory:   ${colorFunc(formatSizeBytes1024(estimate.memory.totalVramBytes))}`,
