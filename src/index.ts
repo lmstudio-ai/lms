@@ -11,7 +11,6 @@ import { chat } from "./subcommands/chat/index.js";
 import { clone } from "./subcommands/clone.js";
 import { create } from "./subcommands/create.js";
 import { daemon } from "./subcommands/daemon/index.js";
-import { deSetup } from "./subcommands/deSetup.js";
 import { dev } from "./subcommands/dev/index.js";
 import { flags } from "./subcommands/flags.js";
 import { get } from "./subcommands/get.js";
@@ -25,7 +24,6 @@ import { logout } from "./subcommands/logout.js";
 import { push } from "./subcommands/push.js";
 import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
-import { setup } from "./subcommands/setup.js";
 import { status } from "./subcommands/status.js";
 import { unload } from "./subcommands/unload.js";
 import { getCommitHash, printVersionCompact, version } from "./subcommands/version.js";
@@ -176,9 +174,7 @@ addCommandsGroup("Develop & Publish (Beta)", [clone, push, dev, login, logout, w
 program.addCommand(create, { hidden: true });
 program.addCommand(bootstrap, { hidden: true });
 program.addCommand(daemon, { hidden: true });
-program.addCommand(deSetup, { hidden: true });
 program.addCommand(flags, { hidden: true });
-program.addCommand(setup, { hidden: true });
 program.addCommand(status, { hidden: true });
 program.addCommand(version, { hidden: true });
 

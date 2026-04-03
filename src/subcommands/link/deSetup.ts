@@ -1,7 +1,7 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
-import { createClient } from "../createClient.js";
-import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import { createClient } from "../../createClient.js";
+import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 
 type DeSetupCommandOptions = OptionValues & LogLevelArgs;
 
