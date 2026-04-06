@@ -3,10 +3,7 @@ import { text } from "@lmstudio/lms-common";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { Spinner } from "../Spinner.js";
-import {
-  makeCannotLogoutWhileComputeDeviceError,
-  normalizeAuthenticationStatus,
-} from "../authenticationStatusUtils.js";
+import { normalizeAuthenticationStatus } from "../authenticationStatusUtils.js";
 
 type LogoutCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
@@ -30,7 +27,7 @@ logoutCommand.action(async options => {
       logger.info("You were already logged out.");
       return;
     case "computeDevice":
-      throw makeCannotLogoutWhileComputeDeviceError(authenticationStatus);
+      break;
     case "loggedInUser":
       break;
     default: {
@@ -60,6 +57,10 @@ logoutCommand.action(async options => {
       process.off("SIGINT", sigintHandler);
       spinner.stopIfNotStopped();
     }
+  }
+  if (authenticationStatus.type === "computeDevice") {
+    logger.info("Successfully logged out and removed compute-device identity.");
+    return;
   }
   logger.info("Successfully logged out.");
 });

@@ -42,7 +42,7 @@ export function formatAuthenticationStatusMessage(authenticationStatus: Authenti
       return `You are currently logged in as: ${authenticationStatus.userName}`;
     case "computeDevice":
       return (
-        "This instance is currently set up as a compute device for " +
+        "You are currently logged in as a compute device for " +
         formatComputeDeviceOwner(authenticationStatus) +
         "."
       );
@@ -60,72 +60,41 @@ export function makeCannotLoginWhileComputeDeviceError(
     text`
       Cannot Log In
 
-      This instance is currently set up as a compute device for
+      This instance is currently logged in as a compute device for
       ${formatComputeDeviceOwner(authenticationStatus)}.
 
-      To log in, you must de-setup first using the command
-      ${chalk.yellow("lms link de-setup")}.
-    `,
-  );
-}
-
-export function makeCannotLogoutWhileComputeDeviceError(
-  authenticationStatus: ComputeDeviceAuthenticationStatus,
-): Error {
-  return makePrettyError(
-    text`
-      Cannot Log Out
-
-      This instance is currently set up as a compute device for
-      ${formatComputeDeviceOwner(authenticationStatus)}.
-
-      To remove compute-device setup, use the command
-      ${chalk.yellow("lms link de-setup")}.
-    `,
-  );
-}
-
-export function makeCannotSetupComputeDeviceWhileLoggedInError(
-  authenticationStatus: LoggedInUserAuthenticationStatus,
-): Error {
-  return makePrettyError(
-    text`
-      Cannot Set Up Compute Device
-
-      This instance is currently logged in as ${authenticationStatus.userName}.
-
-      To set up this instance as a compute device, you must log out first using the command
+      To log in as a user, you must log out first using the command
       ${chalk.yellow("lms logout")}.
     `,
   );
 }
 
-export function makeAlreadySetupAsComputeDeviceError(
-  authenticationStatus: ComputeDeviceAuthenticationStatus,
-): Error {
-  return makePrettyError(
-    text`
-      Already Set Up As Compute Device
-
-      This instance is currently set up as a compute device for
-      ${formatComputeDeviceOwner(authenticationStatus)}.
-
-      To set it up again, you must first use the command ${chalk.yellow("lms link de-setup")}.
-    `,
-  );
-}
-
-export function makeCannotDeSetupComputeDeviceWhileLoggedInError(
+export function makeCannotLoginAsComputeDeviceWhileLoggedInUserError(
   authenticationStatus: LoggedInUserAuthenticationStatus,
 ): Error {
   return makePrettyError(
     text`
-      Cannot De-Setup Compute Device
+      Cannot Log In As Compute Device
 
       This instance is currently logged in as ${authenticationStatus.userName}.
-      It is not set up as a compute device.
 
-      To log out, use the command ${chalk.yellow("lms logout")}.
+      To log in as a compute device, you must log out first using the command
+      ${chalk.yellow("lms logout")}.
+    `,
+  );
+}
+
+export function makeAlreadyLoggedInAsComputeDeviceError(
+  authenticationStatus: ComputeDeviceAuthenticationStatus,
+): Error {
+  return makePrettyError(
+    text`
+      Already Logged In As Compute Device
+
+      This instance is currently logged in as a compute device for
+      ${formatComputeDeviceOwner(authenticationStatus)}.
+
+      To log in again, you must first use the command ${chalk.yellow("lms logout")}.
     `,
   );
 }
