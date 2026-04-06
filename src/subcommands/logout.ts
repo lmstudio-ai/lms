@@ -3,6 +3,10 @@ import { text } from "@lmstudio/lms-common";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { Spinner } from "../Spinner.js";
+import {
+  makeCannotLogoutWhileComputeDeviceError,
+  normalizeAuthenticationStatus,
+} from "../authenticationStatusUtils.js";
 
 type LogoutCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
@@ -17,11 +21,22 @@ logoutCommand.action(async options => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
 
-  const isAuthenticated = await client.repository.isAuthenticated();
+  const authenticationStatus = normalizeAuthenticationStatus(
+    await client.repository.getAuthenticationStatus(),
+  );
 
-  if (!isAuthenticated) {
-    logger.info("You were already logged out.");
-    return;
+  switch (authenticationStatus.type) {
+    case "none":
+      logger.info("You were already logged out.");
+      return;
+    case "computeDevice":
+      throw makeCannotLogoutWhileComputeDeviceError(authenticationStatus);
+    case "loggedInUser":
+      break;
+    default: {
+      const exhaustiveCheck: never = authenticationStatus;
+      throw new Error(`Unexpected authentication status: ${exhaustiveCheck}`);
+    }
   }
 
   const shouldShowSpinner =

@@ -1,12 +1,26 @@
 import { makePromise, makeTitledPrettyError, text, type SimpleLogger } from "@lmstudio/lms-common";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
+import {
+  makeCannotLoginWhileComputeDeviceError,
+  normalizeAuthenticationStatus,
+} from "./authenticationStatusUtils.js";
 
 export async function ensureAuthenticated(
   client: LMStudioClient,
   logger: SimpleLogger,
   { yes = false }: { yes?: boolean } = {},
 ) {
+  const authenticationStatus = normalizeAuthenticationStatus(
+    await client.repository.getAuthenticationStatus(),
+  );
+  if (authenticationStatus.type === "loggedInUser") {
+    return;
+  }
+  if (authenticationStatus.type === "computeDevice") {
+    throw makeCannotLoginWhileComputeDeviceError(authenticationStatus);
+  }
+
   const { promise, resolve, reject } = makePromise<void>();
   client.repository
     .ensureAuthenticated({

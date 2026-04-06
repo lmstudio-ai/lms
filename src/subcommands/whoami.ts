@@ -2,6 +2,10 @@ import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import {
+  formatAuthenticationStatusMessage,
+  normalizeAuthenticationStatus,
+} from "../authenticationStatusUtils.js";
 
 type WhoamiCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
@@ -16,13 +20,10 @@ whoamiCommand.action(async options => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
 
-  const authStatus = await client.repository.getAuthenticationStatus();
-
-  if (authStatus !== null) {
-    logger.info(`You are currently logged in as: ${authStatus.userName}`);
-  } else {
-    logger.info("You are not currently logged in.");
-  }
+  const authenticationStatus = normalizeAuthenticationStatus(
+    await client.repository.getAuthenticationStatus(),
+  );
+  logger.info(formatAuthenticationStatusMessage(authenticationStatus));
 });
 
 export const whoami = whoamiCommand;

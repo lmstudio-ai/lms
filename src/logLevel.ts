@@ -100,6 +100,6 @@ export function createLogger({ logLevel, verbose, quiet }: LogLevelArgs): Simple
       verbose === true || logLevel === "debug"
         ? undefined // If it is verbose, we use the default I
         : null, // Otherwise, no I
-    errorPrefix: chalk.red("Error:"),
+    errorPrefix: chalk.redBright("Error:"),
   });
 }

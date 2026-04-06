@@ -3,6 +3,11 @@ import { text } from "@lmstudio/lms-common";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { ensureAuthenticated } from "../ensureAuthenticated.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import {
+  formatAuthenticationStatusMessage,
+  makeCannotLoginWhileComputeDeviceError,
+  normalizeAuthenticationStatus,
+} from "../authenticationStatusUtils.js";
 
 type LoginCommandOptions = OptionValues &
   CreateClientArgs &
@@ -73,18 +78,20 @@ loginCommand.action(async options => {
     `);
   }
 
+  const authenticationStatus = normalizeAuthenticationStatus(
+    await client.repository.getAuthenticationStatus(),
+  );
+
   // Handle --status flag
   if (status) {
-    const authStatus = await client.repository.getAuthenticationStatus();
-    if (authStatus !== null) {
-      logger.info(`You are currently logged in as: ${authStatus.userName}`);
-    } else {
-      logger.info("You are not currently logged in.");
-    }
+    logger.info(formatAuthenticationStatusMessage(authenticationStatus));
     return;
   }
 
   if (withPreAuthenticatedKeys) {
+    if (authenticationStatus.type === "computeDevice") {
+      throw makeCannotLoginWhileComputeDeviceError(authenticationStatus);
+    }
     if (keyId === undefined || publicKey === undefined || privateKey === undefined) {
       throw new Error(text`
         You must provide --key-id, --public-key, and --private-key when using
@@ -104,10 +111,18 @@ loginCommand.action(async options => {
         --with-pre-authenticated-keys.`);
     }
   }
-  const isAuthenticated = await client.repository.isAuthenticated();
-  if (isAuthenticated) {
-    logger.info("You are already authenticated.");
-    return;
+  switch (authenticationStatus.type) {
+    case "loggedInUser":
+      logger.info(`You are already authenticated as ${authenticationStatus.userName}.`);
+      return;
+    case "computeDevice":
+      throw makeCannotLoginWhileComputeDeviceError(authenticationStatus);
+    case "none":
+      break;
+    default: {
+      const exhaustiveCheck: never = authenticationStatus;
+      throw new Error(`Unexpected authentication status: ${exhaustiveCheck}`);
+    }
   }
   await ensureAuthenticated(client, logger);
   logger.info("Authentication successful.");
