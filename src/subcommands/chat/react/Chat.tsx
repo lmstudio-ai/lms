@@ -2,7 +2,7 @@ import { produce } from "@lmstudio/immer-with-plugins";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, type DOMElement, useApp, Text } from "ink";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { displayVerboseStats, getLargePastePlaceholderText } from "../util.js";
+import { displayVerboseStats, getChipPreviewText } from "../util.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
@@ -19,7 +19,15 @@ import {
 } from "./hooks.js";
 import { insertPasteAtCursor } from "./inputReducer.js";
 import { createSlashCommands } from "./slashCommands.js";
-import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
+import type {
+  ChatUserInputState,
+  InkChatMessage,
+  Suggestion,
+  UserInputContentPart,
+} from "./types.js";
+import { buildUserMessageParts } from "./buildChat.js";
+import { ImagePreparationError } from "./images/imageErrors.js";
+import { ImageStore } from "./images/imageStore.js";
 
 // Freezes streaming content into static chunks at natural breaks to reduce re-renders.
 // Uses multiple boundaries to handle different content (best effort):
@@ -47,6 +55,8 @@ export const emptyChatInputState: ChatUserInputState = {
   cursorOnSegmentIndex: 0,
   cursorInSegmentOffset: 0,
 };
+
+const imageStore = new ImageStore();
 
 export const ChatComponent = React.memo(
   ({ client, llm, chat, onExit, stats, ttl, shouldFetchModelCatalog }: ChatComponentProps) => {
@@ -181,7 +191,7 @@ export const ChatComponent = React.memo(
         return [];
       }
       const firstSegment = userInputState.segments[0];
-      const inputText = firstSegment.content;
+      const inputText = firstSegment?.type === "text" ? firstSegment.content : "";
       return commandHandler.getSuggestions({
         input: inputText,
         shouldShowSuggestions: !isConfirmationActive && !isPredicting && inputText.startsWith("/"),
@@ -292,11 +302,7 @@ export const ChatComponent = React.memo(
 
     const handlePaste = useCallback((content: string) => {
       const normalizedContent = content.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
-
-      if (normalizedContent.length === 0) {
-        return;
-      }
-
+      if (normalizedContent.trim().length === 0) return;
       setUserInputState(previousState =>
         insertPasteAtCursor({
           state: previousState,
@@ -307,27 +313,44 @@ export const ChatComponent = React.memo(
     }, []);
 
     const handleSubmit = useCallback(async () => {
+      const inputStateSnapshot = userInputState;
+      const inputSegments = userInputState.segments;
+      const hasImageChip = inputSegments.some(
+        segment => segment.type === "chip" && segment.data.kind === "image",
+      );
+
       // Collect the full text input from the userInputState
-      const userInputText = userInputState.segments
-        .map(segment => segment.content)
+      const userInputText = inputSegments
+        .map(segment => {
+          if (segment.type === "text") {
+            return segment.content;
+          }
+          return segment.data.kind === "largePaste" ? segment.data.content : "";
+        })
         .join("")
         .trim();
-      // Clear the input state
-      setUserInputState(emptyChatInputState);
-      const confirmationResponse = await handleConfirmationResponse(userInputText);
-      if (confirmationResponse === "handled") {
-        return;
+
+      if (isConfirmationActive) {
+        const confirmationResponse = await handleConfirmationResponse(userInputText);
+        if (confirmationResponse === "handled") {
+          setUserInputState(emptyChatInputState);
+          return;
+        }
+        if (confirmationResponse === "invalid") {
+          logInChat("Please answer 'yes' or 'no'");
+          return;
+        }
       }
-      if (confirmationResponse === "invalid") {
-        logInChat("Please answer 'yes' or 'no'");
+
+      if (userInputText.length === 0 && hasImageChip === false) {
         return;
       }
 
-      if (userInputText.length === 0) {
-        return;
-      }
-
-      if (userInputText.startsWith("/") && userInputState.segments.length === 1) {
+      if (
+        userInputText.startsWith("/") &&
+        inputSegments.length === 1 &&
+        inputSegments[0]?.type === "text"
+      ) {
         const selectedSuggestion =
           normalizedSelectedSuggestionIndex !== null
             ? suggestions[normalizedSelectedSuggestionIndex]
@@ -344,6 +367,7 @@ export const ChatComponent = React.memo(
         // Check if the command is in exception list, if not,
         // execute it.
         if (commandHandler.commandIsIgnored(command) === false) {
+          setUserInputState(emptyChatInputState);
           const wasCommandHandled = await commandHandler.execute(command, argumentsText);
           if (wasCommandHandled === false) {
             logInChat(`Unknown command: ${userInputText}`);
@@ -362,6 +386,11 @@ export const ChatComponent = React.memo(
         return;
       }
 
+      if (hasImageChip === true && llmRef.current.vision === false) {
+        logErrorInChat("The current model does not support image input (vision).");
+        return;
+      }
+
       if (isPredicting) {
         logInChat(
           "A prediction is already in progress. Please wait for it to finish or press CTRL+C to abort it.",
@@ -369,7 +398,23 @@ export const ChatComponent = React.memo(
         return;
       }
 
+      const userMessageContent = inputSegments.map<UserInputContentPart>(segment => {
+        if (segment.type === "text") {
+          return { type: "text", text: segment.content };
+        }
+
+        const displayText = getChipPreviewText(segment.data);
+        return { type: "chip", kind: segment.data.kind, displayText };
+      });
+
       // If nothing else, proceed with normal message submission
+      setUserInputState(emptyChatInputState);
+      // Render the user message immediately (before any async image preparation) to avoid a
+      // transient frame where the input clears but the message hasn't appeared yet ("flash").
+      addMessage({
+        type: "user",
+        content: userMessageContent,
+      });
       setIsPredicting(true);
       setPromptProcessingProgress(null);
       setShowPredictionSpinner(true);
@@ -382,20 +427,30 @@ export const ChatComponent = React.memo(
       const signal = abortControllerRef.current.signal;
 
       try {
-        chatRef.current.append("user", userInputText);
-        addMessage({
-          type: "user",
-          content: userInputState.segments.map(segment => {
-            if (segment.type === "largePaste") {
-              const placeholder = getLargePastePlaceholderText(segment.content);
-              return {
-                type: "largePaste",
-                text: placeholder,
-              };
-            }
-            return { type: segment.type, text: segment.content };
-          }),
-        });
+        let parts: Awaited<ReturnType<typeof buildUserMessageParts>>;
+        try {
+          parts = await buildUserMessageParts({
+            client,
+            inputSegments,
+            imageStore,
+          });
+        } catch (error) {
+          if (error instanceof ImagePreparationError) {
+            setMessages(
+              produce(draftMessages => {
+                const lastMessage = draftMessages.at(-1);
+                if (lastMessage?.type === "user") {
+                  draftMessages.pop();
+                }
+              }),
+            );
+            setUserInputState(inputStateSnapshot);
+            logErrorInChat(`Failed to attach image: ${error.message}`);
+            return;
+          }
+          throw error;
+        }
+        chatRef.current.append({ role: "user", content: parts });
         const result = await llmRef.current.respond(chatRef.current, {
           onFirstToken() {
             setShowPredictionSpinner(false);
@@ -577,20 +632,21 @@ export const ChatComponent = React.memo(
         abortControllerRef.current = null;
       }
     }, [
-      userInputState.segments,
-      handleConfirmationResponse,
+      userInputState,
+      isConfirmationActive,
       isPredicting,
+      addMessage,
+      handleConfirmationResponse,
       logInChat,
       normalizedSelectedSuggestionIndex,
       suggestions,
       commandHandler,
       handleExit,
       logErrorInChat,
-      addMessage,
+      client,
       stats,
       promptProcessingProgress,
       requestConfirmation,
-      client.llm,
       ttl,
     ]);
 
