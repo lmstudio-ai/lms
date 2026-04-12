@@ -49,6 +49,11 @@ interface InsertSuggestionAtCursorOpts {
   suggestionText: string;
 }
 
+interface CursorPosition {
+  segmentIndex: number;
+  offset: number;
+}
+
 type ChatUserInputStateMutator = (draft: ChatUserInputState) => void;
 
 /**
@@ -63,6 +68,310 @@ function produceSanitizedState(
     mutator(draft);
     sanitizeChatUserInputState(draft);
   });
+}
+
+function findLineStartPosition(state: ChatUserInputState): CursorPosition {
+  // Handle empty state
+  if (state.segments.length === 0) {
+    return {
+      segmentIndex: 0,
+      offset: 0,
+    };
+  }
+
+  const cursorSegmentIndex = state.cursorOnSegmentIndex;
+  const cursorOffset = state.cursorInSegmentOffset;
+
+  // Validate cursor position
+  if (cursorSegmentIndex < 0 || cursorSegmentIndex >= state.segments.length) {
+    return {
+      segmentIndex: 0,
+      offset: 0,
+    };
+  }
+
+  const currentSegment = state.segments[cursorSegmentIndex];
+
+  // Check current segment for newline before cursor
+  if (currentSegment !== undefined && currentSegment.type === "text") {
+    const textBeforeCursor = currentSegment.content.slice(0, cursorOffset);
+    const lastNewlineInCurrentSegment = textBeforeCursor.lastIndexOf("\n");
+
+    // Found newline in current segment - line starts after it
+    if (lastNewlineInCurrentSegment !== -1) {
+      return {
+        segmentIndex: cursorSegmentIndex,
+        offset: lastNewlineInCurrentSegment + 1,
+      };
+    }
+  }
+
+  // Search backward through previous segments for newline
+  for (let segmentIndex = cursorSegmentIndex - 1; segmentIndex >= 0; segmentIndex -= 1) {
+    const segment = state.segments[segmentIndex];
+
+    // Skip non-text segments (e.g., largePaste)
+    if (segment === undefined || segment.type !== "text") {
+      continue;
+    }
+
+    const lastNewlineInSegment = segment.content.lastIndexOf("\n");
+
+    // Found newline in previous segment - line starts after it
+    if (lastNewlineInSegment !== -1) {
+      return {
+        segmentIndex,
+        offset: lastNewlineInSegment + 1,
+      };
+    }
+  }
+
+  // No newline found - line starts at beginning of input
+  return {
+    segmentIndex: 0,
+    offset: 0,
+  };
+}
+
+function findLineEndPosition(state: ChatUserInputState): CursorPosition {
+  // Handle empty state
+  if (state.segments.length === 0) {
+    return {
+      segmentIndex: 0,
+      offset: 0,
+    };
+  }
+
+  const cursorSegmentIndex = state.cursorOnSegmentIndex;
+  const cursorOffset = state.cursorInSegmentOffset;
+
+  // Validate cursor position
+  if (cursorSegmentIndex < 0 || cursorSegmentIndex >= state.segments.length) {
+    return {
+      segmentIndex: 0,
+      offset: 0,
+    };
+  }
+
+  const currentSegment = state.segments[cursorSegmentIndex];
+
+  // Check current segment for newline after cursor
+  if (currentSegment !== undefined && currentSegment.type === "text") {
+    const textAfterCursor = currentSegment.content.slice(cursorOffset);
+    const newlineRelativeIndex = textAfterCursor.indexOf("\n");
+
+    // Found newline in current segment - line ends at it
+    if (newlineRelativeIndex !== -1) {
+      const newlineAbsoluteIndex = cursorOffset + newlineRelativeIndex;
+
+      return {
+        segmentIndex: cursorSegmentIndex,
+        offset: newlineAbsoluteIndex,
+      };
+    }
+  }
+
+  // Search forward through following segments for newline
+  for (
+    let segmentIndex = cursorSegmentIndex + 1;
+    segmentIndex < state.segments.length;
+    segmentIndex += 1
+  ) {
+    const segment = state.segments[segmentIndex];
+
+    // Skip non-text segments (e.g., largePaste)
+    if (segment === undefined || segment.type !== "text") {
+      continue;
+    }
+
+    const newlineIndex = segment.content.indexOf("\n");
+
+    // Found newline in following segment - line ends at it
+    if (newlineIndex !== -1) {
+      return {
+        segmentIndex,
+        offset: newlineIndex,
+      };
+    }
+  }
+
+  // No newline found - line ends at end of last text segment
+  const lastSegmentIndex = state.segments.length - 1;
+  const lastSegment = state.segments[lastSegmentIndex];
+
+  if (lastSegment !== undefined && lastSegment.type === "text") {
+    return {
+      segmentIndex: lastSegmentIndex,
+      offset: lastSegment.content.length,
+    };
+  }
+
+  // A last segment being non-text should not be the case because of our trailing placeholder rule
+  // but we handle it anyway as this runs before sanitation
+  // Last segment is not text - search backward for last text segment
+  for (let segmentIndex = lastSegmentIndex - 1; segmentIndex >= 0; segmentIndex -= 1) {
+    const segment = state.segments[segmentIndex];
+
+    if (segment === undefined || segment.type !== "text") {
+      continue;
+    }
+
+    return {
+      segmentIndex,
+      offset: segment.content.length,
+    };
+  }
+
+  // No text segments found - default to beginning
+  return {
+    segmentIndex: 0,
+    offset: 0,
+  };
+}
+
+function isWordSeparatorCharacter(character: string): boolean {
+  // Treat whitespace and common shell separators (including ASCII hyphen and Unicode en/em dashes)
+  // as word breaks; keep path/flag chars intact
+  return /[\s"'`,;|&<>()[\]{}\-\u2013\u2014]/.test(character);
+}
+
+/**
+ * Finds the previous word boundary in a text segment given a cursor offset.
+ * The word boundary is defined as the position before the start of the word
+ * that precedes the cursor offset.
+ * @param content - The text content of the segment
+ * @param cursorOffset - The cursor position within the segment
+ * @returns The offset of the previous word boundary
+ */
+function findPreviousWordBoundaryInSegment(content: string, cursorOffset: number): number {
+  if (cursorOffset <= 0) {
+    return 0;
+  }
+
+  const segmentLength = content.length;
+
+  if (segmentLength === 0) {
+    return 0;
+  }
+
+  let scanIndex = cursorOffset;
+
+  if (scanIndex > segmentLength) {
+    scanIndex = segmentLength;
+  }
+
+  // Scan backwards over any word separator characters
+  while (scanIndex > 0) {
+    const previousCharacter = content.charAt(scanIndex - 1);
+
+    // If previous character is a word separator, keep moving left
+    if (isWordSeparatorCharacter(previousCharacter) === true) {
+      scanIndex -= 1;
+    } else {
+      // Found a non-separator character, stop scanning
+      break;
+    }
+  }
+
+  // Now scan backwards over non-separator characters to find the start of the word
+  while (scanIndex > 0) {
+    const previousCharacter = content.charAt(scanIndex - 1);
+
+    // If previous character is not a word separator, keep moving left
+    if (isWordSeparatorCharacter(previousCharacter) === false) {
+      scanIndex -= 1;
+    } else {
+      // Found a separator character, stop scanning
+      break;
+    }
+  }
+
+  return scanIndex;
+}
+
+/**
+ * Finds the next word boundary in a text segment given a cursor offset.
+ * The word boundary is defined as the position after the end of the word
+ * that follows the cursor offset.
+ * @param content - The text content of the segment
+ * @param cursorOffset - The cursor position within the segment
+ * @returns The offset of the next word boundary
+ */
+function findNextWordBoundaryInSegment(content: string, cursorOffset: number): number {
+  const segmentLength = content.length;
+
+  if (segmentLength === 0) {
+    return 0;
+  }
+
+  let scanIndex = cursorOffset;
+
+  if (scanIndex < 0) {
+    scanIndex = 0;
+  }
+
+  if (scanIndex >= segmentLength) {
+    return segmentLength;
+  }
+
+  // Scan forwards over any word separator characters
+  // to find the start of the next word
+  while (scanIndex < segmentLength) {
+    const character = content.charAt(scanIndex);
+
+    // If character is a word separator, keep moving right
+    if (isWordSeparatorCharacter(character) === true) {
+      scanIndex += 1;
+    } else {
+      // Found a non-separator character, stop scanning
+      break;
+    }
+  }
+
+  // Now scan forwards over non-separator characters
+  while (scanIndex < segmentLength) {
+    const character = content.charAt(scanIndex);
+
+    // If character is not a word separator, keep moving right
+    if (isWordSeparatorCharacter(character) === false) {
+      scanIndex += 1;
+    } else {
+      // Found a separator character, stop scanning
+      break;
+    }
+  }
+
+  return scanIndex;
+}
+
+function findNextWordStartInSegment(content: string, cursorOffset: number): number {
+  const segmentLength = content.length;
+
+  if (segmentLength === 0) {
+    return 0;
+  }
+
+  let scanIndex = cursorOffset;
+
+  if (scanIndex < 0) {
+    scanIndex = 0;
+  }
+
+  if (scanIndex >= segmentLength) {
+    return segmentLength;
+  }
+
+  // Skip over separators to land at the first non-separator (start of the next word)
+  while (scanIndex < segmentLength) {
+    const character = content.charAt(scanIndex);
+    if (isWordSeparatorCharacter(character) === true) {
+      scanIndex += 1;
+      continue;
+    }
+    break;
+  }
+
+  return scanIndex;
 }
 
 /**
@@ -433,6 +742,480 @@ export function moveCursorRight(state: ChatUserInputState): ChatUserInputState {
     // Next segment is text - move to it
     draft.cursorOnSegmentIndex = nextSegmentIndex;
     draft.cursorInSegmentOffset = 0;
+  });
+}
+
+/**
+ * Moves the cursor to the start of the current line.
+ * Handles multi-segment inputs and newlines.
+ * @returns Updated ChatUserInputState with cursor at line start
+ */
+export function moveCursorToLineStart(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const lineStartPosition = findLineStartPosition(draft);
+
+    draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex;
+    draft.cursorInSegmentOffset = lineStartPosition.offset;
+  });
+}
+
+/**
+ * Moves the cursor to the end of the current line.
+ * Handles multi-segment inputs and newlines.
+ * @returns Updated ChatUserInputState with cursor at line end
+ */
+export function moveCursorToLineEnd(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const lineEndPosition = findLineEndPosition(draft);
+
+    draft.cursorOnSegmentIndex = lineEndPosition.segmentIndex;
+    draft.cursorInSegmentOffset = lineEndPosition.offset;
+  });
+}
+
+/**
+ * Moves the cursor one word to the left.
+ * For text segments,
+ * if inside text segment, finds the previous word boundary.
+ * if at start of text segment, moves to the end of the previous text segment.
+ * For largePaste segments, moves to the previous segment.
+ */
+export function moveCursorWordLeft(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentSegment = draft.segments[currentSegmentIndex];
+
+    if (currentSegment === undefined) {
+      return;
+    }
+
+    if (currentSegment.type === "text") {
+      const segmentContent = currentSegment.content;
+      const cursorOffset = draft.cursorInSegmentOffset;
+
+      // Inside text segment
+      if (cursorOffset > 0) {
+        // Find previous word boundary within current segment and move cursor there
+        const newCursorOffset = findPreviousWordBoundaryInSegment(segmentContent, cursorOffset);
+        draft.cursorInSegmentOffset = newCursorOffset;
+        return;
+      }
+    }
+
+    // At the start of the current segment (text or largePaste) - move to previous segment
+    const previousSegmentIndex = currentSegmentIndex - 1;
+    const previousSegment = draft.segments[previousSegmentIndex];
+
+    if (previousSegment === undefined) {
+      return;
+    }
+
+    // If previous segment is largePaste, move cursor there
+    if (previousSegment.type === "largePaste") {
+      draft.cursorOnSegmentIndex = previousSegmentIndex;
+      draft.cursorInSegmentOffset = 0;
+      return;
+    }
+
+    // The previous segment is text - move to its end word boundary
+    const previousContent = previousSegment.content;
+    const newCursorOffset = findPreviousWordBoundaryInSegment(
+      previousContent,
+      previousContent.length,
+    );
+
+    draft.cursorOnSegmentIndex = previousSegmentIndex;
+    draft.cursorInSegmentOffset = newCursorOffset;
+  });
+}
+
+/**
+ * Moves the cursor one word to the right.
+ * For text segments,
+ * if inside text segment, finds the next word boundary.
+ * if at end of text segment, moves to the start of the next text segment.
+ * For largePaste segments, moves to the next segment.
+ */
+export function moveCursorWordRight(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentSegment = draft.segments[currentSegmentIndex];
+
+    if (currentSegment === undefined) {
+      return;
+    }
+
+    if (currentSegment.type === "text") {
+      const segmentContent = currentSegment.content;
+      const cursorOffset = draft.cursorInSegmentOffset;
+      const segmentLength = segmentContent.length;
+
+      // Inside text segment
+      if (cursorOffset < segmentLength) {
+        // Find next word boundary within current segment and move cursor there
+        const newCursorOffset = findNextWordBoundaryInSegment(segmentContent, cursorOffset);
+        draft.cursorInSegmentOffset = newCursorOffset;
+        // If we reached the end of the segment, continue to jump to next segment
+        if (newCursorOffset < segmentLength) {
+          return;
+        }
+        // Fall through to jump to next segment
+      }
+    }
+
+    // At the end of the current segment (text or largePaste) - move to next segment
+    const nextSegmentIndex = currentSegmentIndex + 1;
+    const nextSegment = draft.segments[nextSegmentIndex];
+
+    if (nextSegment === undefined) {
+      return;
+    }
+
+    // If next segment is largePaste, move cursor there
+    if (nextSegment.type === "largePaste") {
+      draft.cursorOnSegmentIndex = nextSegmentIndex;
+      draft.cursorInSegmentOffset = 0;
+      return;
+    }
+
+    // The next segment is text - move to its start word boundary
+    const nextContent = nextSegment.content;
+    const newCursorOffset =
+      currentSegment.type === "largePaste"
+        ? findNextWordStartInSegment(nextContent, 0)
+        : findNextWordBoundaryInSegment(nextContent, 0);
+
+    draft.cursorOnSegmentIndex = nextSegmentIndex;
+    draft.cursorInSegmentOffset = newCursorOffset;
+  });
+}
+
+/**
+ * Deletes the word before the cursor.
+ * Handles all segment types and cursor positions:
+ * - On text segment: deletes word before cursor
+ * - On largePaste at offset 0: deletes the previous segment
+ *
+ */
+export function deleteWordBackward(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentSegment = draft.segments[currentSegmentIndex];
+
+    if (currentSegment === undefined) {
+      return;
+    }
+
+    if (currentSegment.type === "text") {
+      const segmentContent = currentSegment.content;
+      const cursorOffset = draft.cursorInSegmentOffset;
+
+      // Inside text segment
+      if (cursorOffset > 0) {
+        // Find previous word boundary within current segment
+        const newCursorOffset = findPreviousWordBoundaryInSegment(segmentContent, cursorOffset);
+
+        // We are at the start of a word - nothing to delete
+        if (newCursorOffset === cursorOffset) {
+          return;
+        }
+
+        // Delete content from newCursorOffset to cursorOffset
+        currentSegment.content =
+          segmentContent.slice(0, newCursorOffset) + segmentContent.slice(cursorOffset);
+        draft.cursorInSegmentOffset = newCursorOffset;
+        return;
+      }
+    }
+    // At the start of the current segment (text or largePaste) - delete from previous segment
+    const previousSegmentIndex = currentSegmentIndex - 1;
+    const previousSegment = draft.segments[previousSegmentIndex];
+
+    if (previousSegment === undefined) {
+      return;
+    }
+
+    // Previous segment is largePaste - delete the entire segment
+    if (previousSegment.type === "largePaste") {
+      draft.segments.splice(previousSegmentIndex, 1);
+      draft.cursorOnSegmentIndex = previousSegmentIndex;
+      draft.cursorInSegmentOffset = 0;
+      return;
+    }
+
+    // Previous segment is text - delete last word from it
+    const previousContent = previousSegment.content;
+    const previousLength = previousContent.length;
+
+    // Find previous word boundary in previous text segment
+    const newCursorOffset = findPreviousWordBoundaryInSegment(previousContent, previousLength);
+
+    // Delete content from newCursorOffset to end of previous segment
+    previousSegment.content = previousContent.slice(0, newCursorOffset);
+    draft.cursorOnSegmentIndex = previousSegmentIndex;
+    draft.cursorInSegmentOffset = newCursorOffset;
+  });
+}
+
+/**
+ * Deletes the word after the cursor.
+ * Handles all segment types and cursor positions:
+ * - On text segment: deletes word after cursor or the next large paste
+ * - On largePaste at offset 0: deletes the paste segment
+ */
+export function deleteWordForward(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentSegment = draft.segments[currentSegmentIndex];
+
+    if (currentSegment === undefined) {
+      return;
+    }
+
+    const currentSegmentType = currentSegment.type;
+    switch (currentSegmentType) {
+      case "text": {
+        const segmentContent = currentSegment.content;
+        const cursorOffset = draft.cursorInSegmentOffset;
+        const segmentLength = segmentContent.length;
+
+        // Inside text segment
+        if (cursorOffset < segmentLength) {
+          // Find next word boundary within current segment and delete up to there
+          const newCursorOffset = findNextWordBoundaryInSegment(segmentContent, cursorOffset);
+          if (newCursorOffset === cursorOffset) {
+            return;
+          }
+
+          // Delete content from cursorOffset to newCursorOffset
+          currentSegment.content =
+            segmentContent.slice(0, cursorOffset) + segmentContent.slice(newCursorOffset);
+          return;
+        }
+
+        // At end of text segment - delete next segment
+        const nextSegmentIndex = currentSegmentIndex + 1;
+        const nextSegment = draft.segments[nextSegmentIndex];
+
+        if (nextSegment === undefined) {
+          return;
+        }
+
+        // If next segment is largePaste, delete it
+        if (nextSegment.type === "largePaste") {
+          draft.segments.splice(nextSegmentIndex, 1);
+          return;
+        }
+
+        // Next segment is text - delete first word from it
+        const nextContent = nextSegment.content;
+        const nextWordBoundary = findNextWordBoundaryInSegment(nextContent, 0);
+
+        // Delete content from start to nextWordBoundary in next segment
+        nextSegment.content = nextContent.slice(nextWordBoundary);
+        return;
+      }
+      case "largePaste": {
+        const segmentIndexToRemove = currentSegmentIndex;
+        draft.segments.splice(segmentIndexToRemove, 1);
+
+        // We know for sure that there is at least one segment left after sanitation
+        // due to the trailing placeholder rule so segmentIndexToRemove will be valid
+        draft.cursorOnSegmentIndex = segmentIndexToRemove;
+        draft.cursorInSegmentOffset = 0;
+        break;
+      }
+      default: {
+        const exhaustiveCheck: never = currentSegmentType;
+        throw new Error(`Unhandled segment type: ${exhaustiveCheck}`);
+      }
+    }
+  });
+}
+
+/**
+ * Deletes all content from the cursor to the start of the current line.
+ * This is equivalent to Ctrl+U in Emacs/Unix terminals.
+ * - Deletes from cursor back to line start (after last newline or start of input)
+ * - Preserves segments structure
+ * - Handles multi-segment inputs
+ */
+export function deleteToLineStart(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const lineStartPosition = findLineStartPosition(draft);
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentOffset = draft.cursorInSegmentOffset;
+
+    // If already at line start, do nothing
+    if (
+      lineStartPosition.segmentIndex === currentSegmentIndex &&
+      lineStartPosition.offset === currentOffset
+    ) {
+      return;
+    }
+
+    // Same segment - just delete content within segment
+    if (lineStartPosition.segmentIndex === currentSegmentIndex) {
+      const currentSegment = draft.segments[currentSegmentIndex];
+      if (currentSegment !== undefined && currentSegment.type === "text") {
+        currentSegment.content =
+          currentSegment.content.slice(0, lineStartPosition.offset) +
+          currentSegment.content.slice(currentOffset);
+        draft.cursorInSegmentOffset = lineStartPosition.offset;
+      }
+      return;
+    }
+
+    // Different segments - need to delete across segments
+    const lineStartSegment = draft.segments[lineStartPosition.segmentIndex];
+    const currentSegment = draft.segments[currentSegmentIndex];
+
+    // If cursor is at start of current segment (offset 0), preserve current segment
+    if (currentOffset === 0) {
+      // Delete segments between line start and current (exclusive of current)
+      const segmentsToRemove = currentSegmentIndex - lineStartPosition.segmentIndex - 1;
+      if (segmentsToRemove > 0) {
+        draft.segments.splice(lineStartPosition.segmentIndex + 1, segmentsToRemove);
+        draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex + 1;
+      }
+
+      // Truncate line start segment at line start position
+      if (lineStartSegment !== undefined && lineStartSegment.type === "text") {
+        lineStartSegment.content = lineStartSegment.content.slice(0, lineStartPosition.offset);
+        if (lineStartSegment.content.length === 0) {
+          // Remove empty line start segment
+          draft.segments.splice(lineStartPosition.segmentIndex, 1);
+          draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex;
+        }
+      } else if (lineStartSegment !== undefined) {
+        // Line start segment is non-text (e.g., largePaste) - remove it
+        draft.segments.splice(lineStartPosition.segmentIndex, 1);
+        draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex;
+      }
+
+      draft.cursorInSegmentOffset = 0;
+      return;
+    }
+
+    let contentAfterCursor = "";
+    if (currentSegment !== undefined && currentSegment.type === "text") {
+      contentAfterCursor = currentSegment.content.slice(currentOffset);
+    }
+
+    if (lineStartSegment !== undefined && lineStartSegment.type === "text") {
+      // Keep content before line start and merge content after cursor
+      lineStartSegment.content =
+        lineStartSegment.content.slice(0, lineStartPosition.offset) + contentAfterCursor;
+    } else if (contentAfterCursor.length > 0) {
+      // Line starts with non-text segment, create new text segment for content after cursor
+      draft.segments[lineStartPosition.segmentIndex] = {
+        type: "text",
+        content: contentAfterCursor,
+      };
+    }
+
+    // Remove segments between line start and cursor (inclusive of current if different)
+    const segmentsToRemove = currentSegmentIndex - lineStartPosition.segmentIndex;
+    if (segmentsToRemove > 0) {
+      draft.segments.splice(lineStartPosition.segmentIndex + 1, segmentsToRemove);
+    }
+
+    // Position cursor at line start
+    draft.cursorOnSegmentIndex = lineStartPosition.segmentIndex;
+    draft.cursorInSegmentOffset =
+      lineStartSegment !== undefined && lineStartSegment.type === "text"
+        ? lineStartPosition.offset
+        : 0;
+  });
+}
+
+/**
+ * Deletes all content from the cursor to the end of the current line.
+ * This is equivalent to Ctrl+K in Emacs/Unix terminals.
+ * - Deletes from cursor to line end (before next newline or end of input)
+ * - Preserves segments structure
+ * - Handles multi-segment inputs
+ */
+export function deleteToLineEnd(state: ChatUserInputState): ChatUserInputState {
+  return produceSanitizedState(state, draft => {
+    const lineEndPosition = findLineEndPosition(draft);
+    const currentSegmentIndex = draft.cursorOnSegmentIndex;
+    const currentOffset = draft.cursorInSegmentOffset;
+
+    // If already at line end, do nothing
+    if (
+      lineEndPosition.segmentIndex === currentSegmentIndex &&
+      lineEndPosition.offset === currentOffset
+    ) {
+      return;
+    }
+
+    // Same segment - just delete content within segment
+    if (lineEndPosition.segmentIndex === currentSegmentIndex) {
+      const currentSegment = draft.segments[currentSegmentIndex];
+      if (currentSegment !== undefined && currentSegment.type === "text") {
+        currentSegment.content =
+          currentSegment.content.slice(0, currentOffset) +
+          currentSegment.content.slice(lineEndPosition.offset);
+      }
+      return;
+    }
+
+    // Different segments - need to delete across segments
+    const currentSegment = draft.segments[currentSegmentIndex];
+    const lineEndSegment = draft.segments[lineEndPosition.segmentIndex];
+
+    if (currentSegment !== undefined && currentSegment.type === "text") {
+      // Keep content before cursor and append content after line end
+      const contentBeforeCursor = currentSegment.content.slice(0, currentOffset);
+      if (lineEndSegment !== undefined && lineEndSegment.type === "text") {
+        const contentAfterLineEnd = lineEndSegment.content.slice(lineEndPosition.offset);
+        currentSegment.content = contentBeforeCursor + contentAfterLineEnd;
+      } else {
+        currentSegment.content = contentBeforeCursor;
+      }
+    } else if (currentOffset === 0) {
+      // At start of non-text segment - delete from here to line end, but preserve any
+      // remaining text after the line end (e.g., after a newline) in the line-end segment.
+      const preservedTextAfterLineEnd =
+        lineEndSegment !== undefined && lineEndSegment.type === "text"
+          ? lineEndSegment.content.slice(lineEndPosition.offset)
+          : "";
+
+      const segmentsToRemove = lineEndPosition.segmentIndex - currentSegmentIndex + 1;
+      if (segmentsToRemove > 0) {
+        draft.segments.splice(currentSegmentIndex, segmentsToRemove);
+      }
+
+      if (preservedTextAfterLineEnd.length > 0) {
+        draft.segments.splice(currentSegmentIndex, 0, {
+          type: "text",
+          content: preservedTextAfterLineEnd,
+        });
+        draft.cursorOnSegmentIndex = currentSegmentIndex;
+        draft.cursorInSegmentOffset = 0;
+      } else if (currentSegmentIndex < draft.segments.length) {
+        draft.cursorOnSegmentIndex = currentSegmentIndex;
+        draft.cursorInSegmentOffset = 0;
+      } else {
+        // Cursor is now at end-of-input.
+        const lastSegmentIndex = draft.segments.length - 1;
+        draft.cursorOnSegmentIndex = Math.max(0, lastSegmentIndex);
+        const lastSegment = draft.segments[draft.cursorOnSegmentIndex];
+        draft.cursorInSegmentOffset =
+          lastSegment !== undefined && lastSegment.type === "text" ? lastSegment.content.length : 0;
+      }
+      return;
+    }
+
+    // Remove segments between cursor and line end (inclusive of line end if different)
+    const segmentsToRemove = lineEndPosition.segmentIndex - currentSegmentIndex;
+    if (segmentsToRemove > 0) {
+      draft.segments.splice(currentSegmentIndex + 1, segmentsToRemove);
+    }
+
+    // Cursor stays at current position
+    draft.cursorInSegmentOffset = currentOffset;
   });
 }
 
