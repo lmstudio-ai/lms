@@ -17,9 +17,12 @@ type LibatomicCheckResult =
 
 function checkLinuxLibatomic(): LibatomicCheckResult {
   try {
-    const result = spawnSync("ldconfig", ["-p"], { encoding: "utf-8" });
+    let result = spawnSync("ldconfig", ["-p"], { encoding: "utf-8" });
     if (result.error !== undefined) {
-      return { status: "ldconfig-unavailable", error: result.error.message };
+      result = spawnSync("/usr/sbin/ldconfig", ["-p"], { encoding: "utf-8" });
+      if (result.error !== undefined) {
+        return { status: "ldconfig-unavailable", error: result.error.message };
+      }
     }
     if (result.status !== 0) {
       const statusDescription =
