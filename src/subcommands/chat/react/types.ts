@@ -41,12 +41,21 @@ export type ModelState = {
   isLoaded: boolean;
   isCurrent: boolean;
   displayName: string;
+  deviceLabel: string;
+  deviceIdentifier: string | null;
 };
+
+export type SuggestionExecution =
+  | {
+      type: "model";
+      deviceIdentifier: string | null;
+    };
 
 export interface Suggestion {
   command: string;
   args: string[];
   priority: number;
+  execution?: SuggestionExecution;
 }
 
 export type ChatInputSegment =
@@ -63,4 +72,5 @@ export interface ChatUserInputState {
   segments: ChatInputSegment[];
   cursorOnSegmentIndex: number;
   cursorInSegmentOffset: number;
+  acceptedSuggestion?: Suggestion;
 }

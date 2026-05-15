@@ -1,7 +1,9 @@
 import type { HubModel } from "@lmstudio/lms-shared-types";
+import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { measureElement, type DOMElement, useStdin } from "ink";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createDeviceNameResolver, formatDeviceLabel } from "../../../deviceNameLookup.js";
 import { formatSizeBytes1000 } from "../../../formatBytes.js";
 import { getCachedModelCatalogOrFetch, parseModelKey } from "../catalogHelpers.js";
 import { getDownloadSize } from "../downloadHelpers.js";
@@ -117,6 +119,8 @@ export function useModelCatalog(
 export function useDownloadedModels(
   client: LMStudioClient,
   currentModelIdentifier: string | null,
+  currentModelDeviceIdentifier: string | null | undefined,
+  logger: SimpleLogger,
 ): { downloadedModels: Array<ModelState>; refreshDownloadedModels: () => void } {
   const [downloadedModels, setDownloadedModels] = useState<Array<ModelState>>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -127,40 +131,71 @@ export function useDownloadedModels(
 
   useEffect(() => {
     const fetchModels = async () => {
-      const downloadedModels = (await client.system.listDownloadedModels()).filter(
-        model => model.type === "llm",
+      const [allDownloadedModels, loadedModels, deviceNameResolver] = await Promise.all([
+        client.system.listDownloadedModels(),
+        client.llm.listLoaded(),
+        createDeviceNameResolver(client, logger),
+      ]);
+      const downloadedModels = allDownloadedModels.filter(model => model.type === "llm");
+      const loadedModelInfos = await Promise.all(
+        loadedModels.map(async loadedModel => {
+          const loadedModelInfo = await loadedModel.getModelInfo();
+          return { loadedModel, loadedModelInfo };
+        }),
       );
-      const loadedModels = await client.llm.listLoaded();
 
-      // Create entry for each loaded model instance
-      const loadedModelStates = loadedModels.map(loadedModel => {
-        const downloadedModel = downloadedModels.find(model => model.path === loadedModel.path);
+      const identifierMatchCount = loadedModelInfos.filter(
+        ({ loadedModel }) => loadedModel.identifier === currentModelIdentifier,
+      ).length;
+      const loadedModelStates = loadedModelInfos.map(({ loadedModel, loadedModelInfo }) => {
+        const downloadedModel = downloadedModels.find(
+          model =>
+            model.modelKey === loadedModelInfo.modelKey &&
+            model.deviceIdentifier === loadedModelInfo.deviceIdentifier,
+        );
+        const identifierMatches = loadedModel.identifier === currentModelIdentifier;
+        const isCurrent =
+          identifierMatches &&
+          (currentModelDeviceIdentifier === undefined
+            ? identifierMatchCount === 1
+            : loadedModelInfo.deviceIdentifier === currentModelDeviceIdentifier);
         return {
           modelKey: loadedModel.identifier,
           isLoaded: true,
-          isCurrent: loadedModel.identifier === currentModelIdentifier,
-          displayName: downloadedModel?.displayName ?? loadedModel.path,
+          isCurrent,
+          displayName: downloadedModel?.displayName ?? loadedModelInfo.displayName,
+          deviceLabel: formatDeviceLabel(deviceNameResolver, loadedModelInfo.deviceIdentifier),
+          deviceIdentifier: loadedModelInfo.deviceIdentifier,
         };
       });
 
-      // Get set of paths that are currently loaded
-      const loadedPaths = new Set(loadedModels.map(loadedModel => loadedModel.path));
+      const isDownloadedModelLoaded = (modelKey: string, deviceIdentifier: string | null) => {
+        return loadedModelInfos.some(({ loadedModelInfo }) => {
+          return (
+            loadedModelInfo.modelKey === modelKey &&
+            loadedModelInfo.deviceIdentifier === deviceIdentifier
+          );
+        });
+      };
 
-      // Add downloaded models that are NOT loaded
       const downloadedOnlyModels = downloadedModels
-        .filter(model => !loadedPaths.has(model.path))
-        .map(model => ({
-          modelKey: model.modelKey,
-          isLoaded: false,
-          isCurrent: false,
-          displayName: model.displayName,
-        }));
+        .filter(model => isDownloadedModelLoaded(model.modelKey, model.deviceIdentifier) !== true)
+        .map(model => {
+          return {
+            modelKey: model.modelKey,
+            isLoaded: false,
+            isCurrent: false,
+            displayName: model.displayName,
+            deviceLabel: formatDeviceLabel(deviceNameResolver, model.deviceIdentifier),
+            deviceIdentifier: model.deviceIdentifier,
+          };
+        });
 
       setDownloadedModels([...loadedModelStates, ...downloadedOnlyModels]);
     };
 
     fetchModels();
-  }, [client, currentModelIdentifier, refreshTrigger]);
+  }, [client, currentModelIdentifier, currentModelDeviceIdentifier, logger, refreshTrigger]);
 
   return { downloadedModels, refreshDownloadedModels };
 }
@@ -559,12 +594,17 @@ export function useSuggestionHandlers({
 
     const hasArguments = selectedSuggestion.args.length > 0;
     const argumentsText = selectedSuggestion.args.join(" ");
+    const acceptedSuggestion = hasArguments ? selectedSuggestion : undefined;
     // Always add a space after the command (even without args) to trigger suggestions
     const suggestionText = hasArguments
       ? `/${selectedSuggestion.command} ${argumentsText}`
       : `/${selectedSuggestion.command} `;
     setUserInputState((previousState: ChatUserInputState) =>
-      insertSuggestionAtCursor({ state: previousState, suggestionText }),
+      insertSuggestionAtCursor({
+        state: previousState,
+        suggestionText,
+        acceptedSuggestion,
+      }),
     );
   }, [selectedSuggestionIndex, suggestions, setUserInputState]);
 

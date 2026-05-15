@@ -5,6 +5,7 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 import { displayVerboseStats } from "../util.js";
 import type {
   SlashCommand,
+  SlashCommandExecutionContext,
   SlashCommandHandler,
   SlashCommandSuggestionBuilderArgs,
 } from "./SlashCommandHandler.js";
@@ -13,6 +14,7 @@ import type { ChatUserInputState, InkChatMessage, ModelState, Suggestion } from 
 export interface CreateSlashCommandsOpts {
   client: LMStudioClient;
   llmRef: RefObject<LLM | null>;
+  currentModelDeviceIdentifierRef: RefObject<string | null | undefined>;
   chatRef: RefObject<Chat>;
   exitApp: () => void;
   ttl?: number;
@@ -34,6 +36,7 @@ export interface CreateSlashCommandsOpts {
 export function createSlashCommands({
   client,
   llmRef,
+  currentModelDeviceIdentifierRef,
   chatRef,
   exitApp,
   ttl,
@@ -70,29 +73,28 @@ export function createSlashCommands({
     {
       name: "model",
       description: "Load a model (type /model to see list)",
-      handler: async commandArguments => {
+      handler: async (commandArguments, context) => {
         if (commandArguments.length === 0) {
           logInChat("Please specify a model to load. Type /model to see the list.");
           return;
         }
 
         const modelKey = commandArguments.join(" ");
+        const selectedDeviceIdentifier = getSelectedModelDeviceIdentifier(context, modelKey);
 
-        if (llmRef.current !== null) {
-          // Direct identifier match
-          if (llmRef.current.identifier === modelKey) {
-            return;
+        if (
+          llmRef.current !== null &&
+          (await isCurrentModelSelection({
+            llm: llmRef.current,
+            modelKey,
+            deviceIdentifier: selectedDeviceIdentifier,
+            downloadedModels,
+          }))
+        ) {
+          if (selectedDeviceIdentifier !== undefined) {
+            currentModelDeviceIdentifierRef.current = selectedDeviceIdentifier;
           }
-
-          // ModelKey match - only return if it's the only loaded instance
-          if (llmRef.current.modelKey === modelKey) {
-            const loadedInstancesOfThisModel = downloadedModels.filter(
-              model => model.modelKey === modelKey && model.isLoaded,
-            ).length;
-            if (loadedInstancesOfThisModel === 1) {
-              return;
-            }
-          }
+          return;
         }
 
         setModelLoadingProgress(0);
@@ -106,7 +108,9 @@ export function createSlashCommands({
               setModelLoadingProgress(progress);
             },
             signal: abortController.signal,
+            deviceIdentifier: selectedDeviceIdentifier,
           });
+          currentModelDeviceIdentifierRef.current = selectedDeviceIdentifier;
           logInChat(`Model Selected: ${llmRef.current.displayName}`);
         } catch (error) {
           const errorMessage =
@@ -128,7 +132,8 @@ export function createSlashCommands({
         const filteredModels = downloadedModels.filter(modelState => {
           return (
             modelState.modelKey.toLowerCase().includes(normalizedFilter) ||
-            modelState.displayName.toLowerCase().includes(normalizedFilter)
+            modelState.displayName.toLowerCase().includes(normalizedFilter) ||
+            modelState.deviceLabel.toLowerCase().includes(normalizedFilter)
           );
         });
         return filteredModels.map(modelState =>
@@ -231,6 +236,57 @@ interface CreateModelSuggestionOpts {
   registerSuggestionMetadata: SlashCommandSuggestionBuilderArgs["registerSuggestionMetadata"];
 }
 
+function getSelectedModelDeviceIdentifier(
+  context: SlashCommandExecutionContext,
+  modelKey: string,
+): string | null | undefined {
+  const selectedSuggestion = context.selectedSuggestion;
+  const execution = selectedSuggestion?.execution;
+  if (
+    selectedSuggestion?.command !== "model" ||
+    selectedSuggestion.args.join(" ") !== modelKey ||
+    execution?.type !== "model"
+  ) {
+    return undefined;
+  }
+  return execution.deviceIdentifier;
+}
+
+async function isCurrentModelSelection({
+  llm,
+  modelKey,
+  deviceIdentifier,
+  downloadedModels,
+}: {
+  llm: LLM;
+  modelKey: string;
+  deviceIdentifier: string | null | undefined;
+  downloadedModels: Array<ModelState>;
+}): Promise<boolean> {
+  if (deviceIdentifier !== undefined) {
+    if (llm.identifier !== modelKey && llm.modelKey !== modelKey) {
+      return false;
+    }
+    try {
+      const modelInfo = await llm.getModelInfo();
+      return modelInfo.deviceIdentifier === deviceIdentifier;
+    } catch {
+      return false;
+    }
+  }
+
+  if (llm.identifier === modelKey) {
+    return true;
+  }
+  if (llm.modelKey !== modelKey) {
+    return false;
+  }
+  const loadedInstancesOfThisModel = downloadedModels.filter(
+    model => model.modelKey === modelKey && model.isLoaded,
+  ).length;
+  return loadedInstancesOfThisModel === 1;
+}
+
 function createModelSuggestion({
   modelState,
   registerSuggestionMetadata,
@@ -240,10 +296,16 @@ function createModelSuggestion({
     command: "model",
     args: [modelState.modelKey],
     priority,
+    execution: {
+      type: "model",
+      deviceIdentifier: modelState.deviceIdentifier,
+    },
   };
   const statusLabel = modelState.isCurrent ? " (current)" : modelState.isLoaded ? " (loaded)" : "";
+  const deviceSuffix =
+    modelState.deviceLabel === "Local" ? "" : ` ${chalk.dim(`on ${modelState.deviceLabel}`)}`;
   registerSuggestionMetadata(suggestion, {
-    label: `${modelState.modelKey}${statusLabel}`,
+    label: `${modelState.modelKey}${statusLabel}${deviceSuffix}`,
   });
   return suggestion;
 }

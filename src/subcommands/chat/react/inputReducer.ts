@@ -31,7 +31,7 @@
  */
 
 import { produce } from "@lmstudio/immer-with-plugins";
-import { type ChatUserInputState } from "./types.js";
+import { type ChatUserInputState, type Suggestion } from "./types.js";
 
 interface InsertTextAtCursorOpts {
   state: ChatUserInputState;
@@ -47,6 +47,7 @@ interface InsertPasteAtCursorOpts {
 interface InsertSuggestionAtCursorOpts {
   state: ChatUserInputState;
   suggestionText: string;
+  acceptedSuggestion?: Suggestion;
 }
 
 type ChatUserInputStateMutator = (draft: ChatUserInputState) => void;
@@ -186,6 +187,7 @@ function sanitizeChatUserInputState(state: ChatUserInputState): void {
  */
 export function deleteBeforeCursor(state: ChatUserInputState): ChatUserInputState {
   return produceSanitizedState(state, draft => {
+    delete draft.acceptedSuggestion;
     const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
     if (currentSegment === undefined) {
       return;
@@ -268,6 +270,7 @@ export function deleteBeforeCursor(state: ChatUserInputState): ChatUserInputStat
  */
 export function deleteAfterCursor(state: ChatUserInputState): ChatUserInputState {
   return produceSanitizedState(state, draft => {
+    delete draft.acceptedSuggestion;
     const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
     if (currentSegment === undefined) {
       return;
@@ -444,6 +447,7 @@ export function moveCursorRight(state: ChatUserInputState): ChatUserInputState {
  */
 export function insertTextAtCursor({ state, text }: InsertTextAtCursorOpts): ChatUserInputState {
   return produceSanitizedState(state, draft => {
+    delete draft.acceptedSuggestion;
     const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
     if (currentSegment === undefined) {
       return;
@@ -497,6 +501,7 @@ export function insertPasteAtCursor({
     if (content.length === 0) {
       return; // Nothing to insert
     }
+    delete draft.acceptedSuggestion;
     const currentSegment = draft.segments[draft.cursorOnSegmentIndex];
     if (currentSegment === undefined) {
       return;
@@ -562,8 +567,14 @@ export function insertPasteAtCursor({
 export function insertSuggestionAtCursor({
   state,
   suggestionText,
+  acceptedSuggestion,
 }: InsertSuggestionAtCursorOpts): ChatUserInputState {
   return produceSanitizedState(state, draft => {
+    if (acceptedSuggestion === undefined) {
+      delete draft.acceptedSuggestion;
+    } else {
+      draft.acceptedSuggestion = acceptedSuggestion;
+    }
     const lastSegmentIndex = draft.segments.length - 1;
     const lastSegment = draft.segments[lastSegmentIndex];
     if (lastSegment === undefined) {

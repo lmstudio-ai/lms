@@ -7,7 +7,7 @@ import {
   moveCursorLeft,
   moveCursorRight,
 } from "./inputReducer.js";
-import { type ChatInputSegment, type ChatUserInputState } from "./types.js";
+import { type ChatInputSegment, type ChatUserInputState, type Suggestion } from "./types.js";
 
 function createChatUserInputState(
   segments: ChatInputSegment[],
@@ -1026,6 +1026,62 @@ describe("chatInputStateReducers", () => {
       expect(result.segments[2]).toEqual({ type: "text", content: "/context " });
       expect(result.cursorOnSegmentIndex).toBe(2);
       expect(result.cursorInSegmentOffset).toBe(9);
+    });
+
+    it("stores the accepted suggestion", () => {
+      const initialState = createChatUserInputState([{ type: "text", content: "/mod" }], 0, 4);
+      const acceptedSuggestion: Suggestion = {
+        command: "model",
+        args: ["owner/model"],
+        priority: 1,
+        execution: { type: "model", deviceIdentifier: "remote-device" },
+      };
+
+      const result = insertSuggestionAtCursor({
+        state: initialState,
+        suggestionText: "/model owner/model",
+        acceptedSuggestion,
+      });
+
+      expect(result.acceptedSuggestion).toBe(acceptedSuggestion);
+    });
+
+    it("clears the accepted suggestion when accepting a command suggestion", () => {
+      const acceptedSuggestion: Suggestion = {
+        command: "model",
+        args: ["owner/model"],
+        priority: 1,
+        execution: { type: "model", deviceIdentifier: "remote-device" },
+      };
+      const initialState: ChatUserInputState = {
+        ...createChatUserInputState([{ type: "text", content: "/model owner/model" }], 0, 18),
+        acceptedSuggestion,
+      };
+
+      const result = insertSuggestionAtCursor({
+        state: initialState,
+        suggestionText: "/model ",
+      });
+
+      expect(result.acceptedSuggestion).toBeUndefined();
+      expect(result.segments).toEqual([{ type: "text", content: "/model " }]);
+    });
+
+    it("clears the accepted suggestion when text changes", () => {
+      const acceptedSuggestion: Suggestion = {
+        command: "model",
+        args: ["owner/model"],
+        priority: 1,
+        execution: { type: "model", deviceIdentifier: "remote-device" },
+      };
+      const initialState: ChatUserInputState = {
+        ...createChatUserInputState([{ type: "text", content: "/model owner/model" }], 0, 18),
+        acceptedSuggestion,
+      };
+
+      const result = insertTextAtCursor({ state: initialState, text: "x" });
+
+      expect(result.acceptedSuggestion).toBeUndefined();
     });
   });
 

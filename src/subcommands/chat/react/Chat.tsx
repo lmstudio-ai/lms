@@ -1,4 +1,5 @@
 import { produce } from "@lmstudio/immer-with-plugins";
+import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, type DOMElement, useApp, Text } from "ink";
 import React, { useCallback, useMemo, useRef, useState } from "react";
@@ -34,6 +35,7 @@ const STREAMING_ASSISTANT_STATIC_BOUNDARIES = [
 
 interface ChatComponentProps {
   client: LMStudioClient;
+  logger: SimpleLogger;
   llm?: LLM;
   chat: Chat;
   onExit: () => void;
@@ -49,7 +51,16 @@ export const emptyChatInputState: ChatUserInputState = {
 };
 
 export const ChatComponent = React.memo(
-  ({ client, llm, chat, onExit, stats, ttl, shouldFetchModelCatalog }: ChatComponentProps) => {
+  ({
+    client,
+    logger,
+    llm,
+    chat,
+    onExit,
+    stats,
+    ttl,
+    shouldFetchModelCatalog,
+  }: ChatComponentProps) => {
     const { exit } = useApp();
     const rootUiRef = useRef<DOMElement | null>(null);
     const [messages, setMessages] = useState<InkChatMessage[]>([
@@ -83,9 +94,12 @@ export const ChatComponent = React.memo(
     const modelLoadingAbortControllerRef = useRef<AbortController | null>(null);
     const chatRef = useRef<Chat>(chat);
     const llmRef = useRef<LLM | null>(llm ?? null);
+    const currentModelDeviceIdentifierRef = useRef<string | null | undefined>(undefined);
     const { downloadedModels, refreshDownloadedModels } = useDownloadedModels(
       client,
       llmRef.current !== null ? llmRef.current.identifier : null,
+      currentModelDeviceIdentifierRef.current,
+      logger,
     );
     const modelCatalog = useModelCatalog(client, shouldFetchModelCatalog);
     const handleExit = useCallback(() => {
@@ -144,6 +158,7 @@ export const ChatComponent = React.memo(
       const commands = createSlashCommands({
         client,
         llmRef,
+        currentModelDeviceIdentifierRef,
         chatRef,
         exitApp: handleExit,
         ttl,
@@ -204,6 +219,12 @@ export const ChatComponent = React.memo(
       }
       return selectedSuggestionIndex;
     }, [selectedSuggestionIndex, suggestions.length]);
+    const highlightedSuggestion = useMemo(() => {
+      if (normalizedSelectedSuggestionIndex === null) {
+        return undefined;
+      }
+      return suggestions[normalizedSelectedSuggestionIndex];
+    }, [normalizedSelectedSuggestionIndex, suggestions]);
 
     const {
       handleSuggestionsUp,
@@ -328,10 +349,8 @@ export const ChatComponent = React.memo(
       }
 
       if (userInputText.startsWith("/") && userInputState.segments.length === 1) {
-        const selectedSuggestion =
-          normalizedSelectedSuggestionIndex !== null
-            ? suggestions[normalizedSelectedSuggestionIndex]
-            : undefined;
+        // If the user moves after pressing Tab, Enter should follow the current highlight.
+        const selectedSuggestion = highlightedSuggestion ?? userInputState.acceptedSuggestion;
         const { command, argumentsText } = SlashCommandHandler.parseSlashCommand(
           userInputText,
           selectedSuggestion,
@@ -344,7 +363,9 @@ export const ChatComponent = React.memo(
         // Check if the command is in exception list, if not,
         // execute it.
         if (commandHandler.commandIsIgnored(command) === false) {
-          const wasCommandHandled = await commandHandler.execute(command, argumentsText);
+          const wasCommandHandled = await commandHandler.execute(command, argumentsText, {
+            selectedSuggestion,
+          });
           if (wasCommandHandled === false) {
             logInChat(`Unknown command: ${userInputText}`);
           }
@@ -536,6 +557,7 @@ export const ChatComponent = React.memo(
           const errorMessage = error.message.toLowerCase();
           if (errorMessage.includes("unload") || errorMessage.includes("not loaded")) {
             const currentModelKey = llmRef.current.modelKey;
+            const currentModelDeviceIdentifier = currentModelDeviceIdentifierRef.current;
             logErrorInChat(`${error.message}`);
             logInChat(`Would you like to reload the model?`);
             requestConfirmation({
@@ -549,6 +571,7 @@ export const ChatComponent = React.memo(
                     onProgress(progress) {
                       setModelLoadingProgress(progress);
                     },
+                    deviceIdentifier: currentModelDeviceIdentifier,
                   });
                   logInChat(`Model reloaded: ${llmRef.current.displayName}`);
                   setModelLoadingProgress(null);
@@ -578,11 +601,11 @@ export const ChatComponent = React.memo(
       }
     }, [
       userInputState.segments,
+      userInputState.acceptedSuggestion,
       handleConfirmationResponse,
       isPredicting,
       logInChat,
-      normalizedSelectedSuggestionIndex,
-      suggestions,
+      highlightedSuggestion,
       commandHandler,
       handleExit,
       logErrorInChat,
@@ -642,11 +665,7 @@ export const ChatComponent = React.memo(
               .find(cmd => cmd.name.toLowerCase() === commandName.toLowerCase());
             return command !== undefined && command.buildSuggestions !== undefined;
           }}
-          selectedSuggestion={
-            normalizedSelectedSuggestionIndex !== null
-              ? suggestions[normalizedSelectedSuggestionIndex]
-              : null
-          }
+          selectedSuggestion={highlightedSuggestion ?? null}
           predictionSpinnerVisible={showPredictionSpinner}
         />
         {suggestions.length > 0 && (

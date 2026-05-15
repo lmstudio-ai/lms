@@ -146,6 +146,7 @@ export async function startInteractiveChat(
   client: LMStudioClient,
   chat: Chat,
   opts: StartPredictionOpts,
+  logger: SimpleLogger,
   llm: LLM | undefined,
   shouldFetchModelCatalog: boolean,
 ): Promise<void> {
@@ -153,6 +154,7 @@ export async function startInteractiveChat(
     render(
       <ChatComponent
         client={client}
+        logger={logger}
         llm={llm}
         chat={chat}
         stats={opts.stats}
@@ -233,6 +235,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
         stats: options.stats,
         ttl,
       },
+      logger,
       llm,
       shouldFetchModelCatalog,
     );

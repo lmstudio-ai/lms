@@ -17,10 +17,17 @@ export interface SlashCommandSuggestionsOpts {
   shouldShowSuggestions: boolean;
 }
 
+export interface SlashCommandExecutionContext {
+  selectedSuggestion?: Suggestion;
+}
+
 export interface SlashCommand {
   name: string;
   description: string;
-  handler: (commandArguments: string[]) => void | Promise<void>;
+  handler: (
+    commandArguments: string[],
+    context: SlashCommandExecutionContext,
+  ) => void | Promise<void>;
   buildSuggestions?: (builderArgs: SlashCommandSuggestionBuilderArgs) => Suggestion[];
 }
 
@@ -43,7 +50,11 @@ export class SlashCommandHandler {
     });
   }
 
-  async execute(commandName: string, argumentsText: string | null): Promise<boolean> {
+  async execute(
+    commandName: string,
+    argumentsText: string | null,
+    context: SlashCommandExecutionContext = {},
+  ): Promise<boolean> {
     const command = this.commands.get(commandName.toLowerCase());
 
     if (command === undefined) {
@@ -53,7 +64,7 @@ export class SlashCommandHandler {
       argumentsText !== null
         ? argumentsText.split(" ").filter(argument => argument.length > 0)
         : [];
-    await command.handler(commandArguments);
+    await command.handler(commandArguments, context);
     return true;
   }
 
