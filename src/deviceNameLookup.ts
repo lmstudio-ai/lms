@@ -44,6 +44,16 @@ class DeviceNameResolverImpl implements DeviceNameResolver {
   }
 }
 
+export function formatDeviceLabel(
+  deviceNameResolver: DeviceNameResolver,
+  deviceIdentifier: string | null,
+) {
+  if (deviceNameResolver.isLocal(deviceIdentifier)) {
+    return "Local";
+  }
+  return deviceNameResolver.label(deviceIdentifier);
+}
+
 export async function createDeviceNameResolver(
   client: LMStudioClient,
   logger: SimpleLogger,

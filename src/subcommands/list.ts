@@ -5,7 +5,11 @@ import chalk from "chalk";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
-import { createDeviceNameResolver, type DeviceNameResolver } from "../deviceNameLookup.js";
+import {
+  createDeviceNameResolver,
+  formatDeviceLabel,
+  type DeviceNameResolver,
+} from "../deviceNameLookup.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
 import { formatTimeLean } from "../formatElapsedTime.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
@@ -34,16 +38,6 @@ function formatModelKeyWithVariantCount(model: ModelInfo) {
   const variantCount = model.variants.length;
   const variantLabel = variantCount === 1 ? "variant" : "variants";
   return `${model.modelKey}${chalk.dim(` (${variantCount} ${variantLabel})`)}`;
-}
-
-function formatDeviceLabel(
-  deviceNameResolver: DeviceNameResolver,
-  deviceIdentifier: string | null,
-) {
-  if (deviceNameResolver.isLocal(deviceIdentifier)) {
-    return "Local";
-  }
-  return deviceNameResolver.label(deviceIdentifier);
 }
 
 type LoadedModelInfo = {
