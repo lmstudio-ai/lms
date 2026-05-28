@@ -512,6 +512,15 @@ async function loadModel({
   const spinner = new Spinner(spinnerText);
   const startTime = Date.now();
   const abortController = new AbortController();
+  let lastProgressUpdateTime = 0;
+  const updateSpinnerProgress = (progress: number) => {
+    const now = Date.now();
+    if (progress < 1 && now - lastProgressUpdateTime < 100) {
+      return;
+    }
+    spinner.setText(`${spinnerText} ${(progress * 100).toFixed(0)}%`);
+    lastProgressUpdateTime = now;
+  };
 
   const sigintListener = () => {
     spinner.stop();
@@ -530,6 +539,7 @@ async function loadModel({
       config,
       identifier,
       deviceIdentifier,
+      onProgress: updateSpinnerProgress,
     });
   } finally {
     process.removeListener("SIGINT", sigintListener);

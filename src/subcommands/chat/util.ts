@@ -12,6 +12,15 @@ export async function loadModelWithProgress(
 ): Promise<LLM> {
   const spinner = new Spinner(`Loading ${modelName}`);
   const abortController = new AbortController();
+  let lastProgressUpdateTime = 0;
+  const updateSpinnerProgress = (progress: number) => {
+    const now = Date.now();
+    if (progress < 1 && now - lastProgressUpdateTime < 100) {
+      return;
+    }
+    spinner.setText(`Loading ${modelName} ${(progress * 100).toFixed(0)}%`);
+    lastProgressUpdateTime = now;
+  };
 
   const sigintListener = () => {
     spinner.stop();
@@ -26,6 +35,7 @@ export async function loadModelWithProgress(
       verbose: false,
       signal: abortController.signal,
       ttl,
+      onProgress: updateSpinnerProgress,
     });
     return llmModel;
   } finally {
