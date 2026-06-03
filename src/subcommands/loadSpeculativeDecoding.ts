@@ -4,17 +4,30 @@ export interface ResolveCliSpeculativeDecodingLoadConfigOpts {
   speculativeDraftModel?: string;
   speculativeDraftMaxTokens?: number;
   speculativeDraftMinTokens?: number;
+  speculativeDraftMinContinueProbability?: number;
 }
 
 export function resolveCliSpeculativeDecodingLoadConfig({
   speculativeDraftModel,
   speculativeDraftMaxTokens,
   speculativeDraftMinTokens,
-}: ResolveCliSpeculativeDecodingLoadConfigOpts): Pick<LLMLoadModelConfig, "speculativeDecoding"> {
+  speculativeDraftMinContinueProbability,
+}: ResolveCliSpeculativeDecodingLoadConfigOpts): Pick<
+  LLMLoadModelConfig,
+  | "speculativeDraftMtp"
+  | "speculativeDraftModel"
+  | "speculativeDraftMaxTokens"
+  | "speculativeDraftMinTokens"
+  | "speculativeDraftMinContinueProbability"
+> {
   if (speculativeDraftModel === undefined) {
-    if (speculativeDraftMaxTokens !== undefined || speculativeDraftMinTokens !== undefined) {
+    if (
+      speculativeDraftMaxTokens !== undefined ||
+      speculativeDraftMinTokens !== undefined ||
+      speculativeDraftMinContinueProbability !== undefined
+    ) {
       throw new Error(
-        "--speculative-draft-max-tokens and --speculative-draft-min-tokens require --speculative-draft-model.",
+        "--speculative draft tuning flags require --speculative-draft-model.",
       );
     }
 
@@ -36,17 +49,16 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   }
 
   return {
-    speculativeDecoding: [
-      {
-        type: "draftModel",
-        draftModel: speculativeDraftModel,
-        ...(speculativeDraftMaxTokens !== undefined
-          ? { maxTokensToDraft: speculativeDraftMaxTokens }
-          : {}),
-        ...(speculativeDraftMinTokens !== undefined
-          ? { minDraftLengthToConsider: speculativeDraftMinTokens }
-          : {}),
-      },
-    ],
+    speculativeDraftMtp: false,
+    speculativeDraftModel,
+    ...(speculativeDraftMaxTokens !== undefined
+      ? { speculativeDraftMaxTokens: speculativeDraftMaxTokens }
+      : {}),
+    ...(speculativeDraftMinTokens !== undefined
+      ? { speculativeDraftMinTokens: speculativeDraftMinTokens }
+      : {}),
+    ...(speculativeDraftMinContinueProbability !== undefined
+      ? { speculativeDraftMinContinueProbability: speculativeDraftMinContinueProbability }
+      : {}),
   };
 }

@@ -5,44 +5,44 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
     expect(resolveCliSpeculativeDecodingLoadConfig({})).toEqual({});
   });
 
-  it("creates a canonical draftModel strategy", () => {
+  it("creates flat draft-model load config", () => {
     expect(
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftModel: "test/draft",
       }),
     ).toEqual({
-      speculativeDecoding: [
-        {
-          type: "draftModel",
-          draftModel: "test/draft",
-        },
-      ],
+      speculativeDraftMtp: false,
+      speculativeDraftModel: "test/draft",
     });
   });
 
-  it("includes optional max and min draft token settings", () => {
+  it("includes optional shared draft tuning settings", () => {
     expect(
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftModel: "test/draft",
         speculativeDraftMaxTokens: 7,
         speculativeDraftMinTokens: 2,
+        speculativeDraftMinContinueProbability: 0.25,
       }),
     ).toEqual({
-      speculativeDecoding: [
-        {
-          type: "draftModel",
-          draftModel: "test/draft",
-          maxTokensToDraft: 7,
-          minDraftLengthToConsider: 2,
-        },
-      ],
+      speculativeDraftMtp: false,
+      speculativeDraftModel: "test/draft",
+      speculativeDraftMaxTokens: 7,
+      speculativeDraftMinTokens: 2,
+      speculativeDraftMinContinueProbability: 0.25,
     });
   });
 
-  it("rejects draft token flags without a draft model", () => {
+  it("rejects draft tuning flags without a draft model", () => {
     expect(() =>
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftMaxTokens: 7,
+      }),
+    ).toThrow("--speculative-draft-model");
+
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftMinContinueProbability: 0.25,
       }),
     ).toThrow("--speculative-draft-model");
   });

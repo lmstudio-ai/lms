@@ -54,6 +54,7 @@ type LoadCommandOptions = OptionValues &
     speculativeDraftModel?: string;
     speculativeDraftMaxTokens?: number;
     speculativeDraftMinTokens?: number;
+    speculativeDraftMinContinueProbability?: number;
     exact?: boolean;
     local?: boolean;
     identifier?: string;
@@ -70,12 +71,13 @@ function assertSpeculativeDecodingSupportedForCliModel({
   loadConfig: LLMLoadModelConfig;
   logger: SimpleLogger;
 }): void {
-  const speculativeDecoding = loadConfig.speculativeDecoding;
-  if (
-    speculativeDecoding === undefined ||
-    speculativeDecoding.length === 0 ||
-    model.type !== "embedding"
-  ) {
+  const hasSpeculativeDecodingLoadConfig =
+    loadConfig.speculativeDraftMtp !== undefined ||
+    loadConfig.speculativeDraftModel !== undefined ||
+    loadConfig.speculativeDraftMaxTokens !== undefined ||
+    loadConfig.speculativeDraftMinTokens !== undefined ||
+    loadConfig.speculativeDraftMinContinueProbability !== undefined;
+  if (!hasSpeculativeDecodingLoadConfig || model.type !== "embedding") {
     return;
   }
 
@@ -182,6 +184,15 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   )
   .addOption(
     new Option(
+      "--speculative-draft-min-continue-probability <probability>",
+      text`
+        Continue drafting while token probability is at or above this threshold. Requires
+        --speculative-draft-model.
+      `,
+    ).argParser(createRefinedNumberParser({ min: 0, max: 1 })),
+  )
+  .addOption(
+    new Option(
       "--exact",
       text`
         Only load the model if the path provided matches the model exactly. Fails if the path
@@ -231,6 +242,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     speculativeDraftModel,
     speculativeDraftMaxTokens,
     speculativeDraftMinTokens,
+    speculativeDraftMinContinueProbability,
     yes = false,
     exact = false,
     local = false,
@@ -244,6 +256,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       speculativeDraftModel,
       speculativeDraftMaxTokens,
       speculativeDraftMinTokens,
+      speculativeDraftMinContinueProbability,
     }),
   };
   if (gpu !== undefined) {
