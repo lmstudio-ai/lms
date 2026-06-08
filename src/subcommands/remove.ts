@@ -9,7 +9,7 @@ import fuzzy from "fuzzy";
 import { dirname, isAbsolute, join, relative } from "path";
 import { askQuestion } from "../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
-import { createDeviceNameResolver } from "../deviceNameLookup.js";
+import { createDeviceNameResolver, type DeviceNameResolver } from "../deviceNameLookup.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
 import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
@@ -102,7 +102,12 @@ removeCommand.action(async (modelKey, options: RemoveCommandOptions) => {
   const absolutePath = join(modelsFolderPath, target.path);
 
   // Refuse to delete a model whose files are currently loaded in memory.
-  const blockingLoaded = await findLoadedModelsAtPath(client, modelsFolderPath, absolutePath);
+  const blockingLoaded = await findLoadedModelsAtPath(
+    client,
+    deviceNameResolver,
+    modelsFolderPath,
+    absolutePath,
+  );
   if (blockingLoaded.length > 0) {
     const identifiers = blockingLoaded
       .map(identifier => `    ${chalk.yellow(identifier)}`)
@@ -245,24 +250,38 @@ async function resolveRemovalTarget(
 
 /**
  * Find any currently-loaded models whose files live at (or inside) the given path. Used to prevent
- * removing a model that is in use.
+ * removing a model that is in use. Models loaded on remote devices (via LM Link) are ignored, since
+ * deleting local files does not affect them.
  *
  * @param client - The LM Studio client.
+ * @param deviceNameResolver - Resolver used to tell local models apart from remote ones.
  * @param modelsFolderPath - The absolute path to the models folder.
  * @param absolutePath - The absolute path that is about to be removed.
  * @returns A promise that resolves with the identifiers of the blocking loaded models.
  */
 async function findLoadedModelsAtPath(
   client: LMStudioClient,
+  deviceNameResolver: DeviceNameResolver,
   modelsFolderPath: string,
   absolutePath: string,
 ): Promise<Array<string>> {
   const loadedModels: Array<LLM | EmbeddingModel> = (
     await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
   ).flat();
-  return loadedModels
-    .filter(model => pathIsAtOrInside(absolutePath, join(modelsFolderPath, model.path)))
-    .map(model => model.identifier);
+  const blockingIdentifiers = await Promise.all(
+    loadedModels.map(async model => {
+      const modelInfo = await model.getModelInfo();
+      // Only a model loaded on this machine can block deleting the local files.
+      if (!deviceNameResolver.isLocal(modelInfo.deviceIdentifier ?? null)) {
+        return null;
+      }
+      if (pathIsAtOrInside(absolutePath, join(modelsFolderPath, model.path))) {
+        return model.identifier;
+      }
+      return null;
+    }),
+  );
+  return blockingIdentifiers.filter((identifier): identifier is string => identifier !== null);
 }
 
 /**
