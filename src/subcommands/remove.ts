@@ -47,6 +47,26 @@ addLogLevelOptions(removeCommand);
 removeCommand.action(async (modelKey, options: RemoveCommandOptions) => {
   const logger = createLogger(options);
   const { yes = false } = options;
+
+  // `lms remove` deletes files from the local models folder, so it can only operate on the local
+  // LM Studio installation. If the user points the CLI at a remote instance via --host, the listed
+  // models live on that machine while deletion would target local paths — refuse instead.
+  if (options.host !== undefined) {
+    logger.errorWithoutPrefix(
+      makeTitledPrettyError(
+        "Remote Removal Not Supported",
+        text`
+          ${chalk.yellow("lms remove")} deletes model files from the local models folder and cannot
+          remove models from a remote LM Studio instance
+          (${chalk.yellow(`--host ${options.host}`)}).
+
+          Run ${chalk.yellow("lms remove")} directly on the machine where the model is stored.
+        `,
+      ).message,
+    );
+    process.exit(1);
+  }
+
   await using client = await createClient(logger, options);
   const deviceNameResolver = await createDeviceNameResolver(client, logger);
 
