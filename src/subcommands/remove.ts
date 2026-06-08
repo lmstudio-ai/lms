@@ -116,7 +116,7 @@ removeCommand.action(async (modelKey, options: RemoveCommandOptions) => {
 
   // A model key can have multiple downloaded variants (e.g. different quantizations) that live in
   // the same folder. Let the user choose a single variant or the entire model.
-  const target = await resolveRemovalTarget(client, baseModel);
+  const target = await resolveRemovalTarget(client, deviceNameResolver, baseModel);
 
   const modelsFolderPath = await resolveModelsFolderPath(logger, { ensureExists: false });
   const absolutePath = join(modelsFolderPath, target.path);
@@ -226,18 +226,24 @@ async function promptForModel(models: Array<ModelInfo>): Promise<ModelInfo> {
  * the user to either remove a single variant or the entire model.
  *
  * @param client - The LM Studio client.
+ * @param deviceNameResolver - Resolver used to keep only locally-stored variants.
  * @param baseModel - The model selected by the user.
  * @returns A promise that resolves with the ModelInfo to remove (either a single variant or the
  * base model representing all variants).
  */
 async function resolveRemovalTarget(
   client: LMStudioClient,
+  deviceNameResolver: DeviceNameResolver,
   baseModel: ModelInfo,
 ): Promise<ModelInfo> {
   if (baseModel.variants === undefined || baseModel.variants.length <= 1) {
     return baseModel;
   }
-  const variants = await client.system.listDownloadedModelVariants(baseModel.modelKey);
+  // The variant lookup is by model key only, so it can include variants downloaded on LM Link
+  // peers. Only locally-stored variants can be removed by deleting local files.
+  const variants = (await client.system.listDownloadedModelVariants(baseModel.modelKey)).filter(
+    variant => deviceNameResolver.isLocal(variant.deviceIdentifier),
+  );
   if (variants.length <= 1) {
     return baseModel;
   }
