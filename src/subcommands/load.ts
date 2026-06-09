@@ -25,6 +25,7 @@ import { runPromptWithExitHandling } from "../prompt.js";
 import { Spinner } from "../Spinner.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
+import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
 
 const gpuOptionParser = (str: string): number => {
   str = str.trim().toLowerCase();
@@ -50,12 +51,49 @@ type LoadCommandOptions = OptionValues &
     gpu?: number;
     contextLength?: number;
     parallel?: number;
+    speculativeDraftMtp?: boolean;
+    speculativeDraftSimple?: boolean;
+    speculativeDraftModel?: string;
+    speculativeDraftMaxTokens?: number;
+    speculativeDraftMinTokens?: number;
+    speculativeDraftMinContinueProbability?: number;
     exact?: boolean;
     local?: boolean;
     identifier?: string;
     yes?: boolean;
     estimateOnly?: boolean;
   };
+
+function assertSpeculativeDecodingSupportedForCliModel({
+  model,
+  loadConfig,
+  logger,
+}: {
+  model: ModelInfo;
+  loadConfig: LLMLoadModelConfig;
+  logger: SimpleLogger;
+}): void {
+  const hasSpeculativeDecodingLoadConfig =
+    loadConfig.speculativeDraftMtp !== undefined ||
+    loadConfig.speculativeDraftSimple !== undefined ||
+    loadConfig.speculativeDraftModel !== undefined ||
+    loadConfig.speculativeDraftMaxTokens !== undefined ||
+    loadConfig.speculativeDraftMinTokens !== undefined ||
+    loadConfig.speculativeDraftMinContinueProbability !== undefined;
+  if (!hasSpeculativeDecodingLoadConfig || model.type !== "embedding") {
+    return;
+  }
+
+  logger.errorWithoutPrefix(
+    makeTitledPrettyError(
+      "Unsupported load option",
+      text`
+        Speculative decoding can only be configured for LLM models.
+      `,
+    ).message,
+  );
+  process.exit(1);
+}
 
 function hasDuplicatesOnSameDevice(models: Array<ModelInfo>): boolean {
   const deviceIdentifierCounts = new Map<string | null, number>();
@@ -123,6 +161,65 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   )
   .addOption(
     new Option(
+      "--speculative-draft-mtp",
+      text`
+        Enable load-time Draft MTP speculative decoding when supported by the model.
+      `,
+    ).default(undefined),
+  )
+  .addOption(
+    new Option(
+      "--no-speculative-draft-mtp",
+      text`
+        Disable load-time Draft MTP speculative decoding.
+      `,
+    ).default(undefined),
+  )
+  .addOption(
+    new Option(
+      "--speculative-draft-simple",
+      text`
+        Enable load-time Draft Simple speculative decoding using --speculative-draft-model.
+      `,
+    ),
+  )
+  .addOption(
+    new Option(
+      "--speculative-draft-model <model>",
+      text`
+        Draft model resource to use with --speculative-draft-simple.
+      `,
+    ),
+  )
+  .addOption(
+    new Option(
+      "--speculative-draft-max-tokens <count>",
+      text`
+        Maximum number of draft tokens to generate per speculative decoding step. Requires
+        --speculative-draft-simple or --speculative-draft-mtp.
+      `,
+    ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
+  )
+  .addOption(
+    new Option(
+      "--speculative-draft-min-tokens <count>",
+      text`
+        Minimum draft length to consider for speculative decoding. Requires
+        --speculative-draft-simple or --speculative-draft-mtp.
+      `,
+    ).argParser(createRefinedNumberParser({ integer: true, min: 0 })),
+  )
+  .addOption(
+    new Option(
+      "--speculative-draft-min-continue-probability <probability>",
+      text`
+        Continue drafting while token probability is at or above this threshold. Requires
+        --speculative-draft-simple or --speculative-draft-mtp.
+      `,
+    ).argParser(createRefinedNumberParser({ min: 0, max: 1 })),
+  )
+  .addOption(
+    new Option(
       "--exact",
       text`
         Only load the model if the path provided matches the model exactly. Fails if the path
@@ -169,6 +266,12 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     gpu,
     contextLength,
     parallel: maxParallelPredictions,
+    speculativeDraftMtp,
+    speculativeDraftSimple,
+    speculativeDraftModel,
+    speculativeDraftMaxTokens,
+    speculativeDraftMinTokens,
+    speculativeDraftMinContinueProbability,
     yes = false,
     exact = false,
     local = false,
@@ -178,6 +281,14 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   const loadConfig: LLMLoadModelConfig = {
     contextLength,
     maxParallelPredictions,
+    ...resolveCliSpeculativeDecodingLoadConfig({
+      speculativeDraftMtp,
+      speculativeDraftSimple,
+      speculativeDraftModel,
+      speculativeDraftMaxTokens,
+      speculativeDraftMinTokens,
+      speculativeDraftMinContinueProbability,
+    }),
   };
   if (gpu !== undefined) {
     loadConfig.gpu = {
@@ -267,6 +378,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       process.exit(1);
     }
     if (estimateOnly === true) {
+      assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
       const estimate = await (
         model.type === "llm" ? client.llm : client.embedding
       ).estimateResourcesUsage(model.modelKey, loadConfig, {
@@ -277,6 +389,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     }
 
     const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
+    assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
     await loadModel({
       logger,
       namespace: loadNamespace,
@@ -393,6 +506,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   }
 
   if (estimateOnly === true) {
+    assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
     const estimate = await (
       model.type === "llm" ? client.llm : client.embedding
     ).estimateResourcesUsage(model.modelKey, loadConfig, {
@@ -415,6 +529,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   });
 
   const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
+  assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
   await loadModel({
     logger,
     namespace: loadNamespace,
