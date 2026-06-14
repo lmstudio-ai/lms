@@ -41,10 +41,44 @@ Here are some frequently used commands:
   - `lms ps --json` - To list all loaded models available for inferencing in machine-readable JSON format.
 - `lms load` - To load a model
   - `lms load <model path> -y` - To load a model with maximum GPU acceleration without confirmation
+- `lms import <file path>` - To import a local model file into LM Studio.
 - `lms unload <model identifier>` - To unload a model
   - `lms unload --all` - To unload all models
 - `lms create` - To create a new project with LM Studio SDK
 - `lms log stream` - To stream logs from LM Studio
+
+## Import a model file
+
+Use `lms import` when you already have a local model file, such as a `.gguf` file, and want LM Studio to manage it from the models folder.
+
+```shell
+lms import ~/Downloads/mistral-7b-instruct.Q4_K_M.gguf
+```
+
+By default, the command moves the file into LM Studio's models folder. Use one of the file-handling options when you want to keep the original file in place:
+
+```shell
+# Copy the file instead of moving it
+lms import ~/Downloads/model.gguf --copy
+
+# Create a hard link instead of moving or copying it
+lms import ~/Downloads/model.gguf --hard-link
+
+# Create a symbolic link instead of moving or copying it
+lms import ~/Downloads/model.gguf --symbolic-link
+```
+
+If the file name does not include enough information to categorize the model, provide the repository manually:
+
+```shell
+lms import ~/Downloads/model.gguf --user-repo user/repo
+```
+
+For unattended usage, add `--yes` to approve prompts automatically. To preview the target action without changing files, use `--dry-run`:
+
+```shell
+lms import ~/Downloads/model.gguf --yes --dry-run
+```
 
 # Contributing
 
