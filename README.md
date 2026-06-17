@@ -74,10 +74,10 @@ If the file name does not include enough information to categorize the model, pr
 lms import ~/Downloads/model.gguf --user-repo user/repo
 ```
 
-For unattended usage, add `--yes` to approve prompts automatically. To preview the target action without changing files, use `--dry-run`:
+To preview the target action before importing the model file, use `--dry-run`:
 
 ```shell
-lms import ~/Downloads/model.gguf --yes --dry-run
+lms import ~/Downloads/model.gguf --dry-run
 ```
 
 # Contributing
