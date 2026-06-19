@@ -3,6 +3,7 @@ import { type LLM, type LLMPredictionStats, type LMStudioClient, Chat } from "@l
 import chalk from "chalk";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { displayVerboseStats } from "../util.js";
+import { isReasoningMode, REASONING_MODES, type ReasoningMode } from "../reasoning.js";
 import type {
   SlashCommand,
   SlashCommandExecutionContext,
@@ -31,6 +32,8 @@ export interface CreateSlashCommandsOpts {
   setModelLoadingProgress: Dispatch<SetStateAction<number | null>>;
   modelLoadingAbortControllerRef: RefObject<AbortController | null>;
   lastPredictionStatsRef: RefObject<LLMPredictionStats | null>;
+  reasoningMode: ReasoningMode;
+  setReasoningMode: Dispatch<SetStateAction<ReasoningMode>>;
 }
 
 export function createSlashCommands({
@@ -53,6 +56,8 @@ export function createSlashCommands({
   setModelLoadingProgress,
   modelLoadingAbortControllerRef,
   lastPredictionStatsRef,
+  reasoningMode,
+  setReasoningMode,
 }: CreateSlashCommandsOpts): SlashCommand[] {
   return [
     {
@@ -184,6 +189,43 @@ export function createSlashCommands({
           return;
         }
         displayVerboseStats(lastPredictionStatsRef.current, logInChat);
+      },
+    },
+    {
+      name: "reasoning",
+      description: "Set reasoning mode (auto, on, off)",
+      handler: async commandArguments => {
+        if (commandArguments.length === 0) {
+          logInChat(`Reasoning mode: ${reasoningMode}`);
+          return;
+        }
+        if (commandArguments.length !== 1) {
+          logErrorInChat("Usage: /reasoning auto|on|off");
+          return;
+        }
+
+        const requestedMode = commandArguments[0]?.toLowerCase();
+        if (requestedMode === undefined || isReasoningMode(requestedMode) === false) {
+          logErrorInChat("Usage: /reasoning auto|on|off");
+          return;
+        }
+
+        setReasoningMode(requestedMode);
+        logInChat(`Reasoning mode set to: ${requestedMode}`);
+      },
+      buildSuggestions: ({ argsInput, registerSuggestionMetadata }) => {
+        const normalizedFilter = argsInput.trim().toLowerCase();
+        return REASONING_MODES.filter(mode => mode.startsWith(normalizedFilter)).map(mode => {
+          const suggestion: Suggestion = {
+            command: "reasoning",
+            args: [mode],
+            priority: 1,
+          };
+          registerSuggestionMetadata(suggestion, {
+            label: `/reasoning ${mode}`,
+          });
+          return suggestion;
+        });
       },
     },
     {

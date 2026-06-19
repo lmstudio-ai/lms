@@ -2,6 +2,7 @@ import type { SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { Spinner } from "../../Spinner.js";
+import { reasoningModeToPredictionOpts, type ReasoningMode } from "./reasoning.js";
 import { type InkChatMessage } from "./react/types.js";
 
 export async function loadModelWithProgress(
@@ -91,12 +92,13 @@ export async function executePrediction(
   chat: Chat,
   input: string,
   controller?: AbortController,
+  reasoningMode: ReasoningMode = "auto",
 ): Promise<{ result: any; lastFragment: string }> {
   chat.append("user", input);
   const prediction = llmModel.respond(chat, {
+    ...reasoningModeToPredictionOpts(reasoningMode),
     signal: controller?.signal,
   });
-
   let lastFragment = "";
   for await (const fragment of prediction) {
     if (fragment.reasoningType === "reasoningStartTag") {

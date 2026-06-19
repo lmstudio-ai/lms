@@ -16,10 +16,12 @@ import { render } from "ink";
 import { ChatComponent } from "./react/Chat.js";
 import { getCachedModelCatalogOrFetch } from "./catalogHelpers.js";
 import { maybeGetLLM } from "./getLLM.js";
+import { REASONING_MODES, type ReasoningMode } from "./reasoning.js";
 
 interface StartPredictionOpts {
   stats?: true;
   ttl: number;
+  reasoningMode: ReasoningMode;
 }
 
 type ChatCommandOptions = OptionValues &
@@ -31,6 +33,7 @@ type ChatCommandOptions = OptionValues &
     ttl: number;
     dontFetchCatalog: boolean;
     yes?: boolean;
+    reasoning: ReasoningMode;
   };
 
 export const DEFAULT_SYSTEM_PROMPT =
@@ -122,7 +125,13 @@ export async function handleNonInteractiveChat(
   opts: StartPredictionOpts,
 ): Promise<void> {
   try {
-    const { result, lastFragment } = await executePrediction(llm, chat, prompt);
+    const { result, lastFragment } = await executePrediction(
+      llm,
+      chat,
+      prompt,
+      undefined,
+      opts.reasoningMode,
+    );
 
     if (opts.stats !== undefined) {
       displayVerboseStats(result.stats, logger.info.bind(logger));
@@ -159,6 +168,7 @@ export async function startInteractiveChat(
         chat={chat}
         stats={opts.stats}
         ttl={opts.ttl}
+        reasoningMode={opts.reasoningMode}
         onExit={() => {
           resolve();
         }}
@@ -182,6 +192,11 @@ const chatCommandBase = new Command<[], ChatCommandOptions>()
     new Option("--ttl <ttl>", "Time (in seconds) to keep the model loaded after the chat ends")
       .argParser(createRefinedNumberParser({ integer: true, min: 1 }))
       .default(3600),
+  )
+  .addOption(
+    new Option("--reasoning <mode>", "Reasoning mode for this chat session")
+      .choices([...REASONING_MODES])
+      .default("auto"),
   )
   .option("--dont-fetch-catalog", "Skip fetching the model catalog", false)
   .option("-y, --yes", "Assume 'yes' as answer to all CLI prompts");
@@ -234,6 +249,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       {
         stats: options.stats,
         ttl,
+        reasoningMode: options.reasoning,
       },
       logger,
       llm,
@@ -251,6 +267,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
     await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
       stats: options.stats,
       ttl,
+      reasoningMode: options.reasoning,
     });
   } else {
     logger.error("No prompt provided for non-interactive chat.");

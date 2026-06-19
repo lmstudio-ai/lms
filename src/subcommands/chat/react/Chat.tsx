@@ -4,6 +4,7 @@ import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } fro
 import { Box, type DOMElement, useApp, Text } from "ink";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { displayVerboseStats, getLargePastePlaceholderText } from "../util.js";
+import { reasoningModeToPredictionOpts, type ReasoningMode } from "../reasoning.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
@@ -41,6 +42,7 @@ interface ChatComponentProps {
   onExit: () => void;
   stats?: true;
   ttl?: number;
+  reasoningMode: ReasoningMode;
   shouldFetchModelCatalog?: boolean;
 }
 
@@ -59,6 +61,7 @@ export const ChatComponent = React.memo(
     onExit,
     stats,
     ttl,
+    reasoningMode,
     shouldFetchModelCatalog,
   }: ChatComponentProps) => {
     const { exit } = useApp();
@@ -89,6 +92,7 @@ export const ChatComponent = React.memo(
     const { isConfirmationActive, requestConfirmation, handleConfirmationResponse } =
       useConfirmationPrompt();
     const [promptProcessingProgress, setPromptProcessingProgress] = useState<number | null>(null);
+    const [activeReasoningMode, setActiveReasoningMode] = useState<ReasoningMode>(reasoningMode);
     const abortControllerRef = useRef<AbortController | null>(new AbortController());
     const downloadAbortControllerRef = useRef<AbortController | null>(null);
     const modelLoadingAbortControllerRef = useRef<AbortController | null>(null);
@@ -175,6 +179,8 @@ export const ChatComponent = React.memo(
         setModelLoadingProgress,
         modelLoadingAbortControllerRef,
         lastPredictionStatsRef,
+        reasoningMode: activeReasoningMode,
+        setReasoningMode: setActiveReasoningMode,
       });
       handler.setCommands(commands);
       return handler;
@@ -188,6 +194,7 @@ export const ChatComponent = React.memo(
       handleDownloadCommand,
       logInChat,
       logErrorInChat,
+      activeReasoningMode,
       shouldFetchModelCatalog,
     ]);
 
@@ -418,6 +425,7 @@ export const ChatComponent = React.memo(
           }),
         });
         const result = await llmRef.current.respond(chatRef.current, {
+          ...reasoningModeToPredictionOpts(activeReasoningMode),
           onFirstToken() {
             setShowPredictionSpinner(false);
             setPromptProcessingProgress(null);
@@ -615,8 +623,8 @@ export const ChatComponent = React.memo(
       requestConfirmation,
       client.llm,
       ttl,
+      activeReasoningMode,
     ]);
-
     return (
       <Box
         ref={rootUiRef}
