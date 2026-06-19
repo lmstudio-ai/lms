@@ -667,11 +667,11 @@ export const ChatComponent = React.memo(
           onSuggestionsPageRight={handleSuggestionsPageRight}
           onSuggestionAccept={handleSuggestionAccept}
           onPaste={handlePaste}
-          commandHasSuggestions={commandName => {
+          commandRequiresArgumentsFromSuggestions={commandName => {
             const command = commandHandler
               .list()
               .find(cmd => cmd.name.toLowerCase() === commandName.toLowerCase());
-            return command !== undefined && command.buildSuggestions !== undefined;
+            return command?.requireArgumentsFromSuggestions === true;
           }}
           selectedSuggestion={highlightedSuggestion ?? null}
           predictionSpinnerVisible={showPredictionSpinner}

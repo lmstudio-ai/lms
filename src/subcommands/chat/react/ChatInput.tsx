@@ -34,7 +34,7 @@ interface ChatInputProps {
   onSuggestionsPageRight: () => void;
   onSuggestionAccept: () => void;
   onPaste: (content: string) => void;
-  commandHasSuggestions: (commandName: string) => boolean;
+  commandRequiresArgumentsFromSuggestions: (commandName: string) => boolean;
   selectedSuggestion?: { command: string; args: string[] } | null;
   predictionSpinnerVisible: boolean;
 }
@@ -60,7 +60,7 @@ export const ChatInput = ({
   onSuggestionsPageRight,
   onSuggestionAccept,
   onPaste,
-  commandHasSuggestions,
+  commandRequiresArgumentsFromSuggestions,
   selectedSuggestion,
   predictionSpinnerVisible,
 }: ChatInputProps) => {
@@ -139,12 +139,12 @@ export const ChatInput = ({
     }
 
     if (key.return === true) {
-      // Check if there's a selected suggestion for a command that has suggestions
+      // Check if there's a selected command suggestion that should expand into arguments.
       if (
         selectedSuggestion !== undefined &&
         selectedSuggestion !== null &&
         selectedSuggestion.args.length === 0 &&
-        commandHasSuggestions(selectedSuggestion.command)
+        commandRequiresArgumentsFromSuggestions(selectedSuggestion.command)
       ) {
         onSuggestionAccept();
         return;
@@ -152,10 +152,10 @@ export const ChatInput = ({
 
       const currentText = inputState.segments.map(segment => segment.content).join("");
 
-      // Check if input is a slash command without arguments that has suggestions
+      // Check if input is a slash command without arguments that should expand into suggestions.
       if (currentText.startsWith("/") && currentText.includes(" ") === false) {
         const commandName = currentText.slice(1);
-        if (commandHasSuggestions(commandName)) {
+        if (commandRequiresArgumentsFromSuggestions(commandName)) {
           setUserInputState(previousState =>
             insertTextAtCursor({ state: previousState, text: " " }),
           );

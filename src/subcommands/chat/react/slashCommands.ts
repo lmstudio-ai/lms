@@ -78,6 +78,7 @@ export function createSlashCommands({
     {
       name: "model",
       description: "Load a model (type /model to see list)",
+      requireArgumentsFromSuggestions: true,
       handler: async (commandArguments, context) => {
         if (commandArguments.length === 0) {
           logInChat("Please specify a model to load. Type /model to see the list.");
@@ -231,6 +232,7 @@ export function createSlashCommands({
     {
       name: "download",
       description: "Download a model",
+      requireArgumentsFromSuggestions: true,
       handler: handleDownloadCommand,
       buildSuggestions: ({ argsInput, registerSuggestionMetadata }) => {
         if (shouldFetchModelCatalog !== true) {

@@ -29,6 +29,7 @@ export interface SlashCommand {
     context: SlashCommandExecutionContext,
   ) => void | Promise<void>;
   buildSuggestions?: (builderArgs: SlashCommandSuggestionBuilderArgs) => Suggestion[];
+  requireArgumentsFromSuggestions?: boolean;
 }
 
 export class SlashCommandHandler {
