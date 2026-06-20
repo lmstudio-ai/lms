@@ -218,6 +218,7 @@ export function createSlashCommands({
         const normalizedFilter = argsInput.trim().toLowerCase();
         return REASONING_MODES.filter(mode => mode.startsWith(normalizedFilter)).map(mode => {
           const suggestion: Suggestion = {
+            completionKind: "argument",
             command: "reasoning",
             args: [mode],
             priority: 1,
@@ -251,6 +252,7 @@ export function createSlashCommands({
               });
         return filteredModels.map(model => {
           const suggestion: Suggestion = {
+            completionKind: "argument",
             command: "download",
             args: [`${model.owner}/${model.name}`],
             priority: model.staffPickedAt !== undefined ? 2 : 1,
@@ -337,6 +339,7 @@ function createModelSuggestion({
 }: CreateModelSuggestionOpts): Suggestion {
   const priority = modelState.isCurrent ? 3 : modelState.isLoaded ? 2 : 1;
   const suggestion: Suggestion = {
+    completionKind: "argument",
     command: "model",
     args: [modelState.modelKey],
     priority,

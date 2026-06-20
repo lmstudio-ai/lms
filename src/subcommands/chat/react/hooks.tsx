@@ -534,6 +534,7 @@ export interface UseSuggestionHandlersOpts {
     value: ChatUserInputState | ((prev: ChatUserInputState) => ChatUserInputState),
   ) => void;
   commandRequiresArgumentsFromSuggestions: (commandName: string) => boolean;
+  inputText: string;
 }
 
 export function useSuggestionHandlers({
@@ -543,17 +544,20 @@ export function useSuggestionHandlers({
   suggestionsPerPage,
   setUserInputState,
   commandRequiresArgumentsFromSuggestions,
+  inputText,
 }: UseSuggestionHandlersOpts) {
   const handleSuggestionsUp = useCallback(() => {
     if (selectedSuggestionIndex === null) {
+      setSelectedSuggestionIndex(suggestions.length > 0 ? suggestions.length - 1 : null);
       return;
     }
     const nextIndex = Math.max(0, selectedSuggestionIndex - 1);
     setSelectedSuggestionIndex(nextIndex);
-  }, [selectedSuggestionIndex, setSelectedSuggestionIndex]);
+  }, [selectedSuggestionIndex, suggestions.length, setSelectedSuggestionIndex]);
 
   const handleSuggestionsDown = useCallback(() => {
     if (selectedSuggestionIndex === null) {
+      setSelectedSuggestionIndex(suggestions.length > 0 ? 0 : null);
       return;
     }
     const nextIndex = Math.min(suggestions.length - 1, selectedSuggestionIndex + 1);
@@ -594,15 +598,18 @@ export function useSuggestionHandlers({
 
     const { insertSuggestionAtCursor } = await import("./inputReducer.js");
 
-    const hasArguments = selectedSuggestion.args.length > 0;
-    const argumentsText = selectedSuggestion.args.join(" ");
-    const acceptedSuggestion = hasArguments ? selectedSuggestion : undefined;
-    const shouldAppendArgumentSpace =
-      hasArguments === false &&
-      commandRequiresArgumentsFromSuggestions(selectedSuggestion.command) === true;
-    const suggestionText = hasArguments
-      ? `/${selectedSuggestion.command} ${argumentsText}`
-      : `/${selectedSuggestion.command}${shouldAppendArgumentSpace ? " " : ""}`;
+    let acceptedSuggestion: Suggestion | undefined;
+    let suggestionText: string;
+    if (selectedSuggestion.completionKind === "argument") {
+      acceptedSuggestion = selectedSuggestion;
+      suggestionText = `/${selectedSuggestion.command} ${selectedSuggestion.args.join(" ")}`;
+    } else {
+      const inputWithTrimmedStart = inputText.trimStart();
+      const exactCommandInput = inputWithTrimmedStart === `/${selectedSuggestion.command}`;
+      const shouldEnterRequiredArgumentMode =
+        exactCommandInput && commandRequiresArgumentsFromSuggestions(selectedSuggestion.command);
+      suggestionText = `/${selectedSuggestion.command}${shouldEnterRequiredArgumentMode ? " " : ""}`;
+    }
     setUserInputState((previousState: ChatUserInputState) =>
       insertSuggestionAtCursor({
         state: previousState,
@@ -615,6 +622,8 @@ export function useSuggestionHandlers({
     suggestions,
     setUserInputState,
     commandRequiresArgumentsFromSuggestions,
+    inputText,
+    setSelectedSuggestionIndex,
   ]);
 
   return {

@@ -299,6 +299,7 @@ export const ChatComponent = React.memo(
       suggestionsPerPage,
       setUserInputState,
       commandRequiresArgumentsFromSuggestions,
+      inputText: slashCommandInputText,
     });
 
     const handleAbortPrediction = useCallback(() => {
