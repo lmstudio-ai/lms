@@ -2,7 +2,7 @@ import { produce } from "@lmstudio/immer-with-plugins";
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, type DOMElement, useApp, Text } from "ink";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { displayVerboseStats, getLargePastePlaceholderText } from "../util.js";
 import { reasoningModeToPredictionOpts, type ReasoningMode } from "../reasoning.js";
 import { ChatInput } from "./ChatInput.js";
@@ -198,24 +198,63 @@ export const ChatComponent = React.memo(
       shouldFetchModelCatalog,
     ]);
 
-    const suggestions = useMemo<Suggestion[]>(() => {
+    const slashCommandInputText = useMemo(() => {
       if (userInputState.segments.length === 0) {
-        return [];
+        return "";
       }
-      const firstSegment = userInputState.segments[0];
-      const inputText = firstSegment.content;
+      return userInputState.segments[0]?.content ?? "";
+    }, [userInputState.segments]);
+
+    useEffect(() => {
+      setSelectedSuggestionIndex(null);
+    }, [slashCommandInputText]);
+
+    const suggestions = useMemo<Suggestion[]>(() => {
       return commandHandler.getSuggestions({
-        input: inputText,
-        shouldShowSuggestions: !isConfirmationActive && !isPredicting && inputText.startsWith("/"),
+        input: slashCommandInputText,
+        shouldShowSuggestions:
+          !isConfirmationActive && !isPredicting && slashCommandInputText.startsWith("/"),
       });
-    }, [commandHandler, isConfirmationActive, isPredicting, userInputState.segments]);
+    }, [commandHandler, isConfirmationActive, isPredicting, slashCommandInputText]);
 
     const suggestionsPerPage = useSuggestionsPerPage(messages);
     const areSuggestionsVisible = useMemo(() => suggestions.length > 0, [suggestions]);
+    const shouldAutoHighlightFirstSuggestion = useMemo(() => {
+      if (suggestions.length === 0) {
+        return false;
+      }
+
+      const inputWithTrimmedStart = slashCommandInputText.trimStart();
+      if (inputWithTrimmedStart.startsWith("/") === false) {
+        return false;
+      }
+
+      const firstWhitespaceIndex = inputWithTrimmedStart.indexOf(" ");
+      const hasArgumentPosition = firstWhitespaceIndex !== -1;
+      const commandName = hasArgumentPosition
+        ? inputWithTrimmedStart.slice(1, firstWhitespaceIndex)
+        : inputWithTrimmedStart.slice(1);
+      const command = commandHandler
+        .list()
+        .find(cmd => cmd.name.toLowerCase() === commandName.toLowerCase());
+
+      if (command?.requireArgumentsFromSuggestions === true) {
+        return true;
+      }
+
+      // Partial command names should keep command-completion behavior. Exact optional-argument
+      // commands such as /reasoning should only auto-highlight after the user enters a space.
+      if (command === undefined) {
+        return true;
+      }
+
+      return hasArgumentPosition;
+    }, [commandHandler, slashCommandInputText, suggestions.length]);
+
     // As selectedSuggestionIndex can be out of bounds due to changes in suggestions,
     // we normalize it here.
     const normalizedSelectedSuggestionIndex = useMemo(() => {
-      if (suggestions.length === 0) {
+      if (suggestions.length === 0 || shouldAutoHighlightFirstSuggestion === false) {
         return null;
       }
       if (selectedSuggestionIndex === null || selectedSuggestionIndex < 0) {
@@ -225,7 +264,7 @@ export const ChatComponent = React.memo(
         return suggestions.length - 1;
       }
       return selectedSuggestionIndex;
-    }, [selectedSuggestionIndex, suggestions.length]);
+    }, [selectedSuggestionIndex, shouldAutoHighlightFirstSuggestion, suggestions.length]);
     const highlightedSuggestion = useMemo(() => {
       if (normalizedSelectedSuggestionIndex === null) {
         return undefined;
