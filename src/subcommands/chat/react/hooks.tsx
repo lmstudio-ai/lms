@@ -533,6 +533,7 @@ export interface UseSuggestionHandlersOpts {
   setUserInputState: (
     value: ChatUserInputState | ((prev: ChatUserInputState) => ChatUserInputState),
   ) => void;
+  commandRequiresArgumentsFromSuggestions: (commandName: string) => boolean;
 }
 
 export function useSuggestionHandlers({
@@ -541,6 +542,7 @@ export function useSuggestionHandlers({
   suggestions,
   suggestionsPerPage,
   setUserInputState,
+  commandRequiresArgumentsFromSuggestions,
 }: UseSuggestionHandlersOpts) {
   const handleSuggestionsUp = useCallback(() => {
     if (selectedSuggestionIndex === null) {
@@ -595,10 +597,12 @@ export function useSuggestionHandlers({
     const hasArguments = selectedSuggestion.args.length > 0;
     const argumentsText = selectedSuggestion.args.join(" ");
     const acceptedSuggestion = hasArguments ? selectedSuggestion : undefined;
-    // Always add a space after the command (even without args) to trigger suggestions
+    const shouldAppendArgumentSpace =
+      hasArguments === false &&
+      commandRequiresArgumentsFromSuggestions(selectedSuggestion.command) === true;
     const suggestionText = hasArguments
       ? `/${selectedSuggestion.command} ${argumentsText}`
-      : `/${selectedSuggestion.command} `;
+      : `/${selectedSuggestion.command}${shouldAppendArgumentSpace ? " " : ""}`;
     setUserInputState((previousState: ChatUserInputState) =>
       insertSuggestionAtCursor({
         state: previousState,
@@ -606,7 +610,12 @@ export function useSuggestionHandlers({
         acceptedSuggestion,
       }),
     );
-  }, [selectedSuggestionIndex, suggestions, setUserInputState]);
+  }, [
+    selectedSuggestionIndex,
+    suggestions,
+    setUserInputState,
+    commandRequiresArgumentsFromSuggestions,
+  ]);
 
   return {
     handleSuggestionsUp,

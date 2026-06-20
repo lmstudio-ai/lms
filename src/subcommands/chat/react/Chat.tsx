@@ -197,6 +197,15 @@ export const ChatComponent = React.memo(
       activeReasoningMode,
       shouldFetchModelCatalog,
     ]);
+    const commandRequiresArgumentsFromSuggestions = useCallback(
+      (commandName: string): boolean => {
+        const command = commandHandler
+          .list()
+          .find(cmd => cmd.name.toLowerCase() === commandName.toLowerCase());
+        return command?.requireArgumentsFromSuggestions === true;
+      },
+      [commandHandler],
+    );
 
     const slashCommandInputText = useMemo(() => {
       if (userInputState.segments.length === 0) {
@@ -238,7 +247,7 @@ export const ChatComponent = React.memo(
         .list()
         .find(cmd => cmd.name.toLowerCase() === commandName.toLowerCase());
 
-      if (command?.requireArgumentsFromSuggestions === true) {
+      if (commandRequiresArgumentsFromSuggestions(commandName)) {
         return true;
       }
 
@@ -249,7 +258,12 @@ export const ChatComponent = React.memo(
       }
 
       return hasArgumentPosition;
-    }, [commandHandler, slashCommandInputText, suggestions.length]);
+    }, [
+      commandHandler,
+      commandRequiresArgumentsFromSuggestions,
+      slashCommandInputText,
+      suggestions.length,
+    ]);
 
     // As selectedSuggestionIndex can be out of bounds due to changes in suggestions,
     // we normalize it here.
@@ -284,6 +298,7 @@ export const ChatComponent = React.memo(
       suggestions,
       suggestionsPerPage,
       setUserInputState,
+      commandRequiresArgumentsFromSuggestions,
     });
 
     const handleAbortPrediction = useCallback(() => {
@@ -706,12 +721,7 @@ export const ChatComponent = React.memo(
           onSuggestionsPageRight={handleSuggestionsPageRight}
           onSuggestionAccept={handleSuggestionAccept}
           onPaste={handlePaste}
-          commandRequiresArgumentsFromSuggestions={commandName => {
-            const command = commandHandler
-              .list()
-              .find(cmd => cmd.name.toLowerCase() === commandName.toLowerCase());
-            return command?.requireArgumentsFromSuggestions === true;
-          }}
+          commandRequiresArgumentsFromSuggestions={commandRequiresArgumentsFromSuggestions}
           selectedSuggestion={highlightedSuggestion ?? null}
           predictionSpinnerVisible={showPredictionSpinner}
         />
