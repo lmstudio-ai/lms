@@ -534,7 +534,6 @@ export interface UseSuggestionHandlersOpts {
     value: ChatUserInputState | ((prev: ChatUserInputState) => ChatUserInputState),
   ) => void;
   commandRequiresArgumentsFromSuggestions: (commandName: string) => boolean;
-  inputText: string;
 }
 
 export function useSuggestionHandlers({
@@ -544,7 +543,6 @@ export function useSuggestionHandlers({
   suggestionsPerPage,
   setUserInputState,
   commandRequiresArgumentsFromSuggestions,
-  inputText,
 }: UseSuggestionHandlersOpts) {
   const handleSuggestionsUp = useCallback(() => {
     if (selectedSuggestionIndex === null) {
@@ -604,10 +602,9 @@ export function useSuggestionHandlers({
       acceptedSuggestion = selectedSuggestion;
       suggestionText = `/${selectedSuggestion.command} ${selectedSuggestion.args.join(" ")}`;
     } else {
-      const inputWithTrimmedStart = inputText.trimStart();
-      const exactCommandInput = inputWithTrimmedStart === `/${selectedSuggestion.command}`;
-      const shouldEnterRequiredArgumentMode =
-        exactCommandInput && commandRequiresArgumentsFromSuggestions(selectedSuggestion.command);
+      const shouldEnterRequiredArgumentMode = commandRequiresArgumentsFromSuggestions(
+        selectedSuggestion.command,
+      );
       suggestionText = `/${selectedSuggestion.command}${shouldEnterRequiredArgumentMode ? " " : ""}`;
     }
     setUserInputState((previousState: ChatUserInputState) =>
@@ -622,8 +619,6 @@ export function useSuggestionHandlers({
     suggestions,
     setUserInputState,
     commandRequiresArgumentsFromSuggestions,
-    inputText,
-    setSelectedSuggestionIndex,
   ]);
 
   return {
