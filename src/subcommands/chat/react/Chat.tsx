@@ -2,7 +2,7 @@ import { produce } from "@lmstudio/immer-with-plugins";
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import { Box, type DOMElement, useApp, Text } from "ink";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { displayVerboseStats, getLargePastePlaceholderText } from "../util.js";
 import { reasoningModeToPredictionOpts, type ReasoningMode } from "../reasoning.js";
 import { ChatInput } from "./ChatInput.js";
@@ -88,7 +88,10 @@ export const ChatComponent = React.memo(
       progress: number;
     } | null>(null);
     const lastPredictionStatsRef = useRef<LLMPredictionStats | null>(null);
-    const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
+    const [selectedSuggestion, setSelectedSuggestion] = useState<{
+      inputText: string;
+      index: number;
+    } | null>(null);
     const { isConfirmationActive, requestConfirmation, handleConfirmationResponse } =
       useConfirmationPrompt();
     const [promptProcessingProgress, setPromptProcessingProgress] = useState<number | null>(null);
@@ -214,9 +217,27 @@ export const ChatComponent = React.memo(
       return userInputState.segments[0]?.content ?? "";
     }, [userInputState.segments]);
 
-    useEffect(() => {
-      setSelectedSuggestionIndex(null);
-    }, [slashCommandInputText]);
+    const selectedSuggestionIndex =
+      selectedSuggestion?.inputText === slashCommandInputText ? selectedSuggestion.index : null;
+    const setSelectedSuggestionIndex = useCallback(
+      (value: number | null | ((prev: number | null) => number | null)) => {
+        setSelectedSuggestion(previousSelectedSuggestion => {
+          const previousIndex =
+            previousSelectedSuggestion?.inputText === slashCommandInputText
+              ? previousSelectedSuggestion.index
+              : null;
+          const nextIndex = typeof value === "function" ? value(previousIndex) : value;
+          if (nextIndex === null) {
+            return null;
+          }
+          return {
+            inputText: slashCommandInputText,
+            index: nextIndex,
+          };
+        });
+      },
+      [slashCommandInputText],
+    );
 
     const suggestions = useMemo<Suggestion[]>(() => {
       return commandHandler.getSuggestions({
