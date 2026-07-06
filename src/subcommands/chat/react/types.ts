@@ -52,6 +52,7 @@ export type SuggestionExecution =
     };
 
 export interface Suggestion {
+  completionKind: "command" | "argument";
   command: string;
   args: string[];
   priority: number;

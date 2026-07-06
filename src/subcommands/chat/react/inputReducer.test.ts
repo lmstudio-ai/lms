@@ -1031,6 +1031,7 @@ describe("chatInputStateReducers", () => {
     it("stores the accepted suggestion", () => {
       const initialState = createChatUserInputState([{ type: "text", content: "/mod" }], 0, 4);
       const acceptedSuggestion: Suggestion = {
+        completionKind: "argument",
         command: "model",
         args: ["owner/model"],
         priority: 1,
@@ -1048,6 +1049,7 @@ describe("chatInputStateReducers", () => {
 
     it("clears the accepted suggestion when accepting a command suggestion", () => {
       const acceptedSuggestion: Suggestion = {
+        completionKind: "argument",
         command: "model",
         args: ["owner/model"],
         priority: 1,
@@ -1069,6 +1071,7 @@ describe("chatInputStateReducers", () => {
 
     it("clears the accepted suggestion when text changes", () => {
       const acceptedSuggestion: Suggestion = {
+        completionKind: "argument",
         command: "model",
         args: ["owner/model"],
         priority: 1,

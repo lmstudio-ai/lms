@@ -4,6 +4,7 @@ import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } fro
 import { Box, type DOMElement, useApp, Text } from "ink";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { displayVerboseStats, getLargePastePlaceholderText } from "../util.js";
+import { reasoningModeToPredictionOpts, type ReasoningMode } from "../reasoning.js";
 import { ChatInput } from "./ChatInput.js";
 import { ChatMessagesList } from "./ChatMessagesList.js";
 import { ChatSuggestions } from "./ChatSuggestions.js";
@@ -41,6 +42,7 @@ interface ChatComponentProps {
   onExit: () => void;
   stats?: true;
   ttl?: number;
+  reasoningMode: ReasoningMode;
   shouldFetchModelCatalog?: boolean;
 }
 
@@ -59,6 +61,7 @@ export const ChatComponent = React.memo(
     onExit,
     stats,
     ttl,
+    reasoningMode,
     shouldFetchModelCatalog,
   }: ChatComponentProps) => {
     const { exit } = useApp();
@@ -85,10 +88,14 @@ export const ChatComponent = React.memo(
       progress: number;
     } | null>(null);
     const lastPredictionStatsRef = useRef<LLMPredictionStats | null>(null);
-    const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
+    const [selectedSuggestion, setSelectedSuggestion] = useState<{
+      inputText: string;
+      index: number;
+    } | null>(null);
     const { isConfirmationActive, requestConfirmation, handleConfirmationResponse } =
       useConfirmationPrompt();
     const [promptProcessingProgress, setPromptProcessingProgress] = useState<number | null>(null);
+    const [activeReasoningMode, setActiveReasoningMode] = useState<ReasoningMode>(reasoningMode);
     const abortControllerRef = useRef<AbortController | null>(new AbortController());
     const downloadAbortControllerRef = useRef<AbortController | null>(null);
     const modelLoadingAbortControllerRef = useRef<AbortController | null>(null);
@@ -175,6 +182,8 @@ export const ChatComponent = React.memo(
         setModelLoadingProgress,
         modelLoadingAbortControllerRef,
         lastPredictionStatsRef,
+        reasoningMode: activeReasoningMode,
+        setReasoningMode: setActiveReasoningMode,
       });
       handler.setCommands(commands);
       return handler;
@@ -188,27 +197,99 @@ export const ChatComponent = React.memo(
       handleDownloadCommand,
       logInChat,
       logErrorInChat,
+      activeReasoningMode,
       shouldFetchModelCatalog,
     ]);
+    const commandRequiresArgumentsFromSuggestions = useCallback(
+      (commandName: string): boolean => {
+        const command = commandHandler
+          .list()
+          .find(cmd => cmd.name.toLowerCase() === commandName.toLowerCase());
+        return command?.requireArgumentsFromSuggestions === true;
+      },
+      [commandHandler],
+    );
+
+    const slashCommandInputText = useMemo(() => {
+      if (userInputState.segments.length === 0) {
+        return "";
+      }
+      return userInputState.segments[0]?.content ?? "";
+    }, [userInputState.segments]);
+
+    const selectedSuggestionIndex =
+      selectedSuggestion?.inputText === slashCommandInputText ? selectedSuggestion.index : null;
+    const setSelectedSuggestionIndex = useCallback(
+      (value: number | null | ((prev: number | null) => number | null)) => {
+        setSelectedSuggestion(previousSelectedSuggestion => {
+          const previousIndex =
+            previousSelectedSuggestion?.inputText === slashCommandInputText
+              ? previousSelectedSuggestion.index
+              : null;
+          const nextIndex = typeof value === "function" ? value(previousIndex) : value;
+          if (nextIndex === null) {
+            return null;
+          }
+          return {
+            inputText: slashCommandInputText,
+            index: nextIndex,
+          };
+        });
+      },
+      [slashCommandInputText],
+    );
 
     const suggestions = useMemo<Suggestion[]>(() => {
-      if (userInputState.segments.length === 0) {
-        return [];
-      }
-      const firstSegment = userInputState.segments[0];
-      const inputText = firstSegment.content;
       return commandHandler.getSuggestions({
-        input: inputText,
-        shouldShowSuggestions: !isConfirmationActive && !isPredicting && inputText.startsWith("/"),
+        input: slashCommandInputText,
+        shouldShowSuggestions:
+          !isConfirmationActive && !isPredicting && slashCommandInputText.startsWith("/"),
       });
-    }, [commandHandler, isConfirmationActive, isPredicting, userInputState.segments]);
+    }, [commandHandler, isConfirmationActive, isPredicting, slashCommandInputText]);
 
     const suggestionsPerPage = useSuggestionsPerPage(messages);
     const areSuggestionsVisible = useMemo(() => suggestions.length > 0, [suggestions]);
+    const shouldAutoHighlightFirstSuggestion = useMemo(() => {
+      if (suggestions.length === 0) {
+        return false;
+      }
+
+      const inputWithTrimmedStart = slashCommandInputText.trimStart();
+      if (inputWithTrimmedStart.startsWith("/") === false) {
+        return false;
+      }
+
+      const firstWhitespaceIndex = inputWithTrimmedStart.indexOf(" ");
+      const hasArgumentPosition = firstWhitespaceIndex !== -1;
+      const commandName = hasArgumentPosition
+        ? inputWithTrimmedStart.slice(1, firstWhitespaceIndex)
+        : inputWithTrimmedStart.slice(1);
+      const command = commandHandler
+        .list()
+        .find(cmd => cmd.name.toLowerCase() === commandName.toLowerCase());
+
+      if (commandRequiresArgumentsFromSuggestions(commandName)) {
+        return true;
+      }
+
+      // Partial command names should keep command-completion behavior. Exact optional-argument
+      // commands such as /reasoning should only auto-highlight after the user enters a space.
+      if (command === undefined) {
+        return true;
+      }
+
+      return hasArgumentPosition;
+    }, [
+      commandHandler,
+      commandRequiresArgumentsFromSuggestions,
+      slashCommandInputText,
+      suggestions.length,
+    ]);
+
     // As selectedSuggestionIndex can be out of bounds due to changes in suggestions,
     // we normalize it here.
     const normalizedSelectedSuggestionIndex = useMemo(() => {
-      if (suggestions.length === 0) {
+      if (suggestions.length === 0 || shouldAutoHighlightFirstSuggestion === false) {
         return null;
       }
       if (selectedSuggestionIndex === null || selectedSuggestionIndex < 0) {
@@ -218,7 +299,7 @@ export const ChatComponent = React.memo(
         return suggestions.length - 1;
       }
       return selectedSuggestionIndex;
-    }, [selectedSuggestionIndex, suggestions.length]);
+    }, [selectedSuggestionIndex, shouldAutoHighlightFirstSuggestion, suggestions.length]);
     const highlightedSuggestion = useMemo(() => {
       if (normalizedSelectedSuggestionIndex === null) {
         return undefined;
@@ -238,6 +319,7 @@ export const ChatComponent = React.memo(
       suggestions,
       suggestionsPerPage,
       setUserInputState,
+      commandRequiresArgumentsFromSuggestions,
     });
 
     const handleAbortPrediction = useCallback(() => {
@@ -418,6 +500,7 @@ export const ChatComponent = React.memo(
           }),
         });
         const result = await llmRef.current.respond(chatRef.current, {
+          ...reasoningModeToPredictionOpts(activeReasoningMode),
           onFirstToken() {
             setShowPredictionSpinner(false);
             setPromptProcessingProgress(null);
@@ -615,8 +698,8 @@ export const ChatComponent = React.memo(
       requestConfirmation,
       client.llm,
       ttl,
+      activeReasoningMode,
     ]);
-
     return (
       <Box
         ref={rootUiRef}
@@ -659,12 +742,7 @@ export const ChatComponent = React.memo(
           onSuggestionsPageRight={handleSuggestionsPageRight}
           onSuggestionAccept={handleSuggestionAccept}
           onPaste={handlePaste}
-          commandHasSuggestions={commandName => {
-            const command = commandHandler
-              .list()
-              .find(cmd => cmd.name.toLowerCase() === commandName.toLowerCase());
-            return command !== undefined && command.buildSuggestions !== undefined;
-          }}
+          commandRequiresArgumentsFromSuggestions={commandRequiresArgumentsFromSuggestions}
           selectedSuggestion={highlightedSuggestion ?? null}
           predictionSpinnerVisible={showPredictionSpinner}
         />

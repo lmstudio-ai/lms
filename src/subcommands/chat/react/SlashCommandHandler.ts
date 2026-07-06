@@ -29,6 +29,7 @@ export interface SlashCommand {
     context: SlashCommandExecutionContext,
   ) => void | Promise<void>;
   buildSuggestions?: (builderArgs: SlashCommandSuggestionBuilderArgs) => Suggestion[];
+  requireArgumentsFromSuggestions?: boolean;
 }
 
 export class SlashCommandHandler {
@@ -186,6 +187,7 @@ export class SlashCommandHandler {
 
   private createCommandSuggestion(command: SlashCommand): Suggestion {
     const suggestion: Suggestion = {
+      completionKind: "command",
       command: command.name,
       args: [],
       priority: SlashCommandHandler.COMMAND_SUGGESTION_PRIORITY,
