@@ -17,6 +17,12 @@ export interface ResolveModelForLaunchOpts {
   model?: string;
   contextLength?: number;
   yes: boolean;
+  /**
+   * When true, route model-load progress to stderr so `--print-env` stdout stays a clean,
+   * eval-able shell script -- the Spinner otherwise writes progress + cursor escapes to stdout,
+   * which `eval "$(lms launch ... --print-env)"` would ingest before the export/command lines.
+   */
+  printEnv?: boolean;
 }
 
 export interface ResolvedModel {
@@ -91,9 +97,10 @@ async function loadModelWithSpinner(
   logger: SimpleLogger,
   modelKey: string,
   contextLength: number | undefined,
+  progressToStderr: boolean,
 ): Promise<LLM> {
   const spinnerText = `Loading ${modelKey}`;
-  const spinner = new Spinner(spinnerText);
+  const spinner = new Spinner(spinnerText, progressToStderr ? process.stderr : process.stdout);
   const abortController = new AbortController();
   let lastProgressUpdateTime = 0;
   const updateSpinnerProgress = (progress: number) => {
@@ -175,7 +182,13 @@ export async function resolveModelForLaunch(
 
   let model: LLM;
   try {
-    model = await loadModelWithSpinner(client, logger, modelQuery, opts.contextLength);
+    model = await loadModelWithSpinner(
+      client,
+      logger,
+      modelQuery,
+      opts.contextLength,
+      opts.printEnv === true,
+    );
   } catch {
     const ownerName = getOwnerNameFromModelName(modelQuery);
     if (ownerName === null) {
@@ -187,7 +200,13 @@ export async function resolveModelForLaunch(
     await downloadArtifact(client, logger, ownerName.owner, ownerName.name, opts.yes);
     // Retry via the config-aware loader (not the JIT `.model()` shortcut) so a requested
     // --context-length is still honored on a model that had to be downloaded first.
-    model = await loadModelWithSpinner(client, logger, modelQuery, opts.contextLength);
+    model = await loadModelWithSpinner(
+      client,
+      logger,
+      modelQuery,
+      opts.contextLength,
+      opts.printEnv === true,
+    );
   }
 
   const info = await model.getModelInfo();

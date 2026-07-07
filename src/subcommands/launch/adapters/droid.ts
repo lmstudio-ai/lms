@@ -82,8 +82,10 @@ export const droid: ToolAdapter = {
     // hint, so mapping the model's context length onto it would advertise a bogus response budget.
 
     if (!ctx.yes && process.stdin.isTTY === true) {
-      console.info();
-      console.info(chalk.dim(`! "droid" reads its model list from ${filePath}.`));
+      // Prompt context goes to stderr (like the confirm prompt below), so it never lands on stdout
+      // where `eval "$(lms launch droid --print-env)"` would try to run this human text as shell.
+      console.error();
+      console.error(chalk.dim(`! "droid" reads its model list from ${filePath}.`));
       const proceed = await runPromptWithExitHandling(() =>
         confirm(
           { message: `Add/update the "${DISPLAY_NAME}" entry in ${filePath}?`, default: true },

@@ -170,6 +170,8 @@ describe("codex adapter", () => {
       "-c",
       "model_providers.lmslaunch.wire_api=responses",
       "-c",
+      "model_providers.lmslaunch.env_key=OPENAI_API_KEY",
+      "-c",
       "model_provider=lmslaunch",
       "-c",
       "model=openai/gpt-oss-20b",
@@ -178,13 +180,15 @@ describe("codex adapter", () => {
       "-c",
       "model_context_window=32000",
     ]);
+    // env_key must name the env var we populate, or Codex sends no bearer token to a secured endpoint.
+    expect(prepared.args).toContain("model_providers.lmslaunch.env_key=OPENAI_API_KEY");
     expect(prepared.env.OPENAI_API_KEY).toBe("lmstudio");
   });
 
   it("omits model_context_window when context length is unknown", async () => {
     const prepared = await codex.prepare(makeCtx({ contextLength: undefined }));
     expect(prepared.args.join(" ")).not.toContain("model_context_window");
-    expect(prepared.args).toHaveLength(10);
+    expect(prepared.args).toHaveLength(12);
   });
 });
 

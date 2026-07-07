@@ -118,6 +118,7 @@ launchCommand.action(async (tool, toolArgs, options: LaunchCommandOptions) => {
     model: modelQuery,
     contextLength: options.contextLength,
     yes,
+    printEnv: options.printEnv === true,
   });
 
   if (options.contextLength !== undefined && !adapter.supportsContextHint) {

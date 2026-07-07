@@ -24,6 +24,10 @@ export const codex: ToolAdapter = {
       "-c",
       `model_providers.${PROVIDER_ID}.wire_api=responses`,
       "-c",
+      // Names the env var Codex reads the bearer token from. Without env_key the custom provider
+      // sends no Authorization header, so `--api-key` can't authenticate a secured LM Studio endpoint.
+      `model_providers.${PROVIDER_ID}.env_key=OPENAI_API_KEY`,
+      "-c",
       `model_provider=${PROVIDER_ID}`,
       "-c",
       `model=${ctx.model}`,
@@ -34,7 +38,8 @@ export const codex: ToolAdapter = {
       args.push("-c", `model_context_window=${ctx.contextLength}`);
     }
     const env: Record<string, string> = {
-      OPENAI_API_KEY: ctx.apiKey, // some Codex builds require a non-empty key even though unused
+      // Referenced by model_providers.<id>.env_key above; Codex forwards it as the bearer token.
+      OPENAI_API_KEY: ctx.apiKey,
     };
     const notes = [
       `Temporary Codex provider ("${PROVIDER_ID}") using wire_api=responses (current Codex dropped ` +
