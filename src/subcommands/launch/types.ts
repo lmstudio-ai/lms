@@ -13,7 +13,8 @@ export interface LaunchContext {
   contextLength?: number; // read back from the loaded model, if known
   apiKey: string; // bearer token for the local endpoint (default "lmstudio")
   yes: boolean;
-  workDir: string; // per-launch temp dir (0700) for metadata/config files; cleaned up after
+  workDir: string; // per-launch temp dir (0700) for metadata/config files; cleaned up after (kept under --print-env)
+  printEnv: boolean; // true under --print-env: config the emitted command references must outlive this process
 }
 
 /** What an adapter produces. */

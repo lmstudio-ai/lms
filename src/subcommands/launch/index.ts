@@ -141,6 +141,7 @@ launchCommand.action(async (tool, toolArgs, options: LaunchCommandOptions) => {
     apiKey: options.apiKey ?? "lmstudio",
     yes,
     workDir,
+    printEnv: options.printEnv === true,
   };
 
   let prepared: PreparedLaunch | undefined;
@@ -174,8 +175,14 @@ launchCommand.action(async (tool, toolArgs, options: LaunchCommandOptions) => {
     logger.info(`Launching ${adapter.displayName}...`);
     process.exitCode = await spawnToolAndWait(prepared.command, childArgs, prepared.env);
   } finally {
-    await prepared?.cleanup?.();
-    await rm(workDir, { recursive: true, force: true });
+    // --print-env emits a command the user runs later in their own shell, so anything that command
+    // depends on -- aider's --model-metadata-file under workDir, droid's ~/.factory settings entry --
+    // must outlive this process. Skip teardown in that mode only; the spawn, dry-run, and error
+    // paths still clean up here.
+    if (options.printEnv !== true) {
+      await prepared?.cleanup?.();
+      await rm(workDir, { recursive: true, force: true });
+    }
   }
 });
 

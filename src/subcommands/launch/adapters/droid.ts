@@ -18,7 +18,6 @@ export interface DroidCustomModel {
   baseUrl: string;
   apiKey: string;
   provider: string;
-  maxOutputTokens?: number;
 }
 
 export interface DroidSettings {
@@ -43,14 +42,19 @@ export function mergeDroidSettings(existing: DroidSettings, entry: DroidCustomMo
  * Factory's `droid` CLI. Model selection lives in `~/.factory/settings.json`, a real file the
  * user's Factory installation also reads/writes, so we back up the original content, write our
  * entry keyed by a stable displayName (idempotent across re-runs), confirm before touching it
- * unless -y, and restore the original content on exit via `cleanup`.
+ * unless -y, and restore the original content on exit via `cleanup` (kept in place under
+ * `--print-env`, where the emitted command still needs it).
+ *
+ * Factory's BYOK schema has no context-window field (only `maxOutputTokens`, the completion cap),
+ * so this adapter conveys no context hint -- `supportsContextHint` is false and the model's loaded
+ * window is simply the effective one.
  */
 export const droid: ToolAdapter = {
   name: "droid",
   displayName: "Factory (droid)",
   command: COMMAND,
   install: { note: "Install the Factory CLI (droid) from your Factory account/dashboard." },
-  supportsContextHint: true,
+  supportsContextHint: false,
   async prepare(ctx) {
     const filePath = settingsFilePath();
     const fileExisted = await exists(filePath);
@@ -74,9 +78,8 @@ export const droid: ToolAdapter = {
       apiKey: ctx.apiKey,
       provider: "generic-chat-completion-api",
     };
-    if (ctx.contextLength !== undefined) {
-      entry.maxOutputTokens = ctx.contextLength;
-    }
+    // Deliberately no maxOutputTokens: it is Factory's output-completion cap, not a context-window
+    // hint, so mapping the model's context length onto it would advertise a bogus response budget.
 
     if (!ctx.yes && process.stdin.isTTY === true) {
       console.info();
@@ -109,7 +112,11 @@ export const droid: ToolAdapter = {
       args: [],
       env: {},
       notes: [
-        `Wrote a temporary "${DISPLAY_NAME}" entry to ${filePath}; it will be reverted on exit.`,
+        ctx.printEnv
+          ? `Wrote a "${DISPLAY_NAME}" entry to ${filePath} and left it in place so the printed ` +
+            `command resolves the model; it is NOT auto-reverted. Remove it yourself, or re-run ` +
+            `without --print-env to have it reverted on exit.`
+          : `Wrote a temporary "${DISPLAY_NAME}" entry to ${filePath}; it will be reverted on exit.`,
       ],
       cleanup,
     };

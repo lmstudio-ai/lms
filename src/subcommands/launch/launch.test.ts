@@ -7,7 +7,7 @@ import { aider } from "./adapters/aider.js";
 import { claude } from "./adapters/claude.js";
 import { codex } from "./adapters/codex.js";
 import { copilot } from "./adapters/copilot.js";
-import { mergeDroidSettings, type DroidSettings } from "./adapters/droid.js";
+import { droid, mergeDroidSettings, type DroidSettings } from "./adapters/droid.js";
 import { opencode } from "./adapters/opencode.js";
 import { detectUsePowerShell, formatEnvForShell, formatLaunchPlan } from "./format.js";
 import { formatInstallHint, resolveAdapter } from "./registry.js";
@@ -27,6 +27,7 @@ function makeCtx(overrides: Partial<LaunchContext> = {}): LaunchContext {
     apiKey: "lmstudio",
     yes: false,
     workDir: "/lms-launch-test-workdir-unused",
+    printEnv: false,
     ...overrides,
   };
 }
@@ -167,7 +168,7 @@ describe("codex adapter", () => {
       "-c",
       "model_providers.lmslaunch.base_url=http://127.0.0.1:1234/v1",
       "-c",
-      "model_providers.lmslaunch.wire_api=chat",
+      "model_providers.lmslaunch.wire_api=responses",
       "-c",
       "model_provider=lmslaunch",
       "-c",
@@ -244,6 +245,12 @@ describe("opencode adapter", () => {
     const prepared = await opencode.prepare(makeCtx({ contextLength: undefined }));
     const config = JSON.parse(prepared.env.OPENCODE_CONFIG_CONTENT);
     expect(config.provider.lmstudio.models["openai/gpt-oss-20b"].limit).toBeUndefined();
+  });
+});
+
+describe("droid adapter", () => {
+  it("reports no verified context knob (Factory BYOK exposes no context-window field)", () => {
+    expect(droid.supportsContextHint).toBe(false);
   });
 });
 

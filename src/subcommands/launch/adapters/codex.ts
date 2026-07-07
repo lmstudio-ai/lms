@@ -7,7 +7,9 @@ const PROVIDER_ID = "lmslaunch";
 /**
  * Codex CLI. Ships the explicit custom-provider `-c` override form (portable across versions)
  * rather than assuming a built-in "lmstudio"/"oss" provider exists in the installed release.
- * `wire_api=chat` is the broadest OpenAI-compatible mode; see the note below if it doesn't fit.
+ * Uses wire_api=responses: current Codex removed Chat Completions support (Feb 2026) and only
+ * speaks the Responses API, which LM Studio serves at /v1/responses. See the note for the legacy
+ * chat fallback (older Codex + older LM Studio).
  */
 export const codex: ToolAdapter = {
   name: "codex",
@@ -20,7 +22,7 @@ export const codex: ToolAdapter = {
       "-c",
       `model_providers.${PROVIDER_ID}.base_url=${ctx.openaiBaseUrl}`,
       "-c",
-      `model_providers.${PROVIDER_ID}.wire_api=chat`,
+      `model_providers.${PROVIDER_ID}.wire_api=responses`,
       "-c",
       `model_provider=${PROVIDER_ID}`,
       "-c",
@@ -35,8 +37,9 @@ export const codex: ToolAdapter = {
       OPENAI_API_KEY: ctx.apiKey, // some Codex builds require a non-empty key even though unused
     };
     const notes = [
-      `Using a temporary Codex provider ("${PROVIDER_ID}") with wire_api=chat. If Codex fails to ` +
-        `connect, try appending an override after "--": -c model_providers.${PROVIDER_ID}.wire_api=responses`,
+      `Temporary Codex provider ("${PROVIDER_ID}") using wire_api=responses (current Codex dropped ` +
+        `Chat Completions; LM Studio serves /v1/responses). On a pre-2026 Codex without Responses ` +
+        `support, override after "--": -c model_providers.${PROVIDER_ID}.wire_api=chat`,
     ];
     return { command: COMMAND, args, env, notes };
   },
