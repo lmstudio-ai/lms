@@ -15,7 +15,6 @@ export const codex: ToolAdapter = {
   command: COMMAND,
   install: { npm: "@openai/codex" },
   supportsContextHint: true,
-  injectsModelArg: true,
   async prepare(ctx) {
     const args = [
       "-c",

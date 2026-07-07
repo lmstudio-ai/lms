@@ -9,7 +9,6 @@ import { codex } from "./adapters/codex.js";
 import { copilot } from "./adapters/copilot.js";
 import { mergeDroidSettings, type DroidSettings } from "./adapters/droid.js";
 import { opencode } from "./adapters/opencode.js";
-import { peekModelFromArgs, stripModelFlag } from "./argPeek.js";
 import { detectUsePowerShell, formatEnvForShell, formatLaunchPlan } from "./format.js";
 import { formatInstallHint, resolveAdapter } from "./registry.js";
 import { SIGNAL_EXIT } from "./spawnTool.js";
@@ -31,61 +30,6 @@ function makeCtx(overrides: Partial<LaunchContext> = {}): LaunchContext {
     ...overrides,
   };
 }
-
-describe("peekModelFromArgs", () => {
-  it("finds --model <value>", () => {
-    expect(peekModelFromArgs(["--model", "foo/bar"])).toBe("foo/bar");
-  });
-
-  it("finds --model=<value>", () => {
-    expect(peekModelFromArgs(["--model=foo/bar"])).toBe("foo/bar");
-  });
-
-  it("finds -m <value>", () => {
-    expect(peekModelFromArgs(["-m", "foo/bar"])).toBe("foo/bar");
-  });
-
-  it("finds -m=<value>", () => {
-    expect(peekModelFromArgs(["-m=foo/bar"])).toBe("foo/bar");
-  });
-
-  it("returns undefined when absent", () => {
-    expect(peekModelFromArgs(["--verbose", "positional"])).toBeUndefined();
-  });
-
-  it("does not mutate the input array", () => {
-    const args = ["--model", "foo/bar"];
-    peekModelFromArgs(args);
-    expect(args).toEqual(["--model", "foo/bar"]);
-  });
-});
-
-describe("stripModelFlag", () => {
-  it("removes a --model <value> pair", () => {
-    expect(stripModelFlag(["--verbose", "--model", "foo/bar", "--other"])).toEqual([
-      "--verbose",
-      "--other",
-    ]);
-  });
-
-  it("removes a --model=<value> token", () => {
-    expect(stripModelFlag(["--model=foo/bar", "--other"])).toEqual(["--other"]);
-  });
-
-  it("removes a -m <value> pair", () => {
-    expect(stripModelFlag(["-m", "foo/bar", "--other"])).toEqual(["--other"]);
-  });
-
-  it("leaves unrelated args untouched", () => {
-    expect(stripModelFlag(["--foo", "bar"])).toEqual(["--foo", "bar"]);
-  });
-
-  it("does not mutate the input array", () => {
-    const args = ["--model", "foo/bar"];
-    stripModelFlag(args);
-    expect(args).toEqual(["--model", "foo/bar"]);
-  });
-});
 
 describe("SIGNAL_EXIT", () => {
   it("maps common signals to 128 + n exit codes", () => {
@@ -146,14 +90,29 @@ describe("detectUsePowerShell", () => {
 });
 
 describe("formatEnvForShell", () => {
-  it("formats POSIX export lines and quotes args with spaces", () => {
+  it("single-quotes POSIX export lines and every command token", () => {
     const out = formatEnvForShell({ FOO: "bar" }, "claude", ["--model", "a b"], false);
-    expect(out).toBe(`export FOO="bar"\nclaude --model "a b"`);
+    expect(out).toBe(`export FOO='bar'\n'claude' '--model' 'a b'`);
   });
 
-  it("formats PowerShell $env: lines", () => {
+  it("single-quotes PowerShell $env: lines and prefixes the command with the call operator", () => {
     const out = formatEnvForShell({ FOO: "bar" }, "claude", [], true);
-    expect(out).toBe(`$env:FOO="bar"\nclaude`);
+    expect(out).toBe(`$env:FOO='bar'\n& 'claude'`);
+  });
+
+  it("keeps POSIX shell metacharacters inert (no command substitution/globbing)", () => {
+    const out = formatEnvForShell({}, "claude", ["--flag=$(touch pwned)", "a;b&c|d *"], false);
+    expect(out).toBe(`'claude' '--flag=$(touch pwned)' 'a;b&c|d *'`);
+  });
+
+  it("keeps PowerShell metacharacters inert", () => {
+    const out = formatEnvForShell({ K: "$(danger)" }, "claude", ["a`b", "$x"], true);
+    expect(out).toBe(`$env:K='$(danger)'\n& 'claude' 'a\`b' '$x'`);
+  });
+
+  it("escapes embedded single quotes per shell", () => {
+    expect(formatEnvForShell({ K: "a'b" }, "tool", [], false)).toBe(`export K='a'\\''b'\n'tool'`);
+    expect(formatEnvForShell({ K: "a'b" }, "tool", [], true)).toBe(`$env:K='a''b'\n& 'tool'`);
   });
 });
 
@@ -225,10 +184,6 @@ describe("codex adapter", () => {
     const prepared = await codex.prepare(makeCtx({ contextLength: undefined }));
     expect(prepared.args.join(" ")).not.toContain("model_context_window");
     expect(prepared.args).toHaveLength(10);
-  });
-
-  it("declares that it injects its own --model-equivalent arg", () => {
-    expect(codex.injectsModelArg).toBe(true);
   });
 });
 

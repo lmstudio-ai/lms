@@ -41,13 +41,6 @@ export interface ToolAdapter {
   install: ToolInstall;
   /** Does this adapter have a *verified* per-tool context-length knob? */
   supportsContextHint: boolean;
-  /**
-   * Does this adapter express model selection as a CLI arg it constructs itself (e.g. aider's
-   * `--model lm_studio/<model>`)? When true, and the model was resolved by peeking a passthrough
-   * `--model`/`-m` rather than lms's own option, index.ts strips the user's raw copy from the
-   * forwarded args so the tool doesn't see two conflicting `--model` flags.
-   */
-  injectsModelArg?: boolean;
   prepare(ctx: LaunchContext): Promise<PreparedLaunch>;
 }
 

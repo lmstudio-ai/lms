@@ -28,7 +28,6 @@ export const aider: ToolAdapter = {
   command: COMMAND,
   install: { pip: "aider-chat", url: "https://aider.chat/docs/llms/openai-compat.html" },
   supportsContextHint: true,
-  injectsModelArg: true,
   async prepare(ctx) {
     const env: Record<string, string> = {
       LM_STUDIO_API_BASE: ctx.openaiBaseUrl,

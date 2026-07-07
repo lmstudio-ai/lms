@@ -5,16 +5,19 @@ export function detectUsePowerShell(platform: NodeJS.Platform, env: NodeJS.Proce
   return platform === "win32" && env.SHELL === undefined && env.MSYSTEM === undefined;
 }
 
-function escapeForPosixShell(value: string): string {
-  return value.replace(/(["\\$`])/g, "\\$1");
+// Single-quoting is the only fully safe strategy: inside '...' every shell metacharacter
+// ($(), backticks, globs, ;, &, |, spaces) is literal. Whitespace-only or double-quote
+// wrapping would leave those live, so a forwarded arg like `--flag=$(rm -rf ~)` must be
+// single-quoted rather than passed through raw. See PR #594 review.
+
+/** POSIX sh: wrap in single quotes; an embedded `'` becomes the `'\''` close/escape/reopen dance. */
+function quoteForPosix(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function escapeForPowerShell(value: string): string {
-  return value.replace(/(["`])/g, "`$1");
-}
-
-function quoteArgIfNeeded(arg: string): string {
-  return arg === "" || /\s/.test(arg) ? JSON.stringify(arg) : arg;
+/** PowerShell: wrap in single quotes; an embedded `'` is doubled (`''`). */
+function quoteForPowerShell(value: string): string {
+  return `'${value.replace(/'/g, `''`)}'`;
 }
 
 /** Formats resolved env + command as shell-eval'able text, e.g. for `eval "$(lms launch ... --print-env)"`. */
@@ -24,15 +27,15 @@ export function formatEnvForShell(
   args: string[],
   usePowerShell: boolean,
 ): string {
+  const quote = usePowerShell ? quoteForPowerShell : quoteForPosix;
   const lines: string[] = [];
   for (const [key, value] of Object.entries(env)) {
-    lines.push(
-      usePowerShell
-        ? `$env:${key}="${escapeForPowerShell(value)}"`
-        : `export ${key}="${escapeForPosixShell(value)}"`,
-    );
+    lines.push(usePowerShell ? `$env:${key}=${quote(value)}` : `export ${key}=${quote(value)}`);
   }
-  lines.push([command, ...args].map(quoteArgIfNeeded).join(" "));
+  const commandLine = [command, ...args].map(quote).join(" ");
+  // In PowerShell a quoted first token is a string literal, not an invocation, so it must be
+  // run through the `&` call operator; POSIX executes the first word after quote removal.
+  lines.push(usePowerShell ? `& ${commandLine}` : commandLine);
   return lines.join("\n");
 }
 

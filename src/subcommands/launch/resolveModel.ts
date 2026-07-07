@@ -29,12 +29,15 @@ async function pickModelInteractively(
   logger: SimpleLogger,
 ): Promise<string> {
   const deviceNameResolver = await createDeviceNameResolver(client, logger);
+  // Only LLMs are launchable here (the launch path loads via `client.llm.load`). Excluding
+  // non-LLM types keeps embedding/CLIP models out of the picker instead of letting the user
+  // select one that then fails to load.
   const models = (await client.system.listDownloadedModels()).filter(
-    model => model.architecture?.toLowerCase().includes("clip") !== true,
+    model => model.type === "llm" && model.architecture?.toLowerCase().includes("clip") !== true,
   );
   if (models.length === 0) {
     throw new UserInputError(text`
-      No downloaded models found. Download one first with "lms get", then try again.
+      No downloaded LLMs found. Download one first with "lms get", then try again.
     `);
   }
   const modelKeys = models.map(model => model.modelKey);

@@ -7,7 +7,6 @@ import { addCreateClientOptions, createClient, type CreateClientArgs } from "../
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { createRefinedNumberParser } from "../../types/refinedNumber.js";
 import { UserInputError } from "../../types/UserInputError.js";
-import { peekModelFromArgs, stripModelFlag } from "./argPeek.js";
 import { detectUsePowerShell, formatEnvForShell, formatLaunchPlan } from "./format.js";
 import { formatInstallHint, formatToolsCatalog, resolveAdapter } from "./registry.js";
 import { resolveModelForLaunch } from "./resolveModel.js";
@@ -38,7 +37,14 @@ const launchCommand = new Command<[], LaunchCommandOptions>()
     `,
   )
   .argument("[tool]", `The coding tool to launch, e.g. "claude". Omit to see the full catalog.`)
-  .argument("[toolArgs...]", "Arguments forwarded verbatim to the tool.")
+  .argument(
+    "[toolArgs...]",
+    text`
+      Arguments forwarded to the tool. Tokens matching lms's own flags (e.g. --model, -c,
+      --dry-run) are consumed by lms wherever they appear; pass "--" to forward every following
+      token to the tool verbatim.
+    `,
+  )
   .option(
     "-m, --model <model>",
     text`
@@ -66,8 +72,13 @@ const launchCommand = new Command<[], LaunchCommandOptions>()
     "-y, --yes",
     `Assume "yes": no interactive prompts; auto-confirm model loads and config writes.`,
   )
-  .allowUnknownOption(true)
-  .passThroughOptions(true);
+  // allowUnknownOption lets the tool's own flags flow into `toolArgs` untouched. We deliberately
+  // do NOT use passThroughOptions: it stops parsing at the first operand (the tool name), which
+  // would divert lms's own flags placed after it (e.g. `lms launch claude --dry-run`) into
+  // toolArgs and silently forward them to the tool instead of honoring them. Without it, lms
+  // consumes its known flags wherever they appear; `--` remains the escape hatch to force
+  // everything after it through to the tool verbatim.
+  .allowUnknownOption(true);
 
 addCreateClientOptions(launchCommand);
 addLogLevelOptions(launchCommand);
@@ -92,9 +103,7 @@ launchCommand.action(async (tool, toolArgs, options: LaunchCommandOptions) => {
 
   const adapter = resolveAdapter(tool);
 
-  const peekedModel = peekModelFromArgs(toolArgs);
-  const modelWasPeeked = options.model === undefined && peekedModel !== undefined;
-  const modelQuery = options.model ?? peekedModel;
+  const modelQuery = options.model;
   const yes = options.yes ?? false;
 
   await using client = await createClient(logger, options);
@@ -137,9 +146,7 @@ launchCommand.action(async (tool, toolArgs, options: LaunchCommandOptions) => {
   let prepared: PreparedLaunch | undefined;
   try {
     prepared = await adapter.prepare(ctx);
-    const effectiveToolArgs =
-      modelWasPeeked && adapter.injectsModelArg === true ? stripModelFlag(toolArgs) : toolArgs;
-    const childArgs = [...prepared.args, ...effectiveToolArgs];
+    const childArgs = [...prepared.args, ...toolArgs];
 
     prepared.notes?.forEach(note => logger.warn(note));
 
