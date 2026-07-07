@@ -1,0 +1,62 @@
+import { type SimpleLogger } from "@lmstudio/lms-common";
+import { type LMStudioClient } from "@lmstudio/sdk";
+
+/** Everything an adapter needs, fully resolved. */
+export interface LaunchContext {
+  client: LMStudioClient;
+  logger: SimpleLogger;
+  host: string; // loopback host the REST server is reachable on (e.g. "127.0.0.1")
+  port: number; // live REST port
+  origin: string; // `http://${host}:${port}` (no trailing slash, no /v1)
+  openaiBaseUrl: string; // `${origin}/v1`
+  model: string; // resolved model identifier (from getModelInfo().identifier)
+  contextLength?: number; // read back from the loaded model, if known
+  apiKey: string; // bearer token for the local endpoint (default "lmstudio")
+  yes: boolean;
+  workDir: string; // per-launch temp dir (0700) for metadata/config files; cleaned up after
+}
+
+/** What an adapter produces. */
+export interface PreparedLaunch {
+  command: string; // e.g. "claude"
+  args: string[]; // adapter args (forwarded toolArgs are appended by index.ts)
+  env: Record<string, string>; // extra env merged over process.env
+  notes?: string[]; // shown to the user before launch
+  cleanup?: () => Promise<void>; // e.g. remove a written config file; always run in finally
+}
+
+export interface ToolInstall {
+  npm?: string;
+  pip?: string;
+  brew?: string;
+  url?: string;
+  note?: string;
+}
+
+export interface ToolAdapter {
+  name: string;
+  aliases?: string[];
+  displayName: string;
+  command: string; // binary name resolved on PATH
+  install: ToolInstall;
+  /** Does this adapter have a *verified* per-tool context-length knob? */
+  supportsContextHint: boolean;
+  /**
+   * Does this adapter express model selection as a CLI arg it constructs itself (e.g. aider's
+   * `--model lm_studio/<model>`)? When true, and the model was resolved by peeking a passthrough
+   * `--model`/`-m` rather than lms's own option, index.ts strips the user's raw copy from the
+   * forwarded args so the tool doesn't see two conflicting `--model` flags.
+   */
+  injectsModelArg?: boolean;
+  prepare(ctx: LaunchContext): Promise<PreparedLaunch>;
+}
+
+/** An entry in the registry for a tool we know about but deliberately don't support. */
+export interface RuledOutTool {
+  name: string;
+  aliases?: string[];
+  displayName: string;
+  reason: string;
+  suggestion?: string;
+  source: string;
+}
