@@ -182,8 +182,14 @@ program.addCommand(version, { hidden: true });
 
 applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig);
 
-// Handle -v/--version before Commander parsing
-if (commandArguments.includes("-v") || commandArguments.includes("--version")) {
+// Handle a top-level -v/--version before Commander parsing, but only when it appears BEFORE the
+// subcommand. After a subcommand the flag belongs to it -- and `launch` forwards everything past
+// `--` to the wrapped tool (e.g. `lms launch codex -- --version`), which a blunt scan of every
+// argument would otherwise preempt by printing the lms version and exiting.
+const firstSubcommandIndex = commandArguments.findIndex(argument => !argument.startsWith("-"));
+const topLevelArguments =
+  firstSubcommandIndex === -1 ? commandArguments : commandArguments.slice(0, firstSubcommandIndex);
+if (topLevelArguments.includes("-v") || topLevelArguments.includes("--version")) {
   console.info("CLI commit: " + getCommitHash());
   process.exit(0);
 }
