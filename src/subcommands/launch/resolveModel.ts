@@ -189,12 +189,33 @@ export async function resolveModelForLaunch(
       opts.contextLength,
       opts.printEnv === true,
     );
-  } catch {
+  } catch (loadError) {
     const ownerName = getOwnerNameFromModelName(modelQuery);
     if (ownerName === null) {
       throw new UserInputError(text`
         Model "${modelQuery}" not found. See downloaded models with "lms ls", or download it
         first with "lms get ${modelQuery}".
+      `);
+    }
+    // A load failure does not by itself mean the model is missing. If the artifact is already
+    // downloaded (hub models are keyed by "owner/name"), the failure is real -- an invalid
+    // requested context length, an unloadable model, or a server/runtime error -- and must be
+    // surfaced. Otherwise the download path below hits its no-op branch and `process.exit(0)`s, so
+    // `lms launch --model owner/name` would exit successfully without launching or reporting it.
+    const alreadyDownloaded = (await client.system.listDownloadedModels()).some(
+      downloaded => downloaded.modelKey === modelQuery,
+    );
+    if (alreadyDownloaded) {
+      throw loadError;
+    }
+    // Genuinely missing. Under --print-env the command's stdout is consumed by
+    // `eval "$(lms launch ... --print-env)"`, but the JIT downloader renders plan tables and
+    // cursor escapes to stdout (and may prompt for confirmation), which would corrupt the emitted
+    // shell script. Require the model to be present up front instead of downloading it here.
+    if (opts.printEnv === true) {
+      throw new UserInputError(text`
+        Model "${modelQuery}" is not downloaded. Download it first with "lms get ${modelQuery}",
+        then re-run with --print-env.
       `);
     }
     await downloadArtifact(client, logger, ownerName.owner, ownerName.name, opts.yes);
