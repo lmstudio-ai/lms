@@ -252,9 +252,12 @@ describe("opencode adapter", () => {
     const config = JSON.parse(prepared.env.OPENCODE_CONFIG_CONTENT);
     expect(config.model).toBe("lmstudio/openai/gpt-oss-20b");
     expect(config.small_model).toBe("lmstudio/openai/gpt-oss-20b");
-    // The injected provider must survive an inherited allowlist/blocklist.
+    // The injected provider must survive an inherited allowlist/blocklist and a provider policy.
     expect(config.enabled_providers).toEqual(["lmstudio"]);
     expect(config.disabled_providers).toEqual([]);
+    expect(config.experimental.policies).toEqual([
+      { effect: "allow", action: "provider.use", resource: "lmstudio" },
+    ]);
     expect(config.provider.lmstudio.options.baseURL).toBe("http://127.0.0.1:1234/v1");
     expect(config.provider.lmstudio.options.apiKey).toBe("lmstudio");
     // OpenCode's `limit` requires both context and output; we only know context, so we emit no

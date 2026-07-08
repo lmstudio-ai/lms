@@ -33,6 +33,13 @@ export const opencode: ToolAdapter = {
       // takes priority over the allowlist, so clear it too in case a prior config disabled lmstudio.
       enabled_providers: ["lmstudio"],
       disabled_providers: [],
+      // A separate gate: experimental.policies can deny provider.use, which overrides the allowlist
+      // above. Policies are last-match-wins, so appending an explicit allow for lmstudio re-enables
+      // it under a project-level "deny provider.use *". (A user's *global* deny still wins by
+      // design; they'd add lmstudio to their own global policy.)
+      experimental: {
+        policies: [{ effect: "allow", action: "provider.use", resource: "lmstudio" }],
+      },
       provider: {
         lmstudio: {
           npm: "@ai-sdk/openai-compatible",

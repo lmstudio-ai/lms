@@ -108,6 +108,12 @@ export const droid: ToolAdapter = {
       }
     }
 
+    // Capture any pre-existing entry with our displayName (e.g. one an earlier --print-env run left
+    // in place). prepare() below overwrites it; cleanup must restore *this* value, not delete it.
+    const originalEntry = existingSettings.customModels?.find(
+      model => model.displayName === DISPLAY_NAME,
+    );
+
     const entry: DroidCustomModel = {
       displayName: DISPLAY_NAME,
       model: ctx.model,
@@ -167,7 +173,11 @@ export const droid: ToolAdapter = {
         }
         return;
       }
-      const cleaned = removeDroidSettingsEntry(current, DISPLAY_NAME);
+      const withoutOurs = removeDroidSettingsEntry(current, DISPLAY_NAME);
+      // If the entry pre-existed this launch, restore the user's original value instead of deleting
+      // it along with our launch-time overwrite; otherwise just drop the entry we added.
+      const cleaned =
+        originalEntry !== undefined ? mergeDroidSettings(withoutOurs, originalEntry) : withoutOurs;
       if (originalRaw === undefined && Object.keys(cleaned).length === 0) {
         // We created the file and nothing else remains -- leave no trace.
         await rm(filePath, { force: true });
