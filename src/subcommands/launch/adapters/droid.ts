@@ -81,7 +81,17 @@ export const droid: ToolAdapter = {
     // Deliberately no maxOutputTokens: it is Factory's output-completion cap, not a context-window
     // hint, so mapping the model's context length onto it would advertise a bogus response budget.
 
-    if (!ctx.yes && process.stdin.isTTY === true) {
+    if (!ctx.yes) {
+      if (process.stdin.isTTY !== true) {
+        // No TTY means we cannot prompt. Rewriting a real user file -- one that --print-env
+        // deliberately leaves in place (un-reverted) -- must not happen without explicit consent,
+        // so fail here instead of silently proceeding as if --yes had been passed.
+        throw new UserInputError(
+          `Launching "droid" adds a custom model entry to ${filePath}. In a non-interactive shell ` +
+            `there is no way to confirm; re-run with -y/--yes to approve modifying it, or run in an ` +
+            `interactive terminal.`,
+        );
+      }
       // Prompt context goes to stderr (like the confirm prompt below), so it never lands on stdout
       // where `eval "$(lms launch droid --print-env)"` would try to run this human text as shell.
       console.error();

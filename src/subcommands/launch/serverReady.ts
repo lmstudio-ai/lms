@@ -26,7 +26,12 @@ export async function ensureRestServer(
   logger: SimpleLogger,
   opts: EnsureRestServerOpts = {},
 ): Promise<ServerEndpoint> {
-  const cfg = await getServerConfig(logger).catch(() => undefined);
+  // The persisted REST config describes only *this* machine's server, so it must not leak into a
+  // remote launch. For --host, mirror createClient: it connects using --port or DEFAULT_SERVER_PORT
+  // (never the locally-saved port), on the host the user asked for -- otherwise the tool is wired to
+  // http://<remote>:<local-port>/v1 and the readiness probe/start hits the wrong remote port.
+  const cfg =
+    opts.host === undefined ? await getServerConfig(logger).catch(() => undefined) : undefined;
   const bind = cfg?.networkInterface;
   // A server bound to 0.0.0.0 (all interfaces) is still reached locally over loopback.
   const host = opts.host ?? (bind === undefined || bind === "0.0.0.0" ? "127.0.0.1" : bind);
