@@ -138,7 +138,7 @@ describe("formatLaunchPlan", () => {
 });
 
 describe("claude adapter", () => {
-  it("sets env with the bare origin (no /v1) and pins all four model tiers", async () => {
+  it("sets env with the bare origin (no /v1) and pins all four tiers and the subagent model", async () => {
     const prepared = await claude.prepare(makeCtx());
     expect(prepared.command).toBe("claude");
     expect(prepared.args).toEqual([]);
@@ -149,6 +149,7 @@ describe("claude adapter", () => {
     expect(prepared.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe("openai/gpt-oss-20b");
     expect(prepared.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe("openai/gpt-oss-20b");
     expect(prepared.env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBe("openai/gpt-oss-20b");
+    expect(prepared.env.CLAUDE_CODE_SUBAGENT_MODEL).toBe("openai/gpt-oss-20b");
     expect(prepared.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe("32000");
   });
 
@@ -249,6 +250,7 @@ describe("opencode adapter", () => {
     const prepared = await opencode.prepare(makeCtx());
     const config = JSON.parse(prepared.env.OPENCODE_CONFIG_CONTENT);
     expect(config.model).toBe("lmstudio/openai/gpt-oss-20b");
+    expect(config.small_model).toBe("lmstudio/openai/gpt-oss-20b");
     expect(config.provider.lmstudio.options.baseURL).toBe("http://127.0.0.1:1234/v1");
     expect(config.provider.lmstudio.options.apiKey).toBe("lmstudio");
     // OpenCode's `limit` requires both context and output; we only know context, so we emit no

@@ -171,6 +171,10 @@ export const droid: ToolAdapter = {
             `command resolves the model; it is NOT auto-reverted. Remove it yourself, or re-run ` +
             `without --print-env to have it reverted on exit.`
           : `Wrote a temporary "${DISPLAY_NAME}" entry to ${filePath}; it will be reverted on exit.`,
+        // droid isn't pointed at the entry automatically: it keeps its current default model, and
+        // its "--model" flag does not reliably accept custom BYOK models yet (Factory-AI/factory
+        // #787), so injecting one risks an "Invalid model" failure. Selection is via "/model".
+        `To use it, run "/model" inside droid and choose "${DISPLAY_NAME}".`,
       ],
       cleanup,
     };

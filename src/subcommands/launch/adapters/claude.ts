@@ -25,6 +25,11 @@ export const claude: ToolAdapter = {
       ANTHROPIC_DEFAULT_SONNET_MODEL: ctx.model,
       ANTHROPIC_DEFAULT_HAIKU_MODEL: ctx.model,
       ANTHROPIC_DEFAULT_FABLE_MODEL: ctx.model,
+      // CLAUDE_CODE_SUBAGENT_MODEL overrides subagent/agent-team model resolution ahead of the
+      // tiers above (per code.claude.com/docs/en/model-config), so pin it too -- otherwise a value
+      // inherited from the caller's shell would send subagents to a cloud/nonexistent model, since
+      // spawnToolAndWait passes the parent env through unchanged for keys we don't set.
+      CLAUDE_CODE_SUBAGENT_MODEL: ctx.model,
     };
     const notes: string[] = [];
     if (ctx.contextLength !== undefined) {

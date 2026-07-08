@@ -22,6 +22,11 @@ export const opencode: ToolAdapter = {
     const config = {
       $schema: "https://opencode.ai/config.json",
       model: `lmstudio/${ctx.model}`,
+      // OpenCode merges config sources rather than replacing them, and `small_model` (title
+      // generation and other lightweight/background tasks) is a separate setting. Without pinning
+      // it, a global/project `small_model` would keep routing those tasks to a previously
+      // configured provider, so point it at the same local model as the main one.
+      small_model: `lmstudio/${ctx.model}`,
       provider: {
         lmstudio: {
           npm: "@ai-sdk/openai-compatible",
