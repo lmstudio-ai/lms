@@ -81,14 +81,29 @@ async function pickModelInteractively(
   return picked;
 }
 
-async function firstMatchingLoaded(loaded: LLM[], query: string): Promise<LLM | undefined> {
+async function firstMatchingLoaded(
+  loaded: LLM[],
+  query: string,
+  deviceIdentifier: string | null | undefined,
+): Promise<LLM | undefined> {
+  // When the user picked a specific device in the interactive picker, only reuse an instance that
+  // is already loaded on that same device -- otherwise a same-key copy on another device would be
+  // returned here (before the device-aware load runs) and we'd silently launch against a device the
+  // user did not choose. deviceIdentifier is undefined for --model, preserving the prior matching.
+  const onChosenDevice = async (model: LLM): Promise<boolean> =>
+    deviceIdentifier === undefined ||
+    (await model.getModelInfo()).deviceIdentifier === deviceIdentifier;
+
   const byIdentifier = loaded.find(model => model.identifier === query);
-  if (byIdentifier !== undefined) {
+  if (byIdentifier !== undefined && (await onChosenDevice(byIdentifier))) {
     return byIdentifier;
   }
   for (const model of loaded) {
     const info = await model.getModelInfo();
-    if (info.modelKey === query) {
+    if (
+      info.modelKey === query &&
+      (deviceIdentifier === undefined || info.deviceIdentifier === deviceIdentifier)
+    ) {
       return model;
     }
   }
@@ -187,7 +202,7 @@ export async function resolveModelForLaunch(
   }
 
   const loaded = await client.llm.listLoaded();
-  const existing = await firstMatchingLoaded(loaded, modelQuery);
+  const existing = await firstMatchingLoaded(loaded, modelQuery, deviceIdentifier);
   if (existing !== undefined) {
     return await useLoadedModel(existing, opts.contextLength, logger);
   }
