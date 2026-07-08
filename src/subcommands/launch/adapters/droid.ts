@@ -39,11 +39,33 @@ export function mergeDroidSettings(existing: DroidSettings, entry: DroidCustomMo
 }
 
 /**
+ * Exported for unit testing; removes our entry by `displayName`, preserving every other key and
+ * custom model. Used on cleanup so settings the droid session changed meanwhile aren't clobbered.
+ * Drops the `customModels` key entirely when nothing else is left in it.
+ */
+export function removeDroidSettingsEntry(
+  existing: DroidSettings,
+  displayName: string,
+): DroidSettings {
+  const customModels = (existing.customModels ?? []).filter(
+    model => model.displayName !== displayName,
+  );
+  const result: DroidSettings = { ...existing };
+  if (customModels.length > 0) {
+    result.customModels = customModels;
+  } else {
+    delete result.customModels;
+  }
+  return result;
+}
+
+/**
  * Factory's `droid` CLI. Model selection lives in `~/.factory/settings.json`, a real file the
  * user's Factory installation also reads/writes, so we back up the original content, write our
  * entry keyed by a stable displayName (idempotent across re-runs), confirm before touching it
- * unless -y, and restore the original content on exit via `cleanup` (kept in place under
- * `--print-env`, where the emitted command still needs it).
+ * unless -y, and on exit `cleanup` removes only our entry from the current file -- preserving any
+ * settings the droid session changed meanwhile (kept in place under `--print-env`, where the
+ * emitted command still needs it).
  *
  * Factory's BYOK schema has no context-window field (only `maxOutputTokens`, the completion cap),
  * so this adapter conveys no context hint -- `supportsContextHint` is false and the model's loaded
@@ -112,10 +134,30 @@ export const droid: ToolAdapter = {
     await writeFile(filePath, JSON.stringify(merged, null, 2), "utf-8");
 
     const cleanup = async () => {
-      if (originalRaw !== undefined) {
-        await writeFile(filePath, originalRaw, "utf-8");
-      } else {
+      // droid (or the user) may edit ~/.factory/settings.json while the session runs, so re-read the
+      // CURRENT file and strip only our entry -- writing the whole pre-launch snapshot back would
+      // clobber those unrelated changes. Fall back to the snapshot only if the file is now
+      // missing/unparseable, where surgical removal isn't possible.
+      let current: DroidSettings | undefined;
+      try {
+        current = JSON.parse(await readFile(filePath, "utf-8")) as DroidSettings;
+      } catch {
+        current = undefined;
+      }
+      if (current === undefined) {
+        if (originalRaw !== undefined) {
+          await writeFile(filePath, originalRaw, "utf-8");
+        } else {
+          await rm(filePath, { force: true });
+        }
+        return;
+      }
+      const cleaned = removeDroidSettingsEntry(current, DISPLAY_NAME);
+      if (originalRaw === undefined && Object.keys(cleaned).length === 0) {
+        // We created the file and nothing else remains -- leave no trace.
         await rm(filePath, { force: true });
+      } else {
+        await writeFile(filePath, JSON.stringify(cleaned, null, 2), "utf-8");
       }
     };
 

@@ -7,7 +7,12 @@ import { aider } from "./adapters/aider.js";
 import { claude } from "./adapters/claude.js";
 import { codex } from "./adapters/codex.js";
 import { copilot } from "./adapters/copilot.js";
-import { droid, mergeDroidSettings, type DroidSettings } from "./adapters/droid.js";
+import {
+  droid,
+  mergeDroidSettings,
+  removeDroidSettingsEntry,
+  type DroidSettings,
+} from "./adapters/droid.js";
 import { opencode } from "./adapters/opencode.js";
 import { detectUsePowerShell, formatEnvForShell, formatLaunchPlan } from "./format.js";
 import { formatInstallHint, resolveAdapter } from "./registry.js";
@@ -290,5 +295,41 @@ describe("mergeDroidSettings", () => {
     const merged = mergeDroidSettings(existing, entry);
     expect(merged.someOtherKey).toBe("value");
     expect(merged.customModels).toEqual([other, entry]);
+  });
+});
+
+describe("removeDroidSettingsEntry", () => {
+  const entry = {
+    displayName: "LM Studio (lms launch)",
+    model: "openai/gpt-oss-20b",
+    baseUrl: "http://127.0.0.1:1234/v1",
+    apiKey: "lmstudio",
+    provider: "generic-chat-completion-api",
+  };
+
+  it("removes only our entry, preserving models the session added meanwhile", () => {
+    const other = { ...entry, displayName: "Some Other Model" };
+    const sessionAdded = { ...entry, displayName: "Droid Added This" };
+    const current: DroidSettings = { customModels: [other, entry, sessionAdded] };
+    const cleaned = removeDroidSettingsEntry(current, entry.displayName);
+    expect(cleaned.customModels).toEqual([other, sessionAdded]);
+  });
+
+  it("preserves unrelated top-level settings changed during the session", () => {
+    const current: DroidSettings = { customModels: [entry], someOtherKey: "changed" };
+    const cleaned = removeDroidSettingsEntry(current, entry.displayName);
+    expect(cleaned.someOtherKey).toBe("changed");
+    expect(cleaned.customModels).toBeUndefined();
+  });
+
+  it("drops the customModels key when only our entry was present", () => {
+    const cleaned = removeDroidSettingsEntry({ customModels: [entry] }, entry.displayName);
+    expect(cleaned).toEqual({});
+  });
+
+  it("is a no-op when our entry is absent", () => {
+    const other = { ...entry, displayName: "Some Other Model" };
+    const cleaned = removeDroidSettingsEntry({ customModels: [other] }, entry.displayName);
+    expect(cleaned.customModels).toEqual([other]);
   });
 });
