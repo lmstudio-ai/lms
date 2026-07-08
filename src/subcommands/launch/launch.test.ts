@@ -33,6 +33,7 @@ function makeCtx(overrides: Partial<LaunchContext> = {}): LaunchContext {
     yes: false,
     workDir: "/lms-launch-test-workdir-unused",
     printEnv: false,
+    dryRun: false,
     ...overrides,
   };
 }
@@ -251,6 +252,9 @@ describe("opencode adapter", () => {
     const config = JSON.parse(prepared.env.OPENCODE_CONFIG_CONTENT);
     expect(config.model).toBe("lmstudio/openai/gpt-oss-20b");
     expect(config.small_model).toBe("lmstudio/openai/gpt-oss-20b");
+    // The injected provider must survive an inherited allowlist/blocklist.
+    expect(config.enabled_providers).toEqual(["lmstudio"]);
+    expect(config.disabled_providers).toEqual([]);
     expect(config.provider.lmstudio.options.baseURL).toBe("http://127.0.0.1:1234/v1");
     expect(config.provider.lmstudio.options.apiKey).toBe("lmstudio");
     // OpenCode's `limit` requires both context and output; we only know context, so we emit no
@@ -268,6 +272,14 @@ describe("opencode adapter", () => {
 describe("droid adapter", () => {
   it("reports no verified context knob (Factory BYOK exposes no context-window field)", () => {
     expect(droid.supportsContextHint).toBe(false);
+  });
+
+  it("is side-effect-free under --dry-run (no settings write, no cleanup)", async () => {
+    // dryRun returns before any fs access, so this does not touch ~/.factory/settings.json.
+    const prepared = await droid.prepare(makeCtx({ dryRun: true }));
+    expect(prepared.command).toBe("droid");
+    expect(prepared.cleanup).toBeUndefined();
+    expect(prepared.notes?.some(note => note.includes("Would write"))).toBe(true);
   });
 });
 

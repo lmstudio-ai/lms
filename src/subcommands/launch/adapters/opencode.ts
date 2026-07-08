@@ -27,6 +27,12 @@ export const opencode: ToolAdapter = {
       // it, a global/project `small_model` would keep routing those tasks to a previously
       // configured provider, so point it at the same local model as the main one.
       small_model: `lmstudio/${ctx.model}`,
+      // Make sure the injected provider is actually usable this session. `enabled_providers` is an
+      // allowlist (all others ignored) and an inherited `enabled_providers: ["anthropic"]` would
+      // otherwise drop `lmstudio` while `model`/`small_model` point at it. `disabled_providers`
+      // takes priority over the allowlist, so clear it too in case a prior config disabled lmstudio.
+      enabled_providers: ["lmstudio"],
+      disabled_providers: [],
       provider: {
         lmstudio: {
           npm: "@ai-sdk/openai-compatible",

@@ -151,6 +151,7 @@ launchCommand.action(async (tool, toolArgs, options: LaunchCommandOptions) => {
     yes,
     workDir,
     printEnv: options.printEnv === true,
+    dryRun: options.dryRun === true,
   };
 
   let prepared: PreparedLaunch | undefined;

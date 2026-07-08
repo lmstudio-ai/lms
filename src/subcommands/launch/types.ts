@@ -15,6 +15,7 @@ export interface LaunchContext {
   yes: boolean;
   workDir: string; // per-launch temp dir (0700) for metadata/config files; cleaned up after (kept under --print-env)
   printEnv: boolean; // true under --print-env: config the emitted command references must outlive this process
+  dryRun: boolean; // true under --dry-run: prepare() must be side-effect-free (no writes, no prompts)
 }
 
 /** What an adapter produces. */

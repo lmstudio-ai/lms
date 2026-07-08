@@ -79,6 +79,21 @@ export const droid: ToolAdapter = {
   supportsContextHint: false,
   async prepare(ctx) {
     const filePath = settingsFilePath();
+
+    if (ctx.dryRun) {
+      // A dry run must be side-effect-free: describe the plan without touching the real settings
+      // file, without prompting, and without failing in a non-TTY shell for lack of -y.
+      return {
+        command: COMMAND,
+        args: [],
+        env: {},
+        notes: [
+          `Would write a "${DISPLAY_NAME}" entry to ${filePath} (reverted on exit); once launched, ` +
+            `run "/model" inside droid and choose "${DISPLAY_NAME}".`,
+        ],
+      };
+    }
+
     const fileExisted = await exists(filePath);
     const originalRaw = fileExisted ? await readFile(filePath, "utf-8") : undefined;
 
