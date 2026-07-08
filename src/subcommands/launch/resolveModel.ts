@@ -33,7 +33,7 @@ export interface ResolvedModel {
 async function pickModelInteractively(
   client: LMStudioClient,
   logger: SimpleLogger,
-): Promise<string> {
+): Promise<ModelInfo> {
   const deviceNameResolver = await createDeviceNameResolver(client, logger);
   // Only LLMs are launchable here (the launch path loads via `client.llm.load`). Excluding
   // non-LLM types keeps embedding/CLIP models out of the picker instead of letting the user
@@ -75,7 +75,10 @@ async function pickModelInteractively(
       { output: process.stderr },
     ),
   );
-  return picked.modelKey;
+  // Return the full ModelInfo (not just modelKey): the caller needs the selected deviceIdentifier
+  // so a device-specific pick (same key on multiple devices, or a non-local device) loads that
+  // exact copy instead of letting the SDK fall back to its preferred/default device.
+  return picked;
 }
 
 async function firstMatchingLoaded(loaded: LLM[], query: string): Promise<LLM | undefined> {
@@ -98,6 +101,7 @@ async function loadModelWithSpinner(
   modelKey: string,
   contextLength: number | undefined,
   progressToStderr: boolean,
+  deviceIdentifier: string | null | undefined,
 ): Promise<LLM> {
   const spinnerText = `Loading ${modelKey}`;
   const spinner = new Spinner(spinnerText, progressToStderr ? process.stderr : process.stdout);
@@ -123,6 +127,9 @@ async function loadModelWithSpinner(
       verbose: false,
       signal: abortController.signal,
       config: { contextLength },
+      // undefined lets the SDK pick its preferred device (the --model path); a value pins the
+      // interactively-selected device so multi-device installs load the chosen copy.
+      deviceIdentifier,
       onProgress: updateSpinnerProgress,
     });
   } finally {
@@ -159,6 +166,9 @@ export async function resolveModelForLaunch(
   opts: ResolveModelForLaunchOpts,
 ): Promise<ResolvedModel> {
   let modelQuery = opts.model;
+  // Only set when the user picks interactively: the device the selected entry lives on. Left
+  // undefined for --model, where the SDK resolves the device itself.
+  let deviceIdentifier: string | null | undefined;
 
   if (modelQuery === undefined || modelQuery === "") {
     const loaded = await client.llm.listLoaded();
@@ -171,7 +181,9 @@ export async function resolveModelForLaunch(
         loaded. Pass --model, e.g. "lms launch <tool> --model owner/name".
       `);
     }
-    modelQuery = await pickModelInteractively(client, logger);
+    const picked = await pickModelInteractively(client, logger);
+    modelQuery = picked.modelKey;
+    deviceIdentifier = picked.deviceIdentifier;
   }
 
   const loaded = await client.llm.listLoaded();
@@ -188,6 +200,7 @@ export async function resolveModelForLaunch(
       modelQuery,
       opts.contextLength,
       opts.printEnv === true,
+      deviceIdentifier,
     );
   } catch (loadError) {
     const ownerName = getOwnerNameFromModelName(modelQuery);
@@ -227,6 +240,7 @@ export async function resolveModelForLaunch(
       modelQuery,
       opts.contextLength,
       opts.printEnv === true,
+      deviceIdentifier,
     );
   }
 

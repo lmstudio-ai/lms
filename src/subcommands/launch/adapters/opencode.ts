@@ -5,18 +5,20 @@ const COMMAND = "opencode";
 /**
  * opencode. Config is delivered inline via `OPENCODE_CONFIG_CONTENT`, which dodges the Windows
  * `~/.config` vs `%APPDATA%` ambiguity a temp-file-based `OPENCODE_CONFIG` path would raise.
+ *
+ * OpenCode's model `limit` object requires BOTH `context` and `output` (per
+ * https://opencode.ai/config.json); a `context`-only block is invalid and OpenCode rejects/ignores
+ * it. We only know the loaded context window, not a real output cap -- and inventing one would
+ * advertise a bogus response budget -- so we emit no `limit` at all and let the LM Studio server
+ * enforce the window it loaded the model at. `supportsContextHint` is therefore false.
  */
 export const opencode: ToolAdapter = {
   name: "opencode",
   displayName: "opencode",
   command: COMMAND,
   install: { url: "https://opencode.ai" },
-  supportsContextHint: true,
+  supportsContextHint: false,
   async prepare(ctx) {
-    const modelConfig: { limit?: { context: number } } = {};
-    if (ctx.contextLength !== undefined) {
-      modelConfig.limit = { context: ctx.contextLength };
-    }
     const config = {
       $schema: "https://opencode.ai/config.json",
       model: `lmstudio/${ctx.model}`,
@@ -25,7 +27,7 @@ export const opencode: ToolAdapter = {
           npm: "@ai-sdk/openai-compatible",
           name: "LM Studio (local)",
           options: { baseURL: ctx.openaiBaseUrl, apiKey: ctx.apiKey },
-          models: { [ctx.model]: modelConfig },
+          models: { [ctx.model]: {} },
         },
       },
     };

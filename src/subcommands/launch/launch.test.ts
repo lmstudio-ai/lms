@@ -236,16 +236,22 @@ describe("aider adapter", () => {
 });
 
 describe("opencode adapter", () => {
-  it("builds an inline config with the /v1 base URL and context limit", async () => {
+  it("reports no verified context knob (OpenCode's limit needs a paired output cap we can't supply)", () => {
+    expect(opencode.supportsContextHint).toBe(false);
+  });
+
+  it("builds an inline config with the /v1 base URL and no limit block", async () => {
     const prepared = await opencode.prepare(makeCtx());
     const config = JSON.parse(prepared.env.OPENCODE_CONFIG_CONTENT);
     expect(config.model).toBe("lmstudio/openai/gpt-oss-20b");
     expect(config.provider.lmstudio.options.baseURL).toBe("http://127.0.0.1:1234/v1");
     expect(config.provider.lmstudio.options.apiKey).toBe("lmstudio");
-    expect(config.provider.lmstudio.models["openai/gpt-oss-20b"].limit.context).toBe(32000);
+    // OpenCode's `limit` requires both context and output; we only know context, so we emit no
+    // limit block rather than an invalid partial one -- even when a context length is known.
+    expect(config.provider.lmstudio.models["openai/gpt-oss-20b"].limit).toBeUndefined();
   });
 
-  it("omits the context limit when unknown", async () => {
+  it("still emits no limit block when the context length is unknown", async () => {
     const prepared = await opencode.prepare(makeCtx({ contextLength: undefined }));
     const config = JSON.parse(prepared.env.OPENCODE_CONFIG_CONTENT);
     expect(config.provider.lmstudio.models["openai/gpt-oss-20b"].limit).toBeUndefined();

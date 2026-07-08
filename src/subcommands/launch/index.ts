@@ -106,7 +106,15 @@ launchCommand.action(async (tool, toolArgs, options: LaunchCommandOptions) => {
   const modelQuery = options.model;
   const yes = options.yes ?? false;
 
-  await using client = await createClient(logger, options);
+  // For a local launch, --port designates the REST endpoint the tool talks to, not the SDK/control
+  // channel -- that must stay on createClient's findOrStartLlmster path. Feeding --port into
+  // createClient diverts it to a direct probe that exits if the REST server is stopped, before
+  // ensureRestServer ever runs, defeating the advertised auto-start (e.g. `launch claude --port
+  // 4321` on a stopped server). Only remote launches, which connect straight to host:port, keep it.
+  await using client = await createClient(logger, {
+    ...options,
+    port: options.host === undefined ? undefined : options.port,
+  });
 
   const { host, port, origin } = await ensureRestServer(client, logger, {
     host: options.host,
