@@ -7,7 +7,7 @@ import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
 import { exists } from "./exists.js";
 import { lmsKey2Path } from "./lmstudioPaths.js";
-import { readLocalAPIServerPort } from "./localAPIServer.js";
+import { readLocalAPIServerPort, tryFindLocalAPIServer } from "./localAPIServer.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { createRefinedNumberParser } from "./types/refinedNumber.js";
 
@@ -146,18 +146,24 @@ export async function createClient(
     }
   }
   if (port === undefined && host === "127.0.0.1") {
-    // Prefer the port published by current app versions. The shared helper verifies it and keeps
-    // the legacy scan as a fallback for older installations.
-    const serverStatus = await findOrStartLlmster({
-      getLocalAPIServerPort: readLocalAPIServerPort,
-      logger,
-    });
+    // Taskmaster can select one exact development instance. Normal lms runs retain the existing
+    // discovery and wake-up behavior.
+    const serverStatus =
+      process.env.LMS_API_SERVER_INFO_PATH === undefined
+        ? await findOrStartLlmster({
+            getLocalAPIServerPort: readLocalAPIServerPort,
+            logger,
+          })
+        : await tryFindLocalAPIServer(logger);
 
     if (serverStatus !== null) {
       const baseUrl = `ws://${host}:${serverStatus.port}`;
       logger.debug(`Found local API server at ${baseUrl}`);
 
-      if (auth.clientIdentifier === "lms-cli") {
+      if (
+        auth.clientIdentifier === "lms-cli" &&
+        process.env.LMS_API_SERVER_INFO_PATH === undefined
+      ) {
         // Refetch the lms key due to the possibility of a new key being generated.
         const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
         auth = {
@@ -169,7 +175,11 @@ export async function createClient(
       return new LMStudioClient({ baseUrl, logger, ...auth });
     }
 
-    logger.error("Failed to start or connect to local LM Studio API server.");
+    logger.error(
+      process.env.LMS_API_SERVER_INFO_PATH === undefined
+        ? "Failed to start or connect to local LM Studio API server."
+        : `Failed to connect using ${process.env.LMS_API_SERVER_INFO_PATH}.`,
+    );
     process.exit(1);
   }
 
