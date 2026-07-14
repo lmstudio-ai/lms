@@ -7,6 +7,7 @@ import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
 import { exists } from "./exists.js";
 import { lmsKey2Path } from "./lmstudioPaths.js";
+import { readLocalAPIServerPort } from "./localAPIServer.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { createRefinedNumberParser } from "./types/refinedNumber.js";
 
@@ -89,6 +90,7 @@ export interface CreateClientArgs {
 export interface CreateClientOpts {}
 const lmsKey = "<LMS-CLI-LMS-KEY>";
 
+/** Resolves the requested LM Studio instance and creates the authenticated CLI client. */
 export async function createClient(
   logger: SimpleLogger,
   args: CreateClientArgs & LogLevelArgs = {},
@@ -144,8 +146,12 @@ export async function createClient(
     }
   }
   if (port === undefined && host === "127.0.0.1") {
-    // Use shared helper to find or start llmster
-    const serverStatus = await findOrStartLlmster({ logger });
+    // Prefer the port published by current app versions. The shared helper verifies it and keeps
+    // the legacy scan as a fallback for older installations.
+    const serverStatus = await findOrStartLlmster({
+      getLocalAPIServerPort: readLocalAPIServerPort,
+      logger,
+    });
 
     if (serverStatus !== null) {
       const baseUrl = `ws://${host}:${serverStatus.port}`;
