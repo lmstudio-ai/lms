@@ -1,6 +1,6 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
-import { tryFindLocalAPIServer } from "@lmstudio/lms-common-server";
 import { createClient } from "../../createClient.js";
+import { tryFindLocalAPIServer } from "../../localAPIServer.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 
 type DaemonUpCommandOptions = OptionValues &
