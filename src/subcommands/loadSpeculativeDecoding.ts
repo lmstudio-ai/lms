@@ -99,6 +99,8 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   if (speculativeDraftMtp === true) {
     return {
       speculativeDraftMtp: true,
+      speculativeDraftSimple: false,
+      speculativeDraftDflash: false,
       ...(speculativeDraftModel !== undefined ? { speculativeDraftModel } : {}),
       ...tuningConfig,
     };
@@ -108,6 +110,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
     return {
       speculativeDraftMtp: false,
       speculativeDraftSimple: true,
+      speculativeDraftDflash: false,
       speculativeDraftModel,
       ...tuningConfig,
     };
@@ -116,6 +119,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   if (speculativeDraftDflash === true) {
     return {
       speculativeDraftMtp: false,
+      speculativeDraftSimple: false,
       speculativeDraftDflash: true,
       speculativeDraftModel,
       ...tuningConfig,

@@ -14,6 +14,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
     ).toEqual({
       speculativeDraftMtp: false,
       speculativeDraftSimple: true,
+      speculativeDraftDflash: false,
       speculativeDraftModel: "test/draft",
     });
   });
@@ -30,6 +31,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
     ).toEqual({
       speculativeDraftMtp: false,
       speculativeDraftSimple: true,
+      speculativeDraftDflash: false,
       speculativeDraftModel: "test/draft",
       speculativeDraftMaxTokens: 7,
       speculativeDraftMinTokens: 2,
@@ -45,6 +47,8 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       }),
     ).toEqual({
       speculativeDraftMtp: true,
+      speculativeDraftSimple: false,
+      speculativeDraftDflash: false,
       speculativeDraftMaxTokens: 7,
     });
   });
@@ -58,6 +62,8 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       }),
     ).toEqual({
       speculativeDraftMtp: true,
+      speculativeDraftSimple: false,
+      speculativeDraftDflash: false,
       speculativeDraftModel: "test/mtp-assistant",
       speculativeDraftMaxTokens: 7,
     });
@@ -72,6 +78,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       }),
     ).toEqual({
       speculativeDraftMtp: false,
+      speculativeDraftSimple: false,
       speculativeDraftDflash: true,
       speculativeDraftModel: "test/dflash-draft",
       speculativeDraftMinTokens: 2,
