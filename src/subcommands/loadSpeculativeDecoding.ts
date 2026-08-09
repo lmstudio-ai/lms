@@ -3,6 +3,7 @@ import { type LLMLoadModelConfig } from "@lmstudio/sdk";
 export interface ResolveCliSpeculativeDecodingLoadConfigOpts {
   speculativeDraftMtp?: boolean;
   speculativeDraftSimple?: boolean;
+  speculativeDraftDflash?: boolean;
   speculativeDraftModel?: string;
   speculativeDraftMaxTokens?: number;
   speculativeDraftMinTokens?: number;
@@ -12,6 +13,7 @@ export interface ResolveCliSpeculativeDecodingLoadConfigOpts {
 export function resolveCliSpeculativeDecodingLoadConfig({
   speculativeDraftMtp,
   speculativeDraftSimple,
+  speculativeDraftDflash,
   speculativeDraftModel,
   speculativeDraftMaxTokens,
   speculativeDraftMinTokens,
@@ -20,39 +22,47 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   LLMLoadModelConfig,
   | "speculativeDraftMtp"
   | "speculativeDraftSimple"
+  | "speculativeDraftDflash"
   | "speculativeDraftModel"
   | "speculativeDraftMaxTokens"
   | "speculativeDraftMinTokens"
   | "speculativeDraftMinContinueProbability"
 > {
+  const enabledDraftModes = [
+    speculativeDraftMtp === true ? "--speculative-draft-mtp" : undefined,
+    speculativeDraftSimple === true ? "--speculative-draft-simple" : undefined,
+    speculativeDraftDflash === true ? "--speculative-draft-dflash" : undefined,
+  ].filter(mode => mode !== undefined);
   const hasDraftTuning =
     speculativeDraftMaxTokens !== undefined ||
     speculativeDraftMinTokens !== undefined ||
     speculativeDraftMinContinueProbability !== undefined;
 
-  if (speculativeDraftMtp === true && speculativeDraftSimple === true) {
-    throw new Error("--speculative-draft-mtp and --speculative-draft-simple cannot both be used.");
+  if (enabledDraftModes.length > 1) {
+    throw new Error(`${enabledDraftModes.join(" and ")} cannot be used together.`);
   }
 
   if (speculativeDraftModel !== undefined && speculativeDraftModel.length === 0) {
     throw new Error("--speculative-draft-model must not be empty.");
   }
 
-  if (speculativeDraftMtp === true && speculativeDraftModel !== undefined) {
-    throw new Error("--speculative-draft-mtp cannot be combined with --speculative-draft-model.");
-  }
-
-  if (speculativeDraftSimple !== true && speculativeDraftModel !== undefined) {
-    throw new Error("--speculative-draft-model requires --speculative-draft-simple.");
+  if (speculativeDraftModel !== undefined && enabledDraftModes.length === 0) {
+    throw new Error(
+      "--speculative-draft-model requires --speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash.",
+    );
   }
 
   if (speculativeDraftSimple === true && speculativeDraftModel === undefined) {
     throw new Error("--speculative-draft-simple requires --speculative-draft-model.");
   }
 
-  if (speculativeDraftMtp !== true && speculativeDraftSimple !== true && hasDraftTuning) {
+  if (speculativeDraftDflash === true && speculativeDraftModel === undefined) {
+    throw new Error("--speculative-draft-dflash requires --speculative-draft-model.");
+  }
+
+  if (enabledDraftModes.length === 0 && hasDraftTuning) {
     throw new Error(
-      "--speculative draft tuning flags require --speculative-draft-simple or --speculative-draft-mtp.",
+      "--speculative draft tuning flags require --speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash.",
     );
   }
 
@@ -78,31 +88,45 @@ export function resolveCliSpeculativeDecodingLoadConfig({
       : {}),
   };
 
-  if (speculativeDraftMtp === undefined && speculativeDraftSimple === undefined) {
+  if (
+    speculativeDraftMtp === undefined &&
+    speculativeDraftSimple === undefined &&
+    speculativeDraftDflash === undefined
+  ) {
     return {};
   }
 
   if (speculativeDraftMtp === true) {
     return {
       speculativeDraftMtp: true,
+      ...(speculativeDraftModel !== undefined ? { speculativeDraftModel } : {}),
       ...tuningConfig,
     };
   }
 
-  if (speculativeDraftMtp === false && speculativeDraftSimple !== true) {
+  if (speculativeDraftSimple === true) {
+    return {
+      speculativeDraftMtp: false,
+      speculativeDraftSimple: true,
+      speculativeDraftModel,
+      ...tuningConfig,
+    };
+  }
+
+  if (speculativeDraftDflash === true) {
+    return {
+      speculativeDraftMtp: false,
+      speculativeDraftDflash: true,
+      speculativeDraftModel,
+      ...tuningConfig,
+    };
+  }
+
+  if (speculativeDraftMtp === false) {
     return {
       speculativeDraftMtp: false,
     };
   }
 
-  if (speculativeDraftSimple !== true) {
-    return {};
-  }
-
-  return {
-    speculativeDraftMtp: false,
-    speculativeDraftSimple: true,
-    speculativeDraftModel: speculativeDraftModel,
-    ...tuningConfig,
-  };
+  return {};
 }

@@ -37,7 +37,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
     });
   });
 
-  it("creates Draft MTP load config", () => {
+  it("creates bundled Draft MTP load config", () => {
     expect(
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftMtp: true,
@@ -46,6 +46,35 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
     ).toEqual({
       speculativeDraftMtp: true,
       speculativeDraftMaxTokens: 7,
+    });
+  });
+
+  it("creates path-backed Draft MTP load config", () => {
+    expect(
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftMtp: true,
+        speculativeDraftModel: "test/mtp-assistant",
+        speculativeDraftMaxTokens: 7,
+      }),
+    ).toEqual({
+      speculativeDraftMtp: true,
+      speculativeDraftModel: "test/mtp-assistant",
+      speculativeDraftMaxTokens: 7,
+    });
+  });
+
+  it("creates DFlash load config", () => {
+    expect(
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftDflash: true,
+        speculativeDraftModel: "test/dflash-draft",
+        speculativeDraftMinTokens: 2,
+      }),
+    ).toEqual({
+      speculativeDraftMtp: false,
+      speculativeDraftDflash: true,
+      speculativeDraftModel: "test/dflash-draft",
+      speculativeDraftMinTokens: 2,
     });
   });
 
@@ -64,16 +93,16 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftMaxTokens: 7,
       }),
-    ).toThrow("--speculative-draft-simple or --speculative-draft-mtp");
+    ).toThrow("--speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash");
 
     expect(() =>
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftMinContinueProbability: 0.25,
       }),
-    ).toThrow("--speculative-draft-simple or --speculative-draft-mtp");
+    ).toThrow("--speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash");
   });
 
-  it("rejects draft model without Draft Simple", () => {
+  it("rejects draft model without a draft type", () => {
     expect(() =>
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftModel: "test/draft",
@@ -89,7 +118,15 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
     ).toThrow("--speculative-draft-simple requires --speculative-draft-model");
   });
 
-  it("rejects Draft MTP with Draft Simple", () => {
+  it("rejects DFlash without a draft model", () => {
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftDflash: true,
+      }),
+    ).toThrow("--speculative-draft-dflash requires --speculative-draft-model");
+  });
+
+  it("rejects multiple draft modes", () => {
     expect(() =>
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftMtp: true,
@@ -97,15 +134,22 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
         speculativeDraftModel: "test/draft",
       }),
     ).toThrow("--speculative-draft-mtp and --speculative-draft-simple");
-  });
 
-  it("rejects Draft MTP with a draft model resource", () => {
     expect(() =>
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftMtp: true,
+        speculativeDraftDflash: true,
         speculativeDraftModel: "test/draft",
       }),
-    ).toThrow("--speculative-draft-mtp cannot be combined with --speculative-draft-model");
+    ).toThrow("--speculative-draft-mtp and --speculative-draft-dflash");
+
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftSimple: true,
+        speculativeDraftDflash: true,
+        speculativeDraftModel: "test/draft",
+      }),
+    ).toThrow("--speculative-draft-simple and --speculative-draft-dflash");
   });
 
   it("rejects min draft tokens greater than max draft tokens", () => {

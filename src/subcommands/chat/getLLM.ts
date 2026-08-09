@@ -96,6 +96,7 @@ export async function maybeGetLLM(
     const lastLoadedIndexToPathMap = [...lastLoadedModels.entries()];
     const lastLoadedMap = new Map(lastLoadedIndexToPathMap.map(([index, path]) => [path, index]));
     const models = (await client.system.listDownloadedModels())
+      .filter(model => model.isDraftOnly !== true)
       .filter(model => model.architecture?.toLowerCase().includes("clip") !== true)
       .sort((a, b) => {
         const aIndex = lastLoadedMap.get(a.path) ?? lastLoadedMap.size + 1;
