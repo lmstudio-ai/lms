@@ -15,6 +15,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       speculativeDraftMtp: false,
       speculativeDraftSimple: true,
       speculativeDraftDflash: false,
+      speculativeDraftDspark: false,
       speculativeDraftModel: "test/draft",
     });
   });
@@ -32,6 +33,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       speculativeDraftMtp: false,
       speculativeDraftSimple: true,
       speculativeDraftDflash: false,
+      speculativeDraftDspark: false,
       speculativeDraftModel: "test/draft",
       speculativeDraftMaxTokens: 7,
       speculativeDraftMinTokens: 2,
@@ -49,6 +51,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       speculativeDraftMtp: true,
       speculativeDraftSimple: false,
       speculativeDraftDflash: false,
+      speculativeDraftDspark: false,
       speculativeDraftMaxTokens: 7,
     });
   });
@@ -64,6 +67,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       speculativeDraftMtp: true,
       speculativeDraftSimple: false,
       speculativeDraftDflash: false,
+      speculativeDraftDspark: false,
       speculativeDraftModel: "test/mtp-assistant",
       speculativeDraftMaxTokens: 7,
     });
@@ -80,7 +84,25 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       speculativeDraftMtp: false,
       speculativeDraftSimple: false,
       speculativeDraftDflash: true,
+      speculativeDraftDspark: false,
       speculativeDraftModel: "test/dflash-draft",
+      speculativeDraftMinTokens: 2,
+    });
+  });
+
+  it("creates DSpark load config", () => {
+    expect(
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftDspark: true,
+        speculativeDraftModel: "test/dspark-draft",
+        speculativeDraftMinTokens: 2,
+      }),
+    ).toEqual({
+      speculativeDraftMtp: false,
+      speculativeDraftSimple: false,
+      speculativeDraftDflash: false,
+      speculativeDraftDspark: true,
+      speculativeDraftModel: "test/dspark-draft",
       speculativeDraftMinTokens: 2,
     });
   });
@@ -100,13 +122,17 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftMaxTokens: 7,
       }),
-    ).toThrow("--speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash");
+    ).toThrow(
+      "--speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or --speculative-draft-dspark",
+    );
 
     expect(() =>
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftMinContinueProbability: 0.25,
       }),
-    ).toThrow("--speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash");
+    ).toThrow(
+      "--speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or --speculative-draft-dspark",
+    );
   });
 
   it("rejects draft model without a draft type", () => {
@@ -133,6 +159,14 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
     ).toThrow("--speculative-draft-dflash requires --speculative-draft-model");
   });
 
+  it("rejects DSpark without a draft model", () => {
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftDspark: true,
+      }),
+    ).toThrow("--speculative-draft-dspark requires --speculative-draft-model");
+  });
+
   it("rejects multiple draft modes", () => {
     expect(() =>
       resolveCliSpeculativeDecodingLoadConfig({
@@ -157,6 +191,14 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
         speculativeDraftModel: "test/draft",
       }),
     ).toThrow("--speculative-draft-simple and --speculative-draft-dflash");
+
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftDflash: true,
+        speculativeDraftDspark: true,
+        speculativeDraftModel: "test/draft",
+      }),
+    ).toThrow("--speculative-draft-dflash and --speculative-draft-dspark");
   });
 
   it("rejects min draft tokens greater than max draft tokens", () => {

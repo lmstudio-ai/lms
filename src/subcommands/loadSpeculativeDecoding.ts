@@ -4,6 +4,7 @@ export interface ResolveCliSpeculativeDecodingLoadConfigOpts {
   speculativeDraftMtp?: boolean;
   speculativeDraftSimple?: boolean;
   speculativeDraftDflash?: boolean;
+  speculativeDraftDspark?: boolean;
   speculativeDraftModel?: string;
   speculativeDraftMaxTokens?: number;
   speculativeDraftMinTokens?: number;
@@ -14,6 +15,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   speculativeDraftMtp,
   speculativeDraftSimple,
   speculativeDraftDflash,
+  speculativeDraftDspark,
   speculativeDraftModel,
   speculativeDraftMaxTokens,
   speculativeDraftMinTokens,
@@ -23,6 +25,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   | "speculativeDraftMtp"
   | "speculativeDraftSimple"
   | "speculativeDraftDflash"
+  | "speculativeDraftDspark"
   | "speculativeDraftModel"
   | "speculativeDraftMaxTokens"
   | "speculativeDraftMinTokens"
@@ -32,6 +35,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
     speculativeDraftMtp === true ? "--speculative-draft-mtp" : undefined,
     speculativeDraftSimple === true ? "--speculative-draft-simple" : undefined,
     speculativeDraftDflash === true ? "--speculative-draft-dflash" : undefined,
+    speculativeDraftDspark === true ? "--speculative-draft-dspark" : undefined,
   ].filter(mode => mode !== undefined);
   const hasDraftTuning =
     speculativeDraftMaxTokens !== undefined ||
@@ -48,7 +52,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
 
   if (speculativeDraftModel !== undefined && enabledDraftModes.length === 0) {
     throw new Error(
-      "--speculative-draft-model requires --speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash.",
+      "--speculative-draft-model requires --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or --speculative-draft-dspark.",
     );
   }
 
@@ -60,9 +64,13 @@ export function resolveCliSpeculativeDecodingLoadConfig({
     throw new Error("--speculative-draft-dflash requires --speculative-draft-model.");
   }
 
+  if (speculativeDraftDspark === true && speculativeDraftModel === undefined) {
+    throw new Error("--speculative-draft-dspark requires --speculative-draft-model.");
+  }
+
   if (enabledDraftModes.length === 0 && hasDraftTuning) {
     throw new Error(
-      "--speculative draft tuning flags require --speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash.",
+      "--speculative draft tuning flags require --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or --speculative-draft-dspark.",
     );
   }
 
@@ -91,7 +99,8 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   if (
     speculativeDraftMtp === undefined &&
     speculativeDraftSimple === undefined &&
-    speculativeDraftDflash === undefined
+    speculativeDraftDflash === undefined &&
+    speculativeDraftDspark === undefined
   ) {
     return {};
   }
@@ -101,6 +110,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
       speculativeDraftMtp: true,
       speculativeDraftSimple: false,
       speculativeDraftDflash: false,
+      speculativeDraftDspark: false,
       ...(speculativeDraftModel !== undefined ? { speculativeDraftModel } : {}),
       ...tuningConfig,
     };
@@ -111,6 +121,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
       speculativeDraftMtp: false,
       speculativeDraftSimple: true,
       speculativeDraftDflash: false,
+      speculativeDraftDspark: false,
       speculativeDraftModel,
       ...tuningConfig,
     };
@@ -121,6 +132,18 @@ export function resolveCliSpeculativeDecodingLoadConfig({
       speculativeDraftMtp: false,
       speculativeDraftSimple: false,
       speculativeDraftDflash: true,
+      speculativeDraftDspark: false,
+      speculativeDraftModel,
+      ...tuningConfig,
+    };
+  }
+
+  if (speculativeDraftDspark === true) {
+    return {
+      speculativeDraftMtp: false,
+      speculativeDraftSimple: false,
+      speculativeDraftDflash: false,
+      speculativeDraftDspark: true,
       speculativeDraftModel,
       ...tuningConfig,
     };

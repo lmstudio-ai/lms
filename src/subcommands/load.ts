@@ -54,6 +54,7 @@ type LoadCommandOptions = OptionValues &
     speculativeDraftMtp?: boolean;
     speculativeDraftSimple?: boolean;
     speculativeDraftDflash?: boolean;
+    speculativeDraftDspark?: boolean;
     speculativeDraftModel?: string;
     speculativeDraftMaxTokens?: number;
     speculativeDraftMinTokens?: number;
@@ -78,6 +79,7 @@ function assertSpeculativeDecodingSupportedForCliModel({
     loadConfig.speculativeDraftMtp !== undefined ||
     loadConfig.speculativeDraftSimple !== undefined ||
     loadConfig.speculativeDraftDflash !== undefined ||
+    loadConfig.speculativeDraftDspark !== undefined ||
     loadConfig.speculativeDraftModel !== undefined ||
     loadConfig.speculativeDraftMaxTokens !== undefined ||
     loadConfig.speculativeDraftMinTokens !== undefined ||
@@ -195,10 +197,19 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   )
   .addOption(
     new Option(
+      "--speculative-draft-dspark",
+      text`
+        Enable load-time DSpark speculative decoding using --speculative-draft-model.
+      `,
+    ),
+  )
+  .addOption(
+    new Option(
       "--speculative-draft-model <model>",
       text`
         Draft model resource to use with --speculative-draft-simple,
-        --speculative-draft-dflash, or path-backed --speculative-draft-mtp.
+        --speculative-draft-dflash, --speculative-draft-dspark, or path-backed
+        --speculative-draft-mtp.
       `,
     ),
   )
@@ -207,7 +218,8 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       "--speculative-draft-max-tokens <count>",
       text`
         Maximum number of draft tokens to generate per speculative decoding step. Requires
-        --speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash.
+        --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or
+        --speculative-draft-dspark.
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
@@ -216,7 +228,8 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       "--speculative-draft-min-tokens <count>",
       text`
         Minimum draft length to consider for speculative decoding. Requires
-        --speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash.
+        --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or
+        --speculative-draft-dspark.
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 0 })),
   )
@@ -225,7 +238,8 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       "--speculative-draft-min-continue-probability <probability>",
       text`
         Continue drafting while token probability is at or above this threshold. Requires
-        --speculative-draft-simple, --speculative-draft-mtp, or --speculative-draft-dflash.
+        --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or
+        --speculative-draft-dspark.
       `,
     ).argParser(createRefinedNumberParser({ min: 0, max: 1 })),
   )
@@ -280,6 +294,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     speculativeDraftMtp,
     speculativeDraftSimple,
     speculativeDraftDflash,
+    speculativeDraftDspark,
     speculativeDraftModel,
     speculativeDraftMaxTokens,
     speculativeDraftMinTokens,
@@ -297,6 +312,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       speculativeDraftMtp,
       speculativeDraftSimple,
       speculativeDraftDflash,
+      speculativeDraftDspark,
       speculativeDraftModel,
       speculativeDraftMaxTokens,
       speculativeDraftMinTokens,
