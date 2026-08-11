@@ -72,14 +72,13 @@ interface DownloadPlannerCliOpts {
 
 const getCommand = new Command<[], GetCommandOptions>()
   .name("get")
-  .description(text`Search and download local models or presets`)
+  .description(text`Search and download local models or Hub artifacts`)
   .argument(
     "[name]",
     text`
-      The model to download, for example "openai/gpt-oss-20b". If you want to download a specific
-      quantization of a model, you can append the quantization name with "@", for example
-      "qwen/qwen3.5-9b@q8_0". If you wish to download from Hugging Face directly, use the full
-      URL of the model.
+      The model or Hub artifact to download, for example "openai/gpt-oss-20b" or
+      "owner/my-skill". For a specific model quantization, append its name with "@", for example
+      "qwen/qwen3.5-9b@q8_0". To download a model from Hugging Face directly, use its full URL.
     `,
   )
   .option(
