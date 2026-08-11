@@ -84,7 +84,7 @@ function assertSpeculativeDecodingSupportedForCliModel({
     loadConfig.speculativeDraftMaxTokens !== undefined ||
     loadConfig.speculativeDraftMinTokens !== undefined ||
     loadConfig.speculativeDraftMinContinueProbability !== undefined;
-  if (!hasSpeculativeDecodingLoadConfig || model.type !== "embedding") {
+  if (!hasSpeculativeDecodingLoadConfig || model.type === "llm") {
     return;
   }
 
@@ -337,8 +337,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   );
   logger.debug(`Last loaded map loaded with ${lastLoadedMap.size} models.`);
 
-  const models = (await client.system.listDownloadedModels())
-    .filter(model => model.isDraftOnly !== true)
+  const allDownloadedModels = (await client.system.listDownloadedModels())
     .filter(model => model.architecture?.toLowerCase().includes("clip") !== true)
     .filter(model => (local ? model.deviceIdentifier === null : true))
     .sort((a, b) => {
@@ -346,6 +345,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       const bIndex = lastLoadedMap.get(b.modelKey) ?? lastLoadedMap.size + 1;
       return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
     });
+  const models = allDownloadedModels.filter(model => model.type !== "drafter");
 
   if (exact) {
     if (modelKey === undefined) {
@@ -362,7 +362,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     }
     // In this case, we expect a model path and not a model key
     const modelPath = modelKey;
-    const model = models.find(model => model.path === modelPath);
+    const model = allDownloadedModels.find(model => model.path === modelPath);
     if (model === undefined) {
       if (models.length === 0) {
         logger.errorWithoutPrefix(
@@ -410,7 +410,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     if (estimateOnly === true) {
       assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
       const estimate = await (
-        model.type === "llm" ? client.llm : client.embedding
+        model.type === "embedding" ? client.embedding : client.llm
       ).estimateResourcesUsage(model.modelKey, loadConfig, {
         deviceIdentifier: model.deviceIdentifier,
       });
@@ -434,6 +434,13 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   }
 
   const modelKeys = models.map(model => model.modelKey);
+  const normalizedModelKey = modelKey?.toLowerCase();
+  const exactDrafterModel =
+    normalizedModelKey === undefined
+      ? undefined
+      : allDownloadedModels.find(
+          model => model.type === "drafter" && model.modelKey.toLowerCase() === normalizedModelKey,
+        );
 
   const initialFilteredModels = fuzzy.filter(modelKey ?? "", modelKeys);
   logger.debug("Initial filtered models length:", initialFilteredModels.length);
@@ -442,25 +449,28 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   let deferToPreferredDevice = false;
   if (yes) {
     if (initialFilteredModels.length === 0) {
-      logger.errorWithoutPrefix(
-        makeTitledPrettyError(
-          "Model not found",
-          text`
-            No model found that matches model key "${chalk.yellow(modelKey)}".
+      if (exactDrafterModel !== undefined) {
+        model = exactDrafterModel;
+      } else {
+        logger.errorWithoutPrefix(
+          makeTitledPrettyError(
+            "Model not found",
+            text`
+              No model found that matches model key "${chalk.yellow(modelKey)}".
 
-            To see a list of all downloaded models, run:
+              To see a list of all downloaded models, run:
 
-                ${chalk.yellow("lms ls")}
+                  ${chalk.yellow("lms ls")}
 
-            To select a model interactively, remove the ${chalk.yellow("--yes")} flag:
+              To select a model interactively, remove the ${chalk.yellow("--yes")} flag:
 
-                lms load
-          `,
-        ).message,
-      );
-      process.exit(1);
-    }
-    if (initialFilteredModels.length > 1) {
+                  lms load
+            `,
+          ).message,
+        );
+        process.exit(1);
+      }
+    } else if (initialFilteredModels.length > 1) {
       const matchingModels = initialFilteredModels.map(option => models[option.index]);
       const hasSameDeviceDuplicates = hasDuplicatesOnSameDevice(matchingModels);
       if (hasSameDeviceDuplicates) {
@@ -487,21 +497,25 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
         deviceNameResolver,
       });
     } else if (initialFilteredModels.length === 0) {
-      console.info(
-        chalk.red(text`
-          ! Cannot find a model matching the provided model key (${chalk.yellow(modelKey)}). Please
-          select one from the list below.
-        `),
-      );
-      modelKey = "";
-      model = await selectModel({
-        models,
-        modelKeys,
-        initialSearch: modelKey,
-        leaveEmptyLines: 5,
-        estimateOnly,
-        deviceNameResolver,
-      });
+      if (exactDrafterModel !== undefined) {
+        model = exactDrafterModel;
+      } else {
+        console.info(
+          chalk.red(text`
+            ! Cannot find a model matching the provided model key (${chalk.yellow(modelKey)}). Please
+            select one from the list below.
+          `),
+        );
+        modelKey = "";
+        model = await selectModel({
+          models,
+          modelKeys,
+          initialSearch: modelKey,
+          leaveEmptyLines: 5,
+          estimateOnly,
+          deviceNameResolver,
+        });
+      }
     } else if (initialFilteredModels.length === 1) {
       model = models[initialFilteredModels[0].index];
       // console.info(
@@ -538,7 +552,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   if (estimateOnly === true) {
     assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
     const estimate = await (
-      model.type === "llm" ? client.llm : client.embedding
+      model.type === "embedding" ? client.embedding : client.llm
     ).estimateResourcesUsage(model.modelKey, loadConfig, {
       deviceIdentifier: deferToPreferredDevice ? undefined : model.deviceIdentifier,
     });

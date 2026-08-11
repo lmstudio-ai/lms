@@ -136,9 +136,7 @@ export function useDownloadedModels(
         client.llm.listLoaded(),
         createDeviceNameResolver(client, logger),
       ]);
-      const downloadedModels = allDownloadedModels.filter(
-        model => model.type === "llm" && model.isDraftOnly !== true,
-      );
+      const downloadedModels = allDownloadedModels.filter(model => model.type === "llm");
       const loadedModelInfos = await Promise.all(
         loadedModels.map(async loadedModel => {
           const loadedModelInfo = await loadedModel.getModelInfo();
