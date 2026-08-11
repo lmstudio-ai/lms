@@ -26,6 +26,7 @@ import { Spinner } from "../Spinner.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
+import { resolveExactDrafterLoadTarget } from "./loadTargetResolution.js";
 
 const gpuOptionParser = (str: string): number => {
   str = str.trim().toLowerCase();
@@ -434,17 +435,11 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   }
 
   const modelKeys = models.map(model => model.modelKey);
-  const normalizedModelKey = modelKey?.toLowerCase();
-  const exactStandaloneModel =
-    normalizedModelKey === undefined
-      ? undefined
-      : models.find(model => model.modelKey.toLowerCase() === normalizedModelKey);
-  const exactDrafterModel =
-    normalizedModelKey === undefined || exactStandaloneModel !== undefined
-      ? undefined
-      : allDownloadedModels.find(
-          model => model.type === "drafter" && model.modelKey.toLowerCase() === normalizedModelKey,
-        );
+  const exactDrafterModel = resolveExactDrafterLoadTarget({
+    modelKey,
+    standaloneModels: models,
+    allDownloadedModels,
+  });
 
   const initialFilteredModels = fuzzy.filter(modelKey ?? "", modelKeys);
   logger.debug("Initial filtered models length:", initialFilteredModels.length);

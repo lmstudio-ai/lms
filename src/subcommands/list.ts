@@ -13,6 +13,7 @@ import {
 import { formatSizeBytes1000 } from "../formatBytes.js";
 import { formatTimeLean } from "../formatElapsedTime.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import { filterModelsForListCommand } from "./listModelFilters.js";
 
 function loadedCheck(count: number) {
   if (count === 0) {
@@ -310,20 +311,11 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
 
   const originalModelsCount = allDownloadedModels.length;
 
-  let filteredDownloadedModels = allDownloadedModels;
-  if (llm || embedding || drafter) {
-    const allowedTypes = new Set<string>();
-    if (llm) {
-      allowedTypes.add("llm");
-    }
-    if (embedding) {
-      allowedTypes.add("embedding");
-    }
-    if (drafter) {
-      allowedTypes.add("drafter");
-    }
-    filteredDownloadedModels = allDownloadedModels.filter(model => allowedTypes.has(model.type));
-  }
+  const filteredDownloadedModels = filterModelsForListCommand(allDownloadedModels, {
+    llm,
+    embedding,
+    drafter,
+  });
 
   const filteredModelsCount = filteredDownloadedModels.length;
 

@@ -1,4 +1,37 @@
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
+import { resolveExactDrafterLoadTarget, type CliLoadTargetModel } from "./loadTargetResolution.js";
+
+function cliModel(type: CliLoadTargetModel["type"], modelKey: string): CliLoadTargetModel {
+  return { type, modelKey };
+}
+
+describe("resolveExactDrafterLoadTarget", () => {
+  it("prefers exact standalone matches over exact drafter matches", () => {
+    const standaloneModel = cliModel("llm", "test/main");
+    const drafterModel = cliModel("drafter", "test/main");
+
+    expect(
+      resolveExactDrafterLoadTarget({
+        modelKey: "test/main",
+        standaloneModels: [standaloneModel],
+        allDownloadedModels: [standaloneModel, drafterModel],
+      }),
+    ).toBeUndefined();
+  });
+
+  it("selects exact drafter matches before fuzzy standalone matching", () => {
+    const fuzzyStandaloneModel = cliModel("llm", "test/main-dflash-compatible");
+    const drafterModel = cliModel("drafter", "test/main-dflash");
+
+    expect(
+      resolveExactDrafterLoadTarget({
+        modelKey: "test/main-dflash",
+        standaloneModels: [fuzzyStandaloneModel],
+        allDownloadedModels: [fuzzyStandaloneModel, drafterModel],
+      }),
+    ).toBe(drafterModel);
+  });
+});
 
 describe("resolveCliSpeculativeDecodingLoadConfig", () => {
   it("omits speculative decoding when no speculative flags are provided", () => {
