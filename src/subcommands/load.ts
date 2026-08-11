@@ -435,8 +435,12 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
 
   const modelKeys = models.map(model => model.modelKey);
   const normalizedModelKey = modelKey?.toLowerCase();
-  const exactDrafterModel =
+  const exactStandaloneModel =
     normalizedModelKey === undefined
+      ? undefined
+      : models.find(model => model.modelKey.toLowerCase() === normalizedModelKey);
+  const exactDrafterModel =
+    normalizedModelKey === undefined || exactStandaloneModel !== undefined
       ? undefined
       : allDownloadedModels.find(
           model => model.type === "drafter" && model.modelKey.toLowerCase() === normalizedModelKey,
@@ -448,14 +452,13 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   let model: ModelInfo;
   let deferToPreferredDevice = false;
   if (yes) {
-    if (initialFilteredModels.length === 0) {
-      if (exactDrafterModel !== undefined) {
-        model = exactDrafterModel;
-      } else {
-        logger.errorWithoutPrefix(
-          makeTitledPrettyError(
-            "Model not found",
-            text`
+    if (exactDrafterModel !== undefined) {
+      model = exactDrafterModel;
+    } else if (initialFilteredModels.length === 0) {
+      logger.errorWithoutPrefix(
+        makeTitledPrettyError(
+          "Model not found",
+          text`
               No model found that matches model key "${chalk.yellow(modelKey)}".
 
               To see a list of all downloaded models, run:
@@ -466,10 +469,9 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
 
                   lms load
             `,
-          ).message,
-        );
-        process.exit(1);
-      }
+        ).message,
+      );
+      process.exit(1);
     } else if (initialFilteredModels.length > 1) {
       const matchingModels = initialFilteredModels.map(option => models[option.index]);
       const hasSameDeviceDuplicates = hasDuplicatesOnSameDevice(matchingModels);
@@ -496,26 +498,24 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
         estimateOnly,
         deviceNameResolver,
       });
+    } else if (exactDrafterModel !== undefined) {
+      model = exactDrafterModel;
     } else if (initialFilteredModels.length === 0) {
-      if (exactDrafterModel !== undefined) {
-        model = exactDrafterModel;
-      } else {
-        console.info(
-          chalk.red(text`
+      console.info(
+        chalk.red(text`
             ! Cannot find a model matching the provided model key (${chalk.yellow(modelKey)}). Please
             select one from the list below.
           `),
-        );
-        modelKey = "";
-        model = await selectModel({
-          models,
-          modelKeys,
-          initialSearch: modelKey,
-          leaveEmptyLines: 5,
-          estimateOnly,
-          deviceNameResolver,
-        });
-      }
+      );
+      modelKey = "";
+      model = await selectModel({
+        models,
+        modelKeys,
+        initialSearch: modelKey,
+        leaveEmptyLines: 5,
+        estimateOnly,
+        deviceNameResolver,
+      });
     } else if (initialFilteredModels.length === 1) {
       model = models[initialFilteredModels[0].index];
       // console.info(
