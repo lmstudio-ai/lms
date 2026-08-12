@@ -306,7 +306,7 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
     return;
   }
 
-  const allDownloadedModels = await client.system.listDownloadedModels();
+  const allDownloadedModels = await client.system.listDownloadedModels({ includeDrafters: true });
   const loadedModels = await listLoadedModels(client);
 
   const originalModelsCount = allDownloadedModels.length;

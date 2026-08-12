@@ -338,7 +338,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   );
   logger.debug(`Last loaded map loaded with ${lastLoadedMap.size} models.`);
 
-  const allDownloadedModels = (await client.system.listDownloadedModels())
+  const allDownloadedModels = (await client.system.listDownloadedModels({ includeDrafters: true }))
     .filter(model => model.architecture?.toLowerCase().includes("clip") !== true)
     .filter(model => (local ? model.deviceIdentifier === null : true))
     .sort((a, b) => {
