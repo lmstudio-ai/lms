@@ -150,6 +150,68 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
     });
   });
 
+  it("creates explicit full speculative decoding off config", () => {
+    expect(
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftOff: true,
+      }),
+    ).toEqual({
+      speculativeDraftMtp: false,
+      speculativeDraftSimple: false,
+      speculativeDraftDflash: false,
+      speculativeDraftDspark: false,
+    });
+  });
+
+  it("rejects full speculative decoding off with draft modes", () => {
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftOff: true,
+        speculativeDraftSimple: true,
+        speculativeDraftModel: "test/draft",
+      }),
+    ).toThrow("--speculative-draft-off cannot be used with --speculative-draft-simple");
+
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftOff: true,
+        speculativeDraftDflash: true,
+        speculativeDraftModel: "test/dflash-draft",
+      }),
+    ).toThrow("--speculative-draft-off cannot be used with --speculative-draft-dflash");
+
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftOff: true,
+        speculativeDraftDspark: true,
+        speculativeDraftModel: "test/dspark-draft",
+      }),
+    ).toThrow("--speculative-draft-off cannot be used with --speculative-draft-dspark");
+
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftOff: true,
+        speculativeDraftMtp: true,
+      }),
+    ).toThrow("--speculative-draft-off cannot be used with --speculative-draft-mtp");
+  });
+
+  it("rejects full speculative decoding off with draft model or tuning flags", () => {
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftOff: true,
+        speculativeDraftModel: "test/draft",
+      }),
+    ).toThrow("--speculative-draft-off cannot be used with --speculative-draft-model");
+
+    expect(() =>
+      resolveCliSpeculativeDecodingLoadConfig({
+        speculativeDraftOff: true,
+        speculativeDraftMaxTokens: 7,
+      }),
+    ).toThrow("--speculative-draft-off cannot be used with speculative draft tuning flags");
+  });
+
   it("rejects draft tuning flags without a draft type", () => {
     expect(() =>
       resolveCliSpeculativeDecodingLoadConfig({

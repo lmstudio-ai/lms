@@ -10,7 +10,9 @@ export type CliSpeculativeConfig = Pick<
   | "speculativeDraftMaxTokens"
   | "speculativeDraftMinTokens"
   | "speculativeDraftMinContinueProbability"
->;
+> & {
+  speculativeDraftOff?: boolean;
+};
 
 type DraftSelectorField = Extract<
   keyof CliSpeculativeConfig,
@@ -65,6 +67,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   speculativeDraftSimple,
   speculativeDraftDflash,
   speculativeDraftDspark,
+  speculativeDraftOff,
   speculativeDraftModel,
   speculativeDraftMaxTokens,
   speculativeDraftMinTokens,
@@ -75,6 +78,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
     speculativeDraftSimple,
     speculativeDraftDflash,
     speculativeDraftDspark,
+    speculativeDraftOff,
     speculativeDraftModel,
     speculativeDraftMaxTokens,
     speculativeDraftMinTokens,
@@ -85,6 +89,26 @@ export function resolveCliSpeculativeDecodingLoadConfig({
     speculativeDraftMaxTokens !== undefined ||
     speculativeDraftMinTokens !== undefined ||
     speculativeDraftMinContinueProbability !== undefined;
+
+  if (speculativeDraftOff === true) {
+    if (enabledDraftModes.length > 0) {
+      throw new Error(
+        `--speculative-draft-off cannot be used with ${enabledDraftModes.map(({ flag }) => flag).join(" or ")}.`,
+      );
+    }
+    if (speculativeDraftModel !== undefined) {
+      throw new Error("--speculative-draft-off cannot be used with --speculative-draft-model.");
+    }
+    if (hasDraftTuning) {
+      throw new Error("--speculative-draft-off cannot be used with speculative draft tuning flags.");
+    }
+    return {
+      speculativeDraftMtp: false,
+      speculativeDraftSimple: false,
+      speculativeDraftDflash: false,
+      speculativeDraftDspark: false,
+    };
+  }
 
   if (enabledDraftModes.length > 1) {
     throw new Error(
@@ -129,7 +153,8 @@ export function resolveCliSpeculativeDecodingLoadConfig({
     speculativeDraftMtp === undefined &&
     speculativeDraftSimple === undefined &&
     speculativeDraftDflash === undefined &&
-    speculativeDraftDspark === undefined
+    speculativeDraftDspark === undefined &&
+    speculativeDraftOff === undefined
   ) {
     return {};
   }

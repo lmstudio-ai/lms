@@ -176,9 +176,18 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     new Option(
       "--no-speculative-draft-mtp",
       text`
-        Disable load-time Draft MTP speculative decoding.
+        Disable load-time Draft MTP speculative decoding only. Deprecated: use
+        --speculative-draft-off to disable all speculative decoding modes.
       `,
     ).default(undefined),
+  )
+  .addOption(
+    new Option(
+      "--speculative-draft-off",
+      text`
+        Disable all load-time speculative decoding modes for this load.
+      `,
+    ),
   )
   .addOption(
     new Option(
