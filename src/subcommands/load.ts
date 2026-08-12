@@ -53,6 +53,7 @@ type LoadCommandOptions = OptionValues &
     contextLength?: number;
     parallel?: number;
     speculativeDraftMtp?: boolean;
+    speculativeDraftOff?: boolean;
     speculativeDraftSimple?: boolean;
     speculativeDraftDflash?: boolean;
     speculativeDraftDspark?: boolean;
@@ -302,6 +303,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     contextLength,
     parallel: maxParallelPredictions,
     speculativeDraftMtp,
+    speculativeDraftOff,
     speculativeDraftSimple,
     speculativeDraftDflash,
     speculativeDraftDspark,
@@ -320,6 +322,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     maxParallelPredictions,
     ...resolveCliSpeculativeDecodingLoadConfig({
       speculativeDraftMtp,
+      speculativeDraftOff,
       speculativeDraftSimple,
       speculativeDraftDflash,
       speculativeDraftDspark,
