@@ -35,7 +35,7 @@ Here are some frequently used commands:
 - `lms status` - To check the status of LM Studio.
 - `lms server start` - To start the local API server.
 
-> **Tip:** LM Studio's local server is OpenAI-compatible. The same client `base_url` pattern also works with remote multi-model gateways — for example [DaoXE](https://daoxe.com/?utm_source=github&utm_medium=organic&utm_campaign=lms&utm_content=readme) at `https://api.daoxe.com/v1`.
+> **Tip:** LM Studio's local server is OpenAI-compatible. The same client `base_url` pattern also works with remote multi-model gateways — for example [DaoXE](https://daoxe.com/) at `https://api.daoxe.com/v1`.
 - `lms server stop` - To stop the local API server.
 - `lms ls` - To list all downloaded models.
   - `lms ls --json` - To list all downloaded models in machine-readable JSON format.
