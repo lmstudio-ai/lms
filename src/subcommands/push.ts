@@ -4,7 +4,6 @@ import {
   Option,
   type OptionValues,
 } from "@commander-js/extra-typings";
-import { select } from "@inquirer/prompts";
 import { type SimpleLogger, text } from "@lmstudio/lms-common";
 import {
   type ArtifactDependency,
@@ -22,7 +21,7 @@ import { readFile, writeFile } from "fs/promises";
 import { basename, join } from "path";
 import { cwd } from "process";
 import YAML from "yaml";
-import { askQuestion } from "../confirm.js";
+import { askQuestion, askQuestionWithChoices } from "../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { ensureAuthenticated } from "../ensureAuthenticated.js";
 import { exists } from "../exists.js";
@@ -32,7 +31,6 @@ import {
 } from "../findProjectFolder.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
-import { runPromptWithExitHandling } from "../prompt.js";
 
 const overridesParser = (str: string): any => {
   try {
@@ -150,16 +148,15 @@ pushCommand.action(async options => {
           "Multiple artifact owners are available. Run lms push in an interactive terminal to select one or create a manifest.json that specifies the owner.",
         );
       }
-      owner = await runPromptWithExitHandling(() =>
-        select<string>(
-          {
-            message: "Select an artifact owner",
-            loop: false,
-            choices: owners.map(ownerName => ({ name: ownerName, value: ownerName })),
-          },
-          { output: process.stderr },
-        ),
+      // This branch only runs when the owner list has at least two entries.
+      const selectedOwner = await askQuestionWithChoices(
+        "Select an artifact owner",
+        owners as [string, ...Array<string>],
       );
+      if (selectedOwner === null) {
+        process.exit(1);
+      }
+      owner = selectedOwner;
     }
 
     const skillManifest: SkillManifest = {
