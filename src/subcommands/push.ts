@@ -147,7 +147,7 @@ pushCommand.action(async options => {
     } else {
       if (process.stdin.isTTY !== true || process.stderr.isTTY !== true) {
         throw new Error(
-          "Multiple artifact owners are available. Run lms push in an interactive terminal to select one.",
+          "Multiple artifact owners are available. Run lms push in an interactive terminal to select one or create a manifest.json that specifies the owner.",
         );
       }
       owner = await runPromptWithExitHandling(() =>
