@@ -182,8 +182,8 @@ pushCommand.action(async options => {
   const manifestJsonPath = join(projectPath, "manifest.json");
   const manifestContent = await readFile(manifestJsonPath, "utf-8");
   const manifest = artifactManifestSchema.parse(JSON.parse(manifestContent));
-  // For now, we only require user to confirm if the manifest type is plugin.
-  const needsConfirmation = !yes && manifest.type === "plugin";
+  // Plugins and skills can contain executable or supporting files that deserve a final review.
+  const needsConfirmation = !yes && (manifest.type === "plugin" || manifest.type === "skill");
 
   if (manifest.owner === "local") {
     logger.error("This artifact was created without a username.");
