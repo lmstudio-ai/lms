@@ -160,6 +160,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       speculativeDraftSimple: false,
       speculativeDraftDflash: false,
       speculativeDraftDspark: false,
+      speculativeDraftModel: false,
     });
   });
 

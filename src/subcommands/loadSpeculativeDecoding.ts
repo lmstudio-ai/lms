@@ -85,6 +85,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
     speculativeDraftMinContinueProbability,
   };
   const enabledDraftModes = draftModeSpecs.filter(({ field }) => config[field] === true);
+  const hasDraftModel = typeof speculativeDraftModel === "string";
   const hasDraftTuning =
     speculativeDraftMaxTokens !== undefined ||
     speculativeDraftMinTokens !== undefined ||
@@ -107,6 +108,7 @@ export function resolveCliSpeculativeDecodingLoadConfig({
       speculativeDraftSimple: false,
       speculativeDraftDflash: false,
       speculativeDraftDspark: false,
+      speculativeDraftModel: false,
     };
   }
 
@@ -116,18 +118,18 @@ export function resolveCliSpeculativeDecodingLoadConfig({
     );
   }
 
-  if (speculativeDraftModel !== undefined && speculativeDraftModel.length === 0) {
+  if (hasDraftModel && speculativeDraftModel.length === 0) {
     throw new Error("--speculative-draft-model must not be empty.");
   }
 
-  if (speculativeDraftModel !== undefined && enabledDraftModes.length === 0) {
+  if (hasDraftModel && enabledDraftModes.length === 0) {
     throw new Error(
       "--speculative-draft-model requires --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or --speculative-draft-dspark.",
     );
   }
 
   const enabledMode = enabledDraftModes[0];
-  if (enabledMode?.requiresModel === true && speculativeDraftModel === undefined) {
+  if (enabledMode?.requiresModel === true && !hasDraftModel) {
     throw new Error(`${enabledMode.flag} requires --speculative-draft-model.`);
   }
 
@@ -160,7 +162,11 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   }
 
   if (enabledMode !== undefined) {
-    return buildEnabledModeConfig(enabledMode.field, speculativeDraftModel, tuningConfig);
+    return buildEnabledModeConfig(
+      enabledMode.field,
+      hasDraftModel ? speculativeDraftModel : undefined,
+      tuningConfig,
+    );
   }
 
   if (speculativeDraftMtp === false) {
