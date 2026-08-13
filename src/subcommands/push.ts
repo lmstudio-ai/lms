@@ -150,7 +150,7 @@ pushCommand.action(async options => {
       }
       // This branch only runs when the owner list has at least two entries.
       const selectedOwner = await askQuestionWithChoices(
-        "Select an artifact owner",
+        "Select an owner",
         owners as [string, ...Array<string>],
       );
       if (selectedOwner === null) {
@@ -212,6 +212,12 @@ pushCommand.action(async options => {
     overrides,
     onMessage: message => logger.info(message),
   });
+
+  if (manifest.type === "skill") {
+    logger.info("   Or install it with:");
+    logger.info();
+    logger.info(`       ${chalk.yellow(`lms get ${manifest.owner}/${manifest.name}`)}`);
+  }
 });
 
 export const push = pushCommand;
