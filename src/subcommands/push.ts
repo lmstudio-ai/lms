@@ -4,6 +4,7 @@ import {
   Option,
   type OptionValues,
 } from "@commander-js/extra-typings";
+import { select } from "@inquirer/prompts";
 import { type SimpleLogger, text } from "@lmstudio/lms-common";
 import {
   type ArtifactDependency,
@@ -13,20 +14,25 @@ import {
   type LocalArtifactFileList,
   type ModelDownloadSource,
   type ModelManifest,
+  type SkillManifest,
   virtualModelDefinitionSchema,
 } from "@lmstudio/lms-shared-types";
 import chalk from "chalk";
 import { readFile, writeFile } from "fs/promises";
-import { join } from "path";
+import { basename, join } from "path";
 import { cwd } from "process";
 import YAML from "yaml";
 import { askQuestion } from "../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { ensureAuthenticated } from "../ensureAuthenticated.js";
 import { exists } from "../exists.js";
-import { findProjectFolderOrExit } from "../findProjectFolder.js";
+import {
+  findProjectFolderOrExit,
+  recursiveFindAncestorFolderWithFile,
+} from "../findProjectFolder.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import { runPromptWithExitHandling } from "../prompt.js";
 
 const overridesParser = (str: string): any => {
   try {
@@ -81,6 +87,7 @@ const pushCommand = new Command<[], PushCommandOptions>()
 addCreateClientOptions(pushCommand);
 addLogLevelOptions(pushCommand);
 
+/** Uploads the current artifact and fills in metadata that can be derived at publish time. */
 pushCommand.action(async options => {
   const logger = createLogger(options);
   await using client = await createClient(logger, options);
@@ -93,7 +100,84 @@ pushCommand.action(async options => {
   } = options;
   const currentPath = cwd();
   await maybeGenerateManifestJson(logger, currentPath);
-  const projectPath = await findProjectFolderOrExit(logger, currentPath);
+  let projectPath = await recursiveFindAncestorFolderWithFile(logger, "manifest.json", currentPath);
+  let authenticated = false;
+
+  if (projectPath === null && (await exists(join(currentPath, "SKILL.md")))) {
+    const skillContents = await readFile(join(currentPath, "SKILL.md"), "utf-8");
+    const frontmatterMatch = skillContents.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u);
+    if (frontmatterMatch === null) {
+      throw new Error("SKILL.md must contain YAML frontmatter with a name and description.");
+    }
+
+    const frontmatter: unknown = YAML.parse(frontmatterMatch[1]!);
+    if (typeof frontmatter !== "object" || frontmatter === null || Array.isArray(frontmatter)) {
+      throw new Error("SKILL.md must contain YAML frontmatter with a name and description.");
+    }
+
+    const fields = frontmatter as Record<string, unknown>;
+    if (typeof fields.name !== "string" || fields.name.trim().length === 0) {
+      throw new Error("Skill name is required in SKILL.md.");
+    }
+    if (typeof fields.description !== "string" || fields.description.trim().length === 0) {
+      throw new Error("Skill description is required in SKILL.md.");
+    }
+
+    const skillName = fields.name.trim();
+    if (!kebabCaseRegex.test(skillName) || skillName.length > 63) {
+      throw new Error("Skill name must be a kebab-case string between 1 and 63 characters.");
+    }
+    const folderName = basename(currentPath);
+    if (folderName !== skillName) {
+      throw new Error(
+        `Skill folder name must match the name in SKILL.md. Received ${folderName}, expected ${skillName}.`,
+      );
+    }
+
+    await ensureAuthenticated(client, logger, { yes });
+    authenticated = true;
+    const owners = await client.repository.unstable.getWritableArtifactOwners();
+    if (owners.length === 0) {
+      throw new Error("Your account does not have an artifact owner available for publishing.");
+    }
+
+    let owner: string;
+    if (owners.length === 1) {
+      owner = owners[0]!;
+    } else {
+      if (process.stdin.isTTY !== true || process.stderr.isTTY !== true) {
+        throw new Error(
+          "Multiple artifact owners are available. Run lms push in an interactive terminal to select one.",
+        );
+      }
+      owner = await runPromptWithExitHandling(() =>
+        select<string>(
+          {
+            message: "Select an artifact owner",
+            loop: false,
+            choices: owners.map(ownerName => ({ name: ownerName, value: ownerName })),
+          },
+          { output: process.stderr },
+        ),
+      );
+    }
+
+    const skillManifest: SkillManifest = {
+      type: "skill",
+      owner,
+      name: skillName,
+    };
+    await writeFile(
+      join(currentPath, "manifest.json"),
+      JSON.stringify(skillManifest, null, 2),
+      "utf-8",
+    );
+    projectPath = currentPath;
+  }
+
+  if (projectPath === null) {
+    projectPath = await findProjectFolderOrExit(logger, currentPath);
+  }
 
   const manifestJsonPath = join(projectPath, "manifest.json");
   const manifestContent = await readFile(manifestJsonPath, "utf-8");
@@ -109,7 +193,9 @@ pushCommand.action(async options => {
     process.exit(1);
   }
 
-  await ensureAuthenticated(client, logger, { yes });
+  if (!authenticated) {
+    await ensureAuthenticated(client, logger, { yes });
+  }
 
   const fileList = await client.repository.getLocalArtifactFileList(projectPath);
   printFileList(fileList, logger);
