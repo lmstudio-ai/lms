@@ -52,11 +52,11 @@ type LoadCommandOptions = OptionValues &
     gpu?: number;
     contextLength?: number;
     parallel?: number;
+    mtp?: boolean;
+    drafter?: string | false;
     speculativeDraftMtp?: boolean;
     speculativeDraftOff?: boolean;
     speculativeDraftSimple?: boolean;
-    speculativeDraftDflash?: boolean;
-    speculativeDraftDspark?: boolean;
     speculativeDraftModel?: string;
     speculativeDraftMaxTokens?: number;
     speculativeDraftMinTokens?: number;
@@ -80,8 +80,6 @@ function assertSpeculativeDecodingSupportedForCliModel({
   const hasSpeculativeDecodingLoadConfig =
     loadConfig.speculativeDraftMtp !== undefined ||
     loadConfig.speculativeDraftSimple !== undefined ||
-    loadConfig.speculativeDraftDflash !== undefined ||
-    loadConfig.speculativeDraftDspark !== undefined ||
     loadConfig.speculativeDraftModel !== undefined ||
     loadConfig.speculativeDraftMaxTokens !== undefined ||
     loadConfig.speculativeDraftMinTokens !== undefined ||
@@ -167,70 +165,52 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   )
   .addOption(
     new Option(
-      "--speculative-draft-mtp",
+      "--mtp",
       text`
-        Enable load-time Draft MTP speculative decoding when supported by the model.
+        Enable load-time speculative decoding with bundled MTP heads when supported by the model.
       `,
     ).default(undefined),
   )
   .addOption(
     new Option(
-      "--no-speculative-draft-mtp",
+      "--drafter <model>",
       text`
-        Disable load-time Draft MTP speculative decoding only. Deprecated: use
-        --speculative-draft-off to disable all speculative decoding modes.
+        Drafter model resource to use for load-time speculative decoding.
       `,
-    ).default(undefined),
+    ),
   )
   .addOption(
     new Option(
-      "--speculative-draft-off",
+      "--no-drafter",
       text`
         Disable all load-time speculative decoding modes for this load.
       `,
     ),
   )
   .addOption(
+    new Option("--speculative-draft-mtp", "Legacy alias for --mtp.").default(undefined).hideHelp(),
+  )
+  .addOption(
+    new Option("--no-speculative-draft-mtp", "Legacy option to disable load-time bundled MTP only.")
+      .default(undefined)
+      .hideHelp(),
+  )
+  .addOption(new Option("--speculative-draft-off", "Legacy alias for --no-drafter.").hideHelp())
+  .addOption(
     new Option(
       "--speculative-draft-simple",
-      text`
-        Enable load-time Draft Simple speculative decoding using --speculative-draft-model.
-      `,
-    ),
+      "Legacy Draft Simple selector. Use --drafter instead.",
+    ).hideHelp(),
   )
   .addOption(
-    new Option(
-      "--speculative-draft-dflash",
-      text`
-        Enable load-time DFlash speculative decoding using --speculative-draft-model.
-      `,
-    ),
-  )
-  .addOption(
-    new Option(
-      "--speculative-draft-dspark",
-      text`
-        Enable load-time DSpark speculative decoding using --speculative-draft-model.
-      `,
-    ),
-  )
-  .addOption(
-    new Option(
-      "--speculative-draft-model <model>",
-      text`
-        Draft model resource to use with --speculative-draft-simple,
-        --speculative-draft-dflash, --speculative-draft-dspark, or path-backed
-        --speculative-draft-mtp.
-      `,
-    ),
+    new Option("--speculative-draft-model <model>", "Legacy alias for --drafter.").hideHelp(),
   )
   .addOption(
     new Option(
       "--speculative-draft-max-tokens <count>",
       text`
         Maximum number of draft tokens to generate per speculative decoding step. Requires
-        --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or
-        --speculative-draft-dspark.
+        --drafter or --mtp.
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
@@ -238,9 +218,7 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     new Option(
       "--speculative-draft-min-tokens <count>",
       text`
-        Minimum draft length to consider for speculative decoding. Requires
-        --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or
-        --speculative-draft-dspark.
+        Minimum draft length to consider for speculative decoding. Requires --drafter or --mtp.
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 0 })),
   )
@@ -249,8 +227,7 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       "--speculative-draft-min-continue-probability <probability>",
       text`
         Continue drafting while token probability is at or above this threshold. Requires
-        --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or
-        --speculative-draft-dspark.
+        --drafter or --mtp.
       `,
     ).argParser(createRefinedNumberParser({ min: 0, max: 1 })),
   )
@@ -302,11 +279,11 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     gpu,
     contextLength,
     parallel: maxParallelPredictions,
+    mtp,
+    drafter,
     speculativeDraftMtp,
     speculativeDraftOff,
     speculativeDraftSimple,
-    speculativeDraftDflash,
-    speculativeDraftDspark,
     speculativeDraftModel,
     speculativeDraftMaxTokens,
     speculativeDraftMinTokens,
@@ -321,11 +298,11 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     contextLength,
     maxParallelPredictions,
     ...resolveCliSpeculativeDecodingLoadConfig({
+      mtp,
+      drafter,
       speculativeDraftMtp,
       speculativeDraftOff,
       speculativeDraftSimple,
-      speculativeDraftDflash,
-      speculativeDraftDspark,
       speculativeDraftModel,
       speculativeDraftMaxTokens,
       speculativeDraftMinTokens,

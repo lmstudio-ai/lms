@@ -4,34 +4,15 @@ export type CliSpeculativeConfig = Pick<
   LLMLoadModelConfig,
   | "speculativeDraftMtp"
   | "speculativeDraftSimple"
-  | "speculativeDraftDflash"
-  | "speculativeDraftDspark"
   | "speculativeDraftModel"
   | "speculativeDraftMaxTokens"
   | "speculativeDraftMinTokens"
   | "speculativeDraftMinContinueProbability"
 > & {
+  mtp?: boolean;
+  drafter?: string | false;
   speculativeDraftOff?: boolean;
 };
-
-type DraftSelectorField = Extract<
-  keyof CliSpeculativeConfig,
-  | "speculativeDraftMtp"
-  | "speculativeDraftSimple"
-  | "speculativeDraftDflash"
-  | "speculativeDraftDspark"
->;
-
-const draftModeSpecs: Array<{
-  flag: string;
-  field: DraftSelectorField;
-  requiresModel: boolean;
-}> = [
-  { flag: "--speculative-draft-mtp", field: "speculativeDraftMtp", requiresModel: false },
-  { flag: "--speculative-draft-simple", field: "speculativeDraftSimple", requiresModel: true },
-  { flag: "--speculative-draft-dflash", field: "speculativeDraftDflash", requiresModel: true },
-  { flag: "--speculative-draft-dspark", field: "speculativeDraftDspark", requiresModel: true },
-];
 
 function getTuningConfig({
   speculativeDraftMaxTokens,
@@ -47,26 +28,23 @@ function getTuningConfig({
   };
 }
 
-function buildEnabledModeConfig(
-  selectedField: DraftSelectorField,
-  speculativeDraftModel: string | undefined,
-  tuningConfig: CliSpeculativeConfig,
-): CliSpeculativeConfig {
-  return {
-    speculativeDraftMtp: selectedField === "speculativeDraftMtp",
-    speculativeDraftSimple: selectedField === "speculativeDraftSimple",
-    speculativeDraftDflash: selectedField === "speculativeDraftDflash",
-    speculativeDraftDspark: selectedField === "speculativeDraftDspark",
-    ...(speculativeDraftModel !== undefined ? { speculativeDraftModel } : {}),
-    ...tuningConfig,
-  };
+function hasDraftTuning({
+  speculativeDraftMaxTokens,
+  speculativeDraftMinTokens,
+  speculativeDraftMinContinueProbability,
+}: CliSpeculativeConfig): boolean {
+  return (
+    speculativeDraftMaxTokens !== undefined ||
+    speculativeDraftMinTokens !== undefined ||
+    speculativeDraftMinContinueProbability !== undefined
+  );
 }
 
 export function resolveCliSpeculativeDecodingLoadConfig({
+  mtp,
+  drafter,
   speculativeDraftMtp,
   speculativeDraftSimple,
-  speculativeDraftDflash,
-  speculativeDraftDspark,
   speculativeDraftOff,
   speculativeDraftModel,
   speculativeDraftMaxTokens,
@@ -74,69 +52,63 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   speculativeDraftMinContinueProbability,
 }: CliSpeculativeConfig): CliSpeculativeConfig {
   const config: CliSpeculativeConfig = {
+    mtp,
+    drafter,
     speculativeDraftMtp,
     speculativeDraftSimple,
-    speculativeDraftDflash,
-    speculativeDraftDspark,
     speculativeDraftOff,
     speculativeDraftModel,
     speculativeDraftMaxTokens,
     speculativeDraftMinTokens,
     speculativeDraftMinContinueProbability,
   };
-  const enabledDraftModes = draftModeSpecs.filter(({ field }) => config[field] === true);
-  const hasDraftModel = typeof speculativeDraftModel === "string";
-  const hasDraftTuning =
-    speculativeDraftMaxTokens !== undefined ||
-    speculativeDraftMinTokens !== undefined ||
-    speculativeDraftMinContinueProbability !== undefined;
+  const tuningConfig = getTuningConfig(config);
+  const draftTuning = hasDraftTuning(config);
+  const explicitFullOff = drafter === false || speculativeDraftOff === true;
+  const preferredDrafter = typeof drafter === "string" ? drafter : undefined;
+  const legacyDrafter =
+    typeof speculativeDraftModel === "string" ? speculativeDraftModel : undefined;
+  const externalDrafter = preferredDrafter ?? legacyDrafter;
+  const requestedBundledMtp = mtp === true || speculativeDraftMtp === true;
 
-  if (speculativeDraftOff === true) {
-    if (enabledDraftModes.length > 0) {
-      throw new Error(
-        `--speculative-draft-off cannot be used with ${enabledDraftModes.map(({ flag }) => flag).join(" or ")}.`,
-      );
+  if (preferredDrafter !== undefined && legacyDrafter !== undefined) {
+    throw new Error("--drafter cannot be used with --speculative-draft-model.");
+  }
+
+  if (externalDrafter !== undefined && externalDrafter.length === 0) {
+    throw new Error("--drafter must not be empty.");
+  }
+
+  if (explicitFullOff) {
+    if (requestedBundledMtp) {
+      throw new Error("--no-drafter cannot be used with --mtp.");
     }
-    if (speculativeDraftModel !== undefined) {
-      throw new Error("--speculative-draft-off cannot be used with --speculative-draft-model.");
+    if (externalDrafter !== undefined) {
+      throw new Error("--no-drafter cannot be used with --drafter.");
     }
-    if (hasDraftTuning) {
-      throw new Error("--speculative-draft-off cannot be used with speculative draft tuning flags.");
+    if (speculativeDraftSimple === true) {
+      throw new Error("--no-drafter cannot be used with --speculative-draft-simple.");
+    }
+    if (draftTuning) {
+      throw new Error("--no-drafter cannot be used with speculative draft tuning flags.");
     }
     return {
       speculativeDraftMtp: false,
       speculativeDraftSimple: false,
-      speculativeDraftDflash: false,
-      speculativeDraftDspark: false,
       speculativeDraftModel: false,
     };
   }
 
-  if (enabledDraftModes.length > 1) {
-    throw new Error(
-      `${enabledDraftModes.map(({ flag }) => flag).join(" and ")} cannot be used together.`,
-    );
+  if (mtp === true && externalDrafter !== undefined) {
+    throw new Error("--mtp cannot be used with --drafter.");
   }
 
-  if (hasDraftModel && speculativeDraftModel.length === 0) {
-    throw new Error("--speculative-draft-model must not be empty.");
+  if (speculativeDraftSimple === true && externalDrafter === undefined) {
+    throw new Error("--speculative-draft-simple requires --drafter.");
   }
 
-  if (hasDraftModel && enabledDraftModes.length === 0) {
-    throw new Error(
-      "--speculative-draft-model requires --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or --speculative-draft-dspark.",
-    );
-  }
-
-  const enabledMode = enabledDraftModes[0];
-  if (enabledMode?.requiresModel === true && !hasDraftModel) {
-    throw new Error(`${enabledMode.flag} requires --speculative-draft-model.`);
-  }
-
-  if (enabledDraftModes.length === 0 && hasDraftTuning) {
-    throw new Error(
-      "--speculative draft tuning flags require --speculative-draft-simple, --speculative-draft-mtp, --speculative-draft-dflash, or --speculative-draft-dspark.",
-    );
+  if (draftTuning && externalDrafter === undefined && !requestedBundledMtp) {
+    throw new Error("speculative draft tuning flags require --drafter or --mtp.");
   }
 
   if (
@@ -149,24 +121,19 @@ export function resolveCliSpeculativeDecodingLoadConfig({
     );
   }
 
-  const tuningConfig = getTuningConfig(config);
-
-  if (
-    speculativeDraftMtp === undefined &&
-    speculativeDraftSimple === undefined &&
-    speculativeDraftDflash === undefined &&
-    speculativeDraftDspark === undefined &&
-    speculativeDraftOff === undefined
-  ) {
-    return {};
+  if (externalDrafter !== undefined) {
+    return {
+      speculativeDraftMtp: false,
+      speculativeDraftModel: externalDrafter,
+      ...tuningConfig,
+    };
   }
 
-  if (enabledMode !== undefined) {
-    return buildEnabledModeConfig(
-      enabledMode.field,
-      hasDraftModel ? speculativeDraftModel : undefined,
-      tuningConfig,
-    );
+  if (requestedBundledMtp) {
+    return {
+      speculativeDraftMtp: true,
+      ...tuningConfig,
+    };
   }
 
   if (speculativeDraftMtp === false) {
