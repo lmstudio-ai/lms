@@ -7,18 +7,17 @@ import {
   type SimpleLogger,
   text,
 } from "@lmstudio/lms-common";
-import { findLMStudioHome } from "@lmstudio/lms-common-server";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
 import { existsSync, statSync } from "fs";
-import { access, copyFile, link, mkdir, readFile, rename, symlink } from "fs/promises";
+import { access, copyFile, link, mkdir, rename, symlink } from "fs/promises";
 import fuzzy from "fuzzy";
 import { homedir } from "os";
 import { basename, dirname, join } from "path";
 import { z } from "zod";
 import { getCliPref } from "../cliPref.js";
-import { defaultModelsFolder } from "../lmstudioPaths.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import { resolveModelsFolderPath } from "../modelsFolder.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 
@@ -338,62 +337,6 @@ function getUserAppDataPath() {
     default:
       throw new Error("Unsupported platform");
   }
-}
-
-/**
- * Locate the settings.json file of LM Studio.
- *
- * @param logger - The logger to use.
- * @returns A promise that resolves with the path to the settings.json file, or null if it does not
- * exist.
- */
-async function locateSettingsJson(logger: SimpleLogger) {
-  logger.debug("Locating settings.json");
-  const lmstudioHome = findLMStudioHome();
-  const settingsJsonFilePath = join(lmstudioHome, "settings.json");
-  logger.debug("Settings.json file path", settingsJsonFilePath);
-  try {
-    await access(settingsJsonFilePath);
-    return settingsJsonFilePath;
-  } catch (error) {
-    logger.debug("settings.json does not exist", error);
-    return null;
-  }
-}
-
-/**
- * Resolve the path to the models folder. If the settings.json file exists, use the downloadsFolder
- * field.
- *
- * @param logger - The logger to use.
- * @returns A promise that resolves with the path to the models folder.
- */
-async function resolveModelsFolderPath(logger: SimpleLogger) {
-  const settingsJsonPath = await locateSettingsJson(logger);
-  let modelsFolderPath = defaultModelsFolder;
-  if (settingsJsonPath === null) {
-    logger.warn(
-      "Could not locate LM Studio configuration file, using default path:",
-      modelsFolderPath,
-    );
-  } else {
-    try {
-      const content = await readFile(settingsJsonPath, "utf8");
-      const settings = JSON.parse(content);
-      modelsFolderPath = settings.downloadsFolder;
-      if (typeof modelsFolderPath !== "string") {
-        throw new Error("downloadsFolder is not a string");
-      }
-    } catch (error) {
-      logger.warn(
-        "Could not parse LM Studio configuration file, using default path:",
-        modelsFolderPath,
-      );
-      logger.debug(error);
-    }
-  }
-  await mkdir(modelsFolderPath, { recursive: true });
-  return modelsFolderPath;
 }
 
 /**
