@@ -26,6 +26,7 @@ import { Spinner } from "../Spinner.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
+import { resolveExactDrafterLoadTarget } from "./loadTargetResolution.js";
 
 const gpuOptionParser = (str: string): number => {
   str = str.trim().toLowerCase();
@@ -51,7 +52,10 @@ type LoadCommandOptions = OptionValues &
     gpu?: number;
     contextLength?: number;
     parallel?: number;
+    mtp?: boolean;
+    drafter?: string | false;
     speculativeDraftMtp?: boolean;
+    speculativeDraftOff?: boolean;
     speculativeDraftSimple?: boolean;
     speculativeDraftModel?: string;
     speculativeDraftMaxTokens?: number;
@@ -80,7 +84,7 @@ function assertSpeculativeDecodingSupportedForCliModel({
     loadConfig.speculativeDraftMaxTokens !== undefined ||
     loadConfig.speculativeDraftMinTokens !== undefined ||
     loadConfig.speculativeDraftMinContinueProbability !== undefined;
-  if (!hasSpeculativeDecodingLoadConfig || model.type !== "embedding") {
+  if (!hasSpeculativeDecodingLoadConfig || model.type === "llm") {
     return;
   }
 
@@ -161,42 +165,52 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   )
   .addOption(
     new Option(
-      "--speculative-draft-mtp",
+      "--mtp",
       text`
-        Enable load-time Draft MTP speculative decoding when supported by the model.
+        Enable load-time speculative decoding with bundled MTP heads when supported by the model.
       `,
     ).default(undefined),
   )
   .addOption(
     new Option(
-      "--no-speculative-draft-mtp",
+      "--drafter <model>",
       text`
-        Disable load-time Draft MTP speculative decoding.
+        Drafter model resource to use for load-time speculative decoding.
       `,
-    ).default(undefined),
+    ),
   )
+  .addOption(
+    new Option(
+      "--no-drafter",
+      text`
+        Disable all load-time speculative decoding modes for this load.
+      `,
+    ),
+  )
+  .addOption(
+    new Option("--speculative-draft-mtp", "Legacy alias for --mtp.").default(undefined).hideHelp(),
+  )
+  .addOption(
+    new Option("--no-speculative-draft-mtp", "Legacy option to disable load-time bundled MTP only.")
+      .default(undefined)
+      .hideHelp(),
+  )
+  .addOption(new Option("--speculative-draft-off", "Legacy alias for --no-drafter.").hideHelp())
   .addOption(
     new Option(
       "--speculative-draft-simple",
-      text`
-        Enable load-time Draft Simple speculative decoding using --speculative-draft-model.
-      `,
-    ),
+      "Legacy Draft Simple selector. Use --drafter instead.",
+    ).hideHelp(),
   )
   .addOption(
-    new Option(
-      "--speculative-draft-model <model>",
-      text`
-        Draft model resource to use with --speculative-draft-simple.
-      `,
-    ),
+    new Option("--speculative-draft-model <model>", "Legacy alias for --drafter.").hideHelp(),
   )
   .addOption(
     new Option(
       "--speculative-draft-max-tokens <count>",
       text`
         Maximum number of draft tokens to generate per speculative decoding step. Requires
-        --speculative-draft-simple or --speculative-draft-mtp.
+        --drafter or --mtp.
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
@@ -204,8 +218,7 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     new Option(
       "--speculative-draft-min-tokens <count>",
       text`
-        Minimum draft length to consider for speculative decoding. Requires
-        --speculative-draft-simple or --speculative-draft-mtp.
+        Minimum draft length to consider for speculative decoding. Requires --drafter or --mtp.
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 0 })),
   )
@@ -214,7 +227,7 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       "--speculative-draft-min-continue-probability <probability>",
       text`
         Continue drafting while token probability is at or above this threshold. Requires
-        --speculative-draft-simple or --speculative-draft-mtp.
+        --drafter or --mtp.
       `,
     ).argParser(createRefinedNumberParser({ min: 0, max: 1 })),
   )
@@ -266,7 +279,10 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     gpu,
     contextLength,
     parallel: maxParallelPredictions,
+    mtp,
+    drafter,
     speculativeDraftMtp,
+    speculativeDraftOff,
     speculativeDraftSimple,
     speculativeDraftModel,
     speculativeDraftMaxTokens,
@@ -282,7 +298,10 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     contextLength,
     maxParallelPredictions,
     ...resolveCliSpeculativeDecodingLoadConfig({
+      mtp,
+      drafter,
       speculativeDraftMtp,
+      speculativeDraftOff,
       speculativeDraftSimple,
       speculativeDraftModel,
       speculativeDraftMaxTokens,
@@ -308,7 +327,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   );
   logger.debug(`Last loaded map loaded with ${lastLoadedMap.size} models.`);
 
-  const models = (await client.system.listDownloadedModels())
+  const allDownloadedModels = (await client.system.listDownloadedModels({ includeDrafters: true }))
     .filter(model => model.architecture?.toLowerCase().includes("clip") !== true)
     .filter(model => (local ? model.deviceIdentifier === null : true))
     .sort((a, b) => {
@@ -316,6 +335,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       const bIndex = lastLoadedMap.get(b.modelKey) ?? lastLoadedMap.size + 1;
       return aIndex < bIndex ? -1 : aIndex > bIndex ? 1 : 0;
     });
+  const models = allDownloadedModels.filter(model => model.type !== "drafter");
 
   if (exact) {
     if (modelKey === undefined) {
@@ -332,7 +352,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     }
     // In this case, we expect a model path and not a model key
     const modelPath = modelKey;
-    const model = models.find(model => model.path === modelPath);
+    const model = allDownloadedModels.find(model => model.path === modelPath);
     if (model === undefined) {
       if (models.length === 0) {
         logger.errorWithoutPrefix(
@@ -380,7 +400,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     if (estimateOnly === true) {
       assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
       const estimate = await (
-        model.type === "llm" ? client.llm : client.embedding
+        model.type === "embedding" ? client.embedding : client.llm
       ).estimateResourcesUsage(model.modelKey, loadConfig, {
         deviceIdentifier: model.deviceIdentifier,
       });
@@ -404,6 +424,11 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   }
 
   const modelKeys = models.map(model => model.modelKey);
+  const exactDrafterModel = resolveExactDrafterLoadTarget({
+    modelKey,
+    standaloneModels: models,
+    allDownloadedModels,
+  });
 
   const initialFilteredModels = fuzzy.filter(modelKey ?? "", modelKeys);
   logger.debug("Initial filtered models length:", initialFilteredModels.length);
@@ -411,26 +436,27 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   let model: ModelInfo;
   let deferToPreferredDevice = false;
   if (yes) {
-    if (initialFilteredModels.length === 0) {
+    if (exactDrafterModel !== undefined) {
+      model = exactDrafterModel;
+    } else if (initialFilteredModels.length === 0) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(
           "Model not found",
           text`
-            No model found that matches model key "${chalk.yellow(modelKey)}".
+              No model found that matches model key "${chalk.yellow(modelKey)}".
 
-            To see a list of all downloaded models, run:
+              To see a list of all downloaded models, run:
 
-                ${chalk.yellow("lms ls")}
+                  ${chalk.yellow("lms ls")}
 
-            To select a model interactively, remove the ${chalk.yellow("--yes")} flag:
+              To select a model interactively, remove the ${chalk.yellow("--yes")} flag:
 
-                lms load
-          `,
+                  lms load
+            `,
         ).message,
       );
       process.exit(1);
-    }
-    if (initialFilteredModels.length > 1) {
+    } else if (initialFilteredModels.length > 1) {
       const matchingModels = initialFilteredModels.map(option => models[option.index]);
       const hasSameDeviceDuplicates = hasDuplicatesOnSameDevice(matchingModels);
       if (hasSameDeviceDuplicates) {
@@ -456,12 +482,14 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
         estimateOnly,
         deviceNameResolver,
       });
+    } else if (exactDrafterModel !== undefined) {
+      model = exactDrafterModel;
     } else if (initialFilteredModels.length === 0) {
       console.info(
         chalk.red(text`
-          ! Cannot find a model matching the provided model key (${chalk.yellow(modelKey)}). Please
-          select one from the list below.
-        `),
+            ! Cannot find a model matching the provided model key (${chalk.yellow(modelKey)}). Please
+            select one from the list below.
+          `),
       );
       modelKey = "";
       model = await selectModel({
@@ -508,7 +536,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   if (estimateOnly === true) {
     assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
     const estimate = await (
-      model.type === "llm" ? client.llm : client.embedding
+      model.type === "embedding" ? client.embedding : client.llm
     ).estimateResourcesUsage(model.modelKey, loadConfig, {
       deviceIdentifier: deferToPreferredDevice ? undefined : model.deviceIdentifier,
     });

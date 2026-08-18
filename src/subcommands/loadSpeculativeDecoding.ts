@@ -1,22 +1,6 @@
 import { type LLMLoadModelConfig } from "@lmstudio/sdk";
 
-export interface ResolveCliSpeculativeDecodingLoadConfigOpts {
-  speculativeDraftMtp?: boolean;
-  speculativeDraftSimple?: boolean;
-  speculativeDraftModel?: string;
-  speculativeDraftMaxTokens?: number;
-  speculativeDraftMinTokens?: number;
-  speculativeDraftMinContinueProbability?: number;
-}
-
-export function resolveCliSpeculativeDecodingLoadConfig({
-  speculativeDraftMtp,
-  speculativeDraftSimple,
-  speculativeDraftModel,
-  speculativeDraftMaxTokens,
-  speculativeDraftMinTokens,
-  speculativeDraftMinContinueProbability,
-}: ResolveCliSpeculativeDecodingLoadConfigOpts): Pick<
+export type CliSpeculativeConfig = Pick<
   LLMLoadModelConfig,
   | "speculativeDraftMtp"
   | "speculativeDraftSimple"
@@ -24,36 +8,107 @@ export function resolveCliSpeculativeDecodingLoadConfig({
   | "speculativeDraftMaxTokens"
   | "speculativeDraftMinTokens"
   | "speculativeDraftMinContinueProbability"
-> {
-  const hasDraftTuning =
+> & {
+  mtp?: boolean;
+  drafter?: string | false;
+  speculativeDraftOff?: boolean;
+};
+
+function getTuningConfig({
+  speculativeDraftMaxTokens,
+  speculativeDraftMinTokens,
+  speculativeDraftMinContinueProbability,
+}: CliSpeculativeConfig): CliSpeculativeConfig {
+  return {
+    ...(speculativeDraftMaxTokens !== undefined ? { speculativeDraftMaxTokens } : {}),
+    ...(speculativeDraftMinTokens !== undefined ? { speculativeDraftMinTokens } : {}),
+    ...(speculativeDraftMinContinueProbability !== undefined
+      ? { speculativeDraftMinContinueProbability }
+      : {}),
+  };
+}
+
+function hasDraftTuning({
+  speculativeDraftMaxTokens,
+  speculativeDraftMinTokens,
+  speculativeDraftMinContinueProbability,
+}: CliSpeculativeConfig): boolean {
+  return (
     speculativeDraftMaxTokens !== undefined ||
     speculativeDraftMinTokens !== undefined ||
-    speculativeDraftMinContinueProbability !== undefined;
+    speculativeDraftMinContinueProbability !== undefined
+  );
+}
 
-  if (speculativeDraftMtp === true && speculativeDraftSimple === true) {
-    throw new Error("--speculative-draft-mtp and --speculative-draft-simple cannot both be used.");
+export function resolveCliSpeculativeDecodingLoadConfig({
+  mtp,
+  drafter,
+  speculativeDraftMtp,
+  speculativeDraftSimple,
+  speculativeDraftOff,
+  speculativeDraftModel,
+  speculativeDraftMaxTokens,
+  speculativeDraftMinTokens,
+  speculativeDraftMinContinueProbability,
+}: CliSpeculativeConfig): CliSpeculativeConfig {
+  const config: CliSpeculativeConfig = {
+    mtp,
+    drafter,
+    speculativeDraftMtp,
+    speculativeDraftSimple,
+    speculativeDraftOff,
+    speculativeDraftModel,
+    speculativeDraftMaxTokens,
+    speculativeDraftMinTokens,
+    speculativeDraftMinContinueProbability,
+  };
+  const tuningConfig = getTuningConfig(config);
+  const draftTuning = hasDraftTuning(config);
+  const explicitFullOff = drafter === false || speculativeDraftOff === true;
+  const preferredDrafter = typeof drafter === "string" ? drafter : undefined;
+  const legacyDrafter =
+    typeof speculativeDraftModel === "string" ? speculativeDraftModel : undefined;
+  const externalDrafter = preferredDrafter ?? legacyDrafter;
+  const requestedBundledMtp = mtp === true || speculativeDraftMtp === true;
+
+  if (preferredDrafter !== undefined && legacyDrafter !== undefined) {
+    throw new Error("--drafter cannot be used with --speculative-draft-model.");
   }
 
-  if (speculativeDraftModel !== undefined && speculativeDraftModel.length === 0) {
-    throw new Error("--speculative-draft-model must not be empty.");
+  if (externalDrafter !== undefined && externalDrafter.length === 0) {
+    throw new Error("--drafter must not be empty.");
   }
 
-  if (speculativeDraftMtp === true && speculativeDraftModel !== undefined) {
-    throw new Error("--speculative-draft-mtp cannot be combined with --speculative-draft-model.");
+  if (explicitFullOff) {
+    if (requestedBundledMtp) {
+      throw new Error("--no-drafter cannot be used with --mtp.");
+    }
+    if (externalDrafter !== undefined) {
+      throw new Error("--no-drafter cannot be used with --drafter.");
+    }
+    if (speculativeDraftSimple === true) {
+      throw new Error("--no-drafter cannot be used with --speculative-draft-simple.");
+    }
+    if (draftTuning) {
+      throw new Error("--no-drafter cannot be used with speculative draft tuning flags.");
+    }
+    return {
+      speculativeDraftMtp: false,
+      speculativeDraftSimple: false,
+      speculativeDraftModel: false,
+    };
   }
 
-  if (speculativeDraftSimple !== true && speculativeDraftModel !== undefined) {
-    throw new Error("--speculative-draft-model requires --speculative-draft-simple.");
+  if (mtp === true && externalDrafter !== undefined) {
+    throw new Error("--mtp cannot be used with --drafter.");
   }
 
-  if (speculativeDraftSimple === true && speculativeDraftModel === undefined) {
-    throw new Error("--speculative-draft-simple requires --speculative-draft-model.");
+  if (speculativeDraftSimple === true && externalDrafter === undefined) {
+    throw new Error("--speculative-draft-simple requires --drafter.");
   }
 
-  if (speculativeDraftMtp !== true && speculativeDraftSimple !== true && hasDraftTuning) {
-    throw new Error(
-      "--speculative draft tuning flags require --speculative-draft-simple or --speculative-draft-mtp.",
-    );
+  if (draftTuning && externalDrafter === undefined && !requestedBundledMtp) {
+    throw new Error("speculative draft tuning flags require --drafter or --mtp.");
   }
 
   if (
@@ -66,43 +121,26 @@ export function resolveCliSpeculativeDecodingLoadConfig({
     );
   }
 
-  const tuningConfig = {
-    ...(speculativeDraftMaxTokens !== undefined
-      ? { speculativeDraftMaxTokens: speculativeDraftMaxTokens }
-      : {}),
-    ...(speculativeDraftMinTokens !== undefined
-      ? { speculativeDraftMinTokens: speculativeDraftMinTokens }
-      : {}),
-    ...(speculativeDraftMinContinueProbability !== undefined
-      ? { speculativeDraftMinContinueProbability: speculativeDraftMinContinueProbability }
-      : {}),
-  };
-
-  if (speculativeDraftMtp === undefined && speculativeDraftSimple === undefined) {
-    return {};
+  if (externalDrafter !== undefined) {
+    return {
+      speculativeDraftMtp: false,
+      speculativeDraftModel: externalDrafter,
+      ...tuningConfig,
+    };
   }
 
-  if (speculativeDraftMtp === true) {
+  if (requestedBundledMtp) {
     return {
       speculativeDraftMtp: true,
       ...tuningConfig,
     };
   }
 
-  if (speculativeDraftMtp === false && speculativeDraftSimple !== true) {
+  if (speculativeDraftMtp === false) {
     return {
       speculativeDraftMtp: false,
     };
   }
 
-  if (speculativeDraftSimple !== true) {
-    return {};
-  }
-
-  return {
-    speculativeDraftMtp: false,
-    speculativeDraftSimple: true,
-    speculativeDraftModel: speculativeDraftModel,
-    ...tuningConfig,
-  };
+  return {};
 }

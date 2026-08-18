@@ -13,6 +13,7 @@ import {
 import { formatSizeBytes1000 } from "../formatBytes.js";
 import { formatTimeLean } from "../formatElapsedTime.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
+import { filterModelsForListCommand } from "./listModelFilters.js";
 
 function loadedCheck(count: number) {
   if (count === 0) {
@@ -229,6 +230,7 @@ type ListCommandOptions = OptionValues &
   LogLevelArgs & {
     llm?: boolean;
     embedding?: boolean;
+    drafter?: boolean;
     detailed?: boolean;
     variants?: boolean;
     json?: boolean;
@@ -246,6 +248,7 @@ const lsCommand = new Command<[], ListCommandOptions>()
   .argument("[modelKey]", "Show variants for the provided model key")
   .option("--llm", "Show only LLM models")
   .option("--embedding", "Show only embedding models")
+  .option("--drafter", "Show only drafter models")
   .option("--detailed", "[Deprecated] Show detailed view with grouping")
   .option("--variants", "Show variants for all models")
   .option("--json", "Outputs in JSON format to stdout");
@@ -261,6 +264,7 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   const {
     llm = false,
     embedding = false,
+    drafter = false,
     detailed = false,
     variants: variantsOption = false,
     json = false,
@@ -287,7 +291,12 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
 
     const loadedModels = await listLoadedModels(client);
     const firstVariantType = variants[0]?.type;
-    const variantTitle = firstVariantType === "embedding" ? "EMBEDDING" : "LLM";
+    const variantTitle =
+      firstVariantType === "embedding"
+        ? "EMBEDDING"
+        : firstVariantType === "drafter"
+          ? "DRAFTER"
+          : "LLM";
 
     console.info();
     console.info(`Listing variants for ${modelKey}:`);
@@ -297,22 +306,16 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
     return;
   }
 
-  const allDownloadedModels = await client.system.listDownloadedModels();
+  const allDownloadedModels = await client.system.listDownloadedModels({ includeDrafters: true });
   const loadedModels = await listLoadedModels(client);
 
   const originalModelsCount = allDownloadedModels.length;
 
-  let filteredDownloadedModels = allDownloadedModels;
-  if (llm || embedding) {
-    const allowedTypes = new Set<string>();
-    if (llm) {
-      allowedTypes.add("llm");
-    }
-    if (embedding) {
-      allowedTypes.add("embedding");
-    }
-    filteredDownloadedModels = allDownloadedModels.filter(model => allowedTypes.has(model.type));
-  }
+  const filteredDownloadedModels = filterModelsForListCommand(allDownloadedModels, {
+    llm,
+    embedding,
+    drafter,
+  });
 
   const filteredModelsCount = filteredDownloadedModels.length;
 
@@ -402,6 +405,18 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
       });
       console.info();
     }
+
+    const drafterModels = filteredDownloadedModels.filter(model => model.type === "drafter");
+    if (drafterModels.length > 0) {
+      printModelsWithVariantRows({
+        title: "DRAFTER",
+        baseModels: drafterModels,
+        loadedModels,
+        variantInfosByModelKey,
+        deviceNameResolver,
+      });
+      console.info();
+    }
     return;
   }
 
@@ -414,6 +429,12 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   const embeddingModels = filteredDownloadedModels.filter(model => model.type === "embedding");
   if (embeddingModels.length > 0) {
     printDownloadedModelsTable("EMBEDDING", embeddingModels, loadedModels, deviceNameResolver);
+    console.info();
+  }
+
+  const drafterModels = filteredDownloadedModels.filter(model => model.type === "drafter");
+  if (drafterModels.length > 0) {
+    printDownloadedModelsTable("DRAFTER", drafterModels, loadedModels, deviceNameResolver);
     console.info();
   }
 });
