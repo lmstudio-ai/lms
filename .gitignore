@@ -5,3 +5,5 @@ coverage
 .env
 .DS_Store
 .turbo
+
+plans/
