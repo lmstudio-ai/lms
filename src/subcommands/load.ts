@@ -535,8 +535,8 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     }
   }
 
+  assertLoadConfigSupportedForCliModel({ model, loadConfig, logger });
   if (estimateOnly === true) {
-    assertLoadConfigSupportedForCliModel({ model, loadConfig, logger });
     const estimate = await (
       model.type === "llm" ? client.llm : client.embedding
     ).estimateResourcesUsage(model.modelKey, loadConfig, {
@@ -559,7 +559,6 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   });
 
   const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
-  assertLoadConfigSupportedForCliModel({ model, loadConfig, logger });
   await loadModel({
     logger,
     namespace: loadNamespace,
