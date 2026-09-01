@@ -1,4 +1,46 @@
+import { type SimpleLogger } from "@lmstudio/lms-common";
+import { assertLoadConfigSupportedForCliModel, load } from "./load.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
+
+jest.mock("@inquirer/prompts", () => ({ search: jest.fn() }));
+
+describe("assertLoadConfigSupportedForCliModel", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("rejects AutoFit for embedding models", () => {
+    const logger = { errorWithoutPrefix: jest.fn() } as unknown as SimpleLogger;
+    jest.spyOn(process, "exit").mockImplementation(code => {
+      throw new Error(`process.exit(${code})`);
+    });
+
+    expect(() =>
+      assertLoadConfigSupportedForCliModel({
+        model: { type: "embedding" },
+        loadConfig: { autoFit: true },
+        logger,
+      }),
+    ).toThrow("process.exit(1)");
+    expect(logger.errorWithoutPrefix).toHaveBeenCalledWith(
+      expect.stringContaining("AutoFit can only be configured for LLM models."),
+    );
+  });
+});
+
+describe("load command", () => {
+  it.each([
+    { arguments: ["--gpu", "max"], option: "--gpu <offload-ratio>" },
+    { arguments: ["--context-length", "4096"], option: "-c, --context-length <length>" },
+  ])("rejects AutoFit with $option", async ({ arguments: manualArguments, option }) => {
+    load.exitOverride();
+    load.configureOutput({ writeErr: () => {} });
+
+    await expect(
+      load.parseAsync(["node", "lms", "test-model", "--auto", ...manualArguments]),
+    ).rejects.toThrow(`cannot be used with option '${option}'`);
+  });
+});
 
 describe("resolveCliSpeculativeDecodingLoadConfig", () => {
   it("omits speculative decoding when no speculative flags are provided", () => {
