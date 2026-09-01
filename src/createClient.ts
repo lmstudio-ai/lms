@@ -161,7 +161,7 @@ export async function createClient(
 
     if (serverStatus !== null) {
       if (opts.requireBionic === true && serverStatus.package !== "bionic") {
-        logger.error("This option is only available when connected to Bionic.");
+        logger.error("This option is only available when using Bionic.");
         process.exit(1);
       }
       const baseUrl = `ws://${host}:${serverStatus.port}`;
