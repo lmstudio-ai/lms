@@ -65,15 +65,33 @@ type LoadCommandOptions = OptionValues &
     estimateOnly?: boolean;
   };
 
-function assertSpeculativeDecodingSupportedForCliModel({
+interface AssertLoadConfigSupportedForCliModelOpts {
+  model: Pick<ModelInfo, "type">;
+  loadConfig: LLMLoadModelConfig;
+  logger: SimpleLogger;
+}
+
+/** Rejects LLM-only load settings after the CLI resolves an embedding model. */
+export function assertLoadConfigSupportedForCliModel({
   model,
   loadConfig,
   logger,
-}: {
-  model: ModelInfo;
-  loadConfig: LLMLoadModelConfig;
-  logger: SimpleLogger;
-}): void {
+}: AssertLoadConfigSupportedForCliModelOpts): void {
+  if (model.type !== "embedding") {
+    return;
+  }
+  if (loadConfig.autoFit === true) {
+    logger.errorWithoutPrefix(
+      makeTitledPrettyError(
+        "Unsupported load option",
+        text`
+          AutoFit can only be configured for LLM models.
+        `,
+      ).message,
+    );
+    process.exit(1);
+  }
+
   const hasSpeculativeDecodingLoadConfig =
     loadConfig.speculativeDraftMtp !== undefined ||
     loadConfig.speculativeDraftSimple !== undefined ||
@@ -81,7 +99,7 @@ function assertSpeculativeDecodingSupportedForCliModel({
     loadConfig.speculativeDraftMaxTokens !== undefined ||
     loadConfig.speculativeDraftMinTokens !== undefined ||
     loadConfig.speculativeDraftMinContinueProbability !== undefined;
-  if (!hasSpeculativeDecodingLoadConfig || model.type !== "embedding") {
+  if (!hasSpeculativeDecodingLoadConfig) {
     return;
   }
 
@@ -390,7 +408,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       process.exit(1);
     }
     if (estimateOnly === true) {
-      assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
+      assertLoadConfigSupportedForCliModel({ model, loadConfig, logger });
       const estimate = await (
         model.type === "llm" ? client.llm : client.embedding
       ).estimateResourcesUsage(model.modelKey, loadConfig, {
@@ -401,7 +419,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     }
 
     const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
-    assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
+    assertLoadConfigSupportedForCliModel({ model, loadConfig, logger });
     await loadModel({
       logger,
       namespace: loadNamespace,
@@ -518,7 +536,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   }
 
   if (estimateOnly === true) {
-    assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
+    assertLoadConfigSupportedForCliModel({ model, loadConfig, logger });
     const estimate = await (
       model.type === "llm" ? client.llm : client.embedding
     ).estimateResourcesUsage(model.modelKey, loadConfig, {
@@ -541,7 +559,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   });
 
   const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
-  assertSpeculativeDecodingSupportedForCliModel({ model, loadConfig, logger });
+  assertLoadConfigSupportedForCliModel({ model, loadConfig, logger });
   await loadModel({
     logger,
     namespace: loadNamespace,
