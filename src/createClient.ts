@@ -5,7 +5,6 @@ import { LMStudioClient, type LMStudioClientConstructorOpts } from "@lmstudio/sd
 import chalk from "chalk";
 import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
-import { isIPv6 } from "net";
 import { exists } from "./exists.js";
 import { lmsKey2Path } from "./lmstudioPaths.js";
 import { readLocalAPIServerPort, tryFindLocalAPIServer } from "./localAPIServer.js";
@@ -108,15 +107,10 @@ export async function createClient(
   } else if (host.includes("://")) {
     logger.error("Host should not include the protocol.");
     process.exit(1);
-  }
-  const unbracketedHost = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
-  const hostIsIPv6 = isIPv6(unbracketedHost);
-  if (host.includes(":") && !hostIsIPv6) {
+  } else if (host.includes(":")) {
     logger.error(`Host should not include the port number. Use ${chalk.yellow("--port")} instead.`);
     process.exit(1);
   }
-  // IPv6 literals need brackets when used in a URL.
-  const urlHost = hostIsIPv6 ? `[${unbracketedHost}]` : host;
   let auth: LMStudioClientConstructorOpts;
   if (isRemote) {
     // If connecting to a remote server, we will use a random client identifier.
@@ -170,7 +164,7 @@ export async function createClient(
         logger.error("This option is only available when using Bionic.");
         process.exit(1);
       }
-      const baseUrl = `ws://${urlHost}:${serverStatus.port}`;
+      const baseUrl = `ws://${host}:${serverStatus.port}`;
       logger.debug(`Found local API server at ${baseUrl}`);
 
       if (
@@ -201,7 +195,7 @@ export async function createClient(
   }
 
   logger.debug(`Connecting to server at ${host}:${port}`);
-  if (!(await checkHttpServer(logger, port, urlHost))) {
+  if (!(await checkHttpServer(logger, port, host))) {
     logger.error(
       text`
         The server does not appear to be running at ${host}:${port}. Please make sure the server
@@ -213,7 +207,7 @@ export async function createClient(
   if (opts.requireBionic === true) {
     let serverStatus;
     try {
-      serverStatus = await getAPIServerStatusOrThrow({ host: urlHost, port, timeoutMs: 3000 });
+      serverStatus = await getAPIServerStatusOrThrow({ host, port, timeoutMs: 3000 });
     } catch (error) {
       logger.debug(`Failed to verify Bionic server at ${host}:${port}:`, error);
       logger.error("This option is only available when using Bionic.");
@@ -224,7 +218,7 @@ export async function createClient(
       process.exit(1);
     }
   }
-  const baseUrl = `ws://${urlHost}:${port}`;
+  const baseUrl = `ws://${host}:${port}`;
   logger.debug(`Found server at ${port}`);
   const client = new LMStudioClient({
     baseUrl,
