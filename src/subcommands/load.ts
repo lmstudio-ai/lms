@@ -127,7 +127,8 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     new Option(
       "--auto",
       text`
-        Automatically choose context length and model placement based on available resources.
+        Automatically choose context length and model placement based on available resources. This
+        option is only available when using Bionic.
       `,
     ).conflicts(["gpu", "contextLength"]),
   )
