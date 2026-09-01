@@ -87,12 +87,14 @@ export interface CreateClientArgs {
   port?: number;
 }
 
+export interface CreateClientOpts {}
 const lmsKey = "<LMS-CLI-LMS-KEY>";
 
 /** Resolves the requested LM Studio instance and creates the authenticated CLI client. */
 export async function createClient(
   logger: SimpleLogger,
   args: CreateClientArgs & LogLevelArgs = {},
+  _opts: CreateClientOpts = {},
 ) {
   let { host, port } = args;
   let isRemote = true;
