@@ -136,7 +136,8 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       "--gpu <offload-ratio>",
       text`
         GPU offload ratio. Valid values: "off" (disable GPU), "max" (full offload), or a number
-        between 0 and 1 (e.g., "0.5" for 50% offload). Providing this option disables AutoFit.
+        between 0 and 1 (e.g., "0.5" for 50% offload). By default, LM Studio automatically
+        determines the optimal offload ratio.
       `,
     ).argParser(gpuOptionParser),
   )
@@ -144,8 +145,8 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     new Option(
       "-c, --context-length <length>",
       text`
-        The number of tokens to consider as context when generating text. Providing this option
-        disables AutoFit. If not provided, the configured default will be used.
+        The number of tokens to consider as context when generating text. If not provided, the
+        default value will be used.
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
