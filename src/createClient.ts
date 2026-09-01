@@ -1,6 +1,6 @@
 import { Option, type Command, type OptionValues } from "@commander-js/extra-typings";
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
-import { findOrStartLlmster, getAPIServerStatusOrThrow } from "@lmstudio/lms-common-server";
+import { findOrStartLlmster } from "@lmstudio/lms-common-server";
 import { LMStudioClient, type LMStudioClientConstructorOpts } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { randomBytes } from "crypto";
@@ -87,17 +87,12 @@ export interface CreateClientArgs {
   port?: number;
 }
 
-export interface CreateClientOpts {
-  /** Rejects a discovered local server unless it is Bionic. */
-  requireBionic?: boolean;
-}
 const lmsKey = "<LMS-CLI-LMS-KEY>";
 
 /** Resolves the requested LM Studio instance and creates the authenticated CLI client. */
 export async function createClient(
   logger: SimpleLogger,
   args: CreateClientArgs & LogLevelArgs = {},
-  opts: CreateClientOpts = {},
 ) {
   let { host, port } = args;
   let isRemote = true;
@@ -160,10 +155,6 @@ export async function createClient(
         : await tryFindLocalAPIServer(logger);
 
     if (serverStatus !== null) {
-      if (opts.requireBionic === true && serverStatus.package !== "bionic") {
-        logger.error("This option is only available when using Bionic.");
-        process.exit(1);
-      }
       const baseUrl = `ws://${host}:${serverStatus.port}`;
       logger.debug(`Found local API server at ${baseUrl}`);
 
@@ -203,20 +194,6 @@ export async function createClient(
       `,
     );
     process.exit(1);
-  }
-  if (opts.requireBionic === true) {
-    let serverStatus;
-    try {
-      serverStatus = await getAPIServerStatusOrThrow({ host, port, timeoutMs: 3000 });
-    } catch (error) {
-      logger.debug(`Failed to verify Bionic server at ${host}:${port}:`, error);
-      logger.error("This option is only available when using Bionic.");
-      process.exit(1);
-    }
-    if (serverStatus.package !== "bionic") {
-      logger.error("This option is only available when using Bionic.");
-      process.exit(1);
-    }
   }
   const baseUrl = `ws://${host}:${port}`;
   logger.debug(`Found server at ${port}`);

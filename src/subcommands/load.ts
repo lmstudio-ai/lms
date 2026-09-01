@@ -327,7 +327,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   }
   let modelKey = modelKeyArg;
   const logger = createLogger(options);
-  await using client = await createClient(logger, options, { requireBionic: auto === true });
+  await using client = await createClient(logger, options);
   const cliPref = await getCliPref(logger);
   const deviceNameResolver = await createDeviceNameResolver(client, logger);
 
