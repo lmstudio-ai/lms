@@ -1,4 +1,21 @@
+import { load } from "./load.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
+
+jest.mock("@inquirer/prompts", () => ({ search: jest.fn() }));
+
+describe("load command", () => {
+  it.each([
+    { arguments: ["--gpu", "max"], option: "--gpu <offload-ratio>" },
+    { arguments: ["--context-length", "4096"], option: "-c, --context-length <length>" },
+  ])("rejects AutoFit with $option", async ({ arguments: manualArguments, option }) => {
+    load.exitOverride();
+    load.configureOutput({ writeErr: () => {} });
+
+    await expect(
+      load.parseAsync(["node", "lms", "test-model", "--auto", ...manualArguments]),
+    ).rejects.toThrow(`cannot be used with option '${option}'`);
+  });
+});
 
 describe("resolveCliSpeculativeDecodingLoadConfig", () => {
   it("omits speculative decoding when no speculative flags are provided", () => {

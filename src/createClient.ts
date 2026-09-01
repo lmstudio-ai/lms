@@ -87,14 +87,17 @@ export interface CreateClientArgs {
   port?: number;
 }
 
-export interface CreateClientOpts {}
+export interface CreateClientOpts {
+  /** Rejects a discovered local server unless it is Bionic. */
+  requireBionic?: boolean;
+}
 const lmsKey = "<LMS-CLI-LMS-KEY>";
 
 /** Resolves the requested LM Studio instance and creates the authenticated CLI client. */
 export async function createClient(
   logger: SimpleLogger,
   args: CreateClientArgs & LogLevelArgs = {},
-  _opts: CreateClientOpts = {},
+  opts: CreateClientOpts = {},
 ) {
   let { host, port } = args;
   let isRemote = true;
@@ -157,6 +160,10 @@ export async function createClient(
         : await tryFindLocalAPIServer(logger);
 
     if (serverStatus !== null) {
+      if (opts.requireBionic === true && serverStatus.package !== "bionic") {
+        logger.error("This option is only available when connected to Bionic.");
+        process.exit(1);
+      }
       const baseUrl = `ws://${host}:${serverStatus.port}`;
       logger.debug(`Found local API server at ${baseUrl}`);
 

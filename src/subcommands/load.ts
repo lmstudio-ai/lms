@@ -48,6 +48,7 @@ type LoadCommandOptions = OptionValues &
   CreateClientArgs &
   LogLevelArgs & {
     ttl?: number;
+    auto?: boolean;
     gpu?: number;
     contextLength?: number;
     parallel?: number;
@@ -124,11 +125,18 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   )
   .addOption(
     new Option(
+      "--auto",
+      text`
+        Automatically choose context length and model placement based on available resources.
+      `,
+    ).conflicts(["gpu", "contextLength"]),
+  )
+  .addOption(
+    new Option(
       "--gpu <offload-ratio>",
       text`
         GPU offload ratio. Valid values: "off" (disable GPU), "max" (full offload), or a number
-        between 0 and 1 (e.g., "0.5" for 50% offload). By default, LM Studio automatically
-        determines the optimal offload ratio.
+        between 0 and 1 (e.g., "0.5" for 50% offload). Providing this option disables AutoFit.
       `,
     ).argParser(gpuOptionParser),
   )
@@ -136,8 +144,8 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     new Option(
       "-c, --context-length <length>",
       text`
-        The number of tokens to consider as context when generating text. If not provided, the
-        default value will be used.
+        The number of tokens to consider as context when generating text. Providing this option
+        disables AutoFit. If not provided, the configured default will be used.
       `,
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
@@ -263,6 +271,7 @@ addLogLevelOptions(loadCommand);
 loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   const {
     ttl: ttlSeconds,
+    auto,
     gpu,
     contextLength,
     parallel: maxParallelPredictions,
@@ -279,6 +288,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     estimateOnly = false,
   } = options;
   const loadConfig: LLMLoadModelConfig = {
+    autoFit: auto === true ? true : undefined,
     contextLength,
     maxParallelPredictions,
     ...resolveCliSpeculativeDecodingLoadConfig({
@@ -297,7 +307,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   }
   let modelKey = modelKeyArg;
   const logger = createLogger(options);
-  await using client = await createClient(logger, options);
+  await using client = await createClient(logger, options, { requireBionic: auto === true });
   const cliPref = await getCliPref(logger);
   const deviceNameResolver = await createDeviceNameResolver(client, logger);
 
