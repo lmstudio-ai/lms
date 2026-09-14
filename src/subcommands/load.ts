@@ -132,6 +132,37 @@ function hasMultipleModelKeys(models: Array<ModelInfo>): boolean {
   return modelKeys.size > 1;
 }
 
+/**
+ * Resolve a concrete variant key printed by `lms ls --variants`.
+ *
+ * `listDownloadedModels()` returns the base model entries, while the SDK load
+ * call accepts the concrete variant key. Keep the additional lookup lazy so
+ * the normal `lms load` path does not make one request per downloaded model.
+ */
+export async function resolveDownloadedModelVariant({
+  client,
+  modelKey,
+  models,
+}: {
+  client: LMStudioClient;
+  modelKey: string;
+  models: Array<ModelInfo>;
+}): Promise<ModelInfo | undefined> {
+  const separatorIndex = modelKey.lastIndexOf("@");
+  if (separatorIndex === -1) {
+    return undefined;
+  }
+
+  const baseModelKey = modelKey.slice(0, separatorIndex);
+  const baseModel = models.find(model => model.modelKey === baseModelKey);
+  if (baseModel === undefined) {
+    return undefined;
+  }
+
+  const variants = await client.system.listDownloadedModelVariants(baseModel.modelKey);
+  return variants.find(variant => variant.modelKey === modelKey);
+}
+
 const loadCommand = new Command<[], LoadCommandOptions>()
   .name("load")
   .description("Load a model")
@@ -440,7 +471,13 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
 
   let model: ModelInfo;
   let deferToPreferredDevice = false;
-  if (yes) {
+  const variantModel =
+    modelKey === undefined
+      ? undefined
+      : await resolveDownloadedModelVariant({ client, modelKey, models });
+  if (variantModel !== undefined) {
+    model = variantModel;
+  } else if (yes) {
     if (initialFilteredModels.length === 0) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(

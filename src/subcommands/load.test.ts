@@ -1,5 +1,10 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
-import { assertLoadConfigSupportedForCliModel, load } from "./load.js";
+import { type LMStudioClient, type ModelInfo } from "@lmstudio/sdk";
+import {
+  assertLoadConfigSupportedForCliModel,
+  load,
+  resolveDownloadedModelVariant,
+} from "./load.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
 
 jest.mock("@inquirer/prompts", () => ({ search: jest.fn() }));
@@ -25,6 +30,59 @@ describe("assertLoadConfigSupportedForCliModel", () => {
     expect(logger.errorWithoutPrefix).toHaveBeenCalledWith(
       expect.stringContaining("AutoFit can only be configured for LLM models."),
     );
+  });
+});
+
+describe("resolveDownloadedModelVariant", () => {
+  const baseModel = { modelKey: "google/gemma-4-26b-a4b" } as ModelInfo;
+  const variantModel = {
+    modelKey: "google/gemma-4-26b-a4b@4bit",
+  } as ModelInfo;
+
+  it("resolves an exact variant key emitted by lms ls --variants", async () => {
+    const listDownloadedModelVariants = jest.fn().mockResolvedValue([variantModel]);
+    const client = {
+      system: { listDownloadedModelVariants },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariant({
+        client,
+        modelKey: variantModel.modelKey,
+        models: [baseModel],
+      }),
+    ).resolves.toBe(variantModel);
+    expect(listDownloadedModelVariants).toHaveBeenCalledWith(baseModel.modelKey);
+  });
+
+  it("does not query variants for a base model key", async () => {
+    const listDownloadedModelVariants = jest.fn();
+    const client = {
+      system: { listDownloadedModelVariants },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariant({
+        client,
+        modelKey: baseModel.modelKey,
+        models: [baseModel],
+      }),
+    ).resolves.toBeUndefined();
+    expect(listDownloadedModelVariants).not.toHaveBeenCalled();
+  });
+
+  it("returns undefined when the variant is not downloaded", async () => {
+    const client = {
+      system: { listDownloadedModelVariants: jest.fn().mockResolvedValue([baseModel]) },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariant({
+        client,
+        modelKey: "google/gemma-4-26b-a4b@q4_k_m",
+        models: [baseModel],
+      }),
+    ).resolves.toBeUndefined();
   });
 });
 
