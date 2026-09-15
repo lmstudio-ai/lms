@@ -3,7 +3,7 @@ import { type LMStudioClient, type ModelInfo } from "@lmstudio/sdk";
 import {
   assertLoadConfigSupportedForCliModel,
   load,
-  resolveDownloadedModelVariant,
+  resolveDownloadedModelVariants,
 } from "./load.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
 
@@ -47,12 +47,12 @@ describe("resolveDownloadedModelVariant", () => {
     } as unknown as LMStudioClient;
 
     await expect(
-      resolveDownloadedModelVariant({
+      resolveDownloadedModelVariants({
         client,
         modelKey: variantModel.modelKey,
         models: [baseModel],
       }),
-    ).resolves.toBe(variantModel);
+    ).resolves.toEqual([variantModel]);
     expect(listDownloadedModelVariants).toHaveBeenCalledWith(baseModel.modelKey);
   });
 
@@ -63,12 +63,12 @@ describe("resolveDownloadedModelVariant", () => {
     } as unknown as LMStudioClient;
 
     await expect(
-      resolveDownloadedModelVariant({
+      resolveDownloadedModelVariants({
         client,
         modelKey: baseModel.modelKey,
         models: [baseModel],
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual([]);
     expect(listDownloadedModelVariants).not.toHaveBeenCalled();
   });
 
@@ -78,12 +78,12 @@ describe("resolveDownloadedModelVariant", () => {
     } as unknown as LMStudioClient;
 
     await expect(
-      resolveDownloadedModelVariant({
+      resolveDownloadedModelVariants({
         client,
         modelKey: "google/gemma-4-26b-a4b@q4_k_m",
         models: [baseModel],
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual([]);
   });
 
   it("does not resolve a variant hosted only on a linked device", async () => {
@@ -96,12 +96,12 @@ describe("resolveDownloadedModelVariant", () => {
     } as unknown as LMStudioClient;
 
     await expect(
-      resolveDownloadedModelVariant({
+      resolveDownloadedModelVariants({
         client,
         modelKey: variantModel.modelKey,
         models: [baseModel],
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual([]);
   });
 
   it("prefers a matching variant on an eligible device", async () => {
@@ -116,12 +116,38 @@ describe("resolveDownloadedModelVariant", () => {
     } as unknown as LMStudioClient;
 
     await expect(
-      resolveDownloadedModelVariant({
+      resolveDownloadedModelVariants({
         client,
         modelKey: variantModel.modelKey,
         models: [baseModel],
       }),
-    ).resolves.toBe(variantModel);
+    ).resolves.toEqual([variantModel]);
+  });
+
+  it("keeps matching variants on each eligible device for preference selection", async () => {
+    const preferredDeviceVariant = {
+      ...variantModel,
+      deviceIdentifier: "preferred-device",
+    } as ModelInfo;
+    const otherDeviceVariant = { ...variantModel, deviceIdentifier: "other-device" } as ModelInfo;
+    const client = {
+      system: {
+        listDownloadedModelVariants: jest
+          .fn()
+          .mockResolvedValue([preferredDeviceVariant, otherDeviceVariant]),
+      },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariants({
+        client,
+        modelKey: variantModel.modelKey,
+        models: [
+          { ...baseModel, deviceIdentifier: "preferred-device" } as ModelInfo,
+          { ...baseModel, deviceIdentifier: "other-device" } as ModelInfo,
+        ],
+      }),
+    ).resolves.toEqual([preferredDeviceVariant, otherDeviceVariant]);
   });
 });
 

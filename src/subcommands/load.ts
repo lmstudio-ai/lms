@@ -139,7 +139,7 @@ function hasMultipleModelKeys(models: Array<ModelInfo>): boolean {
  * call accepts the concrete variant key. Keep the additional lookup lazy so
  * the normal `lms load` path does not make one request per downloaded model.
  */
-export async function resolveDownloadedModelVariant({
+export async function resolveDownloadedModelVariants({
   client,
   modelKey,
   models,
@@ -147,16 +147,16 @@ export async function resolveDownloadedModelVariant({
   client: LMStudioClient;
   modelKey: string;
   models: Array<ModelInfo>;
-}): Promise<ModelInfo | undefined> {
+}): Promise<Array<ModelInfo>> {
   const separatorIndex = modelKey.lastIndexOf("@");
   if (separatorIndex === -1) {
-    return undefined;
+    return [];
   }
 
   const baseModelKey = modelKey.slice(0, separatorIndex);
   const baseModel = models.find(model => model.modelKey === baseModelKey);
   if (baseModel === undefined) {
-    return undefined;
+    return [];
   }
 
   const variants = await client.system.listDownloadedModelVariants(baseModel.modelKey);
@@ -165,7 +165,7 @@ export async function resolveDownloadedModelVariant({
   // filtered base-model list so flags such as `--local` cannot accidentally
   // load a remote variant.
   const eligibleDeviceIdentifiers = new Set(models.map(model => model.deviceIdentifier));
-  return variants.find(
+  return variants.filter(
     variant =>
       eligibleDeviceIdentifiers.has(variant.deviceIdentifier) && variant.modelKey === modelKey,
   );
@@ -479,12 +479,16 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
 
   let model: ModelInfo;
   let deferToPreferredDevice = false;
-  const variantModel =
+  const variantModels =
     modelKey === undefined
       ? undefined
-      : await resolveDownloadedModelVariant({ client, modelKey, models });
-  if (variantModel !== undefined) {
-    model = variantModel;
+      : await resolveDownloadedModelVariants({ client, modelKey, models });
+  if (variantModels !== undefined && variantModels.length > 0) {
+    model = variantModels[0];
+    // If the variant exists on multiple eligible devices, let the SDK honor
+    // the configured preferred device just as it does for duplicate base
+    // model matches. A single variant must remain pinned to its only device.
+    deferToPreferredDevice = variantModels.length > 1 && !hasDuplicatesOnSameDevice(variantModels);
   } else if (yes) {
     if (initialFilteredModels.length === 0) {
       logger.errorWithoutPrefix(
