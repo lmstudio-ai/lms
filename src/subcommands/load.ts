@@ -160,7 +160,15 @@ export async function resolveDownloadedModelVariant({
   }
 
   const variants = await client.system.listDownloadedModelVariants(baseModel.modelKey);
-  return variants.find(variant => variant.modelKey === modelKey);
+  // `listDownloadedModelVariants` can include copies hosted by linked LM Link
+  // devices. Restrict the result to the same device set as the already
+  // filtered base-model list so flags such as `--local` cannot accidentally
+  // load a remote variant.
+  const eligibleDeviceIdentifiers = new Set(models.map(model => model.deviceIdentifier));
+  return variants.find(
+    variant =>
+      eligibleDeviceIdentifiers.has(variant.deviceIdentifier) && variant.modelKey === modelKey,
+  );
 }
 
 const loadCommand = new Command<[], LoadCommandOptions>()
