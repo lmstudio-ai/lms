@@ -187,11 +187,14 @@ topCommand.action(async (options: TopCommandOptions) => {
     isLocal = h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "0.0.0.0" || h === "::";
   }
 
-  // Create LMStudio client (with checkHealth: false to tolerate starting while offline, preserving local auth passkey)
+  // Create LMStudio client (with checkHealth: false to tolerate starting while offline)
+  // Auth remoteness is determined by whether --host was explicitly supplied (not by its value),
+  // so tunneled loopback addresses don't leak the local privileged passkey.
+  const hostExplicit = options.host !== undefined;
   const client = await createClient(
     logger,
     { ...options, host, port },
-    { checkHealth: false, isRemote: !isLocal },
+    { checkHealth: false, isRemote: hostExplicit },
   );
   const collector = new TopDataCollector(client, logger, host, port, isLocal);
 

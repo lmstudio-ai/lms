@@ -1332,6 +1332,46 @@ describe("Codex Review Fixes - endpoint, IPv6, LAN bind locality, and busyCount 
     fetchSpy.mockRestore();
   });
 
+  it("polling resets stale stream-derived activePredictions to totalBusy", async () => {
+    const client = createMockClient();
+    const logger = createMockLogger();
+    const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async (url: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("lmstudio-greeting")) {
+        return { status: 200, json: async () => ({ lmstudio: true }) } as any;
+      }
+      if (urlStr.includes("/api/status")) {
+        return {
+          status: 200,
+          json: async () => ({
+            status: "online",
+            pid: 123,
+            isDaemon: false,
+            version: "1.0.0",
+            build: "test",
+            loadedModels: [],
+            hardware: null,
+            port: 1234,
+            host: "127.0.0.1",
+          }),
+        } as any;
+      }
+      return { status: 404, json: async () => ({}) } as any;
+    });
+
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234, true);
+
+    // Simulate stream-derived count that's now stale (stream decremented to 0 already)
+    (collector as any).streamActive = true;
+    (collector as any).tracker.activePredictions = 3;
+
+    // Polling observes 0 busy models - should reset to 0, not preserve the stale 3
+    const snapshot = await collector.fetchSnapshot();
+    expect(snapshot.throughput.activePredictions).toBe(0);
+
+    fetchSpy.mockRestore();
+  });
+
   it("advances log offset to end when streaming is active or live activity is cleared", () => {
     const client = createMockClient();
     const logger = createMockLogger();

@@ -839,12 +839,11 @@ export class TopDataCollector {
     const activeModelIdentifier = runningModel ? runningModel.identifier : loadedModels[0]?.identifier ?? "LLM";
     this.refreshLogs(activeModelIdentifier);
 
-    // Update active predictions preserving live stream counter if active, or sync to totalBusy
-    if (this.streamActive) {
-      this.tracker.activePredictions = Math.max(this.tracker.activePredictions, totalBusy);
-    } else {
-      this.tracker.activePredictions = totalBusy;
-    }
+    // Update active predictions: always sync to the polled totalBusy count.
+    // Stream events update the counter between polls, but each poll snapshot is authoritative
+    // to prevent a stale stream-derived count from being preserved by Math.max when
+    // a stream decrement races with a poll observation.
+    this.tracker.activePredictions = totalBusy;
 
     if (totalBusy === 0 && this.tracker.activePredictions === 0) {
       this.tracker.currentTokensPerSec = 0;
