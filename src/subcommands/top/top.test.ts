@@ -1217,6 +1217,80 @@ describe("Codex Review Fixes - endpoint, IPv6, LAN bind locality, and busyCount 
     // RPC state: 1, stream: 1, log task: 1. Total busyCount should be deduplicated to 1 (not 3)
     expect(snapshot.throughput.activePredictions).toBe(1);
   });
+
+  it("createClient tolerates offline server when checkHealth is false", async () => {
+    const logger = createMockLogger();
+    const fetchSpy = jest.spyOn(global, "fetch").mockRejectedValue(new Error("Connection refused"));
+
+    const client = await createClientModule.createClient(
+      logger,
+      { host: "127.0.0.1", port: 9999 },
+      { checkHealth: false },
+    );
+    expect(client).toBeDefined();
+
+    fetchSpy.mockRestore();
+  });
+
+  it("createClient accepts IPv6 hosts without raising port syntax error", async () => {
+    const logger = createMockLogger();
+    const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async () => {
+      return { status: 200, json: async () => ({ lmstudio: true }) } as any;
+    });
+
+    const client = await createClientModule.createClient(
+      logger,
+      { host: "::1", port: 1234 },
+      { checkHealth: true },
+    );
+    expect(client).toBeDefined();
+
+    fetchSpy.mockRestore();
+  });
+
+  it("tracks parallel slot timing candidates independently without cross-slot corruption", () => {
+    const client = createMockClient();
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234);
+
+    const parallelChunk = [
+      `[2026-09-16 20:00:00] [info] slot 0 print_timing: prompt eval time = 40.00 ms / 10 tokens`,
+      `[2026-09-16 20:00:01] [info] slot 1 print_timing: prompt eval time = 80.00 ms / 20 tokens`,
+      `[2026-09-16 20:00:02] [info] slot 0 print_timing:        eval time = 400.00 ms / 20 tokens (25.00 ms per token, 50.00 tokens per second)`,
+      `[2026-09-16 20:00:03] [info] slot 1 print_timing:        eval time = 600.00 ms / 30 tokens (20.00 ms per token, 50.00 tokens per second)`,
+      `[2026-09-16 20:00:04] [info] slot 0 print_timing:       total time = 440.00 ms / 30 tokens`,
+      `[2026-09-16 20:00:05] [info] slot 1 print_timing:       total time = 680.00 ms / 50 tokens`,
+    ].join("\n");
+
+    collector.parseLogChunk(parallelChunk, "test-model", false);
+    const metrics = collector.getThroughputMetrics();
+
+    expect(metrics.recentPredictions).toHaveLength(2);
+    // Slot 1 completed second -> index 0
+    expect(metrics.recentPredictions[0].promptTokens).toBe(20);
+    expect(metrics.recentPredictions[0].predictedTokens).toBe(30);
+
+    // Slot 0 completed first -> index 1
+    expect(metrics.recentPredictions[1].promptTokens).toBe(10);
+    expect(metrics.recentPredictions[1].predictedTokens).toBe(20);
+  });
+
+  it("clears live activity counters when snapshot detects offline server", async () => {
+    const client = createMockClient();
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 9999);
+
+    // Set live in-flight activity state
+    (collector as any).tracker.activePredictions = 2;
+    (collector as any).tracker.currentTokensPerSec = 35.5;
+    (collector as any).activeModelRequests.set("test-model", 1);
+
+    const snapshot = await collector.fetchSnapshot();
+
+    expect(snapshot.server.status).toBe("offline");
+    expect(snapshot.throughput.activePredictions).toBe(0);
+    expect(snapshot.throughput.currentTokensPerSec).toBe(0);
+  });
 });
 
 

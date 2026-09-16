@@ -37,8 +37,14 @@ export class TopDataCollector {
   private nextRecordId = 1;
   private currentLogFilePath: string | null = null;
   private lastLogReadOffset = 0;
-  private lastPromptCandidate: { timeMs: number; tokens: number; timestamp: number } | null = null;
-  private lastEvalCandidate: { timeMs: number; tokens: number; tokPerSec: number; timestamp: number } | null = null;
+  private readonly promptCandidates = new Map<
+    string,
+    { timeMs: number; tokens: number; timestamp: number }
+  >();
+  private readonly evalCandidates = new Map<
+    string,
+    { timeMs: number; tokens: number; tokPerSec: number; timestamp: number; model: string }
+  >();
   private currentLogTimestamp = Date.now();
   private activeLogModel: string = "LLM";
   private knownModelMap: Array<{
@@ -319,13 +325,16 @@ export class TopDataCollector {
         this.activeLogModel = this.resolveModelName(loadMatch[1], defaultModelIdentifier);
       }
 
+      const slotMatch = /(?:slot\s*(\d+)|slot_id\s*=\s*(\d+)|task\s*(\d+))/i.exec(line);
+      const slotKey = slotMatch ? slotMatch[1] || slotMatch[2] || slotMatch[3] : "default";
+
       const promptMatch = promptRegex.exec(line);
       if (promptMatch !== null) {
-        this.lastPromptCandidate = {
+        this.promptCandidates.set(slotKey, {
           timeMs: parseFloat(promptMatch[1]),
           tokens: parseInt(promptMatch[2], 10),
           timestamp: this.currentLogTimestamp,
-        };
+        });
       }
 
       // Track active tasks from engine logs (launching vs releasing)
@@ -363,35 +372,36 @@ export class TopDataCollector {
 
       const evalMatch = evalRegex.exec(line);
       if (evalMatch !== null) {
-        this.lastEvalCandidate = {
+        this.evalCandidates.set(slotKey, {
           timeMs: parseFloat(evalMatch[1]),
           tokens: parseInt(evalMatch[2], 10),
           tokPerSec: evalMatch[3] ? parseFloat(evalMatch[3]) : 0,
           timestamp: this.currentLogTimestamp,
-        };
+          model: this.activeLogModel !== "LLM" ? this.activeLogModel : defaultModelIdentifier,
+        });
       }
 
       const totalMatch = totalRegex.exec(line);
-      if (totalMatch !== null && this.lastEvalCandidate !== null) {
-        const promptTokens = this.lastPromptCandidate?.tokens ?? 0;
-        const predTokens = this.lastEvalCandidate.tokens;
+      const evalCand =
+        this.evalCandidates.get(slotKey) ?? this.evalCandidates.values().next().value;
+      if (totalMatch !== null && evalCand !== undefined) {
+        const promptCand =
+          this.promptCandidates.get(slotKey) ?? this.promptCandidates.values().next().value;
+        const promptTokens = promptCand?.tokens ?? 0;
+        const predTokens = evalCand.tokens;
         const totalTimeSec = parseFloat(totalMatch[1]) / 1000;
         const totalTokens = parseInt(totalMatch[2], 10);
         const evalTokPerSec =
-          this.lastEvalCandidate.tokPerSec > 0
-            ? this.lastEvalCandidate.tokPerSec
-            : predTokens /
-              Math.max(0.001, this.lastEvalCandidate.timeMs / 1000);
-        const ttftSec = (this.lastPromptCandidate?.timeMs ?? 0) / 1000;
+          evalCand.tokPerSec > 0
+            ? evalCand.tokPerSec
+            : predTokens / Math.max(0.001, evalCand.timeMs / 1000);
+        const ttftSec = (promptCand?.timeMs ?? 0) / 1000;
 
-        const recordModel =
-          this.activeLogModel !== "LLM"
-            ? this.activeLogModel
-            : defaultModelIdentifier;
+        const recordModel = evalCand.model;
 
         const record: RecentPredictionRecord = {
           id: String(this.nextRecordId++),
-          timestamp: this.lastEvalCandidate.timestamp,
+          timestamp: evalCand.timestamp,
           modelIdentifier: recordModel,
           promptTokens,
           predictedTokens: predTokens,
@@ -411,6 +421,9 @@ export class TopDataCollector {
           this.activeLogTasks.clear();
         }
 
+        this.promptCandidates.delete(slotKey);
+        this.evalCandidates.delete(slotKey);
+
         this.tracker.history.unshift(record);
         if (this.tracker.history.length > 20) {
           this.tracker.history.pop();
@@ -427,9 +440,6 @@ export class TopDataCollector {
           this.tracker.totalTokensGenerated += predTokens;
           this.tracker.totalPromptTokens += promptTokens;
         }
-
-        this.lastPromptCandidate = null;
-        this.lastEvalCandidate = null;
       }
     }
   }
@@ -530,10 +540,21 @@ export class TopDataCollector {
     };
   }
 
+  private clearLiveActivity(): void {
+    this.tracker.activePredictions = 0;
+    this.tracker.currentTokensPerSec = 0;
+    this.streamActive = false;
+    this.activeModelRequests.clear();
+    this.activeLogTasks.clear();
+    this.promptCandidates.clear();
+    this.evalCandidates.clear();
+  }
+
   public async fetchSnapshot(): Promise<TopSnapshot> {
     const isRunning = await checkHttpServer(this.logger, this.port, this.host);
 
     if (!isRunning) {
+      this.clearLiveActivity();
       return {
         server: {
           status: "offline",
