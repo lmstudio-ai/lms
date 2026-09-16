@@ -41,7 +41,11 @@ export class TopDataCollector {
   private lastEvalCandidate: { timeMs: number; tokens: number; tokPerSec: number; timestamp: number } | null = null;
   private currentLogTimestamp = Date.now();
   private activeLogModel: string = "LLM";
-  private knownModelMap: Array<{ key: string; keywords: string[] }> = [];
+  private knownModelMap: Array<{
+    key: string;
+    exactMatches: string[];
+    keywords: string[];
+  }> = [];
   private readonly instanceRefModelMap = new Map<string, string>();
   private streamActive: boolean = false;
   private readonly activeModelRequests = new Map<string, number>();
@@ -66,24 +70,27 @@ export class TopDataCollector {
     downloadedModels: Array<{ modelKey: string; path?: string }>,
     loadedModels: LoadedModelItem[],
   ): void {
-    const map: Array<{ key: string; keywords: string[] }> = [];
+    const map: Array<{
+      key: string;
+      exactMatches: string[];
+      keywords: string[];
+    }> = [];
 
     for (const lm of loadedModels) {
-      const kw = [lm.identifier.toLowerCase(), lm.modelKey.toLowerCase()];
+      const exactMatches = [lm.identifier.toLowerCase(), lm.modelKey.toLowerCase()];
       const parts = lm.modelKey.toLowerCase().split(/[/_.-]/).filter(p => p.length > 2);
-      kw.push(...parts);
-      map.push({ key: lm.identifier, keywords: [...new Set(kw)] });
+      map.push({ key: lm.identifier, exactMatches, keywords: [...new Set(parts)] });
     }
 
     for (const dm of downloadedModels) {
-      const kw = [dm.modelKey.toLowerCase()];
+      const exactMatches = [dm.modelKey.toLowerCase()];
       if (dm.path) {
-        kw.push(dm.path.replace(/\\/g, "/").toLowerCase());
-        kw.push(path.basename(dm.path).toLowerCase());
+        const normPath = dm.path.replace(/\\/g, "/").toLowerCase();
+        exactMatches.push(normPath);
+        exactMatches.push(path.basename(normPath).toLowerCase());
       }
       const parts = dm.modelKey.toLowerCase().split(/[/_.-]/).filter(p => p.length > 2);
-      kw.push(...parts);
-      map.push({ key: dm.modelKey, keywords: [...new Set(kw)] });
+      map.push({ key: dm.modelKey, exactMatches, keywords: [...new Set(parts)] });
     }
 
     this.knownModelMap = map;
@@ -92,21 +99,45 @@ export class TopDataCollector {
   public resolveModelName(filePath: string, defaultName: string = "LLM"): string {
     const norm = filePath.replace(/\\/g, "/");
     const lower = norm.toLowerCase();
+    const base = path.basename(norm, path.extname(norm)).toLowerCase();
 
+    // 1. First priority: Exact match on full identifier, modelKey, or path/basename
     for (const item of this.knownModelMap) {
-      if (item.keywords.some(kw => lower.includes(kw))) {
+      for (const exact of item.exactMatches) {
+        if (lower === exact || base === exact) {
+          return item.key;
+        }
+      }
+    }
+
+    // 2. Second priority: Full identifier or modelKey contained in path (longer/more specific keys first)
+    const sortedByLength = [...this.knownModelMap].sort((a, b) => b.key.length - a.key.length);
+    for (const item of sortedByLength) {
+      for (const exact of item.exactMatches) {
+        if (exact.length >= 4 && lower.includes(exact)) {
+          return item.key;
+        }
+      }
+    }
+
+    // 3. Third priority: Specific keywords, excluding generic vendor tokens that cause collisions
+    for (const item of sortedByLength) {
+      const specificKeywords = item.keywords.filter(
+        kw => kw !== "google" && kw !== "meta" && kw !== "microsoft" && kw !== "ai" && kw.length >= 3,
+      );
+      if (specificKeywords.some(kw => lower.includes(kw))) {
         return item.key;
       }
     }
 
-    // Heuristics for popular model families
+    // 4. Fallback heuristics for popular model families
     if (lower.includes("deepseek")) return "deepseek-r1-distill-qwen-7b";
     if (lower.includes("gemma")) return "google/gemma-4-12b-qat";
     if (lower.includes("qwen")) return "qwen";
     if (lower.includes("llama")) return "llama";
 
-    const base = path.basename(norm, path.extname(norm));
-    return base || defaultName;
+    const baseName = path.basename(norm, path.extname(norm));
+    return baseName || defaultName;
   }
 
   private getLatestLogFilePath(): string | null {
@@ -306,6 +337,7 @@ export class TopDataCollector {
           totalTimeSec: totalTimeSec,
           stopReason: "completed",
           source: "log",
+          isBackfill: isInitialBackfill,
         };
 
         this.tracker.history.unshift(record);
@@ -313,15 +345,14 @@ export class TopDataCollector {
           this.tracker.history.pop();
         }
 
-        if (evalTokPerSec > 0) {
-          this.tracker.currentTokensPerSec = evalTokPerSec;
-        }
-        if (ttftSec > 0) {
-          this.tracker.lastTtftSec = ttftSec;
-        }
-
-        // Only increment session totals for live inferences, not initial historical log backfill
+        // Only update current speed, TTFT, and session totals for live inferences, not initial historical log backfill
         if (!isInitialBackfill) {
+          if (evalTokPerSec > 0) {
+            this.tracker.currentTokensPerSec = evalTokPerSec;
+          }
+          if (ttftSec > 0) {
+            this.tracker.lastTtftSec = ttftSec;
+          }
           this.tracker.totalTokensGenerated += predTokens;
           this.tracker.totalPromptTokens += promptTokens;
         }
@@ -408,7 +439,8 @@ export class TopDataCollector {
   }
 
   public getThroughputMetrics(): ThroughputMetrics {
-    const validToks = this.tracker.history
+    const liveRecords = this.tracker.history.filter(r => !r.isBackfill);
+    const validToks = liveRecords
       .map(r => r.tokensPerSecond)
       .filter(v => v > 0);
     const avgToks =

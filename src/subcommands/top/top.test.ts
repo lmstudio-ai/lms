@@ -203,6 +203,38 @@ describe("TopDataCollector - model name resolution heuristics", () => {
     expect(collector.resolveModelName("C:/cache/phi-3-mini.gguf")).toBe("custom-loaded-phi3");
   });
 
+  it("prefers exact model matches before generic keyword heuristics", () => {
+    collector.updateKnownModels(
+      [],
+      [
+        {
+          identifier: "google/gemma-4-12b-qat",
+          modelKey: "google/gemma-4-12b-qat",
+          type: "llm",
+          sizeBytes: 7000000,
+          contextLength: 8192,
+          parallel: 1,
+          status: "IDLE",
+          queued: 0,
+        },
+        {
+          identifier: "google/gemma-2-27b-it",
+          modelKey: "google/gemma-2-27b-it",
+          type: "llm",
+          sizeBytes: 15000000,
+          contextLength: 8192,
+          parallel: 1,
+          status: "IDLE",
+          queued: 0,
+        },
+      ],
+    );
+
+    // Exact identifier of the second model must resolve to the second model, not the first
+    expect(collector.resolveModelName("google/gemma-2-27b-it")).toBe("google/gemma-2-27b-it");
+    expect(collector.resolveModelName("google/gemma-4-12b-qat")).toBe("google/gemma-4-12b-qat");
+  });
+
   it("falls back to file basename when no keyword matches", () => {
     expect(collector.resolveModelName("C:\\Users\\LMStudio\\models\\my-experimental-net.gguf")).toBe(
       "my-experimental-net",
@@ -335,6 +367,43 @@ describe("TopDataCollector - engine log chunk parsing & throughput metrics", () 
     // 25 tokens / 0.5s = 50 tokens per second
     expect(metrics.currentTokensPerSec).toBeCloseTo(50, 1);
     expect(metrics.recentPredictions[0].tokensPerSecond).toBeCloseTo(50, 1);
+  });
+
+  it("excludes initial backfill completions from session average and session speed", () => {
+    const historicalChunk = [
+      "[2026-09-16 18:00:00] [info] slot print_timing: prompt eval time = 100.00 ms / 20 tokens",
+      "[2026-09-16 18:00:01] [info] slot print_timing:        eval time = 500.00 ms / 25 tokens (20.00 ms per token, 50.00 tokens per second)",
+      "[2026-09-16 18:00:01] [info] slot print_timing:       total time = 600.00 ms / 45 tokens",
+    ].join("\n");
+
+    // Initial startup backfill: isInitialBackfill = true
+    collector.parseLogChunk(historicalChunk, "test-model", true);
+
+    let metrics = collector.getThroughputMetrics();
+    // Backfill record appears in recent completions history for user context
+    expect(metrics.recentPredictions).toHaveLength(1);
+    expect(metrics.recentPredictions[0].isBackfill).toBe(true);
+    // Must NOT contaminate live session speed, average, or session tokens
+    expect(metrics.currentTokensPerSec).toBe(0);
+    expect(metrics.avgTokensPerSec).toBe(0);
+    expect(metrics.totalTokensGenerated).toBe(0);
+    expect(metrics.lastTtftSec).toBeNull();
+
+    // Now a live session completion arrives: isInitialBackfill = false
+    const liveChunk = [
+      "[2026-09-16 19:00:00] [info] slot print_timing: prompt eval time = 50.00 ms / 10 tokens",
+      "[2026-09-16 19:00:01] [info] slot print_timing:        eval time = 250.00 ms / 20 tokens (12.50 ms per token, 80.00 tokens per second)",
+      "[2026-09-16 19:00:01] [info] slot print_timing:       total time = 300.00 ms / 30 tokens",
+    ].join("\n");
+
+    collector.parseLogChunk(liveChunk, "test-model", false);
+
+    metrics = collector.getThroughputMetrics();
+    expect(metrics.recentPredictions).toHaveLength(2);
+    expect(metrics.totalTokensGenerated).toBe(20);
+    expect(metrics.currentTokensPerSec).toBe(80);
+    // Session average must only average live completions (80 tok/s), NOT contaminated by backfilled (50 tok/s)
+    expect(metrics.avgTokensPerSec).toBe(80);
   });
 });
 

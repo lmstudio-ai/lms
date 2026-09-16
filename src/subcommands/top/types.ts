@@ -55,6 +55,7 @@ export interface RecentPredictionRecord {
   totalTimeSec: number;
   stopReason: string;
   source?: "stream" | "log";
+  isBackfill?: boolean;
 }
 
 export interface ThroughputMetrics {

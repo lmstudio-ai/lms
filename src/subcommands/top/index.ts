@@ -193,7 +193,7 @@ topCommand.action(async (options: TopCommandOptions) => {
     return;
   }
 
-  if (options.once === true || !process.stdin.isTTY) {
+  if (options.once === true || !process.stdin.isTTY || !process.stdout.isTTY) {
     const snapshot = await collector.fetchSnapshot();
     printSnapshotText(snapshot);
     await client[Symbol.asyncDispose]();
