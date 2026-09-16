@@ -123,7 +123,7 @@ export async function createClient(
     return lower === "127.0.0.1" || lower === "localhost" || lower === "::1" || lower === "0.0.0.0" || lower === "::";
   };
 
-  let isRemote = opts.isRemote ?? (host !== undefined && !isLoopback(host));
+  let isRemote = opts.isRemote ?? (host !== undefined);
 
   if (host === undefined) {
     host = "127.0.0.1";

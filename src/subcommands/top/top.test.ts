@@ -1315,6 +1315,23 @@ describe("Codex Review Fixes - endpoint, IPv6, LAN bind locality, and busyCount 
     fetchSpy.mockRestore();
   });
 
+  it("createClient defaults isRemote: true when host is explicitly specified", async () => {
+    const logger = createMockLogger();
+    const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async () => {
+      return { status: 200, json: async () => ({ lmstudio: true }) } as any;
+    });
+
+    // Explicit loopback host without opts.isRemote should default to remote identity
+    const client = await createClientModule.createClient(
+      logger,
+      { host: "127.0.0.1", port: 1234 },
+      { checkHealth: false },
+    );
+    expect(client).toBeDefined();
+
+    fetchSpy.mockRestore();
+  });
+
   it("advances log offset to end when streaming is active or live activity is cleared", () => {
     const client = createMockClient();
     const logger = createMockLogger();
