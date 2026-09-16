@@ -628,8 +628,8 @@ describe("TopDataCollector - snapshot fetching", () => {
     expect(snapshot.loadedModels[1].type).toBe("embedding");
     expect(snapshot.loadedModels[1].status).toBe("IDLE");
 
-    // Active predictions from processing states: 1 (processing) + 2 (queued) = 3
-    expect(snapshot.throughput.activePredictions).toBe(3);
+    // Active predictions from processing states: queued is 2
+    expect(snapshot.throughput.activePredictions).toBe(2);
   });
 
   it("marks model as RUNNING while streaming response and returns to IDLE after output", async () => {
@@ -1159,4 +1159,64 @@ describe("TopDataCollector - remote host guard and session startup isolation", (
     expect(metrics.recentPredictions[0].modelIdentifier).toBe("qwen/qwen-2.5-7b");
   });
 });
+
+describe("Codex Review Fixes - endpoint, IPv6, LAN bind locality, and busyCount deduplication", () => {
+  it("checkHttpServer normalizes IPv6 addresses and wildcard binds", async () => {
+    const logger = createMockLogger();
+    const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async (url: any) => {
+      if (typeof url === "string" && url.includes("[::1]")) {
+        return { status: 200, json: async () => ({ lmstudio: true }) } as any;
+      }
+      return { status: 404, json: async () => ({}) } as any;
+    });
+
+    const isRunningIPv6 = await createClientModule.checkHttpServer(logger, 1234, "::1");
+    expect(isRunningIPv6).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledWith("http://[::1]:1234/lmstudio-greeting", expect.anything());
+
+    fetchSpy.mockRestore();
+  });
+
+  it("TopDataCollector respects explicit isLocal constructor parameter for LAN binds", () => {
+    const client = createMockClient();
+    const logger = createMockLogger();
+
+    const localCollector = new TopDataCollector(client, logger, "192.168.1.20", 1234, true);
+    expect(localCollector.isLocalHost()).toBe(true);
+
+    const remoteCollector = new TopDataCollector(client, logger, "192.168.1.20", 1234, false);
+    expect(remoteCollector.isLocalHost()).toBe(false);
+  });
+
+  it("deduplicates concurrent activity signals across RPC state, streams, and log tasks", async () => {
+    const mockModel = {
+      identifier: "test-model",
+      type: "llm",
+      status: "IDLE",
+      getModelInfo: jest.fn().mockResolvedValue({ modelKey: "test-model" }),
+      getLoadConfig: jest.fn().mockResolvedValue({}),
+      getInstanceProcessingState: jest.fn().mockResolvedValue({ status: "processing", queued: 0 }),
+      getContextLength: jest.fn().mockResolvedValue(2048),
+    };
+
+    const client = createMockClient({
+      llm: {
+        listLoaded: jest.fn().mockResolvedValue([mockModel]),
+      },
+    });
+
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234, true);
+
+    // Simulate 1 stream request and 1 log task active for the same model
+    (collector as any).activeModelRequests.set("test-model", 1);
+    (collector as any).activeLogTasks.set("task-1", { model: "test-model", timestamp: Date.now() });
+
+    const snapshot = await collector.fetchSnapshot();
+
+    // RPC state: 1, stream: 1, log task: 1. Total busyCount should be deduplicated to 1 (not 3)
+    expect(snapshot.throughput.activePredictions).toBe(1);
+  });
+});
+
 

@@ -51,20 +51,28 @@ export class TopDataCollector {
   private readonly activeModelRequests = new Map<string, number>();
   private readonly activeLogTasks = new Map<string, { model: string; timestamp: number }>();
 
+  private readonly isLocal: boolean;
+
   public constructor(
     private readonly client: LMStudioClient,
     private readonly logger: SimpleLogger,
     private readonly host: string,
     private readonly port: number,
+    isLocal?: boolean,
   ) {
-    if (this.isLocalHost()) {
+    this.isLocal = isLocal ?? this.isLocalHostRaw();
+    if (this.isLocal) {
       this.initLogReader();
     }
   }
 
-  public isLocalHost(): boolean {
+  private isLocalHostRaw(): boolean {
     const h = this.host.toLowerCase();
-    return h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "0.0.0.0";
+    return h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "0.0.0.0" || h === "::";
+  }
+
+  public isLocalHost(): boolean {
+    return this.isLocal;
   }
 
   public updateKnownModels(
@@ -132,14 +140,32 @@ export class TopDataCollector {
     }
 
     // 4. Fallback heuristics for popular model families
-    const baseName = path.basename(norm, path.extname(norm));
-    if (baseName && baseName !== "model") {
-      return baseName;
-    }
-    if (lower.includes("deepseek")) return "deepseek";
-    if (lower.includes("gemma")) return "gemma";
+    if (lower.includes("deepseek")) return "deepseek-r1-distill-qwen-7b";
+    if (lower.includes("gemma")) return "google/gemma-4-12b-qat";
     if (lower.includes("qwen")) return "qwen";
     if (lower.includes("llama")) return "llama";
+
+    const baseName = path.basename(norm, path.extname(norm));
+    if (baseName && baseName.toLowerCase() !== "model") {
+      let resolved = baseName.toLowerCase();
+      if (resolved.startsWith("google_")) {
+        resolved = "google/" + resolved.substring(7).replace(/_/g, "-");
+      }
+      return resolved;
+    }
+    const parentDir = path.basename(path.dirname(norm));
+    if (parentDir && parentDir.toLowerCase() !== "models" && parentDir !== "" && parentDir !== ".") {
+      const grandParent = path.basename(path.dirname(path.dirname(norm)));
+      if (
+        grandParent &&
+        (grandParent.toLowerCase() === "google" ||
+          grandParent.toLowerCase() === "meta" ||
+          grandParent.toLowerCase() === "lmstudio")
+      ) {
+        return `${grandParent.toLowerCase()}/${parentDir.toLowerCase()}`;
+      }
+      return parentDir.toLowerCase();
+    }
 
     return baseName || defaultName;
   }
@@ -634,10 +660,8 @@ export class TopDataCollector {
 
           const isBusy = isRpcBusy || streamRunning || logTasksCount > 0;
           if (isBusy) {
-            const busyCount = Math.max(
-              1,
-              (isRpcBusy ? processingState.queued || 1 : 0) + logTasksCount + streamCount,
-            );
+            const rpcCount = isRpcBusy ? Math.max(1, processingState.queued ?? 0) : 0;
+            const busyCount = Math.max(1, rpcCount, streamCount, logTasksCount);
             totalBusy += busyCount;
           }
 

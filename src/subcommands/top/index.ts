@@ -164,27 +164,32 @@ function printSnapshotText(snapshot: TopSnapshot): void {
 
 topCommand.action(async (options: TopCommandOptions) => {
   const logger = createLogger(options);
-  let { host, port } = options;
-  if (host === undefined || port === undefined) {
+  let host: string;
+  let port: number;
+  let isLocal: boolean;
+
+  if (options.host === undefined) {
+    isLocal = true;
     try {
       const serverConfig = await getServerConfig(logger);
-      if (port === undefined) {
-        port = serverConfig?.port ?? DEFAULT_SERVER_PORT;
-      }
-      if (host === undefined) {
-        const bindAddr = serverConfig?.networkInterface;
-        host = !bindAddr || bindAddr === "0.0.0.0" || bindAddr === "::" ? "127.0.0.1" : bindAddr;
-      }
+      port = options.port ?? serverConfig?.port ?? DEFAULT_SERVER_PORT;
+      const bindAddr = serverConfig?.networkInterface;
+      host = !bindAddr || bindAddr === "0.0.0.0" || bindAddr === "::" ? "127.0.0.1" : bindAddr;
     } catch (e) {
       logger.debug("Failed to read server config", e);
-      if (host === undefined) host = "127.0.0.1";
-      if (port === undefined) port = DEFAULT_SERVER_PORT;
+      host = "127.0.0.1";
+      port = options.port ?? DEFAULT_SERVER_PORT;
     }
+  } else {
+    host = options.host;
+    port = options.port ?? DEFAULT_SERVER_PORT;
+    const h = host.toLowerCase();
+    isLocal = h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "0.0.0.0" || h === "::";
   }
 
   // Create LMStudio client
-  const client = await createClient(logger, options);
-  const collector = new TopDataCollector(client, logger, host, port);
+  const client = await createClient(logger, { ...options, host, port });
+  const collector = new TopDataCollector(client, logger, host, port, isLocal);
 
   // Single snapshot mode
   if (options.json === true) {
