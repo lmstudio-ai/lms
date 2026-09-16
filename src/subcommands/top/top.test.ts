@@ -32,6 +32,10 @@ const createMockLogger = (): SimpleLogger =>
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
+    warnText: jest.fn(),
+    infoText: jest.fn(),
+    debugText: jest.fn(),
+    errorText: jest.fn(),
     errorWithoutPrefix: jest.fn(),
   }) as unknown as SimpleLogger;
 
@@ -1278,6 +1282,7 @@ describe("Codex Review Fixes - endpoint, IPv6, LAN bind locality, and busyCount 
   it("clears live activity counters when snapshot detects offline server", async () => {
     const client = createMockClient();
     const logger = createMockLogger();
+    const fetchSpy = jest.spyOn(global, "fetch").mockRejectedValue(new Error("Offline"));
     const collector = new TopDataCollector(client, logger, "127.0.0.1", 9999);
 
     // Set live in-flight activity state
@@ -1290,6 +1295,37 @@ describe("Codex Review Fixes - endpoint, IPv6, LAN bind locality, and busyCount 
     expect(snapshot.server.status).toBe("offline");
     expect(snapshot.throughput.activePredictions).toBe(0);
     expect(snapshot.throughput.currentTokensPerSec).toBe(0);
+
+    fetchSpy.mockRestore();
+  });
+
+  it("createClient respects explicit isRemote: false option for local authentication", async () => {
+    const logger = createMockLogger();
+    const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async () => {
+      return { status: 200, json: async () => ({ lmstudio: true }) } as any;
+    });
+
+    const client = await createClientModule.createClient(
+      logger,
+      { host: "192.168.1.20", port: 1234 },
+      { checkHealth: false, isRemote: false },
+    );
+    expect(client).toBeDefined();
+
+    fetchSpy.mockRestore();
+  });
+
+  it("advances log offset to end when streaming is active or live activity is cleared", () => {
+    const client = createMockClient();
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234, true);
+
+    const advanceSpy = jest.spyOn(collector as any, "advanceLogOffsetToEnd");
+    (collector as any).streamActive = true;
+    (collector as any).refreshLogs("test-model");
+
+    expect(advanceSpy).toHaveBeenCalled();
+    advanceSpy.mockRestore();
   });
 });
 

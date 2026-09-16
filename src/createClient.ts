@@ -94,6 +94,7 @@ export interface CreateClientArgs {
 
 export interface CreateClientOpts {
   checkHealth?: boolean;
+  isRemote?: boolean;
 }
 const lmsKey = "<LMS-CLI-LMS-KEY>";
 
@@ -115,12 +116,16 @@ export async function createClient(
 ) {
   const checkHealth = opts.checkHealth ?? true;
   let { host, port } = args;
-  let isRemote = true;
 
   const isIPv6 = (h: string) => h.includes(":") && (h.startsWith("[") || h.split(":").length > 2);
+  const isLoopback = (h: string) => {
+    const lower = h.toLowerCase();
+    return lower === "127.0.0.1" || lower === "localhost" || lower === "::1" || lower === "0.0.0.0" || lower === "::";
+  };
+
+  let isRemote = opts.isRemote ?? (host !== undefined && !isLoopback(host));
 
   if (host === undefined) {
-    isRemote = false;
     host = "127.0.0.1";
   } else if (host.includes("://")) {
     logger.error("Host should not include the protocol.");

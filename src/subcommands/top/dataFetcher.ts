@@ -236,8 +236,25 @@ export class TopDataCollector {
     }
   }
 
+  private advanceLogOffsetToEnd(): void {
+    if (!this.isLocalHost()) return;
+    const latestFile = this.getLatestLogFilePath();
+    if (latestFile === null) return;
+    this.currentLogFilePath = latestFile;
+    try {
+      const stat = fs.statSync(latestFile);
+      this.lastLogReadOffset = stat.size;
+    } catch {
+      // Ignore
+    }
+  }
+
   private refreshLogs(defaultModelIdentifier: string): void {
-    if (!this.isLocalHost() || this.streamActive) {
+    if (!this.isLocalHost()) {
+      return;
+    }
+    if (this.streamActive) {
+      this.advanceLogOffsetToEnd();
       return;
     }
 
@@ -548,6 +565,7 @@ export class TopDataCollector {
     this.activeLogTasks.clear();
     this.promptCandidates.clear();
     this.evalCandidates.clear();
+    this.advanceLogOffsetToEnd();
   }
 
   public async fetchSnapshot(): Promise<TopSnapshot> {
