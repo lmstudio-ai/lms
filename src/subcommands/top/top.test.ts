@@ -1,3 +1,6 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { Command } from "@commander-js/extra-typings";
@@ -643,7 +646,7 @@ describe("TopDataCollector - remote host guard and session startup isolation", (
     expect(metrics.totalPromptTokens).toBe(30);
   });
 
-  it("deduplicates completions received from both streamLogs and engine log files", () => {
+  it("keeps log fallback active when stream stats are absent and activates on usable stats", () => {
     let streamHandler: ((log: any) => void) | null = null;
     const client = createMockClient({
       diagnostics: {
@@ -659,66 +662,188 @@ describe("TopDataCollector - remote host guard and session startup isolation", (
     collector.startListening();
     expect(streamHandler).not.toBeNull();
 
-    const d = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const localDateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    const timestamp = d.getTime();
-
-    // 1. Diagnostics stream reports completion
+    // 1. Diagnostics stream outputs an event without stats
     streamHandler!({
-      timestamp,
+      timestamp: Date.now(),
       data: {
         type: "llm.prediction.output",
         modelIdentifier: "test-model",
+        output: "partial output",
+        // stats is absent / undefined
+      },
+    });
+
+    // Fallback must stay active because stats were absent
+    expect((collector as any).streamActive).toBe(false);
+
+    // 2. Diagnostics stream outputs a completion WITH usable stats
+    streamHandler!({
+      timestamp: Date.now(),
+      data: {
+        type: "llm.prediction.output",
+        modelIdentifier: "test-model",
+        output: "full output",
         stats: {
-          promptTokensCount: 45,
-          predictedTokensCount: 90,
-          totalTokensCount: 135,
-          tokensPerSecond: 30,
-          timeToFirstTokenSec: 0.2,
-          totalTimeSec: 3.2,
+          promptTokensCount: 20,
+          predictedTokensCount: 50,
+          totalTokensCount: 70,
+          tokensPerSecond: 25,
+          timeToFirstTokenSec: 0.1,
+          totalTimeSec: 2.0,
           stopReason: "eosFound",
         },
       },
     });
 
-    let metrics = collector.getThroughputMetrics();
-    expect(metrics.recentPredictions).toHaveLength(1);
-    expect(metrics.totalTokensGenerated).toBe(90);
-
-    // 2. The local server log chunk arrives with the EXACT same prediction
-    const engineChunk = [
-      `[${localDateStr}] [info] slot print_timing: prompt eval time = 200.00 ms / 45 tokens`,
-      `[${localDateStr}] [info] slot print_timing:        eval time = 3000.00 ms / 90 tokens (33.33 ms per token, 30.00 tokens per second)`,
-      `[${localDateStr}] [info] slot print_timing:       total time = 3200.00 ms / 135 tokens`,
-    ].join("\n");
-
-    collector.parseLogChunk(engineChunk, "test-model", false);
-
-    metrics = collector.getThroughputMetrics();
-    // Must NOT double-count the completion in history or session tokens
-    expect(metrics.recentPredictions).toHaveLength(1);
-    expect(metrics.totalTokensGenerated).toBe(90);
-    expect(metrics.totalPromptTokens).toBe(45);
+    // streamActive should now be true, disabling file fallback
+    expect((collector as any).streamActive).toBe(true);
+    const metrics = collector.getThroughputMetrics();
+    expect(metrics.totalTokensGenerated).toBe(50);
   });
 
-  it("attributes completions to model matching instanceReference in log lines", () => {
+  it("does not drop consecutive distinct stream completions with identical token counts", () => {
+    let streamHandler: ((log: any) => void) | null = null;
+    const client = createMockClient({
+      diagnostics: {
+        unstable_streamLogs: jest.fn().mockImplementation((handler: any) => {
+          streamHandler = handler;
+          return jest.fn();
+        }),
+      },
+    });
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234);
+
+    collector.startListening();
+
+    const timestamp1 = Date.now();
+    streamHandler!({
+      timestamp: timestamp1,
+      data: {
+        type: "llm.prediction.output",
+        modelIdentifier: "test-model",
+        output: "first response",
+        stats: {
+          promptTokensCount: 15,
+          predictedTokensCount: 30,
+          totalTokensCount: 45,
+          tokensPerSecond: 20,
+          timeToFirstTokenSec: 0.15,
+          totalTimeSec: 1.5,
+          stopReason: "eosFound",
+        },
+      },
+    });
+
+    const timestamp2 = timestamp1 + 1000;
+    streamHandler!({
+      timestamp: timestamp2,
+      data: {
+        type: "llm.prediction.output",
+        modelIdentifier: "test-model",
+        output: "second response with same token counts",
+        stats: {
+          promptTokensCount: 15,
+          predictedTokensCount: 30,
+          totalTokensCount: 45,
+          tokensPerSecond: 22,
+          timeToFirstTokenSec: 0.12,
+          totalTimeSec: 1.4,
+          stopReason: "eosFound",
+        },
+      },
+    });
+
+    const metrics = collector.getThroughputMetrics();
+    // Both completions must be recorded in history and totals
+    expect(metrics.recentPredictions).toHaveLength(2);
+    expect(metrics.totalTokensGenerated).toBe(60);
+    expect(metrics.totalPromptTokens).toBe(30);
+  });
+
+  it("preserves partial log lines across polling reads until newline is written", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lms-top-partial-"));
+    const tmpLogFile = path.join(tmpDir, "server.log");
+
     const client = createMockClient();
     const logger = createMockLogger();
     const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234);
 
-    // Pre-populate instanceReference mapping
+    // Mock getLatestLogFilePath to return our test file
+    (collector as any).getLatestLogFilePath = () => tmpLogFile;
+
+    try {
+      // 1. First write has complete lines AND an incomplete partial line at the end (no \n)
+      const initialContent = [
+        "[2026-09-16 19:40:00] [info] slot print_timing: prompt eval time = 100.00 ms / 30 tokens",
+        "[2026-09-16 19:40:02] [info] slot print_timing:        eval time = 1000.00 ms / 40 tokens (25.00 ms per token, 40.00 tokens per second)",
+        "[2026-09-16 19:40:02] [info] slot print_timing:       total time = 1100.00 ms / 70 tokens",
+        // Incomplete line trailing without newline:
+        "[2026-09-16 19:40:05] [info] slot print_timing: prompt eval time = 50.00",
+      ].join("\n");
+
+      fs.writeFileSync(tmpLogFile, initialContent, "utf-8");
+
+      (collector as any).refreshLogs("test-model");
+
+      // First completion is parsed
+      let metrics = collector.getThroughputMetrics();
+      expect(metrics.recentPredictions).toHaveLength(1);
+      expect(metrics.totalTokensGenerated).toBe(40);
+
+      // Verify lastLogReadOffset stopped at the last newline, leaving the partial line uncommitted
+      const offsetAfterFirstRead = (collector as any).lastLogReadOffset;
+      expect(offsetAfterFirstRead).toBeLessThan(fs.statSync(tmpLogFile).size);
+
+      // 2. Append the rest of the incomplete line + completion lines with newline
+      const remainderContent = [
+        " ms / 15 tokens",
+        "[2026-09-16 19:40:06] [info] slot print_timing:        eval time = 500.00 ms / 20 tokens (25.00 ms per token, 40.00 tokens per second)",
+        "[2026-09-16 19:40:06] [info] slot print_timing:       total time = 550.00 ms / 35 tokens\n",
+      ].join("\n");
+
+      fs.appendFileSync(tmpLogFile, remainderContent, "utf-8");
+
+      // Next poll
+      (collector as any).refreshLogs("test-model");
+
+      metrics = collector.getThroughputMetrics();
+      // The second completion should now be parsed completely without error or missing timing
+      expect(metrics.recentPredictions).toHaveLength(2);
+      expect(metrics.totalTokensGenerated).toBe(60);
+      expect(metrics.totalPromptTokens).toBe(45);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores descriptor lookup lines and attributes completions using request context", () => {
+    const client = createMockClient();
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234);
+
     (collector as any).instanceRefModelMap.set("ref-alpha-123", "meta/llama-3-8b");
     (collector as any).instanceRefModelMap.set("ref-beta-456", "qwen/qwen-2.5-7b");
 
-    const chunk = [
+    // 1. Descriptor lookup lines generated by lms top polling (getModelInfo, getLoadConfig) must NOT change activeLogModel
+    const descriptorChunk = [
       `[2026-09-16 19:50:00][INFO][Endpoint=getModelInfo] Getting descriptor for specifier: {"type":"instanceReference","instanceReference":"ref-beta-456"}`,
+      `[2026-09-16 19:50:00][INFO][Endpoint=getLoadConfig] Getting load config stack for specifier: {"type":"instanceReference","instanceReference":"ref-beta-456"}`,
+    ].join("\n");
+
+    collector.parseLogChunk(descriptorChunk, "fallback-model", false);
+    // activeLogModel should remain uncorrupted by descriptor polling queries
+    expect((collector as any).activeLogModel).toBe("LLM");
+
+    // 2. Request context lines (Endpoint=predict) MUST update activeLogModel
+    const requestAndTimingChunk = [
+      `[2026-09-16 19:50:01][INFO][Endpoint=predict] Handling predict for specifier: {"type":"instanceReference","instanceReference":"ref-beta-456"}`,
       `[2026-09-16 19:50:01] [info] slot print_timing: prompt eval time = 50.00 ms / 15 tokens`,
       `[2026-09-16 19:50:02] [info] slot print_timing:        eval time = 500.00 ms / 20 tokens (25.00 ms per token, 40.00 tokens per second)`,
       `[2026-09-16 19:50:02] [info] slot print_timing:       total time = 550.00 ms / 35 tokens`,
     ].join("\n");
 
-    collector.parseLogChunk(chunk, "fallback-model", false);
+    collector.parseLogChunk(requestAndTimingChunk, "fallback-model", false);
 
     const metrics = collector.getThroughputMetrics();
     expect(metrics.recentPredictions).toHaveLength(1);

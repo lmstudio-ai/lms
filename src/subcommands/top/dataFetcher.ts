@@ -43,7 +43,6 @@ export class TopDataCollector {
   private knownModelMap: Array<{ key: string; keywords: string[] }> = [];
   private readonly instanceRefModelMap = new Map<string, string>();
   private streamActive: boolean = false;
-  private readonly processedCompletionKeys = new Set<string>();
 
   public constructor(
     private readonly client: LMStudioClient,
@@ -151,8 +150,15 @@ export class TopDataCollector {
       fs.readSync(fd, buffer, 0, initialReadSize, startOffset);
       fs.closeSync(fd);
 
-      this.lastLogReadOffset = stat.size;
-      const textContent = new TextDecoder().decode(buffer);
+      const lastNewlineIndex = buffer.lastIndexOf(0x0a);
+      if (lastNewlineIndex === -1) {
+        this.lastLogReadOffset = stat.size;
+        return;
+      }
+
+      this.lastLogReadOffset = startOffset + lastNewlineIndex + 1;
+      const completeLinesBuffer = buffer.subarray(0, lastNewlineIndex + 1);
+      const textContent = new TextDecoder().decode(completeLinesBuffer);
       // Pass isInitialBackfill = true so initial history is populated without counting historical tokens as session generated
       this.parseLogChunk(textContent, "LLM", true);
     } catch (e) {
@@ -185,8 +191,15 @@ export class TopDataCollector {
       fs.readSync(fd, buffer, 0, bytesToRead, this.lastLogReadOffset);
       fs.closeSync(fd);
 
-      this.lastLogReadOffset = stat.size;
-      const textContent = new TextDecoder().decode(buffer);
+      const lastNewlineIndex = buffer.lastIndexOf(0x0a);
+      if (lastNewlineIndex === -1) {
+        // Line is incomplete (e.g. logger is currently writing), wait for next poll
+        return;
+      }
+
+      this.lastLogReadOffset += lastNewlineIndex + 1;
+      const completeLinesBuffer = buffer.subarray(0, lastNewlineIndex + 1);
+      const textContent = new TextDecoder().decode(completeLinesBuffer);
       this.parseLogChunk(textContent, defaultModelIdentifier, false);
     } catch (e) {
       this.logger.debug("Failed refreshing server logs", e);
@@ -215,11 +228,25 @@ export class TopDataCollector {
         this.currentLogTimestamp = new Date(timeMatch[1].replace(" ", "T")).getTime();
       }
 
-      const instRefMatch = instRefRegex.exec(line);
-      if (instRefMatch !== null) {
-        const mapped = this.instanceRefModelMap.get(instRefMatch[1]);
-        if (mapped !== undefined) {
-          this.activeLogModel = mapped;
+      // Ignore administrative and descriptor queries (e.g. getModelInfo / getLoadConfig polling queries from lms top)
+      const isDescriptorLookup =
+        /Endpoint=(?:getModelInfo|getLoadConfig|getInstanceProcessingState|listLoaded|listDownloadedModels|surveyHardware)|Getting descriptor for specifier/i.test(line);
+
+      // Only attribute instance references or models that appear in request/inference contexts
+      const isRequestContext =
+        /Endpoint=(?:predict|predictCompletion|chat|createChatCompletion|completions)|(?:POST|GET)\s+(?:\/api\/v1\/(?:chat|responses)|\/v1\/(?:chat\/)?completions)|slot launch_slot_/i.test(line);
+
+      if (!isDescriptorLookup && isRequestContext) {
+        const instRefMatch = instRefRegex.exec(line);
+        if (instRefMatch !== null) {
+          const mapped = this.instanceRefModelMap.get(instRefMatch[1]);
+          if (mapped !== undefined) {
+            this.activeLogModel = mapped;
+          }
+        }
+        const modelParamMatch = /"(?:model|modelIdentifier)":\s*"([^"]+)"/i.exec(line);
+        if (modelParamMatch !== null) {
+          this.activeLogModel = this.resolveModelName(modelParamMatch[1], defaultModelIdentifier);
         }
       }
 
@@ -259,20 +286,6 @@ export class TopDataCollector {
             : predTokens /
               Math.max(0.001, this.lastEvalCandidate.timeMs / 1000);
         const ttftSec = (this.lastPromptCandidate?.timeMs ?? 0) / 1000;
-
-        // Cross-source deduplication: if this exact completion was already received via diagnostics stream within 5 seconds, skip it
-        const isDuplicateFromStream = this.tracker.history.slice(0, 5).some(
-          prev =>
-            prev.source === "stream" &&
-            prev.promptTokens === promptTokens &&
-            prev.predictedTokens === predTokens &&
-            Math.abs(prev.timestamp - this.lastEvalCandidate!.timestamp) <= 5000,
-        );
-        if (isDuplicateFromStream) {
-          this.lastPromptCandidate = null;
-          this.lastEvalCandidate = null;
-          continue;
-        }
 
         const recordModel =
           this.activeLogModel !== "LLM"
@@ -326,28 +339,17 @@ export class TopDataCollector {
         if (log.data.type === "llm.prediction.input") {
           this.tracker.activePredictions++;
         } else if (log.data.type === "llm.prediction.output") {
-          this.streamActive = true;
           this.tracker.activePredictions = Math.max(0, this.tracker.activePredictions - 1);
           const stats = log.data.stats;
+          // Keep the log fallback active when stream stats are absent; only disable file fallback after receiving usable stats
           if (stats !== undefined) {
+            this.streamActive = true;
             const tokPerSec = stats.tokensPerSecond ?? 0;
             const promptCount = stats.promptTokensCount ?? 0;
             const predCount = stats.predictedTokensCount ?? 0;
             const totalCount = stats.totalTokensCount ?? promptCount + predCount;
             const ttft = stats.timeToFirstTokenSec ?? 0;
             const totalTime = stats.totalTimeSec ?? 0;
-
-            // Cross-source deduplication: if this exact completion was already received via log file within 5 seconds, skip it
-            const isDuplicateFromLog = this.tracker.history.slice(0, 5).some(
-              prev =>
-                prev.source === "log" &&
-                prev.promptTokens === promptCount &&
-                prev.predictedTokens === predCount &&
-                Math.abs(prev.timestamp - log.timestamp) <= 5000,
-            );
-            if (isDuplicateFromLog) {
-              return;
-            }
 
             if (tokPerSec > 0) {
               this.tracker.currentTokensPerSec = tokPerSec;
