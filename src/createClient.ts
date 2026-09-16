@@ -126,7 +126,7 @@ export async function createClient(
         not work.
       `;
       auth = {
-        clientIdentifier: "lms-cli-dev",
+        clientIdentifier: `lms-cli-dev-${randomBytes(8).toString("hex")}`,
       };
     } else {
       if (await exists(lmsKey2Path)) {
