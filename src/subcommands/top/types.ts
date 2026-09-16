@@ -32,6 +32,8 @@ export interface LoadedModelItem {
   paramsString?: string;
   format?: string;
   sizeBytes: number;
+  estimatedVramBytes?: number;
+  estimatedRamBytes?: number;
   contextLength: number;
   parallel: number | "-";
   status: "IDLE" | "RUNNING" | "PROCESSING" | string;

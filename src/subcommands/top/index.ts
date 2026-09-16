@@ -65,7 +65,14 @@ function printSnapshotText(snapshot: TopSnapshot): void {
         );
       }
     }
-    const totalModelsSizeBytes = loadedModels.reduce((acc, m) => acc + (m.sizeBytes || 0), 0);
+    const totalVramUsedBytes = loadedModels.reduce(
+      (acc, m) => acc + (m.estimatedVramBytes !== undefined ? m.estimatedVramBytes : (m.sizeBytes || 0)),
+      0,
+    );
+    const totalRamUsedBytes = loadedModels.reduce(
+      (acc, m) => acc + (m.estimatedRamBytes ?? 0),
+      0,
+    );
     const totalVram =
       hardware.vramCapacityBytes > 0
         ? hardware.vramCapacityBytes
@@ -73,12 +80,15 @@ function printSnapshotText(snapshot: TopSnapshot): void {
             (acc, g) => acc + (g.dedicatedMemoryBytes > 0 ? g.dedicatedMemoryBytes : g.totalMemoryBytes),
             0,
           );
-    if (totalModelsSizeBytes > 0 && totalVram > 0) {
-      const isOffloaded = totalModelsSizeBytes > totalVram;
+    if (totalVram > 0) {
       console.info(
-        `  Model Footprint (Est.): ${formatSizeBytes1024(totalModelsSizeBytes)} / ${formatSizeBytes1024(totalVram)} Total VRAM${
-          isOffloaded ? chalk.yellow(" [CPU/RAM offloaded]") : ""
+        `  VRAM Footprint (Est.): ${formatSizeBytes1024(totalVramUsedBytes)} / ${formatSizeBytes1024(totalVram)} Total VRAM${
+          totalRamUsedBytes > 0 ? chalk.yellow(` (+${formatSizeBytes1024(totalRamUsedBytes)} RAM)`) : ""
         }`,
+      );
+    } else if (totalRamUsedBytes > 0) {
+      console.info(
+        `  RAM Footprint (Est.): ${formatSizeBytes1024(totalRamUsedBytes)} / ${formatSizeBytes1024(hardware.ramCapacityBytes)} System RAM`,
       );
     }
     console.info(
@@ -114,13 +124,20 @@ function printSnapshotText(snapshot: TopSnapshot): void {
           ? "∞"
           : "expiring";
 
+      const vramText =
+        m.estimatedVramBytes !== undefined && m.estimatedVramBytes > 0
+          ? formatSizeBytes1024(m.estimatedVramBytes)
+          : m.estimatedRamBytes !== undefined && m.estimatedRamBytes > 0
+          ? `${formatSizeBytes1024(m.estimatedRamBytes)} (RAM)`
+          : formatSizeBytes1000(m.sizeBytes);
+
       return {
         identifier: m.identifier,
         status:
           m.status === "RUNNING" || m.status === "PROCESSING"
             ? chalk.yellow("RUNNING")
             : chalk.green("IDLE"),
-        size: formatSizeBytes1000(m.sizeBytes),
+        size: vramText,
         context: m.contextLength ? `${m.contextLength} ctx` : "-",
         parallel: String(m.parallel),
         ttl: ttlText,
@@ -133,7 +150,7 @@ function printSnapshotText(snapshot: TopSnapshot): void {
         config: {
           identifier: { headingTransform: () => chalk.dim("IDENTIFIER") },
           status: { headingTransform: () => chalk.dim("STATUS") },
-          size: { headingTransform: () => chalk.dim("SIZE") },
+          size: { headingTransform: () => chalk.dim("VRAM (EST)") },
           context: { headingTransform: () => chalk.dim("CONTEXT") },
           parallel: { headingTransform: () => chalk.dim("PARALLEL") },
           ttl: { headingTransform: () => chalk.dim("TTL") },

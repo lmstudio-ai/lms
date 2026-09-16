@@ -635,6 +635,111 @@ describe("TopDataCollector - snapshot fetching", () => {
     expect(snapshot.throughput.activePredictions).toBe(0);
   });
 
+  it("calculates real-time estimated VRAM and RAM footprint dynamically during idle and running states", async () => {
+    let streamHandler: ((log: any) => void) | null = null;
+    const client = createMockClient({
+      diagnostics: {
+        unstable_streamLogs: jest.fn().mockImplementation((handler: any) => {
+          streamHandler = handler;
+          return jest.fn();
+        }),
+      },
+      runtime: {
+        surveyHardware: jest.fn().mockResolvedValue({
+          engines: [
+            {
+              hardwareSurvey: {
+                gpuSurveyResult: {
+                  gpuInfo: [
+                    {
+                      name: "RTX 2060",
+                      detectionPlatform: "CUDA",
+                      integrationType: "discrete",
+                      dedicatedMemoryCapacityBytes: 6 * 1024 * 1024 * 1024,
+                      totalMemoryCapacityBytes: 6 * 1024 * 1024 * 1024,
+                    },
+                  ],
+                },
+                cpuSurveyResult: { cpuInfo: { architecture: "x86_64", supportedInstructionSetExtensions: [] } },
+              },
+              memoryInfo: {
+                ramCapacity: 16 * 1024 * 1024 * 1024,
+                vramCapacity: 6 * 1024 * 1024 * 1024,
+              },
+            },
+          ],
+        }),
+      },
+      llm: {
+        listLoaded: jest.fn().mockResolvedValue([
+          {
+            identifier: "meta-llama-3-8b",
+            getModelInfo: jest.fn().mockResolvedValue({
+              modelKey: "llama3",
+              sizeBytes: 4_000_000_000,
+            }),
+            getLoadConfig: jest.fn().mockResolvedValue({
+              gpu: { ratio: 1.0 },
+              offloadKVCacheToGpu: true,
+            }),
+            getInstanceProcessingState: jest.fn().mockResolvedValue({ status: "idle", queued: 0 }),
+            getContextLength: jest.fn().mockResolvedValue(2048),
+          },
+        ]),
+      },
+    });
+
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234);
+    collector.startListening();
+
+    // 1. Initial snapshot when IDLE: base weights + KV cache
+    let snapshot = await collector.fetchSnapshot();
+    const idleModel = snapshot.loadedModels[0];
+    expect(idleModel.status).toBe("IDLE");
+    // weights (4GB) + KV (2048 * 128KB = 262,144,000 bytes) = 4,262,144,000 bytes
+    const baseVramBytes = idleModel.estimatedVramBytes!;
+    expect(baseVramBytes).toBe(4_000_000_000 + 2048 * 128_000);
+    expect(idleModel.estimatedRamBytes).toBe(0);
+
+    // 2. Stream starts: model becomes RUNNING, live working buffer added in real-time
+    streamHandler!({
+      timestamp: Date.now(),
+      data: {
+        type: "llm.prediction.input",
+        modelIdentifier: "meta-llama-3-8b",
+        input: "Test input",
+      },
+    });
+
+    snapshot = await collector.fetchSnapshot();
+    const runningModel = snapshot.loadedModels[0];
+    expect(runningModel.status).toBe("RUNNING");
+    // Live VRAM should increase by 256MB active buffer in real time
+    expect(runningModel.estimatedVramBytes).toBe(baseVramBytes + 256 * 1024 * 1024);
+
+    // 3. Stream completes: model becomes IDLE, live working buffer reclaimed
+    streamHandler!({
+      timestamp: Date.now(),
+      data: {
+        type: "llm.prediction.output",
+        modelIdentifier: "meta-llama-3-8b",
+        output: "Test output",
+        stats: {
+          promptTokensCount: 10,
+          predictedTokensCount: 20,
+          totalTokensCount: 30,
+          tokensPerSecond: 25,
+        },
+      },
+    });
+
+    snapshot = await collector.fetchSnapshot();
+    const restoredModel = snapshot.loadedModels[0];
+    expect(restoredModel.status).toBe("IDLE");
+    expect(restoredModel.estimatedVramBytes).toBe(baseVramBytes);
+  });
+
   it("handles service info and hardware survey failures gracefully", async () => {
     jest.spyOn(globalThis, "fetch").mockResolvedValue({
       status: 200,

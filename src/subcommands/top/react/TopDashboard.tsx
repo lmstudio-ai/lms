@@ -65,11 +65,18 @@ export const TopDashboard: React.FC<TopDashboardProps> = ({
   const { server, hardware, loadedModels, throughput } = snapshot;
   const isOnline = server.status === "online";
 
-  // Calculate estimated loaded models memory footprint
+  // Calculate estimated loaded models memory footprint (real-time VRAM and RAM)
   const totalModelsSizeBytes = loadedModels.reduce((acc, m) => acc + (m.sizeBytes || 0), 0);
+  const totalVramUsedBytes = loadedModels.reduce(
+    (acc, m) => acc + (m.estimatedVramBytes !== undefined ? m.estimatedVramBytes : (m.sizeBytes || 0)),
+    0,
+  );
+  const totalRamUsedBytes = loadedModels.reduce(
+    (acc, m) => acc + (m.estimatedRamBytes ?? 0),
+    0,
+  );
   const vramCapacity = hardware?.vramCapacityBytes ?? 0;
   const ramCapacity = hardware?.ramCapacityBytes ?? 0;
-  const vramRatio = vramCapacity > 0 ? totalModelsSizeBytes / vramCapacity : 0;
 
   return (
     <Box flexDirection="column" paddingX={1} paddingY={1}>
@@ -157,7 +164,7 @@ export const TopDashboard: React.FC<TopDashboardProps> = ({
           </Box>
         )}
 
-        {/* Aggregate Model Size Footprint (Estimate) vs Total VRAM or RAM */}
+        {/* Real-time VRAM & RAM Footprint */}
         {(() => {
           const totalVram =
             vramCapacity > 0
@@ -166,26 +173,42 @@ export const TopDashboard: React.FC<TopDashboardProps> = ({
                   (sum, g) => sum + (g.dedicatedMemoryBytes > 0 ? g.dedicatedMemoryBytes : g.totalMemoryBytes),
                   0,
                 ) ?? 0;
-          const targetCap = totalVram > 0 ? totalVram : ramCapacity;
-          const ratio = targetCap > 0 ? totalModelsSizeBytes / targetCap : 0;
-          const label = totalVram > 0 ? "Total VRAM" : "System RAM";
-          const isOffloaded = totalVram > 0 && totalModelsSizeBytes > totalVram;
 
-          return (
-            <Box flexDirection="column" marginY={0}>
-              <Box flexDirection="row" justifyContent="space-between">
-                <Text dimColor>Model Size (Est.):</Text>
-                <Text>
-                  {formatSizeBytes1024(totalModelsSizeBytes)} / {formatSizeBytes1024(targetCap)} {label}
-                  {isOffloaded && chalk.yellow(" [CPU/RAM offloaded]")}
-                </Text>
+          if (totalVram > 0) {
+            const ratio = totalVramUsedBytes / totalVram;
+            const hasRamUsage = totalRamUsedBytes > 0;
+            return (
+              <Box flexDirection="column" marginY={0}>
+                <Box flexDirection="row" justifyContent="space-between">
+                  <Text dimColor>VRAM Footprint (Est.):</Text>
+                  <Text>
+                    {formatSizeBytes1024(totalVramUsedBytes)} / {formatSizeBytes1024(totalVram)} Total VRAM
+                    {hasRamUsage ? chalk.yellow(` (+${formatSizeBytes1024(totalRamUsedBytes)} RAM)`) : ""}
+                  </Text>
+                </Box>
+                <Box flexDirection="row" gap={1}>
+                  <Text dimColor>Footprint:   </Text>
+                  <Text>{renderProgressBar(ratio)}</Text>
+                </Box>
               </Box>
-              <Box flexDirection="row" gap={1}>
-                <Text dimColor>Footprint:</Text>
-                <Text>{renderProgressBar(ratio)}</Text>
+            );
+          } else {
+            const ratio = ramCapacity > 0 ? totalRamUsedBytes / ramCapacity : 0;
+            return (
+              <Box flexDirection="column" marginY={0}>
+                <Box flexDirection="row" justifyContent="space-between">
+                  <Text dimColor>RAM Footprint (Est.):</Text>
+                  <Text>
+                    {formatSizeBytes1024(totalRamUsedBytes)} / {formatSizeBytes1024(ramCapacity)} System RAM
+                  </Text>
+                </Box>
+                <Box flexDirection="row" gap={1}>
+                  <Text dimColor>Footprint:   </Text>
+                  <Text>{renderProgressBar(ratio)}</Text>
+                </Box>
               </Box>
-            </Box>
-          );
+            );
+          }
         })()}
 
         {/* System RAM & CPU */}
@@ -290,7 +313,7 @@ export const TopDashboard: React.FC<TopDashboardProps> = ({
             LOADED MODELS ({loadedModels.length})
           </Text>
           <Text dimColor>
-            Total Weight: {formatSizeBytes1000(totalModelsSizeBytes)}
+            {totalVramUsedBytes > 0 ? `VRAM: ${formatSizeBytes1024(totalVramUsedBytes)} | ` : ""}Weight: {formatSizeBytes1000(totalModelsSizeBytes)}
           </Text>
         </Box>
 
@@ -304,7 +327,7 @@ export const TopDashboard: React.FC<TopDashboardProps> = ({
         ) : (
           <Box flexDirection="column" marginTop={1}>
             <Box flexDirection="row" justifyContent="space-between">
-              <Box width="28%">
+              <Box width="26%">
                 <Text bold dimColor>
                   IDENTIFIER
                 </Text>
@@ -314,9 +337,9 @@ export const TopDashboard: React.FC<TopDashboardProps> = ({
                   STATUS
                 </Text>
               </Box>
-              <Box width="15%">
+              <Box width="17%">
                 <Text bold dimColor>
-                  SIZE
+                  VRAM (EST)
                 </Text>
               </Box>
               <Box width="18%">
@@ -359,7 +382,7 @@ export const TopDashboard: React.FC<TopDashboardProps> = ({
 
               return (
                 <Box key={model.identifier} flexDirection="row" justifyContent="space-between">
-                  <Box width="28%">
+                  <Box width="26%">
                     <Text bold color="white" wrap="truncate">
                       {model.identifier}
                     </Text>
@@ -367,8 +390,14 @@ export const TopDashboard: React.FC<TopDashboardProps> = ({
                   <Box width="15%">
                     <Text color={statusColor}>{statusText}</Text>
                   </Box>
-                  <Box width="15%">
-                    <Text>{formatSizeBytes1000(model.sizeBytes)}</Text>
+                  <Box width="17%">
+                    <Text>
+                      {model.estimatedVramBytes !== undefined && model.estimatedVramBytes > 0
+                        ? formatSizeBytes1024(model.estimatedVramBytes)
+                        : model.estimatedRamBytes !== undefined && model.estimatedRamBytes > 0
+                        ? `${formatSizeBytes1024(model.estimatedRamBytes)} (RAM)`
+                        : formatSizeBytes1000(model.sizeBytes)}
+                    </Text>
                   </Box>
                   <Box width="18%">
                     <Text>{model.contextLength ? `${model.contextLength.toLocaleString()} ctx` : "-"}</Text>

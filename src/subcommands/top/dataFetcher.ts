@@ -33,6 +33,7 @@ export class TopDataCollector {
   };
   private unsubscribeLogs: (() => void) | null = null;
   private cachedHardware: HardwareSummary | null = null;
+  private lastHardwareSurveyTime = 0;
   private nextRecordId = 1;
   private currentLogFilePath: string | null = null;
   private lastLogReadOffset = 0;
@@ -470,8 +471,10 @@ export class TopDataCollector {
       this.logger.debug("Failed to query service info", e);
     }
 
-    // Hardware survey (cache to avoid heavy repeated calls every tick)
-    if (this.cachedHardware === null) {
+    // Hardware survey: refresh periodically (every 5000ms) or on first snapshot
+    const now = Date.now();
+    if (this.cachedHardware === null || now - this.lastHardwareSurveyTime >= 5000) {
+      this.lastHardwareSurveyTime = now;
       try {
         const survey = await this.client.runtime.surveyHardware();
         if (survey.engines.length > 0) {
@@ -502,6 +505,7 @@ export class TopDataCollector {
     // Loaded models
     const loadedModels: LoadedModelItem[] = [];
     let totalBusy = 0;
+    const hasGpu = (this.cachedHardware?.gpus.length ?? 0) > 0;
 
     try {
       const [llmModels, embeddingModels] = await Promise.all([
@@ -529,6 +533,38 @@ export class TopDataCollector {
             this.instanceRefModelMap.set(String(instanceRef), model.identifier);
           }
 
+          // Calculate real-time estimated VRAM and RAM footprint
+          let gpuRatio = hasGpu ? 1.0 : 0.0;
+          if (loadConfig?.gpu?.ratio !== undefined) {
+            if (loadConfig.gpu.ratio === "off") {
+              gpuRatio = 0.0;
+            } else if (loadConfig.gpu.ratio === "max") {
+              gpuRatio = 1.0;
+            } else if (typeof loadConfig.gpu.ratio === "number") {
+              gpuRatio = Math.max(0, Math.min(1, loadConfig.gpu.ratio));
+            }
+          }
+
+          const modelSizeBytes = info.sizeBytes || 0;
+          const weightsVram = Math.round(modelSizeBytes * gpuRatio);
+          const weightsRam = Math.round(modelSizeBytes * (1.0 - gpuRatio));
+
+          // Context KV cache: ~128KB per token
+          const effectiveCtx = Math.max(512, contextLength);
+          const kvCacheBytes = Math.round(effectiveCtx * 128_000);
+          const kvOnGpu = loadConfig?.offloadKVCacheToGpu !== false && gpuRatio > 0;
+          const kvVram = kvOnGpu ? kvCacheBytes : 0;
+          const kvRam = kvOnGpu ? 0 : kvCacheBytes;
+
+          // Dynamic in-flight buffer while actively streaming
+          const activeCount = Math.max(1, this.activeModelRequests.get(model.identifier) ?? 1);
+          const liveBuffer = isBusy ? activeCount * 256 * 1024 * 1024 : 0;
+          const liveVram = gpuRatio > 0 ? liveBuffer : 0;
+          const liveRam = gpuRatio > 0 ? 0 : liveBuffer;
+
+          const estimatedVramBytes = weightsVram + kvVram + liveVram;
+          const estimatedRamBytes = weightsRam + kvRam + liveRam;
+
           loadedModels.push({
             identifier: model.identifier,
             modelKey: info.modelKey,
@@ -536,7 +572,9 @@ export class TopDataCollector {
             architecture: info.architecture,
             paramsString: info.paramsString,
             format: info.format,
-            sizeBytes: info.sizeBytes,
+            sizeBytes: modelSizeBytes,
+            estimatedVramBytes,
+            estimatedRamBytes,
             contextLength,
             parallel: loadConfig?.maxParallelPredictions ?? "-",
             status: isBusy ? "RUNNING" : "IDLE",
@@ -564,6 +602,10 @@ export class TopDataCollector {
             totalBusy += Math.max(1, this.activeModelRequests.get(model.identifier) ?? 1) + (processingState.queued || 0);
           }
 
+          const modelSizeBytes = info.sizeBytes || 0;
+          const estimatedVramBytes = hasGpu ? modelSizeBytes : 0;
+          const estimatedRamBytes = hasGpu ? 0 : modelSizeBytes;
+
           loadedModels.push({
             identifier: model.identifier,
             modelKey: info.modelKey,
@@ -571,7 +613,9 @@ export class TopDataCollector {
             architecture: info.architecture,
             paramsString: info.paramsString,
             format: info.format,
-            sizeBytes: info.sizeBytes,
+            sizeBytes: modelSizeBytes,
+            estimatedVramBytes,
+            estimatedRamBytes,
             contextLength,
             parallel: "-",
             status: isBusy ? "RUNNING" : "IDLE",
