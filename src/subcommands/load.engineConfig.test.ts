@@ -220,6 +220,21 @@ it("fails an unreadable source file before starting a load", async () => {
   expect(createClient).not.toHaveBeenCalled();
 });
 
+it.each([[], ["--estimate-only"]])(
+  "rejects an empty import before contacting the daemon with flags %j",
+  async (...flags) => {
+    jest.mocked(readFile).mockResolvedValue("");
+    await expect(
+      parse("test/model", "--yes", "--engine-config-file", "empty.yaml", ...flags),
+    ).rejects.toThrow(
+      "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+    );
+    expect(createClient).not.toHaveBeenCalled();
+    expect(loadModel).not.toHaveBeenCalled();
+    expect(estimate).not.toHaveBeenCalled();
+  },
+);
+
 it("keeps existing argument validation even when YAML is supplied", async () => {
   await expect(
     parse("test/model", "--engine-config-file", "config.yaml", "--auto", "--gpu", "max"),

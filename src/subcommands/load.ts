@@ -410,6 +410,11 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       speculativeDraftMinContinueProbability,
     }),
   };
+  if (typeof engineConfigFile === "string" && loadConfig.engineConfigFileContents === "") {
+    throw new Error(
+      "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+    );
+  }
   if (gpu !== undefined) {
     loadConfig.gpu = {
       ratio: gpu,
