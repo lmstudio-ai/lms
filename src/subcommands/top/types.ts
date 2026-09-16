@@ -52,6 +52,7 @@ export interface RecentPredictionRecord {
   ttftSec: number;
   totalTimeSec: number;
   stopReason: string;
+  source?: "stream" | "log";
 }
 
 export interface ThroughputMetrics {

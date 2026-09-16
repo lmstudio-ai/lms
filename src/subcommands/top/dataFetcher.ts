@@ -41,6 +41,9 @@ export class TopDataCollector {
   private currentLogTimestamp = Date.now();
   private activeLogModel: string = "LLM";
   private knownModelMap: Array<{ key: string; keywords: string[] }> = [];
+  private readonly instanceRefModelMap = new Map<string, string>();
+  private streamActive: boolean = false;
+  private readonly processedCompletionKeys = new Set<string>();
 
   public constructor(
     private readonly client: LMStudioClient,
@@ -48,7 +51,14 @@ export class TopDataCollector {
     private readonly host: string,
     private readonly port: number,
   ) {
-    this.initLogReader();
+    if (this.isLocalHost()) {
+      this.initLogReader();
+    }
+  }
+
+  public isLocalHost(): boolean {
+    const h = this.host.toLowerCase();
+    return h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "0.0.0.0";
   }
 
   public updateKnownModels(
@@ -143,13 +153,18 @@ export class TopDataCollector {
 
       this.lastLogReadOffset = stat.size;
       const textContent = new TextDecoder().decode(buffer);
-      this.parseLogChunk(textContent, "LLM");
+      // Pass isInitialBackfill = true so initial history is populated without counting historical tokens as session generated
+      this.parseLogChunk(textContent, "LLM", true);
     } catch (e) {
       this.logger.debug("Failed to read initial log lines", e);
     }
   }
 
   private refreshLogs(defaultModelIdentifier: string): void {
+    if (!this.isLocalHost() || this.streamActive) {
+      return;
+    }
+
     const latestFile = this.getLatestLogFilePath();
     if (latestFile === null) return;
 
@@ -172,16 +187,21 @@ export class TopDataCollector {
 
       this.lastLogReadOffset = stat.size;
       const textContent = new TextDecoder().decode(buffer);
-      this.parseLogChunk(textContent, defaultModelIdentifier);
+      this.parseLogChunk(textContent, defaultModelIdentifier, false);
     } catch (e) {
       this.logger.debug("Failed refreshing server logs", e);
     }
   }
 
-  public parseLogChunk(chunk: string, defaultModelIdentifier: string): void {
+  public parseLogChunk(
+    chunk: string,
+    defaultModelIdentifier: string,
+    isInitialBackfill: boolean = false,
+  ): void {
     const lines = chunk.split("\n");
     const timeRegex = /\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\]/;
     const loadModelRegex = /load_model:\s*loading model\s*['"]([^'"]+)['"]/i;
+    const instRefRegex = /"instanceReference":\s*"([^"]+)"/i;
     const promptRegex =
       /prompt eval time\s*=\s*([\d.]+)\s*ms\s*\/\s*(\d+)\s*tokens/i;
     const evalRegex =
@@ -193,6 +213,14 @@ export class TopDataCollector {
       const timeMatch = timeRegex.exec(line);
       if (timeMatch !== null) {
         this.currentLogTimestamp = new Date(timeMatch[1].replace(" ", "T")).getTime();
+      }
+
+      const instRefMatch = instRefRegex.exec(line);
+      if (instRefMatch !== null) {
+        const mapped = this.instanceRefModelMap.get(instRefMatch[1]);
+        if (mapped !== undefined) {
+          this.activeLogModel = mapped;
+        }
       }
 
       const loadMatch = loadModelRegex.exec(line);
@@ -221,14 +249,30 @@ export class TopDataCollector {
 
       const totalMatch = totalRegex.exec(line);
       if (totalMatch !== null && this.lastEvalCandidate !== null) {
+        const promptTokens = this.lastPromptCandidate?.tokens ?? 0;
+        const predTokens = this.lastEvalCandidate.tokens;
         const totalTimeSec = parseFloat(totalMatch[1]) / 1000;
         const totalTokens = parseInt(totalMatch[2], 10);
         const evalTokPerSec =
           this.lastEvalCandidate.tokPerSec > 0
             ? this.lastEvalCandidate.tokPerSec
-            : this.lastEvalCandidate.tokens /
+            : predTokens /
               Math.max(0.001, this.lastEvalCandidate.timeMs / 1000);
         const ttftSec = (this.lastPromptCandidate?.timeMs ?? 0) / 1000;
+
+        // Cross-source deduplication: if this exact completion was already received via diagnostics stream within 5 seconds, skip it
+        const isDuplicateFromStream = this.tracker.history.slice(0, 5).some(
+          prev =>
+            prev.source === "stream" &&
+            prev.promptTokens === promptTokens &&
+            prev.predictedTokens === predTokens &&
+            Math.abs(prev.timestamp - this.lastEvalCandidate!.timestamp) <= 5000,
+        );
+        if (isDuplicateFromStream) {
+          this.lastPromptCandidate = null;
+          this.lastEvalCandidate = null;
+          continue;
+        }
 
         const recordModel =
           this.activeLogModel !== "LLM"
@@ -239,13 +283,14 @@ export class TopDataCollector {
           id: String(this.nextRecordId++),
           timestamp: this.lastEvalCandidate.timestamp,
           modelIdentifier: recordModel,
-          promptTokens: this.lastPromptCandidate?.tokens ?? 0,
-          predictedTokens: this.lastEvalCandidate.tokens,
+          promptTokens,
+          predictedTokens: predTokens,
           totalTokens: totalTokens,
           tokensPerSecond: evalTokPerSec,
           ttftSec: ttftSec,
           totalTimeSec: totalTimeSec,
           stopReason: "completed",
+          source: "log",
         };
 
         this.tracker.history.unshift(record);
@@ -259,8 +304,12 @@ export class TopDataCollector {
         if (ttftSec > 0) {
           this.tracker.lastTtftSec = ttftSec;
         }
-        this.tracker.totalTokensGenerated += this.lastEvalCandidate.tokens;
-        this.tracker.totalPromptTokens += this.lastPromptCandidate?.tokens ?? 0;
+
+        // Only increment session totals for live inferences, not initial historical log backfill
+        if (!isInitialBackfill) {
+          this.tracker.totalTokensGenerated += predTokens;
+          this.tracker.totalPromptTokens += promptTokens;
+        }
 
         this.lastPromptCandidate = null;
         this.lastEvalCandidate = null;
@@ -277,6 +326,7 @@ export class TopDataCollector {
         if (log.data.type === "llm.prediction.input") {
           this.tracker.activePredictions++;
         } else if (log.data.type === "llm.prediction.output") {
+          this.streamActive = true;
           this.tracker.activePredictions = Math.max(0, this.tracker.activePredictions - 1);
           const stats = log.data.stats;
           if (stats !== undefined) {
@@ -286,6 +336,18 @@ export class TopDataCollector {
             const totalCount = stats.totalTokensCount ?? promptCount + predCount;
             const ttft = stats.timeToFirstTokenSec ?? 0;
             const totalTime = stats.totalTimeSec ?? 0;
+
+            // Cross-source deduplication: if this exact completion was already received via log file within 5 seconds, skip it
+            const isDuplicateFromLog = this.tracker.history.slice(0, 5).some(
+              prev =>
+                prev.source === "log" &&
+                prev.promptTokens === promptCount &&
+                prev.predictedTokens === predCount &&
+                Math.abs(prev.timestamp - log.timestamp) <= 5000,
+            );
+            if (isDuplicateFromLog) {
+              return;
+            }
 
             if (tokPerSec > 0) {
               this.tracker.currentTokensPerSec = tokPerSec;
@@ -306,7 +368,8 @@ export class TopDataCollector {
               tokensPerSecond: tokPerSec,
               ttftSec: ttft,
               totalTimeSec: totalTime,
-              stopReason: stats.stopReason ?? "unknown",
+              stopReason: stats.stopReason ?? "completed",
+              source: "stream",
             };
 
             this.tracker.history.unshift(record);
@@ -449,6 +512,11 @@ export class TopDataCollector {
             totalBusy += 1 + (processingState.queued || 0);
           }
 
+          const instanceRef = (info as any)?.instanceReference ?? (model as any)?.instanceReference;
+          if (instanceRef) {
+            this.instanceRefModelMap.set(String(instanceRef), model.identifier);
+          }
+
           loadedModels.push({
             identifier: model.identifier,
             modelKey: info.modelKey,
@@ -516,8 +584,10 @@ export class TopDataCollector {
     }
 
     // Refresh server logs to detect completions and update throughput stats
-    const primaryModelIdentifier = loadedModels[0]?.identifier ?? "LLM";
-    this.refreshLogs(primaryModelIdentifier);
+    // When multiple models are loaded, attribute to whichever model is actively PROCESSING
+    const processingModel = loadedModels.find(m => m.status === "PROCESSING");
+    const activeModelIdentifier = processingModel ? processingModel.identifier : loadedModels[0]?.identifier ?? "LLM";
+    this.refreshLogs(activeModelIdentifier);
 
     // Update active predictions based on loaded model processing state
     this.tracker.activePredictions = totalBusy;

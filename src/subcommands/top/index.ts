@@ -61,9 +61,25 @@ function printSnapshotText(snapshot: TopSnapshot): void {
       for (const gpu of hardware.gpus) {
         const total = gpu.dedicatedMemoryBytes > 0 ? gpu.dedicatedMemoryBytes : gpu.totalMemoryBytes;
         console.info(
-          `  GPU: ${gpu.name} (${gpu.detectionPlatform}, ${gpu.integrationType}) - VRAM: ${formatSizeBytes1024(total)}`,
+          `  GPU: ${gpu.name} (${gpu.detectionPlatform}, ${gpu.integrationType}) - Dedicated VRAM: ${formatSizeBytes1024(total)}`,
         );
       }
+    }
+    const totalModelsSizeBytes = loadedModels.reduce((acc, m) => acc + (m.sizeBytes || 0), 0);
+    const totalVram =
+      hardware.vramCapacityBytes > 0
+        ? hardware.vramCapacityBytes
+        : hardware.gpus.reduce(
+            (acc, g) => acc + (g.dedicatedMemoryBytes > 0 ? g.dedicatedMemoryBytes : g.totalMemoryBytes),
+            0,
+          );
+    if (totalModelsSizeBytes > 0 && totalVram > 0) {
+      const isOffloaded = totalModelsSizeBytes > totalVram;
+      console.info(
+        `  Model Footprint (Est.): ${formatSizeBytes1024(totalModelsSizeBytes)} / ${formatSizeBytes1024(totalVram)} Total VRAM${
+          isOffloaded ? chalk.yellow(" [CPU/RAM offloaded]") : ""
+        }`,
+      );
     }
     console.info(
       `  RAM: ${formatSizeBytes1024(hardware.ramCapacityBytes)}  |  CPU: ${hardware.cpuArchitecture}`,

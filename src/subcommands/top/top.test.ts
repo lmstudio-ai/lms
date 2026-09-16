@@ -587,3 +587,142 @@ describe("TopDataCollector - snapshot fetching", () => {
     expect(snapshot.hardware).toBeNull();
   });
 });
+
+describe("TopDataCollector - remote host guard and session startup isolation", () => {
+  it("correctly identifies localhost vs remote host", () => {
+    const client = createMockClient();
+    const logger = createMockLogger();
+
+    const local1 = new TopDataCollector(client, logger, "127.0.0.1", 1234);
+    expect(local1.isLocalHost()).toBe(true);
+
+    const local2 = new TopDataCollector(client, logger, "localhost", 1234);
+    expect(local2.isLocalHost()).toBe(true);
+
+    const local3 = new TopDataCollector(client, logger, "::1", 1234);
+    expect(local3.isLocalHost()).toBe(true);
+
+    const remote = new TopDataCollector(client, logger, "192.168.1.100", 1234);
+    expect(remote.isLocalHost()).toBe(false);
+  });
+
+  it("does not increment session token totals during initial log backfill", () => {
+    const client = createMockClient();
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234);
+
+    const oldLogChunk = [
+      "[2026-09-16 18:00:00] [info] slot print_timing: prompt eval time = 500.00 ms / 200 tokens",
+      "[2026-09-16 18:00:05] [info] slot print_timing:        eval time = 4000.00 ms / 100 tokens (40.00 ms per token, 25.00 tokens per second)",
+      "[2026-09-16 18:00:05] [info] slot print_timing:       total time = 4500.00 ms / 300 tokens",
+    ].join("\n");
+
+    // Backfill historical logs on startup
+    collector.parseLogChunk(oldLogChunk, "historical-model", true);
+
+    let metrics = collector.getThroughputMetrics();
+    // History row is populated for display
+    expect(metrics.recentPredictions).toHaveLength(1);
+    expect(metrics.recentPredictions[0].modelIdentifier).toBe("historical-model");
+    // But session total counters remain 0!
+    expect(metrics.totalTokensGenerated).toBe(0);
+    expect(metrics.totalPromptTokens).toBe(0);
+
+    // Now a live completion occurs during the active session
+    const liveChunk = [
+      "[2026-09-16 19:40:00] [info] slot print_timing: prompt eval time = 100.00 ms / 30 tokens",
+      "[2026-09-16 19:40:02] [info] slot print_timing:        eval time = 1000.00 ms / 40 tokens (25.00 ms per token, 40.00 tokens per second)",
+      "[2026-09-16 19:40:02] [info] slot print_timing:       total time = 1100.00 ms / 70 tokens",
+    ].join("\n");
+
+    collector.parseLogChunk(liveChunk, "live-model", false);
+
+    metrics = collector.getThroughputMetrics();
+    expect(metrics.recentPredictions).toHaveLength(2);
+    expect(metrics.totalTokensGenerated).toBe(40);
+    expect(metrics.totalPromptTokens).toBe(30);
+  });
+
+  it("deduplicates completions received from both streamLogs and engine log files", () => {
+    let streamHandler: ((log: any) => void) | null = null;
+    const client = createMockClient({
+      diagnostics: {
+        unstable_streamLogs: jest.fn().mockImplementation((handler: any) => {
+          streamHandler = handler;
+          return jest.fn();
+        }),
+      },
+    });
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234);
+
+    collector.startListening();
+    expect(streamHandler).not.toBeNull();
+
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const localDateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    const timestamp = d.getTime();
+
+    // 1. Diagnostics stream reports completion
+    streamHandler!({
+      timestamp,
+      data: {
+        type: "llm.prediction.output",
+        modelIdentifier: "test-model",
+        stats: {
+          promptTokensCount: 45,
+          predictedTokensCount: 90,
+          totalTokensCount: 135,
+          tokensPerSecond: 30,
+          timeToFirstTokenSec: 0.2,
+          totalTimeSec: 3.2,
+          stopReason: "eosFound",
+        },
+      },
+    });
+
+    let metrics = collector.getThroughputMetrics();
+    expect(metrics.recentPredictions).toHaveLength(1);
+    expect(metrics.totalTokensGenerated).toBe(90);
+
+    // 2. The local server log chunk arrives with the EXACT same prediction
+    const engineChunk = [
+      `[${localDateStr}] [info] slot print_timing: prompt eval time = 200.00 ms / 45 tokens`,
+      `[${localDateStr}] [info] slot print_timing:        eval time = 3000.00 ms / 90 tokens (33.33 ms per token, 30.00 tokens per second)`,
+      `[${localDateStr}] [info] slot print_timing:       total time = 3200.00 ms / 135 tokens`,
+    ].join("\n");
+
+    collector.parseLogChunk(engineChunk, "test-model", false);
+
+    metrics = collector.getThroughputMetrics();
+    // Must NOT double-count the completion in history or session tokens
+    expect(metrics.recentPredictions).toHaveLength(1);
+    expect(metrics.totalTokensGenerated).toBe(90);
+    expect(metrics.totalPromptTokens).toBe(45);
+  });
+
+  it("attributes completions to model matching instanceReference in log lines", () => {
+    const client = createMockClient();
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234);
+
+    // Pre-populate instanceReference mapping
+    (collector as any).instanceRefModelMap.set("ref-alpha-123", "meta/llama-3-8b");
+    (collector as any).instanceRefModelMap.set("ref-beta-456", "qwen/qwen-2.5-7b");
+
+    const chunk = [
+      `[2026-09-16 19:50:00][INFO][Endpoint=getModelInfo] Getting descriptor for specifier: {"type":"instanceReference","instanceReference":"ref-beta-456"}`,
+      `[2026-09-16 19:50:01] [info] slot print_timing: prompt eval time = 50.00 ms / 15 tokens`,
+      `[2026-09-16 19:50:02] [info] slot print_timing:        eval time = 500.00 ms / 20 tokens (25.00 ms per token, 40.00 tokens per second)`,
+      `[2026-09-16 19:50:02] [info] slot print_timing:       total time = 550.00 ms / 35 tokens`,
+    ].join("\n");
+
+    collector.parseLogChunk(chunk, "fallback-model", false);
+
+    const metrics = collector.getThroughputMetrics();
+    expect(metrics.recentPredictions).toHaveLength(1);
+    expect(metrics.recentPredictions[0].modelIdentifier).toBe("qwen/qwen-2.5-7b");
+  });
+});
+

@@ -138,42 +138,55 @@ export const TopDashboard: React.FC<TopDashboardProps> = ({
         flexDirection="column"
       >
         <Text bold color="#818CF8">
-          HARDWARE & VRAM ALLOCATION
+          HARDWARE & MEMORY FOOTPRINT
         </Text>
-        {hardware !== null && hardware.gpus.length > 0 ? (
-          hardware.gpus.map((gpu, idx) => {
-            const gpuTotalBytes = gpu.dedicatedMemoryBytes > 0 ? gpu.dedicatedMemoryBytes : gpu.totalMemoryBytes;
-            const ratio = gpuTotalBytes > 0 ? totalModelsSizeBytes / gpuTotalBytes : 0;
-            return (
-              <Box key={idx} flexDirection="column" marginY={0}>
-                <Box flexDirection="row" justifyContent="space-between">
+        {hardware !== null && hardware.gpus.length > 0 && (
+          <Box flexDirection="column" marginY={0}>
+            {hardware.gpus.map((gpu, idx) => {
+              const mem = gpu.dedicatedMemoryBytes > 0 ? gpu.dedicatedMemoryBytes : gpu.totalMemoryBytes;
+              return (
+                <Box key={idx} flexDirection="row" justifyContent="space-between">
                   <Text>
                     {chalk.bold(gpu.name)}{" "}
                     {chalk.dim(`(${gpu.detectionPlatform}, ${gpu.integrationType})`)}
                   </Text>
-                  <Text>
-                    {formatSizeBytes1024(totalModelsSizeBytes)} / {formatSizeBytes1024(gpuTotalBytes)}
-                  </Text>
+                  <Text dimColor>VRAM: {formatSizeBytes1024(mem)}</Text>
                 </Box>
-                <Box flexDirection="row" gap={1}>
-                  <Text dimColor>VRAM Used:</Text>
-                  <Text>{renderProgressBar(ratio)}</Text>
-                </Box>
-              </Box>
-            );
-          })
-        ) : (
-          <Box flexDirection="row" justifyContent="space-between">
-            <Text dimColor>
-              {vramCapacity > 0 ? "Hardware VRAM:" : "VRAM usage:"}
-            </Text>
-            <Text>
-              {vramCapacity > 0
-                ? `${formatSizeBytes1024(totalModelsSizeBytes)} / ${formatSizeBytes1024(vramCapacity)}`
-                : formatSizeBytes1024(totalModelsSizeBytes)}
-            </Text>
+              );
+            })}
           </Box>
         )}
+
+        {/* Aggregate Model Size Footprint (Estimate) vs Total VRAM or RAM */}
+        {(() => {
+          const totalVram =
+            vramCapacity > 0
+              ? vramCapacity
+              : hardware?.gpus.reduce(
+                  (sum, g) => sum + (g.dedicatedMemoryBytes > 0 ? g.dedicatedMemoryBytes : g.totalMemoryBytes),
+                  0,
+                ) ?? 0;
+          const targetCap = totalVram > 0 ? totalVram : ramCapacity;
+          const ratio = targetCap > 0 ? totalModelsSizeBytes / targetCap : 0;
+          const label = totalVram > 0 ? "Total VRAM" : "System RAM";
+          const isOffloaded = totalVram > 0 && totalModelsSizeBytes > totalVram;
+
+          return (
+            <Box flexDirection="column" marginY={0}>
+              <Box flexDirection="row" justifyContent="space-between">
+                <Text dimColor>Model Size (Est.):</Text>
+                <Text>
+                  {formatSizeBytes1024(totalModelsSizeBytes)} / {formatSizeBytes1024(targetCap)} {label}
+                  {isOffloaded && chalk.yellow(" [CPU/RAM offloaded]")}
+                </Text>
+              </Box>
+              <Box flexDirection="row" gap={1}>
+                <Text dimColor>Footprint:</Text>
+                <Text>{renderProgressBar(ratio)}</Text>
+              </Box>
+            </Box>
+          );
+        })()}
 
         {/* System RAM & CPU */}
         <Box flexDirection="row" justifyContent="space-between" marginTop={0}>
