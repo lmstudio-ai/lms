@@ -552,7 +552,7 @@ describe("TopDataCollector - snapshot fetching", () => {
     expect(snapshot.loadedModels).toHaveLength(2);
     expect(snapshot.loadedModels[0].identifier).toBe("google/gemma-4-12b-qat");
     expect(snapshot.loadedModels[0].parallel).toBe(4);
-    expect(snapshot.loadedModels[0].status).toBe("PROCESSING");
+    expect(snapshot.loadedModels[0].status).toBe("RUNNING");
     expect(snapshot.loadedModels[0].queued).toBe(2);
 
     expect(snapshot.loadedModels[1].identifier).toBe("nomic-embed-text");
@@ -561,6 +561,78 @@ describe("TopDataCollector - snapshot fetching", () => {
 
     // Active predictions from processing states: 1 (processing) + 2 (queued) = 3
     expect(snapshot.throughput.activePredictions).toBe(3);
+  });
+
+  it("marks model as RUNNING while streaming response and returns to IDLE after output", async () => {
+    let streamHandler: ((log: any) => void) | null = null;
+    const client = createMockClient({
+      diagnostics: {
+        unstable_streamLogs: jest.fn().mockImplementation((handler: any) => {
+          streamHandler = handler;
+          return jest.fn();
+        }),
+      },
+      llm: {
+        listLoaded: jest.fn().mockResolvedValue([
+          {
+            identifier: "qwen-model",
+            getModelInfo: jest.fn().mockResolvedValue({
+              modelKey: "qwen",
+              sizeBytes: 1000,
+            }),
+            getLoadConfig: jest.fn().mockResolvedValue({}),
+            getInstanceProcessingState: jest.fn().mockResolvedValue({ status: "idle", queued: 0 }),
+            getContextLength: jest.fn().mockResolvedValue(2048),
+          },
+        ]),
+      },
+    });
+
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234);
+    collector.startListening();
+
+    // Initial snapshot: IDLE
+    let snapshot = await collector.fetchSnapshot();
+    expect(snapshot.loadedModels[0].status).toBe("IDLE");
+    expect(snapshot.throughput.activePredictions).toBe(0);
+
+    // 1. Response starts streaming (llm.prediction.input)
+    streamHandler!({
+      timestamp: Date.now(),
+      data: {
+        type: "llm.prediction.input",
+        modelIdentifier: "qwen-model",
+        input: "Hello",
+        modelPath: "/path/qwen",
+      },
+    });
+
+    // While response is streaming: RUNNING
+    snapshot = await collector.fetchSnapshot();
+    expect(snapshot.loadedModels[0].status).toBe("RUNNING");
+    expect(snapshot.throughput.activePredictions).toBe(1);
+
+    // 2. Response finishes (llm.prediction.output)
+    streamHandler!({
+      timestamp: Date.now(),
+      data: {
+        type: "llm.prediction.output",
+        modelIdentifier: "qwen-model",
+        output: "World",
+        stats: {
+          promptTokensCount: 5,
+          predictedTokensCount: 10,
+          totalTokensCount: 15,
+          tokensPerSecond: 20,
+        },
+      },
+    });
+
+    // Finished streaming: returns to IDLE
+    snapshot = await collector.fetchSnapshot();
+    expect(snapshot.loadedModels[0].status).toBe("IDLE");
+    expect(snapshot.throughput.activePredictions).toBe(0);
   });
 
   it("handles service info and hardware survey failures gracefully", async () => {

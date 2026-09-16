@@ -34,7 +34,7 @@ export interface LoadedModelItem {
   sizeBytes: number;
   contextLength: number;
   parallel: number | "-";
-  status: "IDLE" | "PROCESSING" | string;
+  status: "IDLE" | "RUNNING" | "PROCESSING" | string;
   queued: number;
   ttlMs?: number | null;
   lastUsedTime?: number | null;

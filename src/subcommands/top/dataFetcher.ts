@@ -43,6 +43,7 @@ export class TopDataCollector {
   private knownModelMap: Array<{ key: string; keywords: string[] }> = [];
   private readonly instanceRefModelMap = new Map<string, string>();
   private streamActive: boolean = false;
+  private readonly activeModelRequests = new Map<string, number>();
 
   public constructor(
     private readonly client: LMStudioClient,
@@ -338,8 +339,16 @@ export class TopDataCollector {
       this.unsubscribeLogs = this.client.diagnostics.unstable_streamLogs(log => {
         if (log.data.type === "llm.prediction.input") {
           this.tracker.activePredictions++;
+          const current = this.activeModelRequests.get(log.data.modelIdentifier) ?? 0;
+          this.activeModelRequests.set(log.data.modelIdentifier, current + 1);
         } else if (log.data.type === "llm.prediction.output") {
           this.tracker.activePredictions = Math.max(0, this.tracker.activePredictions - 1);
+          const current = this.activeModelRequests.get(log.data.modelIdentifier) ?? 1;
+          if (current <= 1) {
+            this.activeModelRequests.delete(log.data.modelIdentifier);
+          } else {
+            this.activeModelRequests.set(log.data.modelIdentifier, current - 1);
+          }
           const stats = log.data.stats;
           // Keep the log fallback active when stream stats are absent; only disable file fallback after receiving usable stats
           if (stats !== undefined) {
@@ -509,9 +518,10 @@ export class TopDataCollector {
             model.getContextLength().catch(() => 0),
           ]);
 
-          const isBusy = processingState.status?.toLowerCase() === "processing";
+          const streamRunning = (this.activeModelRequests.get(model.identifier) ?? 0) > 0;
+          const isBusy = processingState.status?.toLowerCase() === "processing" || streamRunning;
           if (isBusy) {
-            totalBusy += 1 + (processingState.queued || 0);
+            totalBusy += Math.max(1, this.activeModelRequests.get(model.identifier) ?? 1) + (processingState.queued || 0);
           }
 
           const instanceRef = (info as any)?.instanceReference ?? (model as any)?.instanceReference;
@@ -529,7 +539,7 @@ export class TopDataCollector {
             sizeBytes: info.sizeBytes,
             contextLength,
             parallel: loadConfig?.maxParallelPredictions ?? "-",
-            status: processingState.status?.toUpperCase() ?? "IDLE",
+            status: isBusy ? "RUNNING" : "IDLE",
             queued: processingState.queued ?? 0,
             ttlMs: info.ttlMs,
             lastUsedTime: info.lastUsedTime,
@@ -548,9 +558,10 @@ export class TopDataCollector {
             model.getContextLength().catch(() => 0),
           ]);
 
-          const isBusy = processingState.status?.toLowerCase() === "processing";
+          const streamRunning = (this.activeModelRequests.get(model.identifier) ?? 0) > 0;
+          const isBusy = processingState.status?.toLowerCase() === "processing" || streamRunning;
           if (isBusy) {
-            totalBusy += 1 + (processingState.queued || 0);
+            totalBusy += Math.max(1, this.activeModelRequests.get(model.identifier) ?? 1) + (processingState.queued || 0);
           }
 
           loadedModels.push({
@@ -563,7 +574,7 @@ export class TopDataCollector {
             sizeBytes: info.sizeBytes,
             contextLength,
             parallel: "-",
-            status: processingState.status?.toUpperCase() ?? "IDLE",
+            status: isBusy ? "RUNNING" : "IDLE",
             queued: processingState.queued ?? 0,
             ttlMs: info.ttlMs,
             lastUsedTime: info.lastUsedTime,
@@ -586,13 +597,13 @@ export class TopDataCollector {
     }
 
     // Refresh server logs to detect completions and update throughput stats
-    // When multiple models are loaded, attribute to whichever model is actively PROCESSING
-    const processingModel = loadedModels.find(m => m.status === "PROCESSING");
-    const activeModelIdentifier = processingModel ? processingModel.identifier : loadedModels[0]?.identifier ?? "LLM";
+    // When multiple models are loaded, attribute to whichever model is actively RUNNING or PROCESSING
+    const runningModel = loadedModels.find(m => m.status === "RUNNING" || m.status === "PROCESSING");
+    const activeModelIdentifier = runningModel ? runningModel.identifier : loadedModels[0]?.identifier ?? "LLM";
     this.refreshLogs(activeModelIdentifier);
 
-    // Update active predictions based on loaded model processing state
-    this.tracker.activePredictions = totalBusy;
+    // Update active predictions preserving live stream counter if active
+    this.tracker.activePredictions = Math.max(this.tracker.activePredictions, totalBusy);
 
     return {
       server: {

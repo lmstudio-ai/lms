@@ -337,10 +337,10 @@ export const TopDashboard: React.FC<TopDashboardProps> = ({
             </Box>
 
             {loadedModels.map(model => {
-              const isProcessing = model.status === "PROCESSING";
-              const statusColor = isProcessing ? "yellow" : "green";
-              const statusText = isProcessing
-                ? `⚡ BUSY (${model.queued}q)`
+              const isRunning = model.status === "RUNNING" || model.status === "PROCESSING";
+              const statusColor = isRunning ? "yellow" : "green";
+              const statusText = isRunning
+                ? `⚡ RUNNING${model.queued > 0 ? ` (${model.queued}q)` : ""}`
                 : "● IDLE";
 
               const timeLeft =

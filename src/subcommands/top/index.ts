@@ -116,7 +116,10 @@ function printSnapshotText(snapshot: TopSnapshot): void {
 
       return {
         identifier: m.identifier,
-        status: m.status === "PROCESSING" ? chalk.yellow("PROCESSING") : chalk.green("IDLE"),
+        status:
+          m.status === "RUNNING" || m.status === "PROCESSING"
+            ? chalk.yellow("RUNNING")
+            : chalk.green("IDLE"),
         size: formatSizeBytes1000(m.sizeBytes),
         context: m.contextLength ? `${m.contextLength} ctx` : "-",
         parallel: String(m.parallel),
