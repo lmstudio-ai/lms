@@ -165,19 +165,20 @@ function printSnapshotText(snapshot: TopSnapshot): void {
 topCommand.action(async (options: TopCommandOptions) => {
   const logger = createLogger(options);
   let { host, port } = options;
-  if (host === undefined) {
-    host = "127.0.0.1";
-  }
-  if (port === undefined) {
-    if (host === "127.0.0.1") {
-      try {
-        port = (await getServerConfig(logger))?.port ?? DEFAULT_SERVER_PORT;
-      } catch (e) {
-        logger.debug("Failed to read last server config", e);
-        port = DEFAULT_SERVER_PORT;
+  if (host === undefined || port === undefined) {
+    try {
+      const serverConfig = await getServerConfig(logger);
+      if (port === undefined) {
+        port = serverConfig?.port ?? DEFAULT_SERVER_PORT;
       }
-    } else {
-      port = DEFAULT_SERVER_PORT;
+      if (host === undefined) {
+        const bindAddr = serverConfig?.networkInterface;
+        host = !bindAddr || bindAddr === "0.0.0.0" || bindAddr === "::" ? "127.0.0.1" : bindAddr;
+      }
+    } catch (e) {
+      logger.debug("Failed to read server config", e);
+      if (host === undefined) host = "127.0.0.1";
+      if (port === undefined) port = DEFAULT_SERVER_PORT;
     }
   }
 

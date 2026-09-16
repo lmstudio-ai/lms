@@ -835,6 +835,69 @@ describe("TopDataCollector - snapshot fetching", () => {
     expect(snapshot.server.version).toBeNull();
     expect(snapshot.hardware).toBeNull();
   });
+
+  it("marks model as RUNNING when processingState status is generating or processingPrompt or from log launch", async () => {
+    let currentStatus = "generating";
+    const client = createMockClient({
+      llm: {
+        listLoaded: jest.fn().mockResolvedValue([
+          {
+            identifier: "deepseek-r1-distill-qwen-7b",
+            getModelInfo: jest.fn().mockResolvedValue({
+              modelKey: "deepseek",
+              sizeBytes: 4_000_000_000,
+            }),
+            getLoadConfig: jest.fn().mockResolvedValue({}),
+            getInstanceProcessingState: jest.fn().mockImplementation(async () => ({
+              status: currentStatus,
+              queued: currentStatus === "idle" ? 0 : 1,
+            })),
+            getContextLength: jest.fn().mockResolvedValue(2048),
+          },
+        ]),
+      },
+    });
+
+    const logger = createMockLogger();
+    const collector = new TopDataCollector(client, logger, "127.0.0.1", 1234);
+
+    // 1. Status is "generating" -> RUNNING
+    let snapshot = await collector.fetchSnapshot();
+    expect(snapshot.loadedModels[0].status).toBe("RUNNING");
+    expect(snapshot.throughput.activePredictions).toBe(1);
+
+    // 2. Status is "processingPrompt" -> RUNNING
+    currentStatus = "processingPrompt";
+    snapshot = await collector.fetchSnapshot();
+    expect(snapshot.loadedModels[0].status).toBe("RUNNING");
+    expect(snapshot.throughput.activePredictions).toBe(1);
+
+    // 3. Status is "idle" -> IDLE
+    currentStatus = "idle";
+    snapshot = await collector.fetchSnapshot();
+    expect(snapshot.loadedModels[0].status).toBe("IDLE");
+    expect(snapshot.throughput.activePredictions).toBe(0);
+
+    // 4. Engine log launch event: slot launch_slot_ -> marks model as RUNNING
+    collector.parseLogChunk(
+      "[2026-09-16 21:00:00] [DEBUG] slot launch_slot_: id 2 | task 1206 | processing task",
+      "deepseek-r1-distill-qwen-7b",
+      false,
+    );
+    snapshot = await collector.fetchSnapshot();
+    expect(snapshot.loadedModels[0].status).toBe("RUNNING");
+    expect(snapshot.throughput.activePredictions).toBe(1);
+
+    // 5. Engine log release event: slot release -> returns to IDLE
+    collector.parseLogChunk(
+      "[2026-09-16 21:00:10] [DEBUG] slot release: id 2 | task 1206 | stop processing: n_tokens = 200",
+      "deepseek-r1-distill-qwen-7b",
+      false,
+    );
+    snapshot = await collector.fetchSnapshot();
+    expect(snapshot.loadedModels[0].status).toBe("IDLE");
+    expect(snapshot.throughput.activePredictions).toBe(0);
+  });
 });
 
 describe("TopDataCollector - remote host guard and session startup isolation", () => {

@@ -49,6 +49,7 @@ export class TopDataCollector {
   private readonly instanceRefModelMap = new Map<string, string>();
   private streamActive: boolean = false;
   private readonly activeModelRequests = new Map<string, number>();
+  private readonly activeLogTasks = new Map<string, { model: string; timestamp: number }>();
 
   public constructor(
     private readonly client: LMStudioClient,
@@ -131,12 +132,15 @@ export class TopDataCollector {
     }
 
     // 4. Fallback heuristics for popular model families
-    if (lower.includes("deepseek")) return "deepseek-r1-distill-qwen-7b";
-    if (lower.includes("gemma")) return "google/gemma-4-12b-qat";
+    const baseName = path.basename(norm, path.extname(norm));
+    if (baseName && baseName !== "model") {
+      return baseName;
+    }
+    if (lower.includes("deepseek")) return "deepseek";
+    if (lower.includes("gemma")) return "gemma";
     if (lower.includes("qwen")) return "qwen";
     if (lower.includes("llama")) return "llama";
 
-    const baseName = path.basename(norm, path.extname(norm));
     return baseName || defaultName;
   }
 
@@ -194,6 +198,7 @@ export class TopDataCollector {
       const textContent = new TextDecoder().decode(completeLinesBuffer);
       // Pass isInitialBackfill = true so initial history is populated without counting historical tokens as session generated
       this.parseLogChunk(textContent, "LLM", true);
+      this.activeLogTasks.clear();
     } catch (e) {
       this.logger.debug("Failed to read initial log lines", e);
     }
@@ -297,6 +302,39 @@ export class TopDataCollector {
         };
       }
 
+      // Track active tasks from engine logs (launching vs releasing)
+      const isLaunch = /slot\s+launch_slot_:|processing\s+task/i.test(line);
+      if (isLaunch) {
+        const taskMatch = /task\s+(\d+)/i.exec(line);
+        const taskId = taskMatch ? taskMatch[1] : `task_${Date.now()}`;
+        const recordModel =
+          this.activeLogModel !== "LLM"
+            ? this.activeLogModel
+            : defaultModelIdentifier;
+        if (!isInitialBackfill) {
+          this.activeLogTasks.set(taskId, { model: recordModel, timestamp: Date.now() });
+        }
+      }
+
+      // Track intermediate generation speed if emitted during streaming (e.g. tg = 29.53 t/s)
+      const tgMatch = /tg(?:_3s)?\s*=\s*([\d.]+)\s*t\/s/i.exec(line);
+      if (tgMatch !== null && !isInitialBackfill) {
+        const liveSpeed = parseFloat(tgMatch[1]);
+        if (liveSpeed > 0) {
+          this.tracker.currentTokensPerSec = liveSpeed;
+        }
+      }
+
+      const isRelease = /slot\s+release:|stop\s+processing/i.test(line);
+      if (isRelease) {
+        const releaseTaskMatch = /task\s+(\d+)/i.exec(line);
+        if (releaseTaskMatch) {
+          this.activeLogTasks.delete(releaseTaskMatch[1]);
+        } else {
+          this.activeLogTasks.clear();
+        }
+      }
+
       const evalMatch = evalRegex.exec(line);
       if (evalMatch !== null) {
         this.lastEvalCandidate = {
@@ -339,6 +377,13 @@ export class TopDataCollector {
           source: "log",
           isBackfill: isInitialBackfill,
         };
+
+        const totalTaskMatch = /task\s+(\d+)/i.exec(line);
+        if (totalTaskMatch) {
+          this.activeLogTasks.delete(totalTaskMatch[1]);
+        } else {
+          this.activeLogTasks.clear();
+        }
 
         this.tracker.history.unshift(record);
         if (this.tracker.history.length > 20) {
@@ -533,6 +578,15 @@ export class TopDataCollector {
         this.logger.debug("Hardware survey failed", e);
       }
     }
+    // Ingest latest log lines to pick up any new requests or completions
+    this.refreshLogs(this.activeLogModel !== "LLM" ? this.activeLogModel : "LLM");
+
+    // Clean up stale log tasks older than 120s
+    for (const [taskId, entry] of this.activeLogTasks.entries()) {
+      if (now - entry.timestamp > 120_000) {
+        this.activeLogTasks.delete(taskId);
+      }
+    }
 
     // Loaded models
     const loadedModels: LoadedModelItem[] = [];
@@ -554,10 +608,37 @@ export class TopDataCollector {
             model.getContextLength().catch(() => 0),
           ]);
 
-          const streamRunning = (this.activeModelRequests.get(model.identifier) ?? 0) > 0;
-          const isBusy = processingState.status?.toLowerCase() === "processing" || streamRunning;
+          const rawStatus = (processingState.status || "idle").toLowerCase();
+          const isRpcBusy =
+            (rawStatus !== "idle" && rawStatus !== "") || (processingState.queued ?? 0) > 0;
+
+          const streamCount = this.activeModelRequests.get(model.identifier) ?? 0;
+          const streamRunning =
+            streamCount > 0 ||
+            Array.from(this.activeModelRequests.entries()).some(
+              ([id, count]) =>
+                count > 0 &&
+                (id.toLowerCase() === model.identifier.toLowerCase() ||
+                  id.toLowerCase() === info.modelKey.toLowerCase() ||
+                  model.identifier.toLowerCase().includes(id.toLowerCase()) ||
+                  id.toLowerCase().includes(model.identifier.toLowerCase())),
+            );
+
+          const logTasksCount = Array.from(this.activeLogTasks.values()).filter(
+            t =>
+              t.model.toLowerCase() === model.identifier.toLowerCase() ||
+              t.model.toLowerCase() === info.modelKey.toLowerCase() ||
+              model.identifier.toLowerCase().includes(t.model.toLowerCase()) ||
+              t.model.toLowerCase().includes(model.identifier.toLowerCase()),
+          ).length;
+
+          const isBusy = isRpcBusy || streamRunning || logTasksCount > 0;
           if (isBusy) {
-            totalBusy += Math.max(1, this.activeModelRequests.get(model.identifier) ?? 1) + (processingState.queued || 0);
+            const busyCount = Math.max(
+              1,
+              (isRpcBusy ? processingState.queued || 1 : 0) + logTasksCount + streamCount,
+            );
+            totalBusy += busyCount;
           }
 
           const instanceRef = (info as any)?.instanceReference ?? (model as any)?.instanceReference;
@@ -589,7 +670,10 @@ export class TopDataCollector {
           const kvRam = kvOnGpu ? 0 : kvCacheBytes;
 
           // Dynamic in-flight buffer while actively streaming
-          const activeCount = Math.max(1, this.activeModelRequests.get(model.identifier) ?? 1);
+          const activeCount = Math.max(
+            1,
+            (isRpcBusy ? processingState.queued || 1 : 0) + logTasksCount + streamCount,
+          );
           const liveBuffer = isBusy ? activeCount * 256 * 1024 * 1024 : 0;
           const liveVram = gpuRatio > 0 ? liveBuffer : 0;
           const liveRam = gpuRatio > 0 ? 0 : liveBuffer;
@@ -628,15 +712,29 @@ export class TopDataCollector {
             model.getContextLength().catch(() => 0),
           ]);
 
-          const streamRunning = (this.activeModelRequests.get(model.identifier) ?? 0) > 0;
-          const isBusy = processingState.status?.toLowerCase() === "processing" || streamRunning;
+          const rawStatus = (processingState.status || "idle").toLowerCase();
+          const isRpcBusy =
+            (rawStatus !== "idle" && rawStatus !== "") || (processingState.queued ?? 0) > 0;
+          const streamCount = this.activeModelRequests.get(model.identifier) ?? 0;
+          const streamRunning =
+            streamCount > 0 ||
+            Array.from(this.activeModelRequests.entries()).some(
+              ([id, count]) =>
+                count > 0 &&
+                (id.toLowerCase() === model.identifier.toLowerCase() ||
+                  id.toLowerCase() === info.modelKey.toLowerCase() ||
+                  model.identifier.toLowerCase().includes(id.toLowerCase()) ||
+                  id.toLowerCase().includes(model.identifier.toLowerCase())),
+            );
+          const isBusy = isRpcBusy || streamRunning;
           if (isBusy) {
-            totalBusy += Math.max(1, this.activeModelRequests.get(model.identifier) ?? 1) + (processingState.queued || 0);
+            totalBusy += Math.max(1, (isRpcBusy ? processingState.queued || 1 : 0) + streamCount);
           }
 
           const modelSizeBytes = info.sizeBytes || 0;
-          const estimatedVramBytes = hasGpu ? modelSizeBytes : 0;
-          const estimatedRamBytes = hasGpu ? 0 : modelSizeBytes;
+          const isCpuDevice = info.deviceIdentifier?.toLowerCase().includes("cpu") ?? !hasGpu;
+          const estimatedVramBytes = isCpuDevice ? 0 : modelSizeBytes;
+          const estimatedRamBytes = isCpuDevice ? modelSizeBytes : 0;
 
           loadedModels.push({
             identifier: model.identifier,
@@ -678,8 +776,16 @@ export class TopDataCollector {
     const activeModelIdentifier = runningModel ? runningModel.identifier : loadedModels[0]?.identifier ?? "LLM";
     this.refreshLogs(activeModelIdentifier);
 
-    // Update active predictions preserving live stream counter if active
-    this.tracker.activePredictions = Math.max(this.tracker.activePredictions, totalBusy);
+    // Update active predictions preserving live stream counter if active, or sync to totalBusy
+    if (this.streamActive) {
+      this.tracker.activePredictions = Math.max(this.tracker.activePredictions, totalBusy);
+    } else {
+      this.tracker.activePredictions = totalBusy;
+    }
+
+    if (totalBusy === 0 && this.tracker.activePredictions === 0) {
+      this.tracker.currentTokensPerSec = 0;
+    }
 
     return {
       server: {
