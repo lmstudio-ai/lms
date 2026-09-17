@@ -175,11 +175,7 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       loadCommand.error("--engine-config-file and --no-engine-config-file are mutually exclusive.");
     }
   })
-  .addOption(
-    new Option("--no-engine-config-file", "Use ordinary LM Studio settings for this load.").default(
-      undefined,
-    ),
-  )
+  .option("--no-engine-config-file", "Use ordinary LM Studio settings for this load.")
   .addOption(
     new Option(
       "--engine-cwd <path>",
@@ -191,11 +187,7 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       loadCommand.error("--engine-cwd and --no-engine-cwd are mutually exclusive.");
     }
   })
-  .addOption(
-    new Option("--no-engine-cwd", "Use the runtime temporary directory for this load.").default(
-      undefined,
-    ),
-  )
+  .option("--no-engine-cwd", "Use the runtime temporary directory for this load.")
   .addOption(
     new Option(
       "--auto",
@@ -393,11 +385,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
           engineConfigFileContents:
             engineConfigFile === false ? "" : await readFile(resolve(engineConfigFile), "utf8"),
         }),
-    ...(engineCwd === undefined
-      ? {}
-      : {
-          engineCwd: engineCwd === false || engineCwd === "" ? "" : resolve(engineCwd),
-        }),
+    engineCwd: engineCwd === false ? "" : engineCwd,
     autoFit: auto === true ? true : undefined,
     contextLength,
     maxParallelPredictions,

@@ -135,7 +135,7 @@ it.each([["--exact", "test/model"], ["test/model", "--yes"], []])(
       expect.objectContaining({
         config: expect.objectContaining({
           engineConfigFileContents: yaml,
-          engineCwd: resolve("."),
+          engineCwd: ".",
           contextLength: 512,
           maxParallelPredictions: 3,
         }),
@@ -144,12 +144,12 @@ it.each([["--exact", "test/model"], ["test/model", "--yes"], []])(
   },
 );
 
-it("leaves omitted fields absent and notices inherited mode from the loaded report", async () => {
+it("leaves omitted fields unset and notices inherited mode from the loaded report", async () => {
   loadedConfig.mockResolvedValue({ engineConfigFileContents: yaml });
   await parse("test/model", "--yes");
   const config = loadModel.mock.calls[0][1].config;
   expect(config).not.toHaveProperty("engineConfigFileContents");
-  expect(config).not.toHaveProperty("engineCwd");
+  expect(config.engineCwd).toBeUndefined();
   expect(readFile).not.toHaveBeenCalled();
   expect(
     logger.info.mock.calls.filter(
@@ -168,20 +168,20 @@ it.each([
   { args: ["--no-engine-cwd"], expected: { engineCwd: "" }, absent: "engineConfigFileContents" },
   {
     args: ["--engine-cwd", "relative dir"],
-    expected: { engineCwd: resolve("relative dir") },
+    expected: { engineCwd: "relative dir" },
     absent: "engineConfigFileContents",
   },
 ])("keeps reset and inheritance independent: $args", async ({ args, expected, absent }) => {
   await parse("test/model", "--yes", ...args);
   expect(loadModel.mock.calls[0][1].config).toEqual(expect.objectContaining(expected));
-  expect(loadModel.mock.calls[0][1].config).not.toHaveProperty(absent);
+  expect(loadModel.mock.calls[0][1].config[absent as keyof LLMLoadModelConfig]).toBeUndefined();
   expect(readFile).not.toHaveBeenCalled();
 });
 
 it("allows disabling mode while independently supplying a CWD", async () => {
   await parse("test/model", "--yes", "--no-engine-config-file", "--engine-cwd", ".");
   expect(loadModel.mock.calls[0][1].config).toEqual(
-    expect.objectContaining({ engineConfigFileContents: "", engineCwd: resolve(".") }),
+    expect.objectContaining({ engineConfigFileContents: "", engineCwd: "." }),
   );
   expect(logger.info).not.toHaveBeenCalledWith(
     expect.stringContaining("Using a configuration file"),
