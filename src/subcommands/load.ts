@@ -15,6 +15,8 @@ import {
 } from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { getCliPref } from "../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { type DeviceNameResolver, createDeviceNameResolver } from "../deviceNameLookup.js";
@@ -63,6 +65,8 @@ type LoadCommandOptions = OptionValues &
     identifier?: string;
     yes?: boolean;
     estimateOnly?: boolean;
+    engineConfigFile?: string | false;
+    engineCwd?: string | false;
   };
 
 interface AssertLoadConfigSupportedForCliModelOpts {
@@ -79,6 +83,15 @@ export function assertLoadConfigSupportedForCliModel({
 }: AssertLoadConfigSupportedForCliModelOpts): void {
   if (model.type !== "embedding") {
     return;
+  }
+  if (loadConfig.engineConfigFileContents !== undefined || loadConfig.engineCwd !== undefined) {
+    logger.errorWithoutPrefix(
+      makeTitledPrettyError(
+        "Unsupported load option",
+        "Engine configuration options can only be configured for LLM models (initially vLLM).",
+      ).message,
+    );
+    process.exit(1);
   }
   if (loadConfig.autoFit === true) {
     logger.errorWithoutPrefix(
@@ -132,6 +145,15 @@ function hasMultipleModelKeys(models: Array<ModelInfo>): boolean {
   return modelKeys.size > 1;
 }
 
+function enginePathParser(flag: string) {
+  return (value: string, previous: string | false | undefined): string => {
+    if (previous === false) {
+      throw new InvalidArgumentError(`--${flag} and --no-${flag} are mutually exclusive.`);
+    }
+    return value;
+  };
+}
+
 const loadCommand = new Command<[], LoadCommandOptions>()
   .name("load")
   .description("Load a model")
@@ -141,6 +163,31 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       The model key to load. If not provided, enters an interactive mode to select a model.
     `,
   )
+  .addOption(
+    new Option(
+      "--engine-config-file <path>",
+      "Import an engine configuration file (initially vLLM YAML).",
+    ).argParser(enginePathParser("engine-config-file")),
+  )
+  // Check before Commander's negative-option listener replaces the supplied path.
+  .on("option:no-engine-config-file", () => {
+    if (typeof loadCommand.getOptionValue("engineConfigFile") === "string") {
+      loadCommand.error("--engine-config-file and --no-engine-config-file are mutually exclusive.");
+    }
+  })
+  .option("--no-engine-config-file", "Use ordinary LM Studio settings for this load.")
+  .addOption(
+    new Option(
+      "--engine-cwd <path>",
+      "Set the engine's current working directory in config-file mode.",
+    ).argParser(enginePathParser("engine-cwd")),
+  )
+  .on("option:no-engine-cwd", () => {
+    if (typeof loadCommand.getOptionValue("engineCwd") === "string") {
+      loadCommand.error("--engine-cwd and --no-engine-cwd are mutually exclusive.");
+    }
+  })
+  .option("--no-engine-cwd", "Use the runtime temporary directory for this load.")
   .addOption(
     new Option(
       "--auto",
@@ -285,6 +332,28 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     `,
   );
 
+loadCommand.addHelpText(
+  "after",
+  `
+Engine configuration:
+  Omitted engine options inherit host settings. Each --no- option resets only this load;
+  neither changes saved defaults. Engine CWD is independent and ignored outside config-file mode.
+  Relative file and directory paths use the CLI's current directory. Imported contents are a
+  snapshot: source-file edits do not change a running or saved configuration. Reload to apply changes.
+  Without a saved or supplied CWD, the engine runs in temporary storage; relative outputs there
+  are removed on unload. Select a persistent directory for relative resources or persistent outputs.
+  YAML and engine defaults replace ordinary load tuning, including context, parallelism, and GPU
+  flags. LM Studio still supplies model identity, connection, authentication, and lifecycle settings.
+  Resource estimation is unavailable in config-file mode, including --estimate-only.
+  Supplying or clearing either engine option requires local system.manage access (the authenticated
+  bundled CLI). Ordinary callers and LM Link can load unchanged settings configured on the host.
+
+  Configuration files can specify unsafe settings. You are responsible for ensuring the configuration
+  and its referenced resources are safe. Configuration file contents are readable by users and clients
+  with access to the model's configuration. Keep credentials and other secrets out of configuration files.
+`,
+);
+
 addCreateClientOptions(loadCommand);
 addLogLevelOptions(loadCommand);
 
@@ -306,8 +375,17 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     local = false,
     identifier,
     estimateOnly = false,
+    engineConfigFile,
+    engineCwd,
   } = options;
   const loadConfig: LLMLoadModelConfig = {
+    ...(engineConfigFile === undefined
+      ? {}
+      : {
+          engineConfigFileContents:
+            engineConfigFile === false ? "" : await readFile(resolve(engineConfigFile), "utf8"),
+        }),
+    engineCwd: engineCwd === false ? "" : engineCwd,
     autoFit: auto === true ? true : undefined,
     contextLength,
     maxParallelPredictions,
@@ -320,6 +398,11 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       speculativeDraftMinContinueProbability,
     }),
   };
+  if (typeof engineConfigFile === "string" && loadConfig.engineConfigFileContents === "") {
+    throw new Error(
+      "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+    );
+  }
   if (gpu !== undefined) {
     loadConfig.gpu = {
       ratio: gpu,
@@ -691,6 +774,16 @@ async function loadModel({
   }
   const endTime = Date.now();
   const info = await llmModel.getModelInfo();
+  if (info?.type === "llm") {
+    const loadedConfig = await llmModel.getLoadConfig();
+    if (
+      "engineConfigFileContents" in loadedConfig &&
+      typeof loadedConfig.engineConfigFileContents === "string" &&
+      loadedConfig.engineConfigFileContents !== ""
+    ) {
+      logger.info("Using a configuration file; LM Studio load-tuning settings are ignored.");
+    }
+  }
   const loadedDeviceIdentifier = info?.deviceIdentifier ?? null;
   const successLine = deviceNameResolver.isLocal(loadedDeviceIdentifier)
     ? `Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.`
