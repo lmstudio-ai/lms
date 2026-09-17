@@ -132,6 +132,25 @@ function hasMultipleModelKeys(models: Array<ModelInfo>): boolean {
   return modelKeys.size > 1;
 }
 
+export function getBaseModelKey(modelKey: string): string {
+  const separatorIndex = modelKey.lastIndexOf("@");
+  return separatorIndex === -1 ? modelKey : modelKey.slice(0, separatorIndex);
+}
+
+/** Keep recency preferences keyed by base models, not concrete variants. */
+export function updateLastLoadedModels(
+  lastLoadedModels: Array<string>,
+  modelKey: string,
+): Array<string> {
+  const baseModelKey = getBaseModelKey(modelKey);
+  return [
+    baseModelKey,
+    ...lastLoadedModels.filter(
+      lastLoadedModelKey => getBaseModelKey(lastLoadedModelKey) !== baseModelKey,
+    ),
+  ].slice(0, 20);
+}
+
 /**
  * Resolve a concrete variant key printed by `lms ls --variants`.
  *
@@ -148,12 +167,11 @@ export async function resolveDownloadedModelVariants({
   modelKey: string;
   models: Array<ModelInfo>;
 }): Promise<Array<ModelInfo>> {
-  const separatorIndex = modelKey.lastIndexOf("@");
-  if (separatorIndex === -1) {
+  if (!modelKey.includes("@")) {
     return [];
   }
 
-  const baseModelKey = modelKey.slice(0, separatorIndex);
+  const baseModelKey = getBaseModelKey(modelKey);
   const baseModel = models.find(model => model.modelKey === baseModelKey);
   if (baseModel === undefined) {
     return [];
@@ -595,16 +613,10 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     return;
   }
 
-  const modelInLastLoadedModelsIndex = lastLoadedModels.indexOf(model.modelKey);
-  if (modelInLastLoadedModelsIndex !== -1) {
-    logger.debug("Removing model from last loaded models:", model.modelKey);
-    lastLoadedModels.splice(modelInLastLoadedModelsIndex, 1);
-  }
-  lastLoadedModels.unshift(model.modelKey);
+  const updatedLastLoadedModels = updateLastLoadedModels(lastLoadedModels, model.modelKey);
   logger.debug("Updating cliPref");
   cliPref.setWithProducer(draft => {
-    // Keep only the last 20 loaded models
-    draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
+    draft.lastLoadedModels = updatedLastLoadedModels;
   });
 
   const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;

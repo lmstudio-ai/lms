@@ -2,8 +2,10 @@ import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type LMStudioClient, type ModelInfo } from "@lmstudio/sdk";
 import {
   assertLoadConfigSupportedForCliModel,
+  getBaseModelKey,
   load,
   resolveDownloadedModelVariants,
+  updateLastLoadedModels,
 } from "./load.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
 
@@ -148,6 +150,28 @@ describe("resolveDownloadedModelVariant", () => {
         ],
       }),
     ).resolves.toEqual([preferredDeviceVariant, otherDeviceVariant]);
+  });
+});
+
+describe("last loaded model preferences", () => {
+  it("uses the base model key for concrete variants", () => {
+    expect(getBaseModelKey("google/gemma-4-26b-a4b@4bit")).toBe("google/gemma-4-26b-a4b");
+    expect(getBaseModelKey("google/gemma-4-26b-a4b")).toBe("google/gemma-4-26b-a4b");
+  });
+
+  it("deduplicates variant history by base key and keeps the newest model first", () => {
+    expect(
+      updateLastLoadedModels(
+        ["google/gemma-4-26b-a4b@q8", "other/model", "google/gemma-4-26b-a4b@4bit"],
+        "google/gemma-4-26b-a4b@q4_k_m",
+      ),
+    ).toEqual(["google/gemma-4-26b-a4b", "other/model"]);
+  });
+
+  it("limits preferences to the last 20 base model keys", () => {
+    const models = Array.from({ length: 20 }, (_, index) => `owner/model-${index}`);
+    expect(updateLastLoadedModels(models, "owner/new-model")).toHaveLength(20);
+    expect(updateLastLoadedModels(models, "owner/new-model")[0]).toBe("owner/new-model");
   });
 });
 
