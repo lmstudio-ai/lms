@@ -40,6 +40,23 @@ function formatModelKeyWithVariantCount(model: ModelInfo) {
   return `${model.modelKey}${chalk.dim(` (${variantCount} ${variantLabel})`)}`;
 }
 
+/**
+ * Calculate the displayed disk usage, including every concrete variant when
+ * the variant details have been fetched for `lms ls --variants`.
+ */
+export function calculateTotalSizeBytes(
+  models: Array<ModelInfo>,
+  variantInfosByModelKey?: ReadonlyMap<string, Array<ModelInfo>>,
+): number {
+  return models.reduce((total, model) => {
+    const variants = variantInfosByModelKey?.get(model.modelKey);
+    if (variants === undefined) {
+      return total + model.sizeBytes;
+    }
+    return total + variants.reduce((variantTotal, variant) => variantTotal + variant.sizeBytes, 0);
+  }, 0);
+}
+
 type LoadedModelInfo = {
   modelKey: string;
   identifier: string;
@@ -349,20 +366,8 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
     return;
   }
 
-  let totalSizeBytes = 0;
-  for (const model of filteredDownloadedModels) {
-    totalSizeBytes += model.sizeBytes;
-  }
-
-  console.info();
-  console.info(text`
-    You have ${filteredDownloadedModels.length} models,
-    taking up ${formatSizeBytes1000(totalSizeBytes)} of disk space.
-  `);
-  console.info();
-
+  const variantInfosByModelKey = new Map<string, Array<ModelInfo>>();
   if (variantsOption) {
-    const variantInfosByModelKey = new Map<string, Array<ModelInfo>>();
     const modelsWithVariants = filteredDownloadedModels.filter(model => {
       if (model.variants === undefined) {
         return false;
@@ -378,7 +383,21 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
     for (const entry of variantEntries) {
       variantInfosByModelKey.set(entry.modelKey, entry.variants);
     }
+  }
 
+  const totalSizeBytes = calculateTotalSizeBytes(
+    filteredDownloadedModels,
+    variantsOption ? variantInfosByModelKey : undefined,
+  );
+
+  console.info();
+  console.info(text`
+    You have ${filteredDownloadedModels.length} models,
+    taking up ${formatSizeBytes1000(totalSizeBytes)} of disk space.
+  `);
+  console.info();
+
+  if (variantsOption) {
     const llmModels = filteredDownloadedModels.filter(model => model.type === "llm");
     if (llmModels.length > 0) {
       printModelsWithVariantRows({
