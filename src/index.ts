@@ -25,6 +25,7 @@ import { push } from "./subcommands/push.js";
 import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
+import { top } from "./subcommands/top/index.js";
 import { unload } from "./subcommands/unload.js";
 import { getCommitHash, printVersionCompact, version } from "./subcommands/version.js";
 import { whoami } from "./subcommands/whoami.js";
@@ -166,7 +167,7 @@ Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`,
 );
 
 addCommandsGroup("Local models", [chat, get, load, unload, ls, ps, importCmd], "#22D3EE");
-addCommandsGroup("Serve", [server, log], "#34D399");
+addCommandsGroup("Serve", [server, log, top], "#34D399");
 addCommandsGroup("Remote Instances", [link], "#818CF8");
 addCommandsGroup("Runtime", [runtime], "#C084FC");
 addCommandsGroup("Develop & Publish (Beta)", [clone, push, dev, login, logout, whoami], "#F9A8D4");

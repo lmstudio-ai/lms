@@ -17,7 +17,12 @@ export const DEFAULT_SERVER_PORT: number = 1234;
  * Checks if the HTTP server is running.
  */
 export async function checkHttpServer(logger: SimpleLogger, port: number, host?: string) {
-  const resolvedHost = host ?? "127.0.0.1";
+  let resolvedHost = host ?? "127.0.0.1";
+  if (resolvedHost === "0.0.0.0" || resolvedHost === "::") {
+    resolvedHost = "127.0.0.1";
+  } else if (resolvedHost.includes(":") && !resolvedHost.startsWith("[")) {
+    resolvedHost = `[${resolvedHost}]`;
+  }
   const url = `http://${resolvedHost}:${port}/lmstudio-greeting`;
   logger.debug(`Checking server at ${url}`);
   try {
@@ -87,24 +92,45 @@ export interface CreateClientArgs {
   port?: number;
 }
 
-export interface CreateClientOpts {}
+export interface CreateClientOpts {
+  checkHealth?: boolean;
+  isRemote?: boolean;
+}
 const lmsKey = "<LMS-CLI-LMS-KEY>";
+
+function formatWsUrl(host: string, port: number): string {
+  let wsHost = host;
+  if (wsHost === "0.0.0.0" || wsHost === "::") {
+    wsHost = "127.0.0.1";
+  } else if (wsHost.includes(":") && !wsHost.startsWith("[")) {
+    wsHost = `[${wsHost}]`;
+  }
+  return `ws://${wsHost}:${port}`;
+}
 
 /** Resolves the requested LM Studio instance and creates the authenticated CLI client. */
 export async function createClient(
   logger: SimpleLogger,
   args: CreateClientArgs & LogLevelArgs = {},
-  _opts: CreateClientOpts = {},
+  opts: CreateClientOpts = {},
 ) {
+  const checkHealth = opts.checkHealth ?? true;
   let { host, port } = args;
-  let isRemote = true;
+
+  const isIPv6 = (h: string) => h.includes(":") && (h.startsWith("[") || h.split(":").length > 2);
+  const isLoopback = (h: string) => {
+    const lower = h.toLowerCase();
+    return lower === "127.0.0.1" || lower === "localhost" || lower === "::1" || lower === "0.0.0.0" || lower === "::";
+  };
+
+  let isRemote = opts.isRemote ?? (host !== undefined);
+
   if (host === undefined) {
-    isRemote = false;
     host = "127.0.0.1";
   } else if (host.includes("://")) {
     logger.error("Host should not include the protocol.");
     process.exit(1);
-  } else if (host.includes(":")) {
+  } else if (host.includes(":") && !isIPv6(host)) {
     logger.error(`Host should not include the port number. Use ${chalk.yellow("--port")} instead.`);
     process.exit(1);
   }
@@ -126,7 +152,7 @@ export async function createClient(
         not work.
       `;
       auth = {
-        clientIdentifier: "lms-cli-dev",
+        clientIdentifier: `lms-cli-dev-${randomBytes(8).toString("hex")}`,
       };
     } else {
       if (await exists(lmsKey2Path)) {
@@ -157,7 +183,7 @@ export async function createClient(
         : await tryFindLocalAPIServer(logger);
 
     if (serverStatus !== null) {
-      const baseUrl = `ws://${host}:${serverStatus.port}`;
+      const baseUrl = formatWsUrl(host, serverStatus.port);
       logger.debug(`Found local API server at ${baseUrl}`);
 
       if (
@@ -175,12 +201,14 @@ export async function createClient(
       return new LMStudioClient({ baseUrl, logger, ...auth });
     }
 
-    logger.error(
-      process.env.LMS_API_SERVER_INFO_PATH === undefined
-        ? "Failed to start or connect to local LM Studio API server."
-        : `Failed to connect using ${process.env.LMS_API_SERVER_INFO_PATH}.`,
-    );
-    process.exit(1);
+    if (checkHealth) {
+      logger.error(
+        process.env.LMS_API_SERVER_INFO_PATH === undefined
+          ? "Failed to start or connect to local LM Studio API server."
+          : `Failed to connect using ${process.env.LMS_API_SERVER_INFO_PATH}.`,
+      );
+      process.exit(1);
+    }
   }
 
   if (port === undefined) {
@@ -188,7 +216,7 @@ export async function createClient(
   }
 
   logger.debug(`Connecting to server at ${host}:${port}`);
-  if (!(await checkHttpServer(logger, port, host))) {
+  if (checkHealth && !(await checkHttpServer(logger, port, host))) {
     logger.error(
       text`
         The server does not appear to be running at ${host}:${port}. Please make sure the server
@@ -197,7 +225,7 @@ export async function createClient(
     );
     process.exit(1);
   }
-  const baseUrl = `ws://${host}:${port}`;
+  const baseUrl = formatWsUrl(host, port);
   logger.debug(`Found server at ${port}`);
   const client = new LMStudioClient({
     baseUrl,
