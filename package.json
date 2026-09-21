@@ -1,6 +1,6 @@
 {
   "name": "@lmstudio/lms-cli",
-  "version": "0.3.43",
+  "version": "0.4.0",
   "description": "LM Studio CLI",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,12 +24,12 @@
     "@commander-js/extra-typings": "^14.0.0",
     "@inquirer/prompts": "^8.0.1",
     "@lmstudio/immer-with-plugins": "^10.1.1",
-    "@lmstudio/lms-common": "^0.8.9",
-    "@lmstudio/lms-common-server": "^0.2.18",
-    "@lmstudio/lms-es-plugin-runner": "^0.0.20",
-    "@lmstudio/lms-isomorphic": "^0.4.6",
-    "@lmstudio/lms-lmstudio": "^0.0.32",
-    "@lmstudio/sdk": "^1.5.0",
+    "@lmstudio/lms-common": "^0.9.0",
+    "@lmstudio/lms-common-server": "^0.3.0",
+    "@lmstudio/lms-es-plugin-runner": "^0.0.21",
+    "@lmstudio/lms-isomorphic": "^0.5.0",
+    "@lmstudio/lms-lmstudio": "^0.0.33",
+    "@lmstudio/sdk": "^2.0.0",
     "chalk": "^4.1.2",
     "columnify": "^1.6.0",
     "fast-glob": "^3.3.2",
@@ -56,5 +56,5 @@
     "shx": "^0.3.4",
     "typescript": "^5.3.3"
   },
-  "gitHead": "d95ce2feb067b4eec446c673155631ee1734e982"
+  "gitHead": "fef5d2c2e0b43ee6313397dbf3c77c78eba683c3"
 }
