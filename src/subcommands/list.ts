@@ -40,7 +40,7 @@ function formatModelKeyWithVariantCount(model: ModelInfo) {
   return `${model.modelKey}${chalk.dim(` (${variantCount} ${variantLabel})`)}`;
 }
 
-type LoadedModelInfo = {
+export type LoadedModelInfo = {
   modelKey: string;
   identifier: string;
   deviceIdentifier: string | null;
@@ -74,7 +74,7 @@ function countLoadedOnDevice(
   ).length;
 }
 
-function printDownloadedModelsTable(
+export function printDownloadedModelsTable(
   title: string,
   downloadedModels: Array<ModelInfo>,
   loadedModels: Array<LoadedModelInfo>,
