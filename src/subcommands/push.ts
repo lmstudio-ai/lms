@@ -280,9 +280,11 @@ function parseArtifactIdentifierToOwnerName(
 
 async function generateManifestJsonFromModelYaml(folderPath: string, modelYamlPath: string) {
   const virtualModelDefinitionFileContent = await readFile(modelYamlPath, "utf-8");
-  const virtualModelDefinition = virtualModelDefinitionSchema.parse(
-    YAML.parse(virtualModelDefinitionFileContent),
-  );
+  const parsedModelYaml = YAML.parse(virtualModelDefinitionFileContent);
+  // Push only reads model/base/tags. compatibilityTypes may use model.yaml-facing format names
+  // that this version of the shared schema does not know yet; the hub validates it on ingest.
+  delete parsedModelYaml?.metadataOverrides?.compatibilityTypes;
+  const virtualModelDefinition = virtualModelDefinitionSchema.parse(parsedModelYaml);
   const manifestJsonPath = join(folderPath, "manifest.json");
 
   const [owner, name] = parseArtifactIdentifierToOwnerName(virtualModelDefinition.model, "model");
