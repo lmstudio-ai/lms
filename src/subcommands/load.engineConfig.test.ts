@@ -256,16 +256,3 @@ it("rejects explicit engine options for embedding models rather than dropping th
   );
   expect(loadModel).not.toHaveBeenCalled();
 });
-
-it("documents the safety and readability warning in help", () => {
-  let help = "";
-  load.configureOutput({
-    writeOut: text => {
-      help += text;
-    },
-  });
-  load.outputHelp();
-  expect(help.replace(/\s+/g, " ")).toContain(
-    "Configuration files can specify unsafe settings. You are responsible for ensuring the configuration and its referenced resources are safe. Configuration file contents are readable by users and clients with access to the model's configuration. Keep credentials and other secrets out of configuration files.",
-  );
-});

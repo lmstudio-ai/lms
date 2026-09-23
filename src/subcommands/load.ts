@@ -166,7 +166,10 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   .addOption(
     new Option(
       "--engine-config-file <path>",
-      "Import an engine configuration file.",
+      text`
+        Import an engine configuration file. Use trusted files without secrets; contents are
+        readable by users and clients with access to the model's configuration.
+      `,
     ).argParser(enginePathParser("engine-config-file")),
   )
   // Check before Commander's negative-option listener replaces the supplied path.
@@ -179,7 +182,10 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   .addOption(
     new Option(
       "--engine-cwd <path>",
-      "Set the engine's current working directory in config-file mode.",
+      text`
+        Set the engine's current working directory in config-file mode. Defaults to the saved
+        directory or runtime temp, which is removed on unload.
+      `,
     ).argParser(enginePathParser("engine-cwd")),
   )
   .on("option:no-engine-cwd", () => {
@@ -331,28 +337,6 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       or the first matching model will be loaded.
     `,
   );
-
-loadCommand.addHelpText(
-  "after",
-  `
-Engine configuration:
-  Omitted engine options inherit host settings. Each --no- option resets only this load;
-  neither changes saved defaults. Engine CWD is independent and ignored outside config-file mode.
-  Relative file and directory paths use the CLI's current directory. Imported contents are a
-  snapshot: source-file edits do not change a running or saved configuration. Reload to apply changes.
-  Without a saved or supplied CWD, the engine runs in temporary storage; relative outputs there
-  are removed on unload. Select a persistent directory for relative resources or persistent outputs.
-  YAML and engine defaults replace ordinary load tuning, including context, parallelism, and GPU
-  flags. LM Studio still supplies model identity, connection, authentication, and lifecycle settings.
-  Resource estimation is unavailable in config-file mode, including --estimate-only.
-  Supplying or clearing either engine option requires local system.manage access (the authenticated
-  bundled CLI). Ordinary callers and LM Link can load unchanged settings configured on the host.
-
-  Configuration files can specify unsafe settings. You are responsible for ensuring the configuration
-  and its referenced resources are safe. Configuration file contents are readable by users and clients
-  with access to the model's configuration. Keep credentials and other secrets out of configuration files.
-`,
-);
 
 addCreateClientOptions(loadCommand);
 addLogLevelOptions(loadCommand);
