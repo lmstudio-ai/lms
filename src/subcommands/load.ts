@@ -88,7 +88,7 @@ export function assertLoadConfigSupportedForCliModel({
     logger.errorWithoutPrefix(
       makeTitledPrettyError(
         "Unsupported load option",
-        "Engine configuration options can only be configured for LLM models (initially vLLM).",
+        "Engine configuration options can only be configured for LLM models.",
       ).message,
     );
     process.exit(1);
@@ -166,7 +166,7 @@ const loadCommand = new Command<[], LoadCommandOptions>()
   .addOption(
     new Option(
       "--engine-config-file <path>",
-      "Import an engine configuration file (initially vLLM YAML).",
+      "Import an engine configuration file.",
     ).argParser(enginePathParser("engine-config-file")),
   )
   // Check before Commander's negative-option listener replaces the supplied path.
