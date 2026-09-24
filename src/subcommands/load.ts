@@ -734,7 +734,7 @@ async function loadModel({
   }
   const endTime = Date.now();
   const info = await llmModel.getModelInfo();
-  if (info?.type === "llm") {
+  if (info?.type === "llm" && info.format === "torch_safetensors") {
     const loadedConfig = await llmModel.getLoadConfig();
     if (
       "engineConfigFileContents" in loadedConfig &&

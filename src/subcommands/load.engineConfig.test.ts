@@ -145,6 +145,22 @@ it("leaves omitted fields unset and notices inherited mode from the loaded repor
   ).toHaveLength(1);
 });
 
+it.each([null, "peer"])(
+  "keeps successful ONNX loads successful on device %s",
+  async deviceIdentifier => {
+    const onnxModel: ModelInfo = { ...modelInfo, format: "onnx", deviceIdentifier };
+    downloaded.mockResolvedValue([onnxModel]);
+    loadModel.mockResolvedValue({
+      getModelInfo: async () => onnxModel,
+      getLoadConfig: loadedConfig,
+    });
+    loadedConfig.mockRejectedValue(new Error("Unsupported model format: onnx"));
+    await parse("test/model", "--yes");
+    expect(loadedConfig).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("Model loaded successfully"));
+  },
+);
+
 it.each([
   {
     args: ["--no-engine-config-file"],
