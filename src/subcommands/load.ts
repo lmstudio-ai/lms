@@ -145,15 +145,6 @@ function hasMultipleModelKeys(models: Array<ModelInfo>): boolean {
   return modelKeys.size > 1;
 }
 
-function enginePathParser(flag: string) {
-  return (value: string, previous: string | false | undefined): string => {
-    if (previous === false) {
-      throw new InvalidArgumentError(`--${flag} and --no-${flag} are mutually exclusive.`);
-    }
-    return value;
-  };
-}
-
 const loadCommand = new Command<[], LoadCommandOptions>()
   .name("load")
   .description("Load a model")
@@ -163,36 +154,21 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       The model key to load. If not provided, enters an interactive mode to select a model.
     `,
   )
-  .addOption(
-    new Option(
-      "--engine-config-file <path>",
-      text`
-        Import an engine configuration file. Use trusted files without secrets; contents are
-        readable by users and clients with access to the model's configuration.
-      `,
-    ).argParser(enginePathParser("engine-config-file")),
+  .option(
+    "--engine-config-file <path>",
+    text`
+      Import an engine configuration file. Use trusted files without secrets; contents are
+      readable by users and clients with access to the model's configuration.
+    `,
   )
-  // Check before Commander's negative-option listener replaces the supplied path.
-  .on("option:no-engine-config-file", () => {
-    if (typeof loadCommand.getOptionValue("engineConfigFile") === "string") {
-      loadCommand.error("--engine-config-file and --no-engine-config-file are mutually exclusive.");
-    }
-  })
   .option("--no-engine-config-file", "Use ordinary LM Studio settings for this load.")
-  .addOption(
-    new Option(
-      "--engine-cwd <path>",
-      text`
-        Set the engine's current working directory in config-file mode. Defaults to the saved
-        directory or runtime temp, which is removed on unload.
-      `,
-    ).argParser(enginePathParser("engine-cwd")),
+  .option(
+    "--engine-cwd <path>",
+    text`
+      Set the engine's current working directory in config-file mode. Defaults to the saved
+      directory or runtime temp, which is removed on unload.
+    `,
   )
-  .on("option:no-engine-cwd", () => {
-    if (typeof loadCommand.getOptionValue("engineCwd") === "string") {
-      loadCommand.error("--engine-cwd and --no-engine-cwd are mutually exclusive.");
-    }
-  })
   .option("--no-engine-cwd", "Use the runtime temporary directory for this load.")
   .addOption(
     new Option(

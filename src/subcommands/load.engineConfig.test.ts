@@ -100,20 +100,6 @@ beforeEach(() => {
 
 afterEach(() => jest.restoreAllMocks());
 
-it.each(["engine-config-file", "engine-cwd"])(
-  "rejects both orders of conflicting --%s flags",
-  async flag => {
-    for (const args of [
-      [`--${flag}`, "some path", `--no-${flag}`],
-      [`--no-${flag}`, `--${flag}`, "some path"],
-    ]) {
-      await expect(parse("test/model", ...args)).rejects.toThrow("mutually exclusive");
-      expect(createClient).not.toHaveBeenCalled();
-      expect(readFile).not.toHaveBeenCalled();
-    }
-  },
-);
-
 it.each([["--exact", "test/model"], ["test/model", "--yes"], []])(
   "imports one unchanged snapshot for selection arguments %j",
   async (...selection) => {
