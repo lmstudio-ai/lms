@@ -504,12 +504,15 @@ function getDefaultArtifactModelSelectionValue(
   return makeArtifactModelSelectionValue(0);
 }
 
-function formatCompatibilityTypeSuffix(compatibilityType: ModelCompatibilityType) {
+export function formatCompatibilityTypeSuffix(compatibilityType: ModelCompatibilityType) {
   if (compatibilityType === "gguf") {
     return "[GGUF]";
   }
   if (compatibilityType === "safetensors") {
     return "[MLX]";
+  }
+  if (compatibilityType === "torch_safetensors") {
+    return "[PT]";
   }
   return "";
 }
