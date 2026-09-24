@@ -158,8 +158,9 @@ const loadCommand = new Command<[], LoadCommandOptions>()
     "--engine-config-file <path>",
     text`
       Import an engine configuration file. Config-file mode ignores other load-tuning flags.
-      Use trusted files without secrets; contents are readable by users and clients with access
-      to the model's configuration.
+      Prediction settings and their defaults still apply. Configuration files can enable custom
+      code execution on the host. Only use trusted files. Contents are readable by users and
+      clients with access to the model's configuration; keep secrets out.
     `,
   )
   .option("--no-engine-config-file", "Use ordinary LM Studio settings for this load.")
