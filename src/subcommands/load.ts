@@ -15,6 +15,8 @@ import {
 } from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { getCliPref } from "../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { type DeviceNameResolver, createDeviceNameResolver } from "../deviceNameLookup.js";
@@ -63,6 +65,8 @@ type LoadCommandOptions = OptionValues &
     identifier?: string;
     yes?: boolean;
     estimateOnly?: boolean;
+    engineConfigFile?: string | false;
+    engineCwd?: string | false;
   };
 
 interface AssertLoadConfigSupportedForCliModelOpts {
@@ -79,6 +83,15 @@ export function assertLoadConfigSupportedForCliModel({
 }: AssertLoadConfigSupportedForCliModelOpts): void {
   if (model.type !== "embedding") {
     return;
+  }
+  if (loadConfig.engineConfigFileContents !== undefined || loadConfig.engineCwd !== undefined) {
+    logger.errorWithoutPrefix(
+      makeTitledPrettyError(
+        "Unsupported load option",
+        "Engine configuration options can only be configured for LLM models.",
+      ).message,
+    );
+    process.exit(1);
   }
   if (loadConfig.autoFit === true) {
     logger.errorWithoutPrefix(
@@ -141,6 +154,22 @@ const loadCommand = new Command<[], LoadCommandOptions>()
       The model key to load. If not provided, enters an interactive mode to select a model.
     `,
   )
+  .option(
+    "--engine-config-file <path>",
+    text`
+      Import an engine configuration file. Use trusted files without secrets; contents are
+      readable by users and clients with access to the model's configuration.
+    `,
+  )
+  .option("--no-engine-config-file", "Use ordinary LM Studio settings for this load.")
+  .option(
+    "--engine-cwd <path>",
+    text`
+      Set the engine's current working directory in config-file mode. Defaults to the saved
+      directory or runtime temp, which is removed on unload.
+    `,
+  )
+  .option("--no-engine-cwd", "Use the runtime temporary directory for this load.")
   .addOption(
     new Option(
       "--auto",
@@ -306,8 +335,22 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     local = false,
     identifier,
     estimateOnly = false,
+    engineConfigFile,
+    engineCwd,
   } = options;
   const loadConfig: LLMLoadModelConfig = {
+    ...(engineConfigFile === undefined
+      ? {}
+      : {
+          engineConfigFileContents:
+            engineConfigFile === false ? "" : await readFile(resolve(engineConfigFile), "utf8"),
+        }),
+    engineCwd:
+      engineCwd === false || engineCwd === ""
+        ? ""
+        : engineCwd === undefined
+          ? undefined
+          : resolve(engineCwd),
     autoFit: auto === true ? true : undefined,
     contextLength,
     maxParallelPredictions,
@@ -320,6 +363,11 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       speculativeDraftMinContinueProbability,
     }),
   };
+  if (typeof engineConfigFile === "string" && loadConfig.engineConfigFileContents === "") {
+    throw new Error(
+      "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+    );
+  }
   if (gpu !== undefined) {
     loadConfig.gpu = {
       ratio: gpu,
@@ -691,6 +739,16 @@ async function loadModel({
   }
   const endTime = Date.now();
   const info = await llmModel.getModelInfo();
+  if (info?.type === "llm" && info.format === "torch_safetensors") {
+    const loadedConfig = await llmModel.getLoadConfig();
+    if (
+      "engineConfigFileContents" in loadedConfig &&
+      typeof loadedConfig.engineConfigFileContents === "string" &&
+      loadedConfig.engineConfigFileContents !== ""
+    ) {
+      logger.info("Using a configuration file; LM Studio load-tuning settings are ignored.");
+    }
+  }
   const loadedDeviceIdentifier = info?.deviceIdentifier ?? null;
   const successLine = deviceNameResolver.isLocal(loadedDeviceIdentifier)
     ? `Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.`
