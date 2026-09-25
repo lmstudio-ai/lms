@@ -451,6 +451,7 @@ psCommand.action(async (options: PsCommandOptions) => {
             status: instanceProcessingState.status,
             queued: instanceProcessingState.queued,
             parallel: loadConfig.maxParallelPredictions ?? null,
+            engineConfigFileEnabled: (loadConfig.engineConfigFileContents ?? "").length > 0,
           };
         }),
       ),
@@ -464,6 +465,7 @@ psCommand.action(async (options: PsCommandOptions) => {
             status: instanceProcessingState.status,
             queued: instanceProcessingState.queued,
             parallel: null,
+            engineConfigFileEnabled: false,
           };
         }),
       ),
@@ -483,7 +485,12 @@ psCommand.action(async (options: PsCommandOptions) => {
     return;
   }
 
-  const mapModel = async (loadedModel: LLM | EmbeddingModel, parallel: number | "-") => {
+  // Use the reported launch settings; the imported contents never belong in the listing.
+  const mapModel = async (
+    loadedModel: LLM | EmbeddingModel,
+    parallel: number | "-",
+    engineConfigFileEnabled = false,
+  ) => {
     const { identifier } = loadedModel;
     const contextLength = await loadedModel.getContextLength();
     const modelInstanceInfo = await loadedModel.getModelInfo();
@@ -501,6 +508,7 @@ psCommand.action(async (options: PsCommandOptions) => {
       sizeBytes: formatSizeBytes1000(modelInstanceInfo.sizeBytes),
       contextLength: contextLength,
       parallel,
+      loadConfig: engineConfigFileEnabled ? "File" : "LM Studio",
       ttlMs:
         timeLeft !== undefined && modelInstanceInfo.ttlMs !== null
           ? `${formatTimeLean(timeLeft)} ${chalk.dim(`/ ${formatTimeLean(modelInstanceInfo.ttlMs)}`)}`
@@ -513,7 +521,11 @@ psCommand.action(async (options: PsCommandOptions) => {
   const loadedModelsWithInfo = await Promise.all([
     ...llmModels.map(async model => {
       const loadConfig = await model.getLoadConfig();
-      return mapModel(model, loadConfig.maxParallelPredictions ?? "-");
+      return mapModel(
+        model,
+        loadConfig.maxParallelPredictions ?? "-",
+        (loadConfig.engineConfigFileContents ?? "").length > 0,
+      );
     }),
     ...embeddingModels.map(model => mapModel(model, "-")),
   ]);
@@ -530,6 +542,7 @@ psCommand.action(async (options: PsCommandOptions) => {
         "sizeBytes",
         "contextLength",
         "parallel",
+        "loadConfig",
         "device",
         "ttlMs",
       ],
@@ -556,6 +569,10 @@ psCommand.action(async (options: PsCommandOptions) => {
         },
         parallel: {
           headingTransform: () => chalk.dim("PARALLEL"),
+          align: "left",
+        },
+        loadConfig: {
+          headingTransform: () => chalk.dim("LOAD CONFIG"),
           align: "left",
         },
         device: {
