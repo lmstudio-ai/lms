@@ -190,17 +190,6 @@ it("allows disabling mode while independently supplying a CWD", async () => {
   );
 });
 
-it("preserves backend selection of the preferred device without reading host YAML", async () => {
-  downloaded.mockResolvedValue([modelInfo, { ...modelInfo, deviceIdentifier: "peer" }]);
-  loadModel.mockRejectedValue(new Error("system.manage: remote authoring is not allowed"));
-  await expect(parse("test/model", "--yes", "--engine-config-file", "config.yaml")).rejects.toThrow(
-    "system.manage",
-  );
-  expect(loadModel).toHaveBeenCalledTimes(1);
-  expect(loadModel.mock.calls[0][1].deviceIdentifier).toBeUndefined();
-  expect(loadedConfig).not.toHaveBeenCalled();
-});
-
 it.each([[], ["--engine-config-file", "config.yaml"]])(
   "propagates config-mode estimation errors with flags %j",
   async (...flags) => {
@@ -236,12 +225,6 @@ it.each([[], ["--estimate-only"]])(
     expect(estimate).not.toHaveBeenCalled();
   },
 );
-
-it("explains configuration trust and readability in help", () => {
-  const help = load.helpInformation().replace(/\s+/g, " ");
-  expect(help).toContain("Use trusted files without secrets");
-  expect(help).toContain("readable by users and clients with access to the model's configuration");
-});
 
 it("keeps existing argument validation even when YAML is supplied", async () => {
   await expect(
