@@ -345,7 +345,12 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
           engineConfigFileContents:
             engineConfigFile === false ? "" : await readFile(resolve(engineConfigFile), "utf8"),
         }),
-    engineCwd: engineCwd === false ? "" : engineCwd,
+    engineCwd:
+      engineCwd === false || engineCwd === ""
+        ? ""
+        : engineCwd === undefined
+          ? undefined
+          : resolve(engineCwd),
     autoFit: auto === true ? true : undefined,
     contextLength,
     maxParallelPredictions,

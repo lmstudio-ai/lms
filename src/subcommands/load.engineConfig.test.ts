@@ -121,7 +121,7 @@ it.each([["--exact", "test/model"], ["test/model", "--yes"], []])(
       expect.objectContaining({
         config: expect.objectContaining({
           engineConfigFileContents: yaml,
-          engineCwd: ".",
+          engineCwd: resolve("."),
           contextLength: 512,
           maxParallelPredictions: 3,
         }),
@@ -168,9 +168,10 @@ it.each([
     absent: "engineCwd",
   },
   { args: ["--no-engine-cwd"], expected: { engineCwd: "" }, absent: "engineConfigFileContents" },
+  { args: ["--engine-cwd", ""], expected: { engineCwd: "" }, absent: "engineConfigFileContents" },
   {
     args: ["--engine-cwd", "relative dir"],
-    expected: { engineCwd: "relative dir" },
+    expected: { engineCwd: resolve("relative dir") },
     absent: "engineConfigFileContents",
   },
 ])("keeps reset and inheritance independent: $args", async ({ args, expected, absent }) => {
@@ -183,7 +184,7 @@ it.each([
 it("allows disabling mode while independently supplying a CWD", async () => {
   await parse("test/model", "--yes", "--no-engine-config-file", "--engine-cwd", ".");
   expect(loadModel.mock.calls[0][1].config).toEqual(
-    expect.objectContaining({ engineConfigFileContents: "", engineCwd: "." }),
+    expect.objectContaining({ engineConfigFileContents: "", engineCwd: resolve(".") }),
   );
   expect(logger.info).not.toHaveBeenCalledWith(
     expect.stringContaining("Using a configuration file"),
