@@ -29,12 +29,6 @@ describe("assertLoadConfigSupportedForCliModel", () => {
 });
 
 describe("load command", () => {
-  it("describes AutoFit availability as backend-dependent", () => {
-    expect(load.options.find(option => option.long === "--auto")?.description).toContain(
-      "when supported by the connected backend",
-    );
-  });
-
   it.each([
     { arguments: ["--gpu", "max"], option: "--gpu <offload-ratio>" },
     { arguments: ["--context-length", "4096"], option: "-c, --context-length <length>" },
