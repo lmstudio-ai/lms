@@ -237,11 +237,10 @@ it.each([[], ["--estimate-only"]])(
   },
 );
 
-it("explains load-only precedence, custom code execution, and configuration readability in help", () => {
+it("explains configuration trust and readability in help", () => {
   const help = load.helpInformation().replace(/\s+/g, " ");
-  expect(help).toContain("Prediction settings and their defaults still apply");
-  expect(help).toContain("custom code execution on the host");
-  expect(help).toContain("Contents are readable");
+  expect(help).toContain("Use trusted files without secrets");
+  expect(help).toContain("readable by users and clients with access to the model's configuration");
 });
 
 it("keeps existing argument validation even when YAML is supplied", async () => {
