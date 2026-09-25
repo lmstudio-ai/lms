@@ -4,6 +4,16 @@ import { askQuestion } from "./confirm.js";
 import { createDownloadPbUpdater } from "./downloadPbUpdater.js";
 import { ProgressBar } from "./ProgressBar.js";
 
+interface HandleDownloadWithProgressBarOpts {
+  /**
+   * Printed once all bytes are downloaded, while the server finishes the job (for example,
+   * extracting and setting up a runtime).
+   */
+  finalizingMessage?: string;
+  /** Printed once the server reports the job is done. */
+  completedMessage?: string;
+}
+
 export async function handleDownloadWithProgressBar(
   logger: SimpleLogger,
   performDownload: (opts: {
@@ -11,6 +21,10 @@ export async function handleDownloadWithProgressBar(
     onStartFinalizing: () => void;
     signal: AbortSignal;
   }) => Promise<void>,
+  {
+    finalizingMessage = "Finalizing download...",
+    completedMessage = "Download completed.",
+  }: HandleDownloadWithProgressBarOpts = {},
 ) {
   let isAskingExitingBehavior = false;
   let canceled = false;
@@ -51,7 +65,7 @@ export async function handleDownloadWithProgressBar(
           return;
         }
         pb.stop();
-        logger.info("Finalizing download...");
+        logger.info(finalizingMessage);
       },
       signal: abortController.signal,
     });
@@ -60,7 +74,7 @@ export async function handleDownloadWithProgressBar(
       process.exit(1);
     }
     process.removeListener("SIGINT", sigintListener);
-    logger.info("Download completed.");
+    logger.info(completedMessage);
   } catch (e: any) {
     if (e.name === "AbortError") {
       process.exit(1);
