@@ -52,20 +52,28 @@ export async function downloadRuntimeExtensionWithErrorHandling(
   { updateSelections }: { updateSelections: boolean },
 ): Promise<DownloadRuntimeExtensionResult> {
   try {
-    await handleDownloadWithProgressBar(logger, async downloadOptions => {
-      await client.runtime.extensions.download(
-        {
-          name: runtimeExtension.name,
-          version: runtimeExtension.version,
-        },
-        {
-          updateSelections,
-          onProgress: downloadOptions.onProgress,
-          onStartFinalizing: downloadOptions.onStartFinalizing,
-          signal: downloadOptions.signal,
-        },
-      );
-    });
+    await handleDownloadWithProgressBar(
+      logger,
+      async downloadOptions => {
+        await client.runtime.extensions.download(
+          {
+            name: runtimeExtension.name,
+            version: runtimeExtension.version,
+          },
+          {
+            updateSelections,
+            onProgress: downloadOptions.onProgress,
+            onStartFinalizing: downloadOptions.onStartFinalizing,
+            signal: downloadOptions.signal,
+          },
+        );
+      },
+      // After the download, the server extracts and sets up the runtime, which can take minutes.
+      {
+        finalizingMessage: "Installing runtime... (this might take a while)",
+        completedMessage: "Runtime installed.",
+      },
+    );
     return "downloaded";
   } catch (error) {
     if (error instanceof Error && error.message.includes("is already installed")) {
