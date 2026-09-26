@@ -145,6 +145,63 @@ function hasMultipleModelKeys(models: Array<ModelInfo>): boolean {
   return modelKeys.size > 1;
 }
 
+export function getBaseModelKey(modelKey: string): string {
+  const separatorIndex = modelKey.lastIndexOf("@");
+  return separatorIndex === -1 ? modelKey : modelKey.slice(0, separatorIndex);
+}
+
+/** Keep recency preferences keyed by base models, not concrete variants. */
+export function updateLastLoadedModels(
+  lastLoadedModels: Array<string>,
+  modelKey: string,
+): Array<string> {
+  const baseModelKey = getBaseModelKey(modelKey);
+  return [
+    baseModelKey,
+    ...lastLoadedModels.filter(
+      lastLoadedModelKey => getBaseModelKey(lastLoadedModelKey) !== baseModelKey,
+    ),
+  ].slice(0, 20);
+}
+
+/**
+ * Resolve a concrete variant key printed by `lms ls --variants`.
+ *
+ * `listDownloadedModels()` returns the base model entries, while the SDK load
+ * call accepts the concrete variant key. Keep the additional lookup lazy so
+ * the normal `lms load` path does not make one request per downloaded model.
+ */
+export async function resolveDownloadedModelVariants({
+  client,
+  modelKey,
+  models,
+}: {
+  client: LMStudioClient;
+  modelKey: string;
+  models: Array<ModelInfo>;
+}): Promise<Array<ModelInfo>> {
+  if (!modelKey.includes("@")) {
+    return [];
+  }
+
+  const baseModelKey = getBaseModelKey(modelKey);
+  const baseModel = models.find(model => model.modelKey === baseModelKey);
+  if (baseModel === undefined) {
+    return [];
+  }
+
+  const variants = await client.system.listDownloadedModelVariants(baseModel.modelKey);
+  // `listDownloadedModelVariants` can include copies hosted by linked LM Link
+  // devices. Restrict the result to the same device set as the already
+  // filtered base-model list so flags such as `--local` cannot accidentally
+  // load a remote variant.
+  const eligibleDeviceIdentifiers = new Set(models.map(model => model.deviceIdentifier));
+  return variants.filter(
+    variant =>
+      eligibleDeviceIdentifiers.has(variant.deviceIdentifier) && variant.modelKey === modelKey,
+  );
+}
+
 const loadCommand = new Command<[], LoadCommandOptions>()
   .name("load")
   .description("Load a model")
@@ -488,7 +545,17 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
 
   let model: ModelInfo;
   let deferToPreferredDevice = false;
-  if (yes) {
+  const variantModels =
+    modelKey === undefined
+      ? undefined
+      : await resolveDownloadedModelVariants({ client, modelKey, models });
+  if (variantModels !== undefined && variantModels.length > 0) {
+    model = variantModels[0];
+    // If the variant exists on multiple eligible devices, let the SDK honor
+    // the configured preferred device just as it does for duplicate base
+    // model matches. A single variant must remain pinned to its only device.
+    deferToPreferredDevice = variantModels.length > 1 && !hasDuplicatesOnSameDevice(variantModels);
+  } else if (yes) {
     if (initialFilteredModels.length === 0) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(
@@ -594,16 +661,10 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     return;
   }
 
-  const modelInLastLoadedModelsIndex = lastLoadedModels.indexOf(model.modelKey);
-  if (modelInLastLoadedModelsIndex !== -1) {
-    logger.debug("Removing model from last loaded models:", model.modelKey);
-    lastLoadedModels.splice(modelInLastLoadedModelsIndex, 1);
-  }
-  lastLoadedModels.unshift(model.modelKey);
+  const updatedLastLoadedModels = updateLastLoadedModels(lastLoadedModels, model.modelKey);
   logger.debug("Updating cliPref");
   cliPref.setWithProducer(draft => {
-    // Keep only the last 20 loaded models
-    draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
+    draft.lastLoadedModels = updatedLastLoadedModels;
   });
 
   const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;

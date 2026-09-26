@@ -1,5 +1,12 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
-import { assertLoadConfigSupportedForCliModel, load } from "./load.js";
+import { type LMStudioClient, type ModelInfo } from "@lmstudio/sdk";
+import {
+  assertLoadConfigSupportedForCliModel,
+  getBaseModelKey,
+  load,
+  resolveDownloadedModelVariants,
+  updateLastLoadedModels,
+} from "./load.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
 
 jest.mock("@inquirer/prompts", () => ({ search: jest.fn() }));
@@ -25,6 +32,146 @@ describe("assertLoadConfigSupportedForCliModel", () => {
     expect(logger.errorWithoutPrefix).toHaveBeenCalledWith(
       expect.stringContaining("AutoFit can only be configured for LLM models."),
     );
+  });
+});
+
+describe("resolveDownloadedModelVariant", () => {
+  const baseModel = { modelKey: "google/gemma-4-26b-a4b", deviceIdentifier: null } as ModelInfo;
+  const variantModel = {
+    modelKey: "google/gemma-4-26b-a4b@4bit",
+    deviceIdentifier: null,
+  } as ModelInfo;
+
+  it("resolves an exact variant key emitted by lms ls --variants", async () => {
+    const listDownloadedModelVariants = jest.fn().mockResolvedValue([variantModel]);
+    const client = {
+      system: { listDownloadedModelVariants },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariants({
+        client,
+        modelKey: variantModel.modelKey,
+        models: [baseModel],
+      }),
+    ).resolves.toEqual([variantModel]);
+    expect(listDownloadedModelVariants).toHaveBeenCalledWith(baseModel.modelKey);
+  });
+
+  it("does not query variants for a base model key", async () => {
+    const listDownloadedModelVariants = jest.fn();
+    const client = {
+      system: { listDownloadedModelVariants },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariants({
+        client,
+        modelKey: baseModel.modelKey,
+        models: [baseModel],
+      }),
+    ).resolves.toEqual([]);
+    expect(listDownloadedModelVariants).not.toHaveBeenCalled();
+  });
+
+  it("returns undefined when the variant is not downloaded", async () => {
+    const client = {
+      system: { listDownloadedModelVariants: jest.fn().mockResolvedValue([baseModel]) },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariants({
+        client,
+        modelKey: "google/gemma-4-26b-a4b@q4_k_m",
+        models: [baseModel],
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it("does not resolve a variant hosted only on a linked device", async () => {
+    const remoteVariant = {
+      modelKey: variantModel.modelKey,
+      deviceIdentifier: "linked-device",
+    } as ModelInfo;
+    const client = {
+      system: { listDownloadedModelVariants: jest.fn().mockResolvedValue([remoteVariant]) },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariants({
+        client,
+        modelKey: variantModel.modelKey,
+        models: [baseModel],
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it("prefers a matching variant on an eligible device", async () => {
+    const remoteVariant = {
+      modelKey: variantModel.modelKey,
+      deviceIdentifier: "linked-device",
+    } as ModelInfo;
+    const client = {
+      system: {
+        listDownloadedModelVariants: jest.fn().mockResolvedValue([remoteVariant, variantModel]),
+      },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariants({
+        client,
+        modelKey: variantModel.modelKey,
+        models: [baseModel],
+      }),
+    ).resolves.toEqual([variantModel]);
+  });
+
+  it("keeps matching variants on each eligible device for preference selection", async () => {
+    const preferredDeviceVariant = {
+      ...variantModel,
+      deviceIdentifier: "preferred-device",
+    } as ModelInfo;
+    const otherDeviceVariant = { ...variantModel, deviceIdentifier: "other-device" } as ModelInfo;
+    const client = {
+      system: {
+        listDownloadedModelVariants: jest
+          .fn()
+          .mockResolvedValue([preferredDeviceVariant, otherDeviceVariant]),
+      },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariants({
+        client,
+        modelKey: variantModel.modelKey,
+        models: [
+          { ...baseModel, deviceIdentifier: "preferred-device" } as ModelInfo,
+          { ...baseModel, deviceIdentifier: "other-device" } as ModelInfo,
+        ],
+      }),
+    ).resolves.toEqual([preferredDeviceVariant, otherDeviceVariant]);
+  });
+});
+
+describe("last loaded model preferences", () => {
+  it("uses the base model key for concrete variants", () => {
+    expect(getBaseModelKey("google/gemma-4-26b-a4b@4bit")).toBe("google/gemma-4-26b-a4b");
+    expect(getBaseModelKey("google/gemma-4-26b-a4b")).toBe("google/gemma-4-26b-a4b");
+  });
+
+  it("deduplicates variant history by base key and keeps the newest model first", () => {
+    expect(
+      updateLastLoadedModels(
+        ["google/gemma-4-26b-a4b@q8", "other/model", "google/gemma-4-26b-a4b@4bit"],
+        "google/gemma-4-26b-a4b@q4_k_m",
+      ),
+    ).toEqual(["google/gemma-4-26b-a4b", "other/model"]);
+  });
+
+  it("limits preferences to the last 20 base model keys", () => {
+    const models = Array.from({ length: 20 }, (_, index) => `owner/model-${index}`);
+    expect(updateLastLoadedModels(models, "owner/new-model")).toHaveLength(20);
+    expect(updateLastLoadedModels(models, "owner/new-model")[0]).toBe("owner/new-model");
   });
 });
 
