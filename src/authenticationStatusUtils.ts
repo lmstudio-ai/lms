@@ -40,18 +40,18 @@ export function formatAuthenticationStatusMessage(
 ): string {
   switch (authenticationStatus.type) {
     case "none":
-      return "You are not currently logged in.";
+      return t("You are not currently logged in.");
     case "loggedInUser":
-      return `You are currently logged in as: ${authenticationStatus.userName}`;
+      return t(`You are currently logged in as: {p0}`, { p0: authenticationStatus.userName });
     case "computeDevice":
       return (
-        "You are currently logged in as a compute device for " +
+        t("You are currently logged in as a compute device for ") +
         formatComputeDeviceOwner(authenticationStatus) +
         "."
       );
     default: {
       const exhaustiveCheck: never = authenticationStatus;
-      throw new Error(`Unexpected authentication status: ${exhaustiveCheck}`);
+      throw new Error(t(`Unexpected authentication status: {p0}`, { p0: exhaustiveCheck }));
     }
   }
 }

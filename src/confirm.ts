@@ -1,5 +1,6 @@
 import { Cleaner, makePromise } from "@lmstudio/lms-common";
 import { createInterface, type Interface } from "readline/promises";
+import { t } from "./i18n/index.js";
 
 const interrupted = Symbol("interrupted");
 
@@ -54,7 +55,7 @@ export async function askQuestionWithChoices<TChoice extends string>(
     if (matchedChoice !== undefined) {
       answer = matchedChoice;
     } else {
-      process.stderr.write(`Invalid selection. Please enter ${choiceLabel}.\n`);
+      process.stderr.write(t(`Invalid selection. Please enter {p0}.\n`, { p0: choiceLabel }));
     }
   } while (answer === undefined);
   return answer;

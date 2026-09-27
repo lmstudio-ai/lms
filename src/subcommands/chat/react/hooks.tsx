@@ -14,6 +14,7 @@ import {
   type ModelState,
   type Suggestion,
 } from "./types.js";
+import { t } from "../../../i18n/index.js";
 
 type LayoutSnapshot = {
   renderedHeight: number;
@@ -423,7 +424,7 @@ export function useDownloadCommand({
     async (commandArguments: string[]) => {
       if (commandArguments.length === 0) {
         logInChat(
-          "Please specify a model to download using owner/name. Type /model to see the list.",
+          t("Please specify a model to download using owner/name. Type /model to see the list."),
         );
         return;
       }
@@ -431,14 +432,14 @@ export function useDownloadCommand({
       const modelKeyInput = commandArguments.join(" ").trim();
       if (modelKeyInput.length === 0) {
         logInChat(
-          "Please specify a model to download using owner/name. Type /model to see the list.",
+          t("Please specify a model to download using owner/name. Type /model to see the list."),
         );
         return;
       }
 
       const parsedModelKey = parseModelKey(modelKeyInput);
       if (parsedModelKey === null) {
-        logInChat("Please use the owner/name format, for example google/gemma-3-1b");
+        logInChat(t("Please use the owner/name format, for example google/gemma-3-1b"));
         return;
       }
 
@@ -452,7 +453,7 @@ export function useDownloadCommand({
         const errorMessage =
           error instanceof Error && error.message !== undefined ? error.message : String(error);
         setFetchingModelDetails(null);
-        logErrorInChat(`Failed to resolve download plan: ${errorMessage}`);
+        logErrorInChat(t(`Failed to resolve download plan: {p0}`, { p0: errorMessage }));
         return;
       }
 
@@ -465,7 +466,10 @@ export function useDownloadCommand({
       const formattedSize = formatSizeBytes1000(downloadSizeBytes);
       setFetchingModelDetails(null);
       logInChat(
-        `Download ${owner}/${name}? This will download approximately ${formattedSize}. Type yes to continue or no to cancel.`,
+        t(
+          `Download {p0}/{p1}? This will download approximately {p2}. Type yes to continue or no to cancel.`,
+          { p0: owner, p1: name, p2: formattedSize },
+        ),
       );
       requestConfirmation({
         onConfirm: async () => {
@@ -490,7 +494,7 @@ export function useDownloadCommand({
             });
             setDownloadProgress(null);
             downloadAbortControllerRef.current = null;
-            logInChat(`Download completed: ${owner}/${name}`);
+            logInChat(t(`Download completed: {p0}/{p1}`, { p0: owner, p1: name }));
             if (refreshDownloadedModels !== undefined) {
               refreshDownloadedModels();
             }
@@ -500,11 +504,13 @@ export function useDownloadCommand({
               error instanceof Error && error.message !== undefined ? error.message : String(error);
             setDownloadProgress(null);
             downloadAbortControllerRef.current = null;
-            logErrorInChat(`Download failed for ${owner}/${name}: ${errorMessage}`);
+            logErrorInChat(
+              t(`Download failed for {p0}/{p1}: {p2}`, { p0: owner, p1: name, p2: errorMessage }),
+            );
           }
         },
         onCancel: () => {
-          logInChat(`Download canceled for ${owner}/${name}.`);
+          logInChat(t(`Download canceled for {p0}/{p1}.`, { p0: owner, p1: name }));
         },
       });
     },

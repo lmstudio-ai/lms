@@ -24,12 +24,14 @@ function checkLinuxLibatomic(): LibatomicCheckResult {
     }
     if (result.status !== 0) {
       const statusDescription =
-        result.signal !== null ? `signal ${result.signal}` : `exit code ${result.status}`;
+        result.signal !== null
+          ? `signal ${result.signal}`
+          : t(`exit code {p0}`, { p0: result.status });
       const stderr = (result.stderr ?? "").trim();
       const details = stderr.length > 0 ? `: ${stderr}` : "";
       return {
         status: "ldconfig-unavailable",
-        error: `"ldconfig -p" failed with ${statusDescription}${details}`,
+        error: t(`"ldconfig -p" failed with {p0}{p1}`, { p0: statusDescription, p1: details }),
       };
     }
     return (result.stdout ?? "").includes("libatomic.so.1")
@@ -111,10 +113,13 @@ The next version of llmster requires "libatomic", which is not currently install
       });
 
       await new Promise<void>(resolve => {
-        rl.question("We will run the updater in a new terminal. Hit <ENTER> to continue.", () => {
-          rl.close();
-          resolve();
-        });
+        rl.question(
+          t("We will run the updater in a new terminal. Hit <ENTER> to continue."),
+          () => {
+            rl.close();
+            resolve();
+          },
+        );
       });
 
       // Use cmd.exe to start the process in a new window

@@ -20,7 +20,7 @@ export async function loadModelWithProgress(
     if (progress < 1 && now - lastProgressUpdateTime < 100) {
       return;
     }
-    spinner.setText(`Loading ${modelName} ${(progress * 100).toFixed(0)}%`);
+    spinner.setText(t(`Loading {p0} {p1}%`, { p0: modelName, p1: (progress * 100).toFixed(0) }));
     lastProgressUpdateTime = now;
   };
 
@@ -64,22 +64,22 @@ export function displayVerboseStats(
   stats: LLMPredictionStats,
   logFunction: (text: string) => void,
 ) {
-  let result = "\n\nPrediction Stats:";
-  result += `\n  Stop Reason: ${stats.stopReason}`;
+  let result = t("\n\nPrediction Stats:");
+  result += t(`\n  Stop Reason: {p0}`, { p0: stats.stopReason });
   if (stats.tokensPerSecond !== undefined) {
-    result += `\n  Tokens/Second: ${stats.tokensPerSecond.toFixed(2)}`;
+    result += t(`\n  Tokens/Second: {p0}`, { p0: stats.tokensPerSecond.toFixed(2) });
   }
   if (stats.timeToFirstTokenSec !== undefined) {
-    result += `\n  Time to First Token: ${stats.timeToFirstTokenSec.toFixed(3)}s`;
+    result += t(`\n  Time to First Token: {p0}s`, { p0: stats.timeToFirstTokenSec.toFixed(3) });
   }
   if (stats.promptTokensCount !== undefined) {
-    result += `\n  Prompt Tokens: ${stats.promptTokensCount}`;
+    result += t(`\n  Prompt Tokens: {p0}`, { p0: stats.promptTokensCount });
   }
   if (stats.predictedTokensCount !== undefined) {
-    result += `\n  Predicted Tokens: ${stats.predictedTokensCount}`;
+    result += t(`\n  Predicted Tokens: {p0}`, { p0: stats.predictedTokensCount });
   }
   if (stats.totalTokensCount !== undefined) {
-    result += `\n  Total Tokens: ${stats.totalTokensCount}`;
+    result += t(`\n  Total Tokens: {p0}`, { p0: stats.totalTokensCount });
   }
   logFunction(result);
 }
@@ -118,7 +118,7 @@ export async function executePrediction(
   }
 
   if (controller?.signal.aborted === true) {
-    process.stdout.write(chalk.dim("\nGeneration interrupted by user with Ctrl^C\n"));
+    process.stdout.write(chalk.dim(t("\nGeneration interrupted by user with Ctrl^C\n")));
   }
 
   const result = await prediction.result();
@@ -165,7 +165,7 @@ export function getLargePastePlaceholderText(content: string, previewLength: num
   for (const character of content) {
     if (scanned >= MAX_SCAN_FOR_PLACEHOLDER) {
       truncated = true;
-      return `[Pasted ${content.length} characters...]`;
+      return t(`[Pasted {p0} characters...]`, { p0: content.length });
     }
     scanned++;
 
@@ -183,7 +183,7 @@ export function getLargePastePlaceholderText(content: string, previewLength: num
 
   const ellipsis = truncated ? "..." : "";
   const spacer = preview.length > 0 ? " " : "";
-  return `[Pasted${spacer}${preview}${ellipsis}]`;
+  return t(`[Pasted{p0}{p1}{p2}]`, { p0: spacer, p1: preview, p2: ellipsis });
 }
 
 export const estimateMessageLinesCount = (message: InkChatMessage): number => {

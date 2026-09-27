@@ -155,19 +155,25 @@ async function selectRuntimeExtensionToDownload(
       let latestLocalDescriptor: string;
 
       if (latestLocalVersion === undefined) {
-        latestLocalDescriptor = "No local version";
+        latestLocalDescriptor = t("No local version");
       } else if (runtimeExtension.localVersions.includes(remoteVersion)) {
         if (latestLocalVersion === remoteVersion) {
           latestLocalDescriptor = "Up-to-date";
         } else {
-          latestLocalDescriptor = "Same version installed";
+          latestLocalDescriptor = t("Same version installed");
         }
       } else {
         const versionComparison = compareVersions(runtimeExtension.version, latestLocalVersion);
         if (versionComparison < 0) {
-          latestLocalDescriptor = `Downgrade available: ${latestLocalVersion} -> ${remoteVersion}`;
+          latestLocalDescriptor = t(`Downgrade available: {p0} -> {p1}`, {
+            p0: latestLocalVersion,
+            p1: remoteVersion,
+          });
         } else if (versionComparison > 0) {
-          latestLocalDescriptor = `Update available: ${latestLocalVersion} -> ${remoteVersion}`;
+          latestLocalDescriptor = t(`Update available: {p0} -> {p1}`, {
+            p0: latestLocalVersion,
+            p1: remoteVersion,
+          });
         } else {
           // Should not happen as this is handled in the previous branch
           latestLocalDescriptor = "Up-to-date";
@@ -182,7 +188,7 @@ async function selectRuntimeExtensionToDownload(
     return await runPromptWithExitHandling(() =>
       select<DownloadableRuntimeExtensionInfo>(
         {
-          message: "Multiple runtime extensions matched the query. Select one to download:",
+          message: t("Multiple runtime extensions matched the query. Select one to download:"),
           choices: promptChoices,
         },
         { output: process.stderr },

@@ -234,7 +234,9 @@ it.each([[], ["--estimate-only"]])(
     await expect(
       parse("test/model", "--yes", "--engine-config-file", "empty.yaml", ...flags),
     ).rejects.toThrow(
-      "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+      t(
+        "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+      ),
     );
     expect(createClient).not.toHaveBeenCalled();
     expect(loadModel).not.toHaveBeenCalled();

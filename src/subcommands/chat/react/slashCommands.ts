@@ -11,6 +11,7 @@ import type {
   SlashCommandSuggestionBuilderArgs,
 } from "./SlashCommandHandler.js";
 import type { ChatUserInputState, InkChatMessage, ModelState, Suggestion } from "./types.js";
+import { t } from "../../../i18n/index.js";
 
 export interface CreateSlashCommandsOpts {
   client: LMStudioClient;
@@ -62,7 +63,7 @@ export function createSlashCommands({
   return [
     {
       name: "help",
-      description: "Show help information",
+      description: t("Show help information"),
       handler: async () => {
         const helpText = commandHandler.generateHelpText();
         addMessage({ type: "help", content: helpText });
@@ -70,18 +71,18 @@ export function createSlashCommands({
     },
     {
       name: "exit",
-      description: "Exit the chat",
+      description: t("Exit the chat"),
       handler: async () => {
         exitApp();
       },
     },
     {
       name: "model",
-      description: "Load a model (type /model to see list)",
+      description: t("Load a model (type /model to see list)"),
       requireArgumentsFromSuggestions: true,
       handler: async (commandArguments, context) => {
         if (commandArguments.length === 0) {
-          logInChat("Please specify a model to load. Type /model to see the list.");
+          logInChat(t("Please specify a model to load. Type /model to see the list."));
           return;
         }
 
@@ -117,17 +118,20 @@ export function createSlashCommands({
             deviceIdentifier: selectedDeviceIdentifier,
           });
           currentModelDeviceIdentifierRef.current = selectedDeviceIdentifier;
-          logInChat(`Model Selected: ${llmRef.current.displayName}`);
+          logInChat(t(`Model Selected: {p0}`, { p0: llmRef.current.displayName }));
         } catch (error) {
           const errorMessage =
             error instanceof Error && error.message !== undefined ? error.message : String(error);
           if (errorMessage.includes("Cannot find a model with path")) {
             logErrorInChat(
-              `Model "${modelKey}" not found. Use /download to download it or /model to list available models.`,
+              t(
+                `Model "{p0}" not found. Use /download to download it or /model to list available models.`,
+                { p0: modelKey },
+              ),
             );
             return;
           }
-          logErrorInChat(`Failed to load model: ${errorMessage}`);
+          logErrorInChat(t(`Failed to load model: {p0}`, { p0: errorMessage }));
         } finally {
           setModelLoadingProgress(null);
           modelLoadingAbortControllerRef.current = null;
@@ -152,7 +156,7 @@ export function createSlashCommands({
     },
     {
       name: "clear",
-      description: "Clear the chat history",
+      description: t("Clear the chat history"),
       handler: async () => {
         setMessages([]);
         setUserInputState({
@@ -169,24 +173,24 @@ export function createSlashCommands({
     },
     {
       name: "system-prompt",
-      description: "Replace the system prompt",
+      description: t("Replace the system prompt"),
       handler: async commandArguments => {
         const prompt = commandArguments.join(" ");
         if (prompt.length === 0) {
-          logInChat("Please provide a system prompt.");
+          logInChat(t("Please provide a system prompt."));
           return;
         }
 
         chatRef.current.replaceSystemPrompt(prompt);
-        logInChat("System prompt updated to: " + prompt);
+        logInChat(t("System prompt updated to: ") + prompt);
       },
     },
     {
       name: "stats",
-      description: "Show stats of the previous generation",
+      description: t("Show stats of the previous generation"),
       handler: async () => {
         if (lastPredictionStatsRef.current === null) {
-          logInChat("No previous generation stats available.");
+          logInChat(t("No previous generation stats available."));
           return;
         }
         displayVerboseStats(lastPredictionStatsRef.current, logInChat);
@@ -194,25 +198,25 @@ export function createSlashCommands({
     },
     {
       name: "reasoning",
-      description: "Set reasoning mode (auto, on, off)",
+      description: t("Set reasoning mode (auto, on, off)"),
       handler: async commandArguments => {
         if (commandArguments.length === 0) {
-          logInChat(`Reasoning mode: ${reasoningMode}`);
+          logInChat(t(`Reasoning mode: {p0}`, { p0: reasoningMode }));
           return;
         }
         if (commandArguments.length !== 1) {
-          logErrorInChat("Usage: /reasoning auto|on|off");
+          logErrorInChat(t("Usage: /reasoning auto|on|off"));
           return;
         }
 
         const requestedMode = commandArguments[0]?.toLowerCase();
         if (requestedMode === undefined || isReasoningMode(requestedMode) === false) {
-          logErrorInChat("Usage: /reasoning auto|on|off");
+          logErrorInChat(t("Usage: /reasoning auto|on|off"));
           return;
         }
 
         setReasoningMode(requestedMode);
-        logInChat(`Reasoning mode set to: ${requestedMode}`);
+        logInChat(t(`Reasoning mode set to: {p0}`, { p0: requestedMode }));
       },
       buildSuggestions: ({ argsInput, registerSuggestionMetadata }) => {
         const normalizedFilter = argsInput.trim().toLowerCase();
@@ -232,7 +236,7 @@ export function createSlashCommands({
     },
     {
       name: "download",
-      description: "Download a model",
+      description: t("Download a model"),
       requireArgumentsFromSuggestions: true,
       handler: handleDownloadCommand,
       buildSuggestions: ({ argsInput, registerSuggestionMetadata }) => {
@@ -348,7 +352,11 @@ function createModelSuggestion({
       deviceIdentifier: modelState.deviceIdentifier,
     },
   };
-  const statusLabel = modelState.isCurrent ? " (current)" : modelState.isLoaded ? " (loaded)" : "";
+  const statusLabel = modelState.isCurrent
+    ? t(" (current)")
+    : modelState.isLoaded
+      ? t(" (loaded)")
+      : "";
   const deviceSuffix =
     modelState.deviceLabel === "Local" ? "" : ` ${chalk.dim(`on ${modelState.deviceLabel}`)}`;
   registerSuggestionMetadata(suggestion, {

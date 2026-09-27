@@ -75,7 +75,7 @@ async function getScaffolds(_logger: SimpleLogger) {
   const response = await fetch(url);
   const json = await response.json();
   if (!Array.isArray(json)) {
-    throw new Error("Invalid response from the server.");
+    throw new Error(t("Invalid response from the server."));
   }
 
   return json as Array<unknown>;
@@ -163,7 +163,7 @@ async function selectScaffold(
   return await runPromptWithExitHandling(() =>
     search<number>(
       {
-        message: chalk.green("Select a scaffold to use") + chalk.dim(" |"),
+        message: chalk.green(t("Select a scaffold to use")) + chalk.dim(" |"),
         pageSize,
         theme: searchTheme,
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
@@ -296,7 +296,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
       if (code === 0) {
         resolve(stdout.trim());
       } else {
-        reject(new Error(`npm install exited with code ${code}`));
+        reject(new Error(t(`npm install exited with code {p0}`, { p0: code })));
       }
     });
   });
@@ -352,7 +352,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`npm install exited with code ${code}`));
+        reject(new Error(t(`npm install exited with code {p0}`, { p0: code })));
       }
     });
   });

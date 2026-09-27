@@ -85,7 +85,9 @@ async function listEngines(
 
     if (sortedEngines.length === 0) {
       throw new UserInputError(
-        `No LLM Engines support the "${[...modelFormatFilters].join(", ")}" model format(s).`,
+        t(`No LLM Engines support the "{p0}" model format(s).`, {
+          p0: [...modelFormatFilters].join(", "),
+        }),
       );
     }
   }

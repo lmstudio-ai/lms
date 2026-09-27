@@ -140,7 +140,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
             return options.map(option => {
               const modelEntry = modelEntries[option.index];
               if (modelEntry === undefined) {
-                throw new Error("Search results returned an invalid model index.");
+                throw new Error(t("Search results returned an invalid model index."));
               }
               return {
                 value: modelEntry,

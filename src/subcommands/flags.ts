@@ -16,7 +16,7 @@ const trueFalseParser = (str: string): boolean => {
   } else if (str === "false") {
     return false;
   }
-  throw new InvalidArgumentError("Expected 'true' or 'false'");
+  throw new InvalidArgumentError(t("Expected 'true' or 'false'"));
 };
 
 type FlagsCommandOptions = OptionValues &

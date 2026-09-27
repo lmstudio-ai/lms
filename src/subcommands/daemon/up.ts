@@ -39,16 +39,14 @@ up.action(async (options: DaemonUpCommandOptions) => {
         console.info(t(`The daemon is already running (PID: {p0}).`, { p0: daemonInfo.pid }));
       } else {
         console.info(
-          t(`LM Studio is already running (PID: {p0}); not starting a second daemon.`, {
-            p0: daemonInfo.pid,
-          }),
+          `LM Studio is already running (PID: ${daemonInfo.pid}); not starting a second daemon.`,
         );
       }
     } else {
       if (daemonInfo.isDaemon) {
         console.info(t(`llmster started (PID: {p0}).`, { p0: daemonInfo.pid }));
       } else {
-        console.info(t(`LM Studio started (PID: {p0}).`, { p0: daemonInfo.pid }));
+        console.info(`LM Studio started (PID: ${daemonInfo.pid}).`);
       }
     }
   }

@@ -37,37 +37,37 @@ function getBackendCompatibilityStatusLabel(
     case "compatible":
       return "Compatible";
     case "incompatibleAppVersion":
-      return "Incompatible app version";
+      return t("Incompatible app version");
     case "incompatibleBackendVersion":
-      return "Incompatible backend version";
+      return t("Incompatible backend version");
     case "invalidCpuArchitecture":
-      return "Invalid CPU architecture";
+      return t("Invalid CPU architecture");
     case "invalidCpuInstructionSetExtensions":
-      return "Invalid CPU instruction set extensions";
+      return t("Invalid CPU instruction set extensions");
     case "cpuSurveyUnsuccessful":
-      return "CPU survey unsuccessful";
+      return t("CPU survey unsuccessful");
     case "gpuSurveyUnsuccessful":
-      return "GPU survey unsuccessful";
+      return t("GPU survey unsuccessful");
     case "gpuRequiredButNoneFound":
-      return "GPU required but none found";
+      return t("GPU required but none found");
     case "gpuTargetsRequiredButNoneSpecified":
-      return "GPU targets required but none specified";
+      return t("GPU targets required but none specified");
     case "gpuDriverUnsupported":
-      return "GPU driver unsupported";
+      return t("GPU driver unsupported");
     case "noSupportedGpus":
-      return "No supported GPUs";
+      return t("No supported GPUs");
     case "incompatiblePlatform":
-      return "Incompatible platform";
+      return t("Incompatible platform");
     case "libraryOutdated":
-      return "Library outdated";
+      return t("Library outdated");
     case "invalidLibraryVersionFormat":
-      return "Invalid library version format";
+      return t("Invalid library version format");
     case "missingLibraries":
-      return "Missing libraries";
+      return t("Missing libraries");
     case "errorSurveyingHardware":
-      return "Error surveying hardware";
+      return t("Error surveying hardware");
     case "errorCheckingCompatibility":
-      return "Error checking compatibility";
+      return t("Error checking compatibility");
     case "unknown":
       return "Unknown";
     default: {
@@ -198,7 +198,7 @@ function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | 
   if (survey.compatibility.message === undefined) {
     return `Compatibility: ${statusLabel}`;
   }
-  return `Compatibility: ${statusLabel} - ${survey.compatibility.message}`;
+  return t(`Compatibility: {p0} - {p1}`, { p0: statusLabel, p1: survey.compatibility.message });
 }
 
 function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine) {

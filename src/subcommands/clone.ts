@@ -14,15 +14,15 @@ const artifactIdentifierParser = (str: string): { owner: string; name: string } 
   const parts = str.split("/");
   if (parts.length !== 2) {
     throw new InvalidArgumentError(
-      "Invalid artifact identifier. Must be in the form of 'owner/name'.",
+      t("Invalid artifact identifier. Must be in the form of 'owner/name'."),
     );
   }
   const [owner, name] = parts;
   if (!kebabCaseRegex.test(owner)) {
-    throw new InvalidArgumentError("Invalid owner. Must be kebab-case.");
+    throw new InvalidArgumentError(t("Invalid owner. Must be kebab-case."));
   }
   if (!kebabCaseWithDotsRegex.test(name)) {
-    throw new InvalidArgumentError("Invalid name. Must be kebab-case (dots allowed).");
+    throw new InvalidArgumentError(t("Invalid name. Must be kebab-case (dots allowed)."));
   }
   return { owner, name };
 };

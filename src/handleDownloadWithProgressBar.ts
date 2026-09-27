@@ -23,8 +23,8 @@ export async function handleDownloadWithProgressBar(
     signal: AbortSignal;
   }) => Promise<void>,
   {
-    finalizingMessage = "Finalizing download...",
-    completedMessage = "Download completed.",
+    finalizingMessage = t("Finalizing download..."),
+    completedMessage = t("Download completed."),
   }: HandleDownloadWithProgressBarOpts = {},
 ) {
   let isAskingExitingBehavior = false;
@@ -41,7 +41,7 @@ export async function handleDownloadWithProgressBar(
     isAskingExitingBehavior = true;
     logger.infoWithoutPrefix();
     process.stdin.resume();
-    askQuestion("Continue to download in the background?").then(confirmed => {
+    askQuestion(t("Continue to download in the background?")).then(confirmed => {
       if (confirmed) {
         logger.info(t("Download will continue in the background."));
         process.exit(1);

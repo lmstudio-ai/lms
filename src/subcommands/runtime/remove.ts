@@ -30,9 +30,9 @@ async function removeRuntimeEngine(
     logger.info(t("Use 'lms runtime ls' to see installed runtime extensions."));
     process.exit(1);
   }
-  let prefix = "About to remove ";
+  let prefix = t("About to remove ");
   if (dryRun === true) {
-    prefix = "Would remove ";
+    prefix = t("Would remove ");
   }
   for (const runtimeExtension of runtimeExtensions) {
     logger.info(prefix + `${runtimeExtension.name}@${runtimeExtension.version}`);

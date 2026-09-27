@@ -155,13 +155,13 @@ async function promptForDeviceIdentifier({
   return await runPromptWithExitHandling(() =>
     select<string>(
       {
-        message: chalk.green("Select a preferred device") + chalk.dim(" |"),
+        message: chalk.green(t("Select a preferred device")) + chalk.dim(" |"),
         loop: false,
         pageSize,
         choices: deviceOptions.map(option => {
           let label = option.deviceName;
           if (option.kind === "local") {
-            label += chalk.dim(" (this device)");
+            label += chalk.dim(t(" (this device)"));
           }
           if (option.statusLabel !== null) {
             label += chalk.dim(` (${option.statusLabel})`);
@@ -170,7 +170,7 @@ async function promptForDeviceIdentifier({
             preferredDeviceIdentifier !== undefined &&
             preferredDeviceIdentifier === option.deviceIdentifier
           ) {
-            label += chalk.green(" (preferred)");
+            label += chalk.green(t(" (preferred)"));
           }
           return {
             name: label,

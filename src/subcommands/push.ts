@@ -37,7 +37,7 @@ const overridesParser = (str: string): any => {
   try {
     return JSON.parse(str);
   } catch (error) {
-    throw new InvalidArgumentError("Invalid JSON string");
+    throw new InvalidArgumentError(t("Invalid JSON string"));
   }
 };
 
@@ -106,30 +106,33 @@ pushCommand.action(async options => {
     const skillContents = await readFile(join(currentPath, "SKILL.md"), "utf-8");
     const frontmatterMatch = skillContents.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u);
     if (frontmatterMatch === null) {
-      throw new Error("SKILL.md must contain YAML frontmatter with a name and description.");
+      throw new Error(t("SKILL.md must contain YAML frontmatter with a name and description."));
     }
 
     const frontmatter: unknown = YAML.parse(frontmatterMatch[1]!);
     if (typeof frontmatter !== "object" || frontmatter === null || Array.isArray(frontmatter)) {
-      throw new Error("SKILL.md must contain YAML frontmatter with a name and description.");
+      throw new Error(t("SKILL.md must contain YAML frontmatter with a name and description."));
     }
 
     const fields = frontmatter as Record<string, unknown>;
     if (typeof fields.name !== "string" || fields.name.trim().length === 0) {
-      throw new Error("Skill name is required in SKILL.md.");
+      throw new Error(t("Skill name is required in SKILL.md."));
     }
     if (typeof fields.description !== "string" || fields.description.trim().length === 0) {
-      throw new Error("Skill description is required in SKILL.md.");
+      throw new Error(t("Skill description is required in SKILL.md."));
     }
 
     const skillName = fields.name.trim();
     if (!kebabCaseRegex.test(skillName) || skillName.length > 63) {
-      throw new Error("Skill name must be a kebab-case string between 1 and 63 characters.");
+      throw new Error(t("Skill name must be a kebab-case string between 1 and 63 characters."));
     }
     const folderName = basename(currentPath);
     if (folderName !== skillName) {
       throw new Error(
-        `Skill folder name must match the name in SKILL.md. Received ${folderName}, expected ${skillName}.`,
+        t(`Skill folder name must match the name in SKILL.md. Received {p0}, expected {p1}.`, {
+          p0: folderName,
+          p1: skillName,
+        }),
       );
     }
 
@@ -137,7 +140,7 @@ pushCommand.action(async options => {
     authenticated = true;
     const owners = await client.repository.unstable.getWritableArtifactOwners();
     if (owners.length === 0) {
-      throw new Error("Your account does not have an artifact owner available for publishing.");
+      throw new Error(t("Your account does not have an artifact owner available for publishing."));
     }
 
     let owner: string;
@@ -146,12 +149,14 @@ pushCommand.action(async options => {
     } else {
       if (process.stdin.isTTY !== true || process.stderr.isTTY !== true) {
         throw new Error(
-          "Multiple artifact owners are available. Run lms push in an interactive terminal to select one or create a manifest.json that specifies the owner.",
+          t(
+            "Multiple artifact owners are available. Run lms push in an interactive terminal to select one or create a manifest.json that specifies the owner.",
+          ),
         );
       }
       // This branch only runs when the owner list has at least two entries.
       const selectedOwner = await askQuestionWithChoices(
-        "Select an owner",
+        t("Select an owner"),
         owners as [string, ...Array<string>],
       );
       if (selectedOwner === null) {
@@ -279,7 +284,7 @@ function parseArtifactIdentifierToOwnerName(
     !kebabCaseRegex.test(owner) ||
     !kebabCaseWithDotsRegex.test(name)
   ) {
-    throw new Error(`Invalid ${fieldName}: ${artifactIdentifier}`);
+    throw new Error(t(`Invalid {p0}: {p1}`, { p0: fieldName, p1: artifactIdentifier }));
   }
   return [owner, name] as const;
 }

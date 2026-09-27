@@ -7,9 +7,9 @@ import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { type LinkStatusCommandOptions } from "./shared.js";
 
 const statusDisplayLabels = new Map<string, string>([
-  ["offline", "Offline (will attempt to reconnect)"],
+  ["offline", t("Offline (will attempt to reconnect)")],
   ["starting", "Connecting"],
-  ["stopping", "Shutting down"],
+  ["stopping", t("Shutting down")],
   ["online", "Online"],
 ]);
 
@@ -139,7 +139,7 @@ status.action(async function () {
     const reconnectInSeconds = lmLinkStatus.reconnectInSeconds;
     let offlineStatusLabel = "Offline";
     if (reconnectInSeconds !== undefined) {
-      offlineStatusLabel = `Offline (Reconnect in ${reconnectInSeconds}s)`;
+      offlineStatusLabel = t(`Offline (Reconnect in {p0}s)`, { p0: reconnectInSeconds });
     }
     const secondsSinceError = Math.max(0, Math.floor((Date.now() - lastError.timestamp) / 1000));
     logger.info(t(`This device: {p0}`, { p0: lmLinkStatus.deviceName }));

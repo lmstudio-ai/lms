@@ -40,8 +40,9 @@ type ChatCommandOptions = OptionValues &
 export const DEFAULT_SYSTEM_PROMPT =
   "You are an AI assistant running in the user's terminal. Provide helpful and concise responses.";
 
-const FETCH_MODEL_CATALOG_MESSAGE =
-  "Always fetch the model catalog ? (requires internet connection)";
+const FETCH_MODEL_CATALOG_MESSAGE = t(
+  "Always fetch the model catalog ? (requires internet connection)",
+);
 
 export async function getOrAskShouldFetchModelCatalog(
   dontFetchCatalog: boolean,

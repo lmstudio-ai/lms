@@ -119,7 +119,7 @@ loginCommand.action(async options => {
         break;
       default: {
         const exhaustiveCheck: never = authenticationStatus;
-        throw new Error(`Unexpected authentication status: ${exhaustiveCheck}`);
+        throw new Error(t(`Unexpected authentication status: {p0}`, { p0: exhaustiveCheck }));
       }
     }
 
@@ -176,7 +176,7 @@ loginCommand.action(async options => {
       break;
     default: {
       const exhaustiveCheck: never = authenticationStatus;
-      throw new Error(`Unexpected authentication status: ${exhaustiveCheck}`);
+      throw new Error(t(`Unexpected authentication status: {p0}`, { p0: exhaustiveCheck }));
     }
   }
   await ensureAuthenticated(client, logger);

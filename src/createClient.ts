@@ -24,7 +24,7 @@ export async function checkHttpServer(logger: SimpleLogger, port: number, host?:
   try {
     const abortController = new AbortController();
     const timeout = setTimeout(
-      () => abortController.abort(new Error("Connection timed out.")),
+      () => abortController.abort(new Error(t("Connection timed out."))),
       500,
     );
     let response;

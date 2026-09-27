@@ -29,7 +29,7 @@ import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 function parseUserRepo(value: string): [string, string] {
   const parts = value.split("/");
   if (parts.length !== 2) {
-    throw new InvalidArgumentError("Must be user and repo separated by a slash.");
+    throw new InvalidArgumentError(t("Must be user and repo separated by a slash."));
   }
   return parts as [string, string];
 }
@@ -39,12 +39,12 @@ function parseUserRepo(value: string): [string, string] {
  */
 function validateFilePath(filePath: string): void {
   if (!existsSync(filePath)) {
-    throw new InvalidArgumentError(`File does not exist`);
+    throw new InvalidArgumentError(t(`File does not exist`));
   }
 
   const stats = statSync(filePath);
   if (!stats.isFile()) {
-    throw new InvalidArgumentError(`Path is not a file`);
+    throw new InvalidArgumentError(t(`Path is not a file`));
   }
 }
 
@@ -307,7 +307,7 @@ async function validateModelNameOrWarn(logger: SimpleLogger, path: string, yes: 
       const shouldContinue = await runPromptWithExitHandling(() =>
         confirm(
           {
-            message: chalk.green("Do you wish to continue? (Not recommended)"),
+            message: chalk.green(t("Do you wish to continue? (Not recommended)")),
             default: false,
           },
           { output: process.stderr },
@@ -355,7 +355,7 @@ function getUserAppDataPath() {
         ? join(homedir(), ".config")
         : process.env.XDG_CONFIG_HOME;
     default:
-      throw new Error("Unsupported platform");
+      throw new Error(t("Unsupported platform"));
   }
 }
 
@@ -473,7 +473,7 @@ async function warnAboutMove(logger: SimpleLogger, yes: boolean, modelsFolderPat
   const shouldContinue = await runPromptWithExitHandling(() =>
     confirm(
       {
-        message: chalk.green("Do you wish to continue?"),
+        message: chalk.green(t("Do you wish to continue?")),
         default: true,
       },
       { output: process.stderr },
@@ -517,16 +517,16 @@ function getDefaultUserName() {
  */
 function isValidFolderName(fieldName: string, value: string): true | string {
   if (value === "") {
-    return `${fieldName} cannot be empty`;
+    return t(`{p0} cannot be empty`, { p0: fieldName });
   }
   if (value.length > 100) {
-    return `${fieldName} is too long`;
+    return t(`{p0} is too long`, { p0: fieldName });
   }
   if (value.startsWith(".") || value.endsWith(".")) {
-    return `${fieldName} cannot start or end with "."`;
+    return t(`{p0} cannot start or end with "."`, { p0: fieldName });
   }
   if (value.trim() !== value) {
-    return `${fieldName} cannot have leading or trailing spaces`;
+    return t(`{p0} cannot have leading or trailing spaces`, { p0: fieldName });
   }
   if (/[/<>:"\\|?*]/.test(value)) {
     return `${fieldName} cannot contain special characters`;
@@ -669,7 +669,7 @@ async function resolveByHuggingFaceInteractive(
   const selected = await runPromptWithExitHandling(() =>
     search<[string, string] | null>(
       {
-        message: chalk.green("Please select the correct one") + chalk.dim(" |"),
+        message: chalk.green("Please select the correct onet(") + chalk.dim(") |"),
         pageSize,
         theme: searchTheme,
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {

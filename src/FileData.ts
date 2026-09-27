@@ -9,6 +9,7 @@ import { existsSync, writeFileSync } from "fs";
 import { mkdir, readFile } from "fs/promises";
 import path from "path";
 import { type ZodSchema } from "zod";
+import { t } from "./i18n/index.js";
 
 const fileDataGlobalCache: Map<string, FileData<any, any>> = new Map();
 
@@ -96,7 +97,7 @@ export class FileData<TData, TSerialized> {
       const data = this.deserializer(parsed);
       return data;
     } catch (e) {
-      this.logger?.error(`Error reading data from file: ${e}`);
+      this.logger?.error(t(`Error reading data from file: {p0}`, { p0: String(e) }));
       return null;
     }
   }
@@ -111,7 +112,7 @@ export class FileData<TData, TSerialized> {
     try {
       writeFileSync(this.filePath, json);
     } catch (e) {
-      this.logger?.error(`Error writing data to file: ${e}`);
+      this.logger?.error(t(`Error writing data to file: {p0}`, { p0: String(e) }));
     }
   }
 

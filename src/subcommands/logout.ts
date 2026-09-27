@@ -33,14 +33,14 @@ logoutCommand.action(async options => {
       break;
     default: {
       const exhaustiveCheck: never = authenticationStatus;
-      throw new Error(`Unexpected authentication status: ${exhaustiveCheck}`);
+      throw new Error(t(`Unexpected authentication status: {p0}`, { p0: exhaustiveCheck }));
     }
   }
 
   const shouldShowSpinner =
     process.stdout.isTTY && options.logLevel !== "none" && options.quiet !== true;
 
-  const spinner = shouldShowSpinner ? new Spinner("Logging out...") : null;
+  const spinner = shouldShowSpinner ? new Spinner(t("Logging out...")) : null;
 
   const sigintHandler = () => {
     spinner?.stopIfNotStopped();

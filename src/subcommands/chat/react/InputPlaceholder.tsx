@@ -1,5 +1,6 @@
 import { Box, Text } from "ink";
 import { Spinner } from "./Spinner.js";
+import { t } from "../../../i18n/index.js";
 
 interface InputPlaceholderOpts {
   isPredicting: boolean;
@@ -22,7 +23,7 @@ export function InputPlaceholder({
     return (
       <Box>
         <Text dimColor>
-          Fetching model details for {fetchingModelDetails.owner}/{fetchingModelDetails.name}{" "}
+          {t("Fetching model details for")} {fetchingModelDetails.owner}/{fetchingModelDetails.name}{" "}
         </Text>
         <Spinner />
       </Box>
@@ -45,7 +46,9 @@ export function InputPlaceholder({
     return (
       <Box>
         <Text color="cyan">› </Text>
-        <Text dimColor>Loading model... {Math.round(modelLoadingProgress * 100)}%</Text>
+        <Text dimColor>
+          {t("Loading model...")} {Math.round(modelLoadingProgress * 100)}%
+        </Text>
       </Box>
     );
   }
@@ -54,7 +57,9 @@ export function InputPlaceholder({
     return (
       <Box>
         <Text color="cyan">› </Text>
-        <Text dimColor>Processing prompt... {Math.round(promptProcessingProgress * 100)}% </Text>
+        <Text dimColor>
+          {t("Processing prompt...")} {Math.round(promptProcessingProgress * 100)}%{" "}
+        </Text>
         <Spinner />
       </Box>
     );
@@ -67,11 +72,15 @@ export function InputPlaceholder({
     return <Text color="cyan">› </Text>;
   }
 
+  // The cursor sits on the first character; splitting after translating keeps that behaviour
+  // in every locale instead of hard-coding an English "T".
+  const inputPlaceholder = t("Type a message or use / to use commands");
+
   return (
     <Box>
       <Text color="cyan">› </Text>
-      <Text inverse>T</Text>
-      <Text dimColor>ype a message or use / to use commands</Text>
+      <Text inverse>{inputPlaceholder.slice(0, 1)}</Text>
+      <Text dimColor>{inputPlaceholder.slice(1)}</Text>
     </Box>
   );
 }

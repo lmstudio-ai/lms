@@ -12,7 +12,7 @@ import fuzzy from "fuzzy";
 import { getCachedModelCatalogOrFetch } from "./catalogHelpers.js";
 import { getCliPref } from "../../cliPref.js";
 
-const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
+const MODEL_SELECTION_MESSAGE = t("Select a model to chat with");
 
 export async function maybeGetLLM(
   client: LMStudioClient,

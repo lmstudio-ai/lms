@@ -1,4 +1,5 @@
 import { type Suggestion } from "./types.js";
+import { t } from "../../../i18n/index.js";
 
 export interface SlashCommandSuggestionMetadata {
   label: string;
@@ -80,7 +81,7 @@ export class SlashCommandHandler {
     const commandsText = sortedCommands
       .map(command => `/${command.name} - ${command.description}`)
       .join("\n");
-    return `Available commands:\n${commandsText}\n`;
+    return t(`Available commands:\n{p0}\n`, { p0: commandsText });
   }
 
   getSuggestions(opts: SlashCommandSuggestionsOpts): Suggestion[] {

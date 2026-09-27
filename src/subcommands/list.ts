@@ -19,9 +19,9 @@ function loadedCheck(count: number) {
   if (count === 0) {
     return "";
   } else if (count === 1) {
-    return chalk.green("✓ LOADED");
+    return chalk.green(t("✓ LOADED"));
   } else {
-    return chalk.green(`✓ LOADED (${count})`);
+    return chalk.green(t(`✓ LOADED ({p0})`, { p0: count }));
   }
 }
 

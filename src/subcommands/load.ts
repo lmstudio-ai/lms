@@ -39,10 +39,10 @@ const gpuOptionParser = (str: string): number => {
   }
   const num = +str;
   if (Number.isNaN(num)) {
-    throw new InvalidArgumentError("Not a number");
+    throw new InvalidArgumentError(t("Not a number"));
   }
   if (num < 0 || num > 1) {
-    throw new InvalidArgumentError("Number out of range, must be between 0 and 1");
+    throw new InvalidArgumentError(t("Number out of range, must be between 0 and 1"));
   }
   return num;
 };
@@ -366,7 +366,9 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   };
   if (typeof engineConfigFile === "string" && loadConfig.engineConfigFileContents === "") {
     throw new Error(
-      "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+      t(
+        "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+      ),
     );
   }
   if (gpu !== undefined) {
@@ -673,8 +675,11 @@ async function selectModel({
     search<ModelInfo>(
       {
         message:
-          chalk.green(`Select a model to ${estimateOnly === true ? "estimate" : "load"}`) +
-          chalk.dim(" |"),
+          chalk.green(
+            t(`Select a model to {p0}`, {
+              p0: t(estimateOnly === true ? "estimate" : "load"),
+            }),
+          ) + chalk.dim(" |"),
         pageSize,
         theme: searchTheme,
         source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
@@ -842,8 +847,8 @@ function printEstimatedResourceUsage(
   }
   const message =
     estimate.passesGuardrails === true
-      ? "This model may be loaded based on your resource guardrails settings."
-      : "This model will fail to load based on your resource guardrails settings.";
+      ? t("This model may be loaded based on your resource guardrails settings.")
+      : t("This model will fail to load based on your resource guardrails settings.");
 
   logger.info("\nEstimate: " + colorFunc(message));
 }

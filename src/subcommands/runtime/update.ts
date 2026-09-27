@@ -134,7 +134,7 @@ async function confirmUpdate(
     return "cannot-confirm";
   }
 
-  const userConfirmed = await askQuestion("Continue updating runtime extensions?");
+  const userConfirmed = await askQuestion(t("Continue updating runtime extensions?"));
   if (userConfirmed === false) {
     logger.info(t("Update cancelled."));
     return "declined";

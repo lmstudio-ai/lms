@@ -36,7 +36,7 @@ async function selectRuntimeEngine(
     // Then run `lms runtime select llm-engine llama.cpp-win-x86_64-avx2@1.0.0 --latest`
     // Without this Error, the command would select @1.0.0, but that may or may not
     // be what the user intends.
-    throw new UserInputError("Cannot specify version with --latest.");
+    throw new UserInputError(t("Cannot specify version with --latest."));
   }
 
   let runtimeExtensions = resolveMultipleRuntimeExtensions(engineInfos, name);
@@ -179,7 +179,7 @@ const selectCommand = new Command()
     const { latest = false } = mergedOptions;
 
     if (alias === undefined && latest === false) {
-      throw new UserInputError("Must specify at least one of [alias] or --latest");
+      throw new UserInputError(t("Must specify at least one of [alias] or --latest"));
     } else if (alias === undefined) {
       await selectLatestVersionOfSelectedEngines(logger, client);
     } else {

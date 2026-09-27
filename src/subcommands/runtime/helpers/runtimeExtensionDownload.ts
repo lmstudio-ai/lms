@@ -32,13 +32,13 @@ export function formatRuntimeUpdateStatus(
   latestLocalVersion: string | undefined,
 ): string {
   if (latestLocalVersion === undefined) {
-    return chalk.dim("not installed");
+    return chalk.dim(t("not installed"));
   }
   const versionComparison = compareVersions(remoteVersion, latestLocalVersion);
   if (versionComparison > 0) {
-    return chalk.yellow("update available");
+    return chalk.yellow(t("update available"));
   } else if (versionComparison < 0) {
-    return chalk.yellow("newer version installed");
+    return chalk.yellow(t("newer version installed"));
   } else {
     return chalk.dim("up-to-date");
   }
@@ -71,8 +71,8 @@ export async function downloadRuntimeExtensionWithErrorHandling(
       },
       // After the download, the server extracts and sets up the runtime, which can take minutes.
       {
-        finalizingMessage: "Installing runtime... (this might take a while)",
-        completedMessage: "Runtime installed.",
+        finalizingMessage: t("Installing runtime... (this might take a while)"),
+        completedMessage: t("Runtime installed."),
       },
     );
     return "downloaded";
