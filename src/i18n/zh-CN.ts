@@ -915,4 +915,19 @@ export const zhCN: Record<string, string> = {
   "select": "选择",
   "No results found": "无匹配结果",
   "{p0} cannot contain special characters": "{p0} 不能包含特殊字符",
+  "--speculative-draft-mtp and --speculative-draft-simple cannot both be used.":
+    "--speculative-draft-mtp 与 --speculative-draft-simple 不能同时使用。",
+  "--speculative-draft-model must not be empty.": "--speculative-draft-model 不能为空。",
+  "--speculative-draft-mtp cannot be combined with --speculative-draft-model.":
+    "--speculative-draft-mtp 不能与 --speculative-draft-model 同时使用。",
+  "--speculative-draft-model requires --speculative-draft-simple.":
+    "--speculative-draft-model 需要配合 --speculative-draft-simple 使用。",
+  "--speculative-draft-simple requires --speculative-draft-model.":
+    "--speculative-draft-simple 需要配合 --speculative-draft-model 使用。",
+  "--speculative draft tuning flags require --speculative-draft-simple or --speculative-draft-mtp.":
+    "投机解码调参标志需要搭配 --speculative-draft-simple 或 --speculative-draft-mtp 使用。",
+  "--speculative-draft-min-tokens must be less than or equal to --speculative-draft-max-tokens.":
+    "--speculative-draft-min-tokens 必须小于或等于 --speculative-draft-max-tokens。",
+  "No project name argument found in scaffold.": "脚手架中未找到项目名参数。",
+  "Please select the correct onet(": "请选择正确的一项(",
 };

@@ -215,7 +215,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     }
   }
   if (projectNameIndex === -1) {
-    throw new Error("No project name argument found in scaffold.");
+    throw new Error(t("No project name argument found in scaffold."));
   }
   const replacer = new Replacer();
   let projectName: string = "project";

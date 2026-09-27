@@ -677,7 +677,7 @@ async function resolveByHuggingFaceInteractive(
   const selected = await runPromptWithExitHandling(() =>
     search<[string, string] | null>(
       {
-        message: chalk.green("Please select the correct onet(") + chalk.dim(") |"),
+        message: chalk.green(t("Please select the correct onet(")) + chalk.dim(") |"),
         pageSize,
         theme: searchTheme,
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
