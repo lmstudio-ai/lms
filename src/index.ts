@@ -112,6 +112,10 @@ function dimOptionParameters(flags: string, helpMessageGap: number): string {
 function createHelpConfiguration(maxWidth: number, helpMessageGap: number): HelpConfiguration {
   return {
     helpWidth: maxWidth,
+    // commander hard-codes the section headings it passes here (`Usage:`, `Options:`, ...).
+    // Everything else — including the group titles registered through commandsGroup(), which
+    // are already localized — flows through unchanged because t() falls back to its input.
+    styleTitle: title => t(title),
     commandUsage: command => chalk.bold(`${getCommandPath(command)} ${command.usage()}`),
     subcommandTerm: (command: CommandUnknownOpts) => formatCommandTerm(command, helpMessageGap),
     subcommandDescription: (command: { description(): string }) => command.description(),

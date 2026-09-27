@@ -104,15 +104,15 @@ function renderRuntimeExtensionsList(
     columns: ["name", "latestLocalVersion", "version", "status"],
     config: {
       name: {
-        headingTransform: () => "NAME",
+        headingTransform: () => t("NAME"),
         align: "left",
       },
       latestLocalVersion: {
-        headingTransform: () => "LATEST LOCAL",
+        headingTransform: () => t("LATEST LOCAL"),
         align: "left",
       },
       version: {
-        headingTransform: () => "AVAILABLE",
+        headingTransform: () => t("AVAILABLE"),
         align: "left",
       },
       status: {

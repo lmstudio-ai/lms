@@ -1,3 +1,4 @@
+import { resolve } from "path";
 /**
  * Tests for the i18n layer.
  *
@@ -179,6 +180,121 @@ describe("translation lookup", () => {
     const { t } = await loadWithEnv({ LANG: "zh_CN.UTF-8" });
     expect(t("Prints the status of LM Studio")).toBe("打印 LM Studio 状态");
     expect(t("Load a model")).toBe(SAMPLE_ZH);
+  });
+});
+
+describe("help section titles", () => {
+  // commander builds these headings itself, so nothing else in the suite notices if they stop
+  // being localized — help would silently fall back to English while every description stayed
+  // Chinese.
+  const TITLES: Array<[string, string]> = [
+    ["Usage:", "用法："],
+    ["Options:", "选项："],
+    ["Arguments:", "参数："],
+    ["Global Options:", "全局选项："],
+    ["Commands:", "命令："],
+  ];
+
+  it.each(TITLES)("localizes the %j section title", async (source, expected) => {
+    const { t } = await loadWithEnv({ LANG: "zh_CN.UTF-8" });
+    expect(t(source)).toBe(expected);
+  });
+
+  it.each(TITLES)("keeps the %j section title in English", async source => {
+    const { t } = await loadWithEnv({ LANG: "en_US.UTF-8" });
+    expect(t(source)).toBe(source);
+  });
+
+  it("feeds commander's headings through t()", async () => {
+    // styleTitle is the only hook commander exposes for them; losing the call would leave
+    // `Usage:` / `Options:` in English no matter what the catalog says.
+    const { readFileSync } = await import("fs");
+    const candidates = [
+      resolve(process.cwd(), "packages/lms-cli/src/index.ts"),
+      resolve(process.cwd(), "src/index.ts"),
+      resolve(__dirname, "index.ts"),
+      resolve(__dirname, "..", "index.ts"),
+    ];
+    const path = candidates.find(p => {
+      try {
+        readFileSync(p);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    expect(path).toBeDefined();
+    const lines = readFileSync(path as string, "utf8").split("\n");
+    const hook = /styleTitle\s*:\s*(?:title|str|heading)\s*=>\s*t\(/;
+    expect(
+      lines.findIndex(line => hook.test(line) && !line.trimStart().startsWith("//")),
+    ).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("table headers", () => {
+  // columnify pads cells with wcwidth, so CJK headings stay aligned; without that, translating
+  // them would silently misalign every table. These assertions keep the wording in place and the
+  // wiring that feeds headings through t() intact.
+  const HEADERS: Array<[string, string]> = [
+    ["PARAMS", "参数"],
+    ["ARCH", "架构"],
+    ["SIZE", "大小"],
+    ["DEVICE", "设备"],
+    ["IDENTIFIER", "标识符"],
+    ["MODEL", "模型"],
+    ["STATUS", "状态"],
+    ["CONTEXT", "上下文"],
+    ["PARALLEL", "并行"],
+    ["LOAD CONFIG", "加载配置"],
+    ["LLM ENGINE", "LLM 引擎"],
+    ["SELECTED", "已选择"],
+    ["MODEL FORMAT", "模型格式"],
+    ["GPU/ACCELERATORS", "GPU/加速器"],
+    ["EMBEDDING", "嵌入模型"],
+    ["LATEST LOCAL", "最新本地"],
+    ["AVAILABLE", "可用"],
+    ["NAME", "名称"],
+  ];
+
+  it.each(HEADERS)("localizes the %j column heading", async (heading, expected) => {
+    const { t } = await loadWithEnv({ LANG: "zh_CN.UTF-8" });
+    expect(t(heading)).toBe(expected);
+  });
+
+  // Acronyms must stay as they are; translating them would contradict the terminology rules.
+  it.each(["TTL", "VRAM", "LLM", "GGUF", "MLX", "GPU"])(
+    "keeps the acronym %j in English",
+    async acronym => {
+      const { t } = await loadWithEnv({ LANG: "zh_CN.UTF-8" });
+      expect(t(acronym)).toBe(acronym);
+    },
+  );
+
+  it("feeds column headings through t()", async () => {
+    const { readFileSync } = await import("fs");
+    const candidates = [
+      resolve(process.cwd(), "packages/lms-cli/src/subcommands/list.ts"),
+      resolve(process.cwd(), "src/subcommands/list.ts"),
+      resolve(__dirname, "..", "subcommands", "list.ts"),
+      resolve(__dirname, "..", "list.ts"),
+    ];
+    const path = candidates.find(c => {
+      try {
+        readFileSync(c);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    expect(path).toBeDefined();
+    const source = readFileSync(path as string, "utf8");
+    // Every literal heading in a headingTransform must be wrapped; `TTL` is the one acronym we
+    // deliberately leave alone.
+    const literal = [...source.matchAll(/headingTransform:\s*\(\)\s*=>\s*chalk\.dim\("([^"]+)"\)/g)]
+      .map(m => m[1])
+      .filter(h => h !== "TTL" && h !== "");
+    expect(literal).toEqual([]);
   });
 });
 

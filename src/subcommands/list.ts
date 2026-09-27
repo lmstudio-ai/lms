@@ -106,22 +106,22 @@ function printDownloadedModelsTable(
           align: "left",
         },
         path: {
-          headingTransform: () => chalk.dim(title),
+          headingTransform: () => chalk.dim(t(title)),
         },
         params: {
-          headingTransform: () => chalk.dim("PARAMS"),
+          headingTransform: () => chalk.dim(t("PARAMS")),
           align: "left",
         },
         arch: {
-          headingTransform: () => chalk.dim("ARCH"),
+          headingTransform: () => chalk.dim(t("ARCH")),
           align: "left",
         },
         sizeBytes: {
-          headingTransform: () => chalk.dim("SIZE"),
+          headingTransform: () => chalk.dim(t("SIZE")),
           align: "left",
         },
         device: {
-          headingTransform: () => chalk.dim("DEVICE"),
+          headingTransform: () => chalk.dim(t("DEVICE")),
           align: "left",
         },
       },
@@ -200,22 +200,22 @@ function printModelsWithVariantRows({
           align: "left",
         },
         path: {
-          headingTransform: () => chalk.dim(title),
+          headingTransform: () => chalk.dim(t(title)),
         },
         params: {
-          headingTransform: () => chalk.dim("PARAMS"),
+          headingTransform: () => chalk.dim(t("PARAMS")),
           align: "left",
         },
         arch: {
-          headingTransform: () => chalk.dim("ARCH"),
+          headingTransform: () => chalk.dim(t("ARCH")),
           align: "left",
         },
         sizeBytes: {
-          headingTransform: () => chalk.dim("SIZE"),
+          headingTransform: () => chalk.dim(t("SIZE")),
           align: "left",
         },
         device: {
-          headingTransform: () => chalk.dim("DEVICE"),
+          headingTransform: () => chalk.dim(t("DEVICE")),
           align: "left",
         },
       },
@@ -563,35 +563,35 @@ psCommand.action(async (options: PsCommandOptions) => {
       ],
       config: {
         identifier: {
-          headingTransform: () => chalk.dim("IDENTIFIER"),
+          headingTransform: () => chalk.dim(t("IDENTIFIER")),
           align: "left",
         },
         path: {
-          headingTransform: () => chalk.dim("MODEL"),
+          headingTransform: () => chalk.dim(t("MODEL")),
           align: "left",
         },
         status: {
-          headingTransform: () => chalk.dim("STATUS"),
+          headingTransform: () => chalk.dim(t("STATUS")),
           align: "left",
         },
         sizeBytes: {
-          headingTransform: () => chalk.dim("SIZE"),
+          headingTransform: () => chalk.dim(t("SIZE")),
           align: "left",
         },
         contextLength: {
-          headingTransform: () => chalk.dim("CONTEXT"),
+          headingTransform: () => chalk.dim(t("CONTEXT")),
           align: "left",
         },
         parallel: {
-          headingTransform: () => chalk.dim("PARALLEL"),
+          headingTransform: () => chalk.dim(t("PARALLEL")),
           align: "left",
         },
         loadConfig: {
-          headingTransform: () => chalk.dim("LOAD CONFIG"),
+          headingTransform: () => chalk.dim(t("LOAD CONFIG")),
           align: "left",
         },
         device: {
-          headingTransform: () => chalk.dim("DEVICE"),
+          headingTransform: () => chalk.dim(t("DEVICE")),
           align: "left",
         },
         ttlMs: {

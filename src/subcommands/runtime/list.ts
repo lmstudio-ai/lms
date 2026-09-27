@@ -110,15 +110,15 @@ async function listEngines(
       columns: ["engine", "selected", "format"],
       config: {
         engine: {
-          headingTransform: () => "LLM ENGINE",
+          headingTransform: () => t("LLM ENGINE"),
           align: "left",
         },
         selected: {
-          headingTransform: () => "SELECTED",
+          headingTransform: () => t("SELECTED"),
           align: "center",
         },
         format: {
-          headingTransform: () => "MODEL FORMAT",
+          headingTransform: () => t("MODEL FORMAT"),
           align: "center",
         },
       },

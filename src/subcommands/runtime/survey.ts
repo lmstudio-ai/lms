@@ -164,7 +164,7 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
   return columnify(rows, {
     columns: ["device", "vram"],
     config: {
-      device: { headingTransform: () => chalk.dim("GPU/ACCELERATORS"), align: "left" },
+      device: { headingTransform: () => chalk.dim(t("GPU/ACCELERATORS")), align: "left" },
       vram: { headingTransform: () => chalk.dim("VRAM"), align: "left" },
     },
     columnSplitter: "   ",
@@ -174,20 +174,20 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
 function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
   const cpuInfo = survey.hardwareSurvey.cpuSurveyResult.cpuInfo;
   if (cpuInfo === undefined) {
-    return `${chalk.dim("CPU:")} ${t("unavailable")}`;
+    return `${chalk.dim(t("CPU:"))} ${t("unavailable")}`;
   }
   const instructionSetExtensions =
     cpuInfo.supportedInstructionSetExtensions.length > 0
       ? ` (${cpuInfo.supportedInstructionSetExtensions.join(", ")})`
       : "";
   const architectureLabel = getRuntimeHardwareCpuArchitectureLabel(cpuInfo.architecture);
-  return `${chalk.dim("CPU:")} ${architectureLabel}${instructionSetExtensions}`;
+  return `${chalk.dim(t("CPU:"))} ${architectureLabel}${instructionSetExtensions}`;
 }
 
 function renderRamLine(survey: RuntimeHardwareSurveyEngine): string {
   const ramCapacityText = formatSizeBytes1024(survey.memoryInfo.ramCapacity);
 
-  return `${chalk.dim("RAM:")} ${ramCapacityText}`;
+  return `${chalk.dim(t("RAM:"))} ${ramCapacityText}`;
 }
 
 function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | undefined {
