@@ -1,9 +1,10 @@
-import { SimpleLogger } from "@lmstudio/lms-common";
+import { SimpleLogger, text } from "@lmstudio/lms-common";
 import { type UtilBinary } from "@lmstudio/lms-es-plugin-runner";
 import { pluginManifestSchema } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient, type PluginManifest, type PluginRunnerType } from "@lmstudio/sdk";
 import { type ChildProcessWithoutNullStreams } from "child_process";
 import { readFile } from "fs/promises";
+import { t } from "../../i18n/index.js";
 
 type PluginProcessStatus = "stopped" | "starting" | "running" | "restarting";
 export interface PluginProcessOpts {
@@ -46,10 +47,12 @@ export abstract class PluginProcess {
     }
 
     if (manifest.runner !== this.runnerType) {
-      this.serverLogger.errorText`
+      this.serverLogger.error(
+        t(text`
         "lms dev" currently does not support changing the runner type dynamically. Please re-run
         "lms dev".
-      `;
+      `),
+      );
       this.status = "stopped";
       return;
     }

@@ -9,6 +9,7 @@ import {
 import columnify from "columnify";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { invertSelections } from "./helpers/invertSelections.js";
@@ -63,7 +64,7 @@ async function listEngines(
   const engines = constructDisplayInfo(enginesResp, selectionsResp);
 
   if (engines.length === 0) {
-    logger.info("No runtimes found.");
+    logger.info(t("No runtimes found."));
     return;
   }
 
@@ -127,7 +128,7 @@ async function listEngines(
 
 const lsCommand = new Command()
   .name("ls")
-  .description("List installed LLM engines")
+  .description(t("List installed LLM engines"))
   .action(async function () {
     // Access options for logging and client creation
     const options = this.optsWithGlobals();

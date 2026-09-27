@@ -1,5 +1,6 @@
 import { Command } from "@commander-js/extra-typings";
 import chalk from "chalk";
+import { t } from "../i18n/index.js";
 
 export function getCommitHash() {
   return "<LMS-CLI-COMMIT-HASH>";
@@ -23,23 +24,24 @@ export function printVersionWithLogo() {
   console.info();
   printVersionCompact();
   console.info();
-  console.info(chalk.blue("Docs: https://lmstudio.ai/docs/developer"));
-  console.info(chalk.blue("Join our Discord: https://discord.gg/lmstudio"));
-  console.info(chalk.blue("Contribute: https://github.com/lmstudio-ai/lms"));
+  // The label is translated while the URL itself is left untouched so the link stays intact.
+  console.info(chalk.blue(`${t("Docs:")} https://lmstudio.ai/docs/developer`));
+  console.info(chalk.blue(`${t("Join our Discord:")} https://discord.gg/lmstudio`));
+  console.info(chalk.blue(`${t("Contribute:")} https://github.com/lmstudio-ai/lms`));
 }
 
 export function printVersionCompact() {
   console.info(
     chalk.blue("lms"),
-    `is LM Studio's CLI utility for your models, server, and inference runtime.`,
+    t(`is LM Studio's CLI utility for your models, server, and inference runtime.`),
   );
-  console.info(chalk.dim("CLI commit:"), chalk.cyan(getCommitHash()));
+  console.info(chalk.dim(t("CLI commit:")), chalk.cyan(getCommitHash()));
 }
 
 export const version = new Command()
   .name("version")
-  .description("Prints the version of the CLI")
-  .option("--json", "Prints the version in JSON format")
+  .description(t("Prints the version of the CLI"))
+  .option("--json", t("Prints the version in JSON format"))
   .action(async options => {
     const { json = false } = options;
     if (json) {

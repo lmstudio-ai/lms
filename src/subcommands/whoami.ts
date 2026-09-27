@@ -1,6 +1,7 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import {
   formatAuthenticationStatusMessage,
@@ -11,7 +12,7 @@ type WhoamiCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
 const whoamiCommand = new Command<[], WhoamiCommandOptions>()
   .name("whoami")
-  .description(text`Check the current authentication status`);
+  .description(t(text`Check the current authentication status`));
 
 addCreateClientOptions(whoamiCommand);
 addLogLevelOptions(whoamiCommand);

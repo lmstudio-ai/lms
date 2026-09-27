@@ -2,6 +2,7 @@ import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { ensureAuthenticated } from "../ensureAuthenticated.js";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import {
   formatAuthenticationStatusMessage,
@@ -24,46 +25,46 @@ type LoginCommandOptions = OptionValues &
 
 const loginCommand = new Command<[], LoginCommandOptions>()
   .name("login")
-  .description(text`Authenticate with LM Studio`)
+  .description(t(text`Authenticate with LM Studio`))
   .option(
     "--status",
-    text`
+    t(text`
       Check the current authentication status without logging in.
-    `,
+    `),
   )
   .option(
     "--as-compute-device <token>",
-    text`
+    t(text`
       Log in as a compute device using a token from LM Studio.
-    `,
+    `),
   )
   .option(
     "--with-pre-authenticated-keys",
-    text`
+    t(text`
       Authenticate using pre-authenticated keys. This is useful for CI/CD environments. You must
       also provide the --key-id, --public-key, and --private-key flags.
-    `,
+    `),
   )
   .option(
     "--key-id <value>",
-    text`
+    t(text`
       The key ID to use for authentication. You should supply this if and only if you are using
       --with-pre-authenticated-keys.
-    `,
+    `),
   )
   .option(
     "--public-key <value>",
-    text`
+    t(text`
       The public key to use for authentication. You should supply this if and only if you are
       using --with-pre-authenticated-keys.
-    `,
+    `),
   )
   .option(
     "--private-key <value>",
-    text`
+    t(text`
       The private key to use for authentication. You should supply this if and only if you are
       using --with-pre-authenticated-keys.
-    `,
+    `),
   );
 
 addCreateClientOptions(loginCommand);
@@ -83,15 +84,19 @@ loginCommand.action(async options => {
 
   // Validate mutually exclusive options
   if (status && (withPreAuthenticatedKeys === true || asComputeDevice !== undefined)) {
-    throw new Error(text`
+    throw new Error(
+      t(text`
       The --status flag cannot be used with --with-pre-authenticated-keys or
       --as-compute-device.
-    `);
+    `),
+    );
   }
   if (withPreAuthenticatedKeys === true && asComputeDevice !== undefined) {
-    throw new Error(text`
+    throw new Error(
+      t(text`
       The --with-pre-authenticated-keys and --as-compute-device flags cannot be used together.
-    `);
+    `),
+    );
   }
 
   const authenticationStatus = normalizeAuthenticationStatus(
@@ -120,10 +125,14 @@ loginCommand.action(async options => {
 
     const computeDeviceAuthenticationStatus =
       await client.repository.loginAsComputeDevice(asComputeDevice);
-    const ownerType =
-      computeDeviceAuthenticationStatus.ownerIsOrganization === true ? "organization" : "user";
+    const ownerType = t(
+      computeDeviceAuthenticationStatus.ownerIsOrganization === true ? "organization" : "user",
+    );
     logger.info(
-      `Successfully logged in as a compute device for ${ownerType} ${computeDeviceAuthenticationStatus.ownerUsername}.`,
+      t(`Successfully logged in as a compute device for {p0} {p1}.`, {
+        p0: ownerType,
+        p1: computeDeviceAuthenticationStatus.ownerUsername,
+      }),
     );
     return;
   }
@@ -133,27 +142,33 @@ loginCommand.action(async options => {
       throw makeCannotLoginWhileComputeDeviceError(authenticationStatus);
     }
     if (keyId === undefined || publicKey === undefined || privateKey === undefined) {
-      throw new Error(text`
+      throw new Error(
+        t(text`
         You must provide --key-id, --public-key, and --private-key when using
-        --with-pre-authenticated-keys.`);
+        --with-pre-authenticated-keys.`),
+      );
     }
     const { userName } = await client.repository.loginWithPreAuthenticatedKeys({
       keyId,
       publicKey,
       privateKey,
     });
-    logger.info(`Successfully logged in as ${userName}.`);
+    logger.info(t(`Successfully logged in as {p0}.`, { p0: userName }));
     return;
   } else {
     if (keyId !== undefined || publicKey !== undefined || privateKey !== undefined) {
-      throw new Error(text`
+      throw new Error(
+        t(text`
         You must not provide --key-id, --public-key, or --private-key when not using
-        --with-pre-authenticated-keys.`);
+        --with-pre-authenticated-keys.`),
+      );
     }
   }
   switch (authenticationStatus.type) {
     case "loggedInUser":
-      logger.info(`You are already authenticated as ${authenticationStatus.userName}.`);
+      logger.info(
+        t(`You are already authenticated as {p0}.`, { p0: authenticationStatus.userName }),
+      );
       return;
     case "computeDevice":
       throw makeCannotLoginWhileComputeDeviceError(authenticationStatus);
@@ -165,7 +180,7 @@ loginCommand.action(async options => {
     }
   }
   await ensureAuthenticated(client, logger);
-  logger.info("Authentication successful.");
+  logger.info(t("Authentication successful."));
 });
 
 export const login = loginCommand;

@@ -1,11 +1,12 @@
 import { Command, Option, type OptionValues } from "@commander-js/extra-typings";
-import { type SimpleLogger } from "@lmstudio/lms-common";
+import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { type DownloadableRuntimeExtensionInfo } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import columnify from "columnify";
 import { select } from "@inquirer/prompts";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { runPromptWithExitHandling } from "../../prompt.js";
 import {
@@ -46,20 +47,25 @@ async function searchRuntimeExtensions(
 
   if (searchResults.length === 0) {
     if (opts.allowIncompatible) {
-      logger.info("No runtime extensions matched the query.");
+      logger.info(t("No runtime extensions matched the query."));
     } else {
       // Let's try again including incompatible extensions
       const incompatibleResults = await client.runtime.extensions.search(searchQuery, {
         channel: opts.channel,
         includeIncompatible: true,
       });
-      logger.info("No runtime extensions matched the query.");
+      logger.info(t("No runtime extensions matched the query."));
       if (incompatibleResults.length > 0) {
         logger.info();
-        logger.infoText`
-          However, ${incompatibleResults.length} incompatible runtime extension(s) were found.
+        logger.info(
+          t(
+            text`
+          However, {p0} incompatible runtime extension(s) were found.
           Re-run with --allow-incompatible to see and download them.
-        `;
+        `,
+            { p0: incompatibleResults.length },
+          ),
+        );
       }
     }
     process.exit(0);
@@ -130,10 +136,12 @@ async function selectRuntimeExtensionToDownload(
   }
 
   if (options.yes === true) {
-    logger.warnText`
+    logger.warn(
+      t(text`
       Multiple runtime extensions matched the query. Selecting the first result because --yes was
       provided.
-    `;
+    `),
+    );
     return runtimeExtensions[0];
   }
 
@@ -182,10 +190,12 @@ async function selectRuntimeExtensionToDownload(
     );
   }
 
-  logger.errorText`
+  logger.error(
+    t(text`
     Multiple runtime extensions matched the query. Re-run with a more specific query or use -l to
     list all matches.
-  `;
+  `),
+  );
   process.exit(1);
 }
 
@@ -194,37 +204,44 @@ async function downloadRuntimeExtension(
   client: LMStudioClient,
   runtimeExtension: DownloadableRuntimeExtensionInfo,
 ) {
-  logger.info(`Download ${runtimeExtension.name}@${runtimeExtension.version}...`);
+  logger.info(
+    t(`Download {p0}@{p1}...`, { p0: runtimeExtension.name, p1: runtimeExtension.version }),
+  );
   const downloadResult: DownloadRuntimeExtensionResult =
     await downloadRuntimeExtensionWithErrorHandling(logger, client, runtimeExtension, {
       updateSelections: true,
     });
   if (downloadResult === "downloaded") {
-    logger.info("Select the runtime using:");
+    logger.info(t("Select the runtime using:"));
     logger.info();
-    logger.info(`  lms runtime select ${runtimeExtension.name}@${runtimeExtension.version}`);
+    logger.info(
+      t(`  lms runtime select {p0}@{p1}`, {
+        p0: runtimeExtension.name,
+        p1: runtimeExtension.version,
+      }),
+    );
   }
 }
 
 const getCommand = new Command<[], RuntimeGetCommandOptions>()
   .name("get")
-  .description("Download or list runtime extensions.")
+  .description(t("Download or list runtime extensions."))
   .argument(
     "[query]",
-    "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
+    t("Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'"),
   )
-  .option("-l, --list", "List runtime extensions without downloading")
+  .option("-l, --list", t("List runtime extensions without downloading"))
   .option(
     "--allow-incompatible",
-    "Include runtime extensions that are incompatible with your system",
+    t("Include runtime extensions that are incompatible with your system"),
   )
   .addOption(
     new Option(
       "--channel <channel>",
-      "Override the runtime extension channel to query from (examples: stable, beta)",
+      t("Override the runtime extension channel to query from (examples: stable, beta)"),
     ),
   )
-  .option("-y, --yes", "Automatically pick the first result when multiple matches are found")
+  .option("-y, --yes", t("Automatically pick the first result when multiple matches are found"))
   .action(async function (queryArgument: string | undefined) {
     const options = this.optsWithGlobals();
     const logger = createLogger(options);

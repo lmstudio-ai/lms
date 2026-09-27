@@ -6,6 +6,7 @@ import chalk from "chalk";
 import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
 import { exists } from "./exists.js";
+import { t } from "./i18n/index.js";
 import { lmsKey2Path } from "./lmstudioPaths.js";
 import { readLocalAPIServerPort, tryFindLocalAPIServer } from "./localAPIServer.js";
 import { type LogLevelArgs } from "./logLevel.js";
@@ -60,21 +61,24 @@ export function addCreateClientOptions<
     .addOption(
       new Option(
         "--host <host>",
-        text`
+        t(text`
           If you wish to connect to a remote LM Studio instance, specify the host here. Note that, in
           this case, lms will connect using client identifier "lms-cli-remote-<random chars>", which
           will not be a privileged client, and will restrict usage of functionalities such as
           "lms push".
-        `,
+        `),
       ).hideHelp(),
     )
     .addOption(
       new Option(
         "--port <port>",
-        text`
-          The port where LM Studio can be reached. If not provided and the host is set to "127.0.0.1"
-          (default), the last used port will be used; otherwise, ${DEFAULT_SERVER_PORT} will be used.
-        `,
+        t(
+          text`
+            The port where LM Studio can be reached. If not provided and the host is set to "127.0.0.1"
+            (default), the last used port will be used; otherwise, {defaultPort} will be used.
+          `,
+          { defaultPort: DEFAULT_SERVER_PORT },
+        ),
       )
         .argParser(createRefinedNumberParser({ integer: true, min: 0, max: 65535 }))
         .hideHelp(),
@@ -102,10 +106,14 @@ export async function createClient(
     isRemote = false;
     host = "127.0.0.1";
   } else if (host.includes("://")) {
-    logger.error("Host should not include the protocol.");
+    logger.error(t("Host should not include the protocol."));
     process.exit(1);
   } else if (host.includes(":")) {
-    logger.error(`Host should not include the port number. Use ${chalk.yellow("--port")} instead.`);
+    logger.error(
+      t(`Host should not include the port number. Use {p0} instead.`, {
+        p0: chalk.yellow("--port"),
+      }),
+    );
     process.exit(1);
   }
   let auth: LMStudioClientConstructorOpts;
@@ -121,10 +129,12 @@ export async function createClient(
       (process.env.LMS_FORCE_PROD === undefined || process.env.LMS_FORCE_PROD === "")
     ) {
       // lmsKey not injected and we did not force prod, this is not a production build.
-      logger.warnText`
+      logger.warn(
+        t(text`
         You are using a development build of lms-cli. Privileged features such as "lms push" will
         not work.
-      `;
+      `),
+      );
       auth = {
         clientIdentifier: "lms-cli-dev",
       };
@@ -177,8 +187,8 @@ export async function createClient(
 
     logger.error(
       process.env.LMS_API_SERVER_INFO_PATH === undefined
-        ? "Failed to start or connect to local LM Studio API server."
-        : `Failed to connect using ${process.env.LMS_API_SERVER_INFO_PATH}.`,
+        ? t("Failed to start or connect to local LM Studio API server.")
+        : t("Failed to connect using {path}.", { path: process.env.LMS_API_SERVER_INFO_PATH }),
     );
     process.exit(1);
   }
@@ -190,10 +200,13 @@ export async function createClient(
   logger.debug(`Connecting to server at ${host}:${port}`);
   if (!(await checkHttpServer(logger, port, host))) {
     logger.error(
-      text`
-        The server does not appear to be running at ${host}:${port}. Please make sure the server
+      t(
+        text`
+        The server does not appear to be running at {p0}:{p1}. Please make sure the server
         is running and accessible at the specified address.
       `,
+        { p0: host, p1: port },
+      ),
     );
     process.exit(1);
   }

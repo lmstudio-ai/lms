@@ -4,6 +4,7 @@ import { type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { compareVersions } from "../../../compareVersions.js";
 import { handleDownloadWithProgressBar } from "../../../handleDownloadWithProgressBar.js";
+import { t } from "../../../i18n/index.js";
 
 export function determineLatestLocalVersion(localVersions: Array<string>): string | undefined {
   let latestLocalVersion: string | undefined = undefined;
@@ -77,7 +78,12 @@ export async function downloadRuntimeExtensionWithErrorHandling(
     return "downloaded";
   } catch (error) {
     if (error instanceof Error && error.message.includes("is already installed")) {
-      logger.info(`${runtimeExtension.name}@${runtimeExtension.version} is already installed.`);
+      logger.info(
+        t(`{p0}@{p1} is already installed.`, {
+          p0: runtimeExtension.name,
+          p1: runtimeExtension.version,
+        }),
+      );
       return "already-installed";
     }
     throw error;

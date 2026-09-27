@@ -11,6 +11,7 @@ import { cwd } from "process";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
 import { exists } from "../../exists.js";
 import { findProjectFolderOrExit } from "../../findProjectFolder.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { DenoPluginProcess } from "./DenoPluginProcess.js";
 import { NodePluginProcess } from "./NodePluginProcess.js";
@@ -25,26 +26,26 @@ type DevCommandOptions = OptionValues &
 
 const devCommand = new Command<[], DevCommandOptions>()
   .name("dev")
-  .description("Starts a plugin dev server in the current folder")
+  .description(t("Starts a plugin dev server in the current folder"))
   .option(
     "-i, --install",
-    text`
+    t(text`
       When specified, instead of starting the development server, installs the plugin to
       LM Studio.
-    `,
+    `),
   )
   .option(
     "-y, --yes",
-    text`
+    t(text`
       Automatically approve all prompts. Useful for scripting.
       When used with --install, it will overwrite the plugin without asking.
-    `,
+    `),
   )
   .option(
     "--no-notify",
-    text`
+    t(text`
       When specified, will not produce the "Plugin started" notification in LM Studio.
-    `,
+    `),
   );
 
 addCreateClientOptions(devCommand);
@@ -62,7 +63,7 @@ devCommand.action(async (options: DevCommandOptions) => {
     JSON.parse(await readFile(manifestPath, "utf-8")),
   );
   if (!manifestParseResult.success) {
-    logger.error("Failed to parse the manifest file.");
+    logger.error(t("Failed to parse the manifest file."));
     logger.error(Validator.prettyPrintZod("manifest", manifestParseResult.error));
     process.exit(1);
   }
@@ -82,20 +83,20 @@ async function handleInstall(
   logger: SimpleLogger,
   client: LMStudioClient,
 ): Promise<number> {
-  logger.info(`Installing the plugin ${manifest.owner}/${manifest.name}...`);
+  logger.info(t(`Installing the plugin {p0}/{p1}...`, { p0: manifest.owner, p1: manifest.name }));
   await client.repository.installLocalPlugin({ path: projectPath });
-  logger.info(`Successfully installed ${manifest.owner}/${manifest.name}.`);
+  logger.info(t(`Successfully installed {p0}/{p1}.`, { p0: manifest.owner, p1: manifest.name }));
   return 0;
 }
 
 async function ensureNpmDependencies(path: string, logger: SimpleLogger, client: LMStudioClient) {
   const packageJson = join(path, "package.json");
   if (!(await exists(packageJson))) {
-    logger.error("No package.json found in the plugin folder.");
+    logger.error(t("No package.json found in the plugin folder."));
     process.exit(1);
   }
   if (!(await exists(join(path, "node_modules")))) {
-    logger.info("Installing npm dependencies...");
+    logger.info(t("Installing npm dependencies..."));
     await client.repository.installPluginDependencies(path);
   } else {
     logger.debug("node_modules already exists. Skipping npm install.");
@@ -110,7 +111,7 @@ async function handleDevServer(
   { noNotify }: { noNotify: boolean },
 ) {
   if (manifest.type !== "plugin") {
-    logger.error("The version of lms you are using only supports plugins.");
+    logger.error(t("The version of lms you are using only supports plugins."));
     process.exit(1);
   }
 
@@ -120,17 +121,27 @@ async function handleDevServer(
     case "ecmascript":
     case "node":
       await ensureNpmDependencies(projectPath, logger, client);
-      logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
+      logger.info(
+        t(`Starting the development server for {p0}/{p1}...`, {
+          p0: manifest.owner,
+          p1: manifest.name,
+        }),
+      );
       await startNodeDevServer(projectPath, logger, client, { noNotify });
       break;
     case "deno": {
       await ensureNpmDependencies(projectPath, logger, client);
-      logger.info(`Starting the development server for ${manifest.owner}/${manifest.name}...`);
+      logger.info(
+        t(`Starting the development server for {p0}/{p1}...`, {
+          p0: manifest.owner,
+          p1: manifest.name,
+        }),
+      );
       await startDenoDevServer(projectPath, manifest, logger, client, { noNotify });
       break;
     }
     default: {
-      logger.error("The version of lms you are using only supports node/deno plugins.");
+      logger.error(t("The version of lms you are using only supports node/deno plugins."));
       process.exit(1);
     }
   }
@@ -138,11 +149,11 @@ async function handleDevServer(
     .whenDisconnected()
     .then(async () => {
       await client[Symbol.asyncDispose]();
-      logger.info("Disconnected from the server. Stopping the development server.");
+      logger.info(t("Disconnected from the server. Stopping the development server."));
       process.exit(1);
     })
     .catch(() => {
-      console.error("Error while disposing the client.");
+      console.error(t("Error while disposing the client."));
       process.exit(1);
     });
 }

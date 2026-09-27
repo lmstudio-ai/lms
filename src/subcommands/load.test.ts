@@ -1,6 +1,7 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { assertLoadConfigSupportedForCliModel, load } from "./load.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
+import { t } from "../i18n/index.js";
 
 jest.mock("@inquirer/prompts", () => ({ search: jest.fn() }));
 
@@ -23,7 +24,7 @@ describe("assertLoadConfigSupportedForCliModel", () => {
       }),
     ).toThrow("process.exit(1)");
     expect(logger.errorWithoutPrefix).toHaveBeenCalledWith(
-      expect.stringContaining("AutoFit can only be configured for LLM models."),
+      expect.stringContaining(t("AutoFit can only be configured for LLM models.")),
     );
   });
 });

@@ -1,11 +1,12 @@
 import { Command, Option } from "@commander-js/extra-typings";
-import { type SimpleLogger } from "@lmstudio/lms-common";
+import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { type DownloadableRuntimeExtensionInfo } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { compareVersions } from "../../compareVersions.js";
 import { askQuestion } from "../../confirm.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import {
   determineLatestLocalVersion,
@@ -104,7 +105,7 @@ function renderUpdatePlan(
     };
   });
 
-  logger.info("Update Plan:");
+  logger.info(t("Update Plan:"));
   logger.info();
   const longestName = Math.max(...rows.map(row => row.name.length));
   const nameWidth = longestName + 4;
@@ -128,14 +129,14 @@ async function confirmUpdate(
   const isStdinInteractive = process.stdin.isTTY === true;
   if (isStdoutInteractive === false || isStdinInteractive === false) {
     logger.error(
-      "Cannot prompt for confirmation in a non-interactive environment. Re-run with --yes.",
+      t("Cannot prompt for confirmation in a non-interactive environment. Re-run with --yes."),
     );
     return "cannot-confirm";
   }
 
   const userConfirmed = await askQuestion("Continue updating runtime extensions?");
   if (userConfirmed === false) {
-    logger.info("Update cancelled.");
+    logger.info(t("Update cancelled."));
     return "declined";
   }
   return "confirmed";
@@ -148,17 +149,29 @@ async function performUpdates(
 ): Promise<void> {
   for (const updateCandidate of updateCandidates) {
     const runtimeExtension = updateCandidate.runtimeExtension;
-    logger.infoText`
-      Updating ${runtimeExtension.name} from ${updateCandidate.latestLocalVersion}
-      to ${runtimeExtension.version}...
-    `;
+    logger.info(
+      t(
+        text`
+      Updating {p0} from {p1}
+      to {p2}...
+    `,
+        {
+          p0: runtimeExtension.name,
+          p1: updateCandidate.latestLocalVersion,
+          p2: runtimeExtension.version,
+        },
+      ),
+    );
     const downloadResult: DownloadRuntimeExtensionResult =
       await downloadRuntimeExtensionWithErrorHandling(logger, client, runtimeExtension, {
         updateSelections: true,
       });
     if (downloadResult === "downloaded") {
       logger.info(
-        "Updated " + runtimeExtension.name + " to version " + runtimeExtension.version + ".",
+        t("Updated {name} to version {version}.", {
+          name: runtimeExtension.name,
+          version: runtimeExtension.version,
+        }),
       );
     }
   }
@@ -174,12 +187,14 @@ async function runtimeUpdateAction(
   const hasQueryArgument = queryArgument !== undefined && queryArgument.length > 0;
 
   if (opts.all === true) {
-    logger.info("Checking updates for all installed runtime extensions...");
+    logger.info(t("Checking updates for all installed runtime extensions..."));
   } else if (hasQueryArgument === true) {
     // Don't log anything here; the query is already specified.
   } else {
     logger.info(
-      "Checking updates for selected installed runtime extensions... (Pass --all to include all)",
+      t(
+        "Checking updates for selected installed runtime extensions... (Pass --all to include all)",
+      ),
     );
   }
 
@@ -189,7 +204,7 @@ async function runtimeUpdateAction(
   });
 
   if (allRuntimeExtensions.length === 0) {
-    logger.info("No runtime extensions matched the query.");
+    logger.info(t("No runtime extensions matched the query."));
     return;
   }
 
@@ -203,7 +218,7 @@ async function runtimeUpdateAction(
   );
 
   if (updateCandidates.length === 0) {
-    logger.info("All matching runtime extensions are already up-to-date.");
+    logger.info(t("All matching runtime extensions are already up-to-date."));
     return;
   }
 
@@ -226,24 +241,24 @@ async function runtimeUpdateAction(
 
 const updateCommand = new Command()
   .name("update")
-  .description("Update installed runtime extensions.")
+  .description(t("Update installed runtime extensions."))
   .argument(
     "[query]",
-    "Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'",
+    t("Query runtime extensions. Examples: 'llama.cpp', 'llama.cpp:cuda', 'llama.cpp@1.2.3'"),
   )
-  .option("-a, --all", "Update all installed runtime extensions")
+  .option("-a, --all", t("Update all installed runtime extensions"))
   .option(
     "--allow-incompatible",
-    "Include runtime extensions that are incompatible with your system",
+    t("Include runtime extensions that are incompatible with your system"),
   )
   .addOption(
     new Option(
       "--channel <channel>",
-      "Override the runtime extension channel to query from (examples: stable, beta)",
+      t("Override the runtime extension channel to query from (examples: stable, beta)"),
     ),
   )
-  .option("--dry-run", "Show extensions that would be updated without performing downloads")
-  .option("-y, --yes", "Skip confirmation prompts")
+  .option("--dry-run", t("Show extensions that would be updated without performing downloads"))
+  .option("-y, --yes", t("Skip confirmation prompts"))
   .action(async function (queryArgument: string | undefined) {
     const mergedOptions = this.optsWithGlobals();
     const logger = createLogger(mergedOptions as LogLevelArgs);

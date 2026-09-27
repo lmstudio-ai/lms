@@ -1,5 +1,6 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { createClient } from "../../createClient.js";
+import { t } from "../../i18n/index.js";
 import { tryFindLocalAPIServer } from "../../localAPIServer.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 
@@ -10,8 +11,8 @@ type DaemonUpCommandOptions = OptionValues &
 
 const up = new Command<[], DaemonUpCommandOptions>()
   .name("up")
-  .description("Manually start the llmster daemon")
-  .option("--json", "Output result in JSON format");
+  .description(t("Manually start the llmster daemon"))
+  .option("--json", t("Output result in JSON format"));
 
 addLogLevelOptions(up);
 
@@ -35,17 +36,19 @@ up.action(async (options: DaemonUpCommandOptions) => {
   } else {
     if (previousStatus !== null) {
       if (daemonInfo.isDaemon) {
-        console.info(`The daemon is already running (PID: ${daemonInfo.pid}).`);
+        console.info(t(`The daemon is already running (PID: {p0}).`, { p0: daemonInfo.pid }));
       } else {
         console.info(
-          `LM Studio is already running (PID: ${daemonInfo.pid}); not starting a second daemon.`,
+          t(`LM Studio is already running (PID: {p0}); not starting a second daemon.`, {
+            p0: daemonInfo.pid,
+          }),
         );
       }
     } else {
       if (daemonInfo.isDaemon) {
-        console.info(`llmster started (PID: ${daemonInfo.pid}).`);
+        console.info(t(`llmster started (PID: {p0}).`, { p0: daemonInfo.pid }));
       } else {
-        console.info(`LM Studio started (PID: ${daemonInfo.pid}).`);
+        console.info(t(`LM Studio started (PID: {p0}).`, { p0: daemonInfo.pid }));
       }
     }
   }

@@ -30,6 +30,7 @@ import {
   recursiveFindAncestorFolderWithFile,
 } from "../findProjectFolder.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 const overridesParser = (str: string): any => {
@@ -52,34 +53,34 @@ type PushCommandOptions = OptionValues &
 
 const pushCommand = new Command<[], PushCommandOptions>()
   .name("push")
-  .description("Uploads the artifact in the current folder to LM Studio Hub")
+  .description(t("Uploads the artifact in the current folder to LM Studio Hub"))
   .option(
     "--description <value>",
-    text`
+    t(text`
       Description of the artifact. If provided, will overwrite the existing description.
-    `,
+    `),
   )
-  .addOption(new Option("--overrides <value>", "JSON string").argParser(overridesParser))
+  .addOption(new Option("--overrides <value>", t("JSON string")).argParser(overridesParser))
   .option(
     "--write-revision",
-    text`
+    t(text`
       When specified, the revision number will be written to the manifest.json file. This is
       useful if you want to keep track of the revision number in your source control.
-    `,
+    `),
   )
   .option(
     "--private",
-    text`
+    t(text`
       When specified, the published artifact will be marked as private. This flag is only
       effective if the artifact did not exist before. (It will not change the visibility of an
       existing artifact.)
-    `,
+    `),
   )
   .option(
     "-y, --yes",
-    text`
+    t(text`
       Automatically approve all prompts.
-    `,
+    `),
   );
 
 addCreateClientOptions(pushCommand);
@@ -183,9 +184,9 @@ pushCommand.action(async options => {
   const needsConfirmation = !yes && (manifest.type === "plugin" || manifest.type === "skill");
 
   if (manifest.owner === "local") {
-    logger.error("This artifact was created without a username.");
+    logger.error(t("This artifact was created without a username."));
     logger.error(
-      "Please edit the manifest.json and set the owner field to your LM Studio Hub username.",
+      t("Please edit the manifest.json and set the owner field to your LM Studio Hub username."),
     );
     process.exit(1);
   }
@@ -199,7 +200,7 @@ pushCommand.action(async options => {
 
   if (needsConfirmation) {
     if (!(await askQuestion("Continue?"))) {
-      logger.info("Aborting push.");
+      logger.info(t("Aborting push."));
       process.exit(1);
     }
   }
@@ -214,7 +215,7 @@ pushCommand.action(async options => {
   });
 
   if (manifest.type === "skill") {
-    logger.info("   Or install it with:");
+    logger.info(t("   Or install it with:"));
     logger.info();
     logger.info(`       ${chalk.yellow(`lms get ${manifest.owner}/${manifest.name}`)}`);
   }
@@ -224,20 +225,25 @@ export const push = pushCommand;
 
 function printFileList(fileList: LocalArtifactFileList, logger: SimpleLogger) {
   logger.info();
-  logger.info("The following files will be pushed:");
+  logger.info(t("The following files will be pushed:"));
   logger.info();
   for (const file of fileList.files) {
     logger.info(`   ${file.relativePath} ${chalk.dim(`(${formatSizeBytes1000(file.sizeBytes)})`)}`);
   }
   logger.info();
   if (fileList.usedIgnoreFile !== undefined && fileList.usedIgnoreFile !== "") {
-    logger.info(chalk.dim(`(Used ignore file ${fileList.usedIgnoreFile})`));
+    logger.info(chalk.dim(t("(Used ignore file {file}).", { file: fileList.usedIgnoreFile })));
   } else {
     logger.info(
-      chalk.dim(text`
-        (i) You can create a ${chalk.yellow(".lmsignore")} or ${chalk.yellow(".gitignore")} file to
+      chalk.dim(
+        t(
+          text`
+        (i) You can create a {p0} or {p1} file to
         filter out unwanted files.
-      `),
+      `,
+          { p0: chalk.yellow(".lmsignore"), p1: chalk.yellow(".gitignore") },
+        ),
+      ),
     );
   }
   logger.info();

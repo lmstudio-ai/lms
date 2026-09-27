@@ -21,6 +21,7 @@ import fuzzy from "fuzzy";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatBytes.js";
 import { handleDownloadWithProgressBar } from "../handleDownloadWithProgressBar.js";
+import { t } from "../i18n/index.js";
 import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
@@ -72,45 +73,45 @@ interface DownloadPlannerCliOpts {
 
 const getCommand = new Command<[], GetCommandOptions>()
   .name("get")
-  .description(text`Search and download local models or Hub artifacts`)
+  .description(t(text`Search and download local models or Hub artifacts`))
   .argument(
     "[name]",
-    text`
+    t(text`
       The model or Hub artifact to download, for example "openai/gpt-oss-20b" or
       "owner/my-skill". For a specific model quantization, append its name with "@", for example
       "qwen/qwen3.5-9b@q8_0". To download a model from Hugging Face directly, use its full URL.
-    `,
+    `),
   )
   .option(
     "--mlx",
-    text`
+    t(text`
       Restrict model resolution to MLX-compatible options. If any of "--mlx" or "--gguf" is
       specified, only matching formats will be considered. Otherwise only options supported by your
       system will be considered.
-    `,
+    `),
   )
   .option(
     "--gguf",
-    text`
+    t(text`
       Restrict model resolution to GGUF-compatible options. If any of "--mlx" or "--gguf" is
       specified, only matching formats will be considered. Otherwise only options supported by your
       system will be considered.
-    `,
+    `),
   )
   .option(
     "-y, --yes",
-    text`
+    t(text`
       Automatically approve all prompts. Useful for scripting. If there are multiple
       staff picks matching the search term, the first one will be used. If there are multiple
       download options, the preselected option based on your hardware and preferences will be used.
-    `,
+    `),
   )
   .option(
     "--select",
-    text`
+    t(text`
       Open variant selection before downloading. Useful if the default variant is already
       downloaded and you want to choose a different one.
-    `,
+    `),
   );
 
 addCreateClientOptions(getCommand);
@@ -256,7 +257,7 @@ async function resolveStaffPickDownloadRequest({
   compatibilityTypes: Array<ModelCompatibilityType> | undefined;
 }): Promise<Extract<DownloadPlanRequest, { type: "artifact" }>> {
   if (searchTerm !== undefined && searchTerm !== "") {
-    logger.info("Searching staff picks with the term", chalk.yellow(searchTerm));
+    logger.info(t("Searching staff picks with the term"), chalk.yellow(searchTerm));
   }
 
   const staffPickResults = await client.repository.unstable.fuzzyFindStaffPicks({
@@ -272,10 +273,12 @@ async function resolveStaffPickDownloadRequest({
   if (exactMatchIndex !== -1) {
     selectedResult = staffPickResults[exactMatchIndex];
   } else if (yes) {
-    logger.info("Multiple staff picks found. Automatically selecting the first one due to --yes.");
+    logger.info(
+      t("Multiple staff picks found. Automatically selecting the first one due to --yes."),
+    );
     selectedResult = staffPickResults[0];
   } else {
-    logger.info("No exact match found. Please choose a model from the list below.");
+    logger.info(t("No exact match found. Please choose a model from the list below."));
     logger.infoWithoutPrefix();
     selectedResult = await askToChooseStaffPick(staffPickResults, 2);
   }
@@ -596,7 +599,7 @@ async function askToChooseArtifactDownloadSelection(
   modelNode: ArtifactDownloadPlanModelNode,
   pageSize: number,
 ): Promise<ArtifactModelSelectionValue> {
-  console.info(chalk.dim("! Use the arrow keys to navigate, and press enter to select."));
+  console.info(chalk.dim(t("! Use the arrow keys to navigate, and press enter to select.")));
 
   const choiceData = createArtifactDownloadOptionChoiceData(modelNode);
   const quantColumnWidth = Math.max(0, ...choiceData.map(choice => choice.quantText.length));
@@ -971,42 +974,51 @@ function maybeExitIfNothingToDownload({
   if (requestRefersToModel(downloadPlan, request)) {
     if (request.type === "artifact") {
       logger.infoWithoutPrefix(
-        text`
+        t(
+          text`
           Model already downloaded. To use, run:
-          ${chalk.yellowBright(`lms load ${quoteCommandArgument(commandTarget)}`)}
+          {p0}
         `,
+          { p0: chalk.yellowBright(`lms load ${quoteCommandArgument(commandTarget)}`) },
+        ),
       );
     } else {
       const rootNode = downloadPlan.nodes[0];
       if (rootNode === undefined || rootNode.type !== "model") {
         // Unexpected: direct planner model downloads should always resolve to a model root here.
-        logger.infoWithoutPrefix("Model already downloaded.");
+        logger.infoWithoutPrefix(t("Model already downloaded."));
       } else {
         const modelKey = rootNode.selected?.modelKey ?? rootNode.alreadyOwned?.modelKey;
         if (modelKey !== undefined) {
           logger.infoWithoutPrefix(
-            text`
+            t(
+              text`
               Model already downloaded. To use, run:
-              ${chalk.yellowBright(`lms load ${quoteCommandArgument(modelKey)}`)}
+              {p0}
             `,
+              { p0: chalk.yellowBright(`lms load ${quoteCommandArgument(modelKey)}`) },
+            ),
           );
         } else {
           // Unexpected: no-download direct model plans should usually expose the selected or
           // already-owned model key. Avoid printing a broken `lms load` hint when they do not.
-          logger.infoWithoutPrefix("Model already downloaded.");
+          logger.infoWithoutPrefix(t("Model already downloaded."));
         }
       }
     }
   } else {
-    logger.infoWithoutPrefix("Everything is already downloaded");
+    logger.infoWithoutPrefix(t("Everything is already downloaded"));
   }
 
   if (showSelectHint) {
     logger.infoWithoutPrefix(
-      text`
+      t(
+        text`
         If you wish to download a variant, run:
-        ${chalk.yellowBright(`lms get ${quoteCommandArgument(commandTarget)} --select`)}
+        {p0}
       `,
+        { p0: chalk.yellowBright(`lms get ${quoteCommandArgument(commandTarget)} --select`) },
+      ),
     );
   }
 
@@ -1160,12 +1172,16 @@ async function maybeHandleMissingRequestedQuant({
 
   const editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlan);
   if (yes || editableNodeIndexes.length === 0) {
-    logger.error(`Cannot find variant ${requestedQuantName}.`);
+    logger.error(t(`Cannot find variant {p0}.`, { p0: requestedQuantName }));
     process.exit(1);
   }
 
   logger.infoWithoutPrefix(
-    chalk.red(`Cannot find variant ${requestedQuantName}, please select one from below.`),
+    chalk.red(
+      t("Cannot find variant {variant}, please select one from below.", {
+        variant: requestedQuantName,
+      }),
+    ),
   );
   await openArtifactDownloadSelectionEditor(downloadPlanner, {
     clearScreenBeforeSelection: false,

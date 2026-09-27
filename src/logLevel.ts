@@ -2,6 +2,7 @@ import { Option, type Command, type OptionValues } from "@commander-js/extra-typ
 import { makePrettyError, SimpleLogger, text } from "@lmstudio/lms-common";
 import chalk from "chalk";
 import { Console } from "console";
+import { t } from "./i18n/index.js";
 
 const levels = ["debug", "info", "warn", "error", "none"] as const;
 
@@ -21,10 +22,12 @@ export function addLogLevelOptions<
 >(command: Command<Args, Opts, GlobalOpts>): Command<Args, Opts & LogLevelArgs, GlobalOpts> {
   return command
     .addOption(
-      new Option("--log-level <level>", "The level of logging to use").choices(levels).hideHelp(),
+      new Option("--log-level <level>", t("The level of logging to use"))
+        .choices(levels)
+        .hideHelp(),
     )
-    .addOption(new Option("--quiet", "Suppress all logging").hideHelp())
-    .addOption(new Option("--verbose", "Enable verbose logging").hideHelp()) as Command<
+    .addOption(new Option("--quiet", t("Suppress all logging")).hideHelp())
+    .addOption(new Option("--verbose", t("Enable verbose logging")).hideHelp()) as Command<
     Args,
     Opts & LogLevelArgs,
     GlobalOpts
@@ -61,10 +64,19 @@ export function getLogLevelMap({
   }
   if (numSpecified > 1) {
     throw makePrettyError(
-      chalk.red(text`
-        Only one of ${chalk.yellow("--logLevel")}, ${chalk.yellow("--verbose")}, or
-        ${chalk.yellow("--quiet")} can be specified.
-      `),
+      chalk.red(
+        t(
+          text`
+        Only one of {p0}, {p1}, or
+        {p2} can be specified.
+      `,
+          {
+            p0: chalk.yellow("--logLevel"),
+            p1: chalk.yellow("--verbose"),
+            p2: chalk.yellow("--quiet"),
+          },
+        ),
+      ),
     );
   }
   if (quiet) {

@@ -2,6 +2,7 @@ import { Command } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import chalk from "chalk";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { type LinkStatusCommandOptions } from "./shared.js";
 
@@ -14,12 +15,12 @@ const statusDisplayLabels = new Map<string, string>([
 
 export const status = new Command<[], LinkStatusCommandOptions>()
   .name("status")
-  .description("Display the status of LM Link")
+  .description(t("Display the status of LM Link"))
   .option(
     "--json",
-    text`
+    t(text`
       Outputs the status in JSON format to stdout.
-    `,
+    `),
   );
 
 addCreateClientOptions(status);
@@ -70,37 +71,62 @@ status.action(async function () {
 
   // Human-readable output: check issues in priority order
   if (lmLinkStatus.issues.includes("deviceDisabled") === true) {
-    logger.infoText`
-      You have disabled LM Link. To re-enable it, run ${chalk.cyan("lms link enable")}.
-    `;
+    logger.info(
+      t(
+        text`
+      You have disabled LM Link. To re-enable it, run {p0}.
+    `,
+        { p0: chalk.cyan("lms link enable") },
+      ),
+    );
     return;
   }
 
   if (lmLinkStatus.issues.includes("notLoggedIn") === true) {
-    logger.infoText`
-      LM Link not running because you are not logged in. Use ${chalk.cyan("lms login")} to login.
-    `;
+    logger.info(
+      t(
+        text`
+      LM Link not running because you are not logged in. Use {p0} to login.
+    `,
+        { p0: chalk.cyan("lms login") },
+      ),
+    );
     return;
   }
 
   if (lmLinkStatus.issues.includes("noAccess") === true) {
-    logger.infoText`
-      You do not have access to LM Link. Visit ${chalk.cyan("https://lmstudio.ai/lm-link")} to
+    logger.info(
+      t(
+        text`
+      You do not have access to LM Link. Visit {p0} to
       request access.
-    `;
+    `,
+        { p0: chalk.cyan("https://lmstudio.ai/lm-link") },
+      ),
+    );
     return;
   }
 
   if (lmLinkStatus.issues.includes("badVersion") === true) {
     const { isDaemon } = await client.system.getInfo();
-    logger.infoText`
+    logger.info(
+      t(
+        text`
       LM Link cannot connect because the protocol has updated. You need to update
-      ${isDaemon ? "llmster" : "LM Studio"} to continue using LM Link.
-    `;
+      {p0} to continue using LM Link.
+    `,
+        { p0: isDaemon ? "llmster" : "LM Studio" },
+      ),
+    );
     if (isDaemon) {
-      logger.infoText`
-        Run ${chalk.cyan("lms daemon update")} to update.
-      `;
+      logger.info(
+        t(
+          text`
+        Run {p0} to update.
+      `,
+          { p0: chalk.cyan("lms daemon update") },
+        ),
+      );
     }
     return;
   }
@@ -116,14 +142,16 @@ status.action(async function () {
       offlineStatusLabel = `Offline (Reconnect in ${reconnectInSeconds}s)`;
     }
     const secondsSinceError = Math.max(0, Math.floor((Date.now() - lastError.timestamp) / 1000));
-    logger.info(`This device: ${lmLinkStatus.deviceName}`);
-    logger.info(`Status: ${offlineStatusLabel}`);
-    logger.info(`Last error: ${lastError.message} (${secondsSinceError}s ago)`);
+    logger.info(t(`This device: {p0}`, { p0: lmLinkStatus.deviceName }));
+    logger.info(t(`Status: {p0}`, { p0: offlineStatusLabel }));
+    logger.info(
+      t(`Last error: {p0} ({p1}s ago)`, { p0: lastError.message, p1: secondsSinceError }),
+    );
     return;
   }
 
-  logger.info(`This device: ${lmLinkStatus.deviceName}`);
-  logger.info(`Status: ${statusLabel}`);
+  logger.info(t(`This device: {p0}`, { p0: lmLinkStatus.deviceName }));
+  logger.info(t(`Status: {p0}`, { p0: statusLabel }));
 
   if (lmLinkStatus.status !== "online") {
     return;
@@ -131,7 +159,7 @@ status.action(async function () {
   logger.info("");
 
   const peerCount = lmLinkStatus.peers.length;
-  logger.info(`Found ${peerCount} device${peerCount === 1 ? "" : "s"}:`);
+  logger.info(t(`Found {p0} device{p1}:`, { p0: peerCount, p1: peerCount === 1 ? "" : "s" }));
 
   if (peerCount === 0) {
     return;
@@ -156,8 +184,8 @@ status.action(async function () {
 
   for (const peer of lmLinkStatus.peers) {
     logger.info(`  - ${peer.deviceName}`);
-    logger.info(`    Status: ${peer.status}`);
-    logger.info(`    Identifier: ${peer.deviceIdentifier}`);
+    logger.info(t(`    Status: {p0}`, { p0: peer.status }));
+    logger.info(t(`    Identifier: {p0}`, { p0: peer.deviceIdentifier }));
 
     // Filter models for this peer
     const peerModels = modelInfos.filter(
@@ -165,14 +193,14 @@ status.action(async function () {
     );
 
     if (peerModels.length > 0) {
-      logger.info("    Loaded Models Instances:");
+      logger.info(t("    Loaded Models Instances:"));
       const displayCount = Math.min(5, peerModels.length);
       for (let index = 0; index < displayCount; index++) {
         logger.info(`      - ${peerModels[index].identifier}`);
       }
       if (peerModels.length > 5) {
         const remaining = peerModels.length - 5;
-        logger.info(`      ... (and ${remaining} more)`);
+        logger.info(t(`      ... (and {p0} more)`, { p0: remaining }));
       }
     }
   }

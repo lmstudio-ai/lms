@@ -12,10 +12,16 @@ import { tmpdir } from "os";
 import { join } from "path";
 import util from "util";
 import { z } from "zod";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 import { runPromptWithExitHandling } from "../prompt.js";
-import { ANSI_CYAN, ANSI_RESET_COLOR, fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
+import {
+  ANSI_CYAN,
+  ANSI_RESET_COLOR,
+  fuzzyHighlightOptions,
+  searchTheme,
+} from "../inquirerTheme.js";
 
 const execAsync = util.promisify(exec);
 const illegalPathChars = ["/", "\\", ":", "*", "?", '"', "<", ">", "|"];
@@ -77,36 +83,43 @@ async function getScaffolds(_logger: SimpleLogger) {
 
 const createCommand = new Command()
   .name("create")
-  .description("Create a new project with scaffolding")
-  .argument("[scaffold]", "The scaffold to use");
+  .description(t("Create a new project with scaffolding"))
+  .argument("[scaffold]", t("The scaffold to use"));
 
 addLogLevelOptions(createCommand);
 
 createCommand.action(async (scaffoldName, options) => {
   const logger = createLogger(options);
   let allScaffolds: Array<unknown>;
-  logger.info("Fetching scaffolds list...");
+  logger.info(t("Fetching scaffolds list..."));
   try {
     allScaffolds = await getScaffolds(logger);
   } catch (error) {
-    logger.error("Failed to fetch scaffolds", error);
+    logger.error(t("Failed to fetch scaffolds"), error);
     return;
   }
   logger.debug(`Found ${allScaffolds.length} scaffolds`);
   const scaffoldBasicsList = filteredArray(scaffoldBasicsListSchema).parse(allScaffolds);
   if (scaffoldBasicsList.length !== allScaffolds.length) {
     logger.warn(
-      "Cannot parse some of the scaffolds. This is likely due to outdated LM Studio Version.",
+      t("Cannot parse some of the scaffolds. This is likely due to outdated LM Studio Version."),
     );
-    logger.warn("Please update LM Studio from https://lmstudio.ai");
+    logger.warn(t("Please update LM Studio from https://lmstudio.ai"));
   }
 
   console.info(
-    text`
-        ${chalk.green.underline(" Welcome to LM Studio Interactive Project Creator ")}
+    t(
+      text`
+        {p0}
 
        Select a scaffold to use from the list below.
       `,
+      {
+        p0: chalk.green.underline(
+          " " + t("Welcome to LM Studio Interactive Project Creator") + " ",
+        ),
+      },
+    ),
   );
 
   // Try exact match first.
@@ -130,9 +143,9 @@ createCommand.action(async (scaffoldName, options) => {
   );
   if (!scaffold.success) {
     logger.error(
-      "Failed to parse scaffold data. This is likely due to outdated LM Studio Version.",
+      t("Failed to parse scaffold data. This is likely due to outdated LM Studio Version."),
     );
-    logger.error("Please update LM Studio from https://lmstudio.ai");
+    logger.error(t("Please update LM Studio from https://lmstudio.ai"));
     logger.debug(scaffold.error);
     process.exit(1);
   }
@@ -230,37 +243,42 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
   }
 
   if (illegalPaths.includes(projectName)) {
-    logger.error(`The project name "${projectName}" is not allowed.`);
+    logger.error(t(`The project name "{p0}" is not allowed.`, { p0: projectName }));
     process.exit(1);
   }
 
   for (const char of illegalPathChars) {
     if (projectName.includes(char)) {
-      logger.error(`The project name "${projectName}" contains illegal character "${char}".`);
+      logger.error(
+        t(`The project name "{p0}" contains illegal character "{p1}".`, {
+          p0: projectName,
+          p1: char,
+        }),
+      );
       process.exit(1);
     }
   }
 
   if (existsSync(projectName)) {
-    logger.error(`The directory/file "${projectName}" already exists.`);
+    logger.error(t(`The directory/file "{p0}" already exists.`, { p0: projectName }));
     process.exit(1);
   }
 
-  logger.info("Checking requirements...");
+  logger.info(t("Checking requirements..."));
   if (!(await checkIfCommandExists(logger, "node"))) {
-    logger.error("Node.js is required to create this project.");
-    logger.error("Please install Node.js from https://nodejs.org/");
+    logger.error(t("Node.js is required to create this project."));
+    logger.error(t("Please install Node.js from https://nodejs.org/"));
     process.exit(1);
   }
   if (!(await checkIfCommandExists(logger, "npm"))) {
-    logger.error("npm is required to create this project.");
-    logger.error("Please install Node.js from https://nodejs.org/");
+    logger.error(t("npm is required to create this project."));
+    logger.error(t("Please install Node.js from https://nodejs.org/"));
     process.exit(1);
   }
 
   const tempDir = tmpdir();
 
-  logger.info("Downloading necessary files...");
+  logger.info(t("Downloading necessary files..."));
 
   const tarballName = await new Promise<string>((resolve, reject) => {
     let stdout = "";
@@ -284,7 +302,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
   });
 
   logger.debug("tarballName is", tarballName);
-  logger.info("Extracting files...");
+  logger.info(t("Extracting files..."));
 
   await mkdir(projectName, { recursive: true });
 
@@ -303,7 +321,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
 
   unlink(`${tempDir}/${tarballName}`);
 
-  logger.info("Initializing project...");
+  logger.info(t("Initializing project..."));
 
   const files = await fg([`./${projectName}/**/*`, `!./${projectName}/node_modules/**/*`], {
     dot: true,
@@ -321,7 +339,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
 
   progressBar.stop();
 
-  logger.info("Installing dependencies...");
+  logger.info(t("Installing dependencies..."));
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["install"], {
@@ -339,7 +357,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     });
   });
 
-  logger.info("Finalizing...");
+  logger.info(t("Finalizing..."));
 
   const packageJsonPath = `./${projectName}/package.json`;
   const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
@@ -356,7 +374,7 @@ async function createWithScaffold(logger: SimpleLogger, scaffold: Scaffold) {
     }
   }
 
-  logger.info("\nProject initialized.");
+  logger.info(t("\nProject initialized."));
 
   const motdLines = [];
 

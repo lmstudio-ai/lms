@@ -3,6 +3,7 @@ import { type DownloadProgressUpdate } from "@lmstudio/sdk";
 import { askQuestion } from "./confirm.js";
 import { createDownloadPbUpdater } from "./downloadPbUpdater.js";
 import { ProgressBar } from "./ProgressBar.js";
+import { t } from "./i18n/index.js";
 
 interface HandleDownloadWithProgressBarOpts {
   /**
@@ -42,10 +43,10 @@ export async function handleDownloadWithProgressBar(
     process.stdin.resume();
     askQuestion("Continue to download in the background?").then(confirmed => {
       if (confirmed) {
-        logger.info("Download will continue in the background.");
+        logger.info(t("Download will continue in the background."));
         process.exit(1);
       } else {
-        logger.warn("Download canceled.");
+        logger.warn(t("Download canceled."));
         abortController.abort();
         canceled = true;
       }

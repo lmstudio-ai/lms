@@ -1,5 +1,4 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
-import { text } from "@lmstudio/lms-common";
 import chalk from "chalk";
 import {
   addCreateClientOptions,
@@ -9,6 +8,7 @@ import {
   type CreateClientArgs,
 } from "../createClient.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { getServerConfig } from "./server.js";
 
@@ -20,7 +20,7 @@ type StatusCommandOptions = OptionValues &
 
 const statusCommand = new Command<[], StatusCommandOptions>()
   .name("status")
-  .description("Prints the status of LM Studio");
+  .description(t("Prints the status of LM Studio"));
 
 addCreateClientOptions(statusCommand);
 addLogLevelOptions(statusCommand);
@@ -46,9 +46,10 @@ statusCommand.action(async options => {
   const running = await checkHttpServer(logger, port, host);
   let content = "";
   if (running) {
-    content += text`
-      Server: ${chalk.green("ON")} (port: ${port})
-    `;
+    content += t("Server: {status} (port: {port})", {
+      status: chalk.green(t("ON")),
+      port,
+    });
     content += "\n\n";
 
     await using client = await createClient(logger, options);
@@ -57,9 +58,9 @@ statusCommand.action(async options => {
     ).flat();
     const downloadedModels = await client.system.listDownloadedModels();
     if (loadedModels.length === 0) {
-      content += "No Models Loaded";
+      content += t("No Models Loaded");
     } else {
-      content += "Loaded Models";
+      content += t("Loaded Models");
       for (const model of loadedModels) {
         const sizeBytes = downloadedModels.find(m => m.path === model.path)?.sizeBytes;
         let sizeText = "";
@@ -70,13 +71,10 @@ statusCommand.action(async options => {
       }
     }
   } else {
-    content += text`
-      Server: ${chalk.red(" OFF ")}
-
-      ${chalk.dim("(i) To start the server, run the following command:")}
-
-          lms server start
-    `;
+    content += t("Server: {status}\n\n{hint}\n\n    lms server start", {
+      status: chalk.red(" OFF "),
+      hint: chalk.dim(t("(i) To start the server, run the following command:")),
+    });
   }
   console.info(content);
 });

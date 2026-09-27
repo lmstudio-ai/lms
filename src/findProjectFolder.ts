@@ -1,6 +1,7 @@
-import { type SimpleLogger } from "@lmstudio/lms-common";
+import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { access } from "fs/promises";
 import { dirname, join, resolve } from "path";
+import { t } from "./i18n/index.js";
 
 /**
  * From the given folder, recursively travels back up, until finds one folder that contains a file
@@ -42,11 +43,13 @@ export async function recursiveFindAncestorFolderWithFile(
 export async function findProjectFolderOrExit(logger: SimpleLogger, cwd: string) {
   const projectFolder = await recursiveFindAncestorFolderWithFile(logger, "manifest.json", cwd);
   if (projectFolder === null) {
-    logger.errorText`Could not find the project folder. Please invoke this command in a folder with a
+    logger.error(
+      t(text`Could not find the project folder. Please invoke this command in a folder with a
       manifest.json file.
       \n       To create an empty plugin, use the \`lms create\` command, or create a new plugin in
       LM Studio.
-    `;
+    `),
+    );
     process.exit(1);
   }
   return projectFolder;

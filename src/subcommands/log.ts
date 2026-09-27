@@ -7,6 +7,7 @@ import {
 } from "@lmstudio/lms-shared-types";
 import chalk from "chalk";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 type LogStreamOptions = OptionValues &
@@ -20,15 +21,15 @@ type LogStreamOptions = OptionValues &
 
 const stream = new Command<[], LogStreamOptions>()
   .name("stream")
-  .description("Stream logs from LM Studio")
-  .option("--json", "Outputs in JSON format, separated by newline")
-  .option("--stats", "Print prediction stats if available")
+  .description(t("Stream logs from LM Studio"))
+  .option("--json", t("Outputs in JSON format, separated by newline"))
+  .option("--stats", t("Print prediction stats if available"))
   .addOption(
-    new Option("-s, --source <source>", "Source of logs: 'model', 'server', or 'runtime'")
+    new Option("-s, --source <source>", t("Source of logs: 'model', 'server', or 'runtime'"))
       .default("model")
       .choices(["model", "server", "runtime"]),
   )
-  .option("--filter <filter>", "Filter for model source: 'input', 'output'");
+  .option("--filter <filter>", t("Filter for model source: 'input', 'output'"));
 
 addCreateClientOptions(stream);
 addLogLevelOptions(stream);
@@ -42,13 +43,13 @@ stream.action(async options => {
 
   // Don't allow stats with non-model sources
   if (stats === true && (source === "server" || source === "runtime")) {
-    logger.error("--stats can only be used with --source model");
+    logger.error(t("--stats can only be used with --source model"));
     process.exit(1);
   }
 
   // Validate filter usage
   if (filter !== undefined && (source === "server" || source === "runtime")) {
-    logger.error("--filter can only be used with --source model");
+    logger.error(t("--filter can only be used with --source model"));
     process.exit(1);
   }
 
@@ -60,7 +61,7 @@ stream.action(async options => {
     } else {
       // Check for empty string
       if (filter.trim() === "") {
-        logger.error("--filter cannot be empty");
+        logger.error(t("--filter cannot be empty"));
         process.exit(1);
       }
       // Parse filter
@@ -70,14 +71,14 @@ stream.action(async options => {
         .filter(f => f.length > 0);
       for (const type of filterTypes) {
         if (type !== "input" && type !== "output") {
-          logger.error("--filter values must be 'input', 'output', or 'input,output'");
+          logger.error(t("--filter values must be 'input', 'output', or 'input,output'"));
           process.exit(1);
         }
       }
     }
   }
 
-  logger.info("Streaming logs from LM Studio\n");
+  logger.info(t("Streaming logs from LM Studio\n"));
   const unsubscribe = client.diagnostics.unstable_streamLogs(log => {
     // Here we consume the same stream for both model and server logs and filter based on user input
     if (!shouldShowLogEvent(log, source, filterTypes)) {
@@ -158,11 +159,11 @@ function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolea
   console.log("modelIdentifier: " + chalk.green(data.modelIdentifier));
   if (data.type === "llm.prediction.input") {
     console.log("modelPath: " + chalk.green(data.modelPath));
-    console.log("input:");
+    console.log(t("input:"));
     console.log(chalk.green(data.input));
   }
   if (data.type === "llm.prediction.output") {
-    console.log("output:");
+    console.log(t("output:"));
     console.log(chalk.green(data.output));
     if (stats === true) {
       if (data.stats !== undefined) {
@@ -170,7 +171,7 @@ function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolea
           console.log(`${key}: ${chalk.green(value)}`);
         });
       } else {
-        console.log("No stats available");
+        console.log(t("No stats available"));
       }
     }
   }
@@ -178,5 +179,5 @@ function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolea
 
 export const log = new Command()
   .name("log")
-  .description("Log incoming and outgoing messages")
+  .description(t("Log incoming and outgoing messages"))
   .addCommand(stream);

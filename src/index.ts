@@ -6,6 +6,7 @@ import {
 } from "@commander-js/extra-typings";
 import chalk from "chalk";
 import { resolve as resolvePath } from "path";
+import { t, padEndWidth } from "./i18n/index.js";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
 import { clone } from "./subcommands/clone.js";
@@ -157,19 +158,26 @@ program.name("lms");
 program.helpCommand(true);
 
 // Add a hidden global version option (-v/--version) that prints and exits without cluttering help
-program.addOption(new Option("-v, --version", "Print the version of the CLI").hideHelp());
+program.addOption(new Option("-v, --version", t("Print the version of the CLI")).hideHelp());
+// Both footer labels are padded by terminal columns (not code units) so that the two links stay
+// aligned after translation — CJK characters occupy two columns each.
+const HELP_FOOTER_LABEL_WIDTH = 22;
 program.addHelpText(
   "after",
   `
-Learn more:           ${chalk.blue("https://lmstudio.ai/docs/developer")}
-Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`,
+${padEndWidth(t("Learn more:"), HELP_FOOTER_LABEL_WIDTH)}${chalk.blue("https://lmstudio.ai/docs/developer")}
+${padEndWidth(t("Join our Discord:"), HELP_FOOTER_LABEL_WIDTH)}${chalk.blue("https://discord.gg/lmstudio")}`,
 );
 
-addCommandsGroup("Local models", [chat, get, load, unload, ls, ps, importCmd], "#22D3EE");
-addCommandsGroup("Serve", [server, log], "#34D399");
-addCommandsGroup("Remote Instances", [link], "#818CF8");
-addCommandsGroup("Runtime", [runtime], "#C084FC");
-addCommandsGroup("Develop & Publish (Beta)", [clone, push, dev, login, logout, whoami], "#F9A8D4");
+addCommandsGroup(t("Local models"), [chat, get, load, unload, ls, ps, importCmd], "#22D3EE");
+addCommandsGroup(t("Serve"), [server, log], "#34D399");
+addCommandsGroup(t("Remote Instances"), [link], "#818CF8");
+addCommandsGroup(t("Runtime"), [runtime], "#C084FC");
+addCommandsGroup(
+  t("Develop & Publish (Beta)"),
+  [clone, push, dev, login, logout, whoami],
+  "#F9A8D4",
+);
 
 program.addCommand(create, { hidden: true });
 program.addCommand(bootstrap, { hidden: true });
@@ -182,7 +190,7 @@ applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig)
 
 // Handle -v/--version before Commander parsing
 if (commandArguments.includes("-v") || commandArguments.includes("--version")) {
-  console.info("CLI commit: " + getCommitHash());
+  console.info(t("CLI commit: ") + getCommitHash());
   process.exit(0);
 }
 

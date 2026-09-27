@@ -1,0 +1,191 @@
+/**
+ * Minimal, dependency-free i18n layer for the `lms` CLI.
+ *
+ * Design notes
+ * ------------
+ * - The English source string doubles as the message key, so a missing translation falls back to
+ *   English and an incomplete catalog can never break or garble output.
+ * - Command descriptions are registered while modules are being imported — before `index.ts` parses
+ *   any arguments — so the locale must be resolved while this module is evaluated. Everything below
+ *   therefore runs at module scope on purpose.
+ * - Locale resolution order: `LMS_LANG` override, then the POSIX locale variables, then the macOS
+ *   system language (POSIX variables are frequently absent or set to the neutral `C` on macOS), and
+ *   finally English. Only Simplified-Chinese environments select Chinese; every other environment
+ *   renders the original English strings.
+ *
+ * @public
+ */
+
+import { execFileSync } from "node:child_process";
+import { zhCN } from "./zh-CN.js";
+
+type Locale = "zh-CN" | "en";
+
+/**
+ * Values substituted into `{placeholder}` slots.
+ *
+ * `boolean`, `null` and `undefined` are permitted because call sites routinely pass
+ * possibly-absent or flag values; a missing value renders as an empty string.
+ *
+ * @public
+ */
+export type TParams = Record<string, string | number | boolean | null | undefined>;
+
+const currentLocale: Locale = resolveLocale();
+
+function resolveLocale(): Locale {
+  // Explicit override, e.g. `LMS_LANG=en lms status`.
+  const override = process.env.LMS_LANG;
+  if (override !== undefined && override.trim() !== "") return localeFromTag(override);
+
+  // POSIX locale variables, most specific first. `C` and `POSIX` state no language preference, so
+  // they are skipped rather than resolved, which lets the macOS system language below answer.
+  for (const name of ["LC_ALL", "LC_MESSAGES", "LANG"] as const) {
+    const value = process.env[name];
+    if (value === undefined || value.trim() === "") continue;
+    if (isNeutralPosixLocale(value)) continue;
+    return localeFromTag(value);
+  }
+
+  const systemLanguage = readMacOSSystemLanguage();
+  if (systemLanguage !== undefined) return localeFromTag(systemLanguage);
+
+  return "en";
+}
+
+/** True for the locale values that mean "no language preference" (`C`, `POSIX`, `C.UTF-8`, ...). */
+function isNeutralPosixLocale(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "c" ||
+    normalized.startsWith("c.") ||
+    normalized === "posix" ||
+    normalized.startsWith("posix.")
+  );
+}
+
+function localeFromTag(tag: string): Locale {
+  return isSimplifiedChineseTag(tag) ? "zh-CN" : "en";
+}
+
+/**
+ * True only for Simplified-Chinese tags. Traditional-Chinese environments (`zh-Hant`, `zh-TW`,
+ * `zh-HK`, `zh-MO`) are deliberately excluded because only a Simplified catalog ships with the CLI.
+ */
+function isSimplifiedChineseTag(tag: string): boolean {
+  // Drop the codeset and modifier: `zh_CN.UTF-8@pinyin` -> `zh-cn`.
+  const language = tag.trim().toLowerCase().replace(/_/g, "-").split(/[.@]/)[0];
+  if (language === "zh") return true;
+  if (!language.startsWith("zh-")) return false;
+  return !/^(hant|tw|hk|mo)(-|$)/.test(language.slice(3));
+}
+
+/**
+ * Reads the macOS system language. Consulted only when the POSIX locale variables are absent or
+ * neutral, because macOS terminals frequently leave `LANG` unset. Returns `undefined` on other
+ * platforms or when the value cannot be read.
+ */
+function readMacOSSystemLanguage(): string | undefined {
+  if (process.platform !== "darwin") return undefined;
+  const candidates: Array<Array<string>> = [
+    ["read", "-g", "AppleLanguages"],
+    ["read", "-g", "AppleLocale"],
+  ];
+  for (const args of candidates) {
+    try {
+      const output = execFileSync("defaults", args, {
+        encoding: "utf8",
+        timeout: 1000,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      // AppleLanguages prints a parenthesised list; the first quoted entry is the preferred language.
+      const quoted = output.match(/"([^"]+)"/);
+      const value = (quoted ? quoted[1] : output).trim();
+      if (value !== "") return value;
+    } catch {
+      // `defaults` missing or timed out — try the next candidate, then give up.
+    }
+  }
+  return undefined;
+}
+
+/** Maps an English source string to its Simplified Chinese translation. */
+const catalogs: Record<Locale, Record<string, string>> = {
+  "zh-CN": zhCN,
+  "en": {},
+};
+
+function interpolate(template: string, params?: TParams): string {
+  if (params === undefined) return template;
+  return template.replace(/\{(\w+)\}/g, (match, name: string) => {
+    if (!(name in params)) return match;
+    const value = params[name];
+    return value === undefined || value === null ? "" : String(value);
+  });
+}
+
+/**
+ * Translate a user-facing string.
+ *
+ * The English source string is the lookup key. When no translation exists (or the locale is `en`),
+ * the source string is returned unchanged, so untranslated code paths degrade gracefully.
+ *
+ * Placeholders use `{name}` syntax:
+ * ```ts
+ * t("Artifact successfully cloned to {path}.", { path: resolvedPath });
+ * ```
+ *
+ * @param source - English source string, used as the lookup key.
+ * @param params - Optional values for `{placeholder}` slots.
+ * @public
+ */
+export function t(source: string, params?: TParams): string {
+  if (currentLocale === "en") return interpolate(source, params);
+  const translated = catalogs[currentLocale][source];
+  if (translated === undefined) return interpolate(source, params);
+  return interpolate(translated, params);
+}
+
+/**
+ * Terminal columns occupied by a string, counting East Asian wide characters as 2 columns.
+ *
+ * `String.prototype.padEnd` counts UTF-16 code units, so a label containing Han characters or CJK
+ * punctuation would misalign tabular output. Used by {@link padEndWidth}.
+ */
+function displayWidth(input: string): number {
+  let width = 0;
+  for (const char of input) {
+    width += isWideCodePoint(char.codePointAt(0) ?? 0) ? 2 : 1;
+  }
+  return width;
+}
+
+function isWideCodePoint(code: number): boolean {
+  return (
+    (code >= 0x1100 && code <= 0x115f) || // Hangul Jamo
+    (code >= 0x2e80 && code <= 0x303e) || // CJK Radicals .. CJK Symbols
+    (code >= 0x3041 && code <= 0x33ff) || // Hiragana .. CJK Compatibility
+    (code >= 0x3400 && code <= 0x4dbf) || // CJK Extension A
+    (code >= 0x4e00 && code <= 0x9fff) || // CJK Unified Ideographs
+    (code >= 0xa000 && code <= 0xa4cf) || // Yi Syllables
+    (code >= 0xac00 && code <= 0xd7a3) || // Hangul Syllables
+    (code >= 0xf900 && code <= 0xfaff) || // CJK Compatibility Ideographs
+    (code >= 0xfe10 && code <= 0xfe19) || // Vertical forms
+    (code >= 0xfe30 && code <= 0xfe6f) || // CJK Compatibility Forms
+    (code >= 0xff00 && code <= 0xff60) || // Fullwidth Forms
+    (code >= 0xffe0 && code <= 0xffe6) || // Fullwidth Signs
+    (code >= 0x20000 && code <= 0x3fffd) // CJK Extensions B and beyond
+  );
+}
+
+/**
+ * Right-pads a string so it occupies at least `targetWidth` terminal columns, so translated labels
+ * keep table and footer columns aligned.
+ *
+ * @public
+ */
+export function padEndWidth(input: string, targetWidth: number): string {
+  const current = displayWidth(input);
+  if (current >= targetWidth) return input;
+  return input + " ".repeat(targetWidth - current);
+}

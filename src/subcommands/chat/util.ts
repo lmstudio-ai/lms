@@ -2,6 +2,7 @@ import type { SimpleLogger } from "@lmstudio/lms-common";
 import { type Chat, type LLM, type LLMPredictionStats, type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { Spinner } from "../../Spinner.js";
+import { t } from "../../i18n/index.js";
 import { reasoningModeToPredictionOpts, type ReasoningMode } from "./reasoning.js";
 import { type InkChatMessage } from "./react/types.js";
 
@@ -26,7 +27,7 @@ export async function loadModelWithProgress(
   const sigintListener = () => {
     spinner.stop();
     abortController.abort();
-    logger.warn("Load cancelled.");
+    logger.warn(t("Load cancelled."));
     process.exit(1);
   };
 
