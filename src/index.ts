@@ -6,6 +6,7 @@ import {
 } from "@commander-js/extra-typings";
 import chalk from "chalk";
 import { resolve as resolvePath } from "path";
+import { installCommanderErrorLocalization } from "./commanderErrors.js";
 import { t, padEndWidth } from "./i18n/index.js";
 import { bootstrap } from "./subcommands/bootstrap.js";
 import { chat } from "./subcommands/chat/index.js";
@@ -193,6 +194,11 @@ if (commandArguments.includes("-v") || commandArguments.includes("--version")) {
   console.info(t("CLI commit: ") + getCommitHash());
   process.exit(0);
 }
+
+// commander validates arguments and resolves subcommands in English before any of our own text
+// is involved, so localize its errors here — after every command is registered, and only across
+// the commands that have not installed their own outputError handler (see importCmd.ts).
+installCommanderErrorLocalization(program);
 
 // Here we manually pass in the arguments to avoid Commander.js's built-in parsing of process.argv
 // which can interfere with our custom handling of no-argument case above.

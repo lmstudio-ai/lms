@@ -185,18 +185,27 @@ describe("translation lookup", () => {
 describe("catalog invariants", () => {
   it("keeps the same placeholder set in every translation as in its English key", async () => {
     const { zhCN } = (await import("./zh-CN.js")) as { zhCN: Record<string, string> };
-    const mismatches: string[] = [];
+    // Placeholders that appear only in the English key, each with the reason it may vanish.
+    const englishOnly = new Map<string, string>([
+      ["p1", "`Found {p0} device{p1}:` — English marks a plural with it"],
+      ["s", "`too many arguments ... argument{s}` — English marks a plural with it"],
+    ]);
+    const unexpected: string[] = [];
     for (const [key, value] of Object.entries(zhCN)) {
-      const inKey = [...key.matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort();
-      const inValue = [...value.matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort();
-      if (inKey.join(",") !== inValue.join(",")) {
-        mismatches.push(`${JSON.stringify(key)}: [${inKey}] -> [${inValue}]`);
+      const inKey = [...key.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
+      const inValue = [...value.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
+      // A translation must never invent a placeholder the source does not define: it would
+      // render a literal `{name}` or swallow an unrelated value.
+      const invented = inValue.filter(name => !inKey.includes(name));
+      if (invented.length > 0) {
+        unexpected.push(`${JSON.stringify(key)}: translation adds {${invented.join("}, {")}}`);
+        continue;
+      }
+      const dropped = inKey.filter(name => !inValue.includes(name) && !englishOnly.has(name));
+      if (dropped.length > 0) {
+        unexpected.push(`${JSON.stringify(key)}: translation drops {${dropped.join("}, {")}}`);
       }
     }
-    // `Found {p0} device{p1}:` legitimately drops {p1}: English marks a plural with it, Chinese
-    // has no plural morphology, so the marker is intentionally absent from the translation.
-    const expected = ['"Found {p0} device{p1}:": [p0,p1] -> [p0]'];
-    const unexpected = mismatches.filter(m => !expected.includes(m));
     expect(unexpected).toEqual([]);
   });
 

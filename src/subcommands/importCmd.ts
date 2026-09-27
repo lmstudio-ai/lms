@@ -17,6 +17,7 @@ import { homedir } from "os";
 import { basename, dirname, join } from "path";
 import { z } from "zod";
 import { getCliPref } from "../cliPref.js";
+import { localizeCommanderError, markCustomErrorOutput } from "../commanderErrors.js";
 import { t } from "../i18n/index.js";
 import { defaultModelsFolder } from "../lmstudioPaths.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
@@ -119,16 +120,20 @@ const importCommand = new Command<[], ImportCommandOptions>()
     `),
   );
 
+// commander's own wording is localized by our handler; this command additionally appends the
+// missing-path guidance, so it must keep control of the write.
+markCustomErrorOutput(importCommand);
 importCommand.configureOutput({
   outputError: (str, write) => {
+    const localized = localizeCommanderError(str);
     if (str.startsWith("error: missing required argument 'file-path'")) {
       write(
-        `${str.trimEnd()}\n\n${missingFilePathHelpMessage}\n\n${chalk.blue(
+        `${localized.trimEnd()}\n\n${missingFilePathHelpMessage}\n\n${chalk.blue(
           t("Run 'lms import -h' for more info."),
         )}\n\n`,
       );
     } else {
-      write(str);
+      write(localized);
     }
   },
 });

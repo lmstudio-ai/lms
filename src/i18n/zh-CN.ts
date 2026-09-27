@@ -870,4 +870,20 @@ export const zhCN: Record<string, string> = {
   "(will put the model under imported-models/uncategorized)":
     "（将模型放入 imported-models/uncategorized）",
   "Run 'lms import -h' for more info.": "运行 'lms import -h' 查看更多信息。",
+  "error: missing required argument '{name}'": "错误：缺少必需参数 '{name}'",
+  "error: too many arguments for '{command}'. Expected {expected} argument{s} but got {received}.":
+    "错误：'{command}' 的参数过多。期望 {expected} 个参数，但收到 {received} 个。",
+  "error: too many arguments. Expected {expected} argument{s} but got {received}.":
+    "错误：参数过多。期望 {expected} 个参数，但收到 {received} 个。",
+  "error: unknown command '{name}'{suggestion}": "错误：未知命令 '{name}'{suggestion}",
+  "error: unknown option '{flag}'{suggestion}": "错误：未知选项 '{flag}'{suggestion}",
+  "error: option '{option}' argument '{value}' is invalid.{reason}":
+    "错误：选项 '{option}' 的参数 '{value}' 无效。{reason}",
+  "error: option '{option}' argument missing": "错误：选项 '{option}' 缺少参数",
+  "error: required option '{option}' not specified": "错误：未指定必需选项 '{option}'",
+  "error: option '{option}' value '{value}' from env '{env}' is invalid.":
+    "错误：来自环境变量 '{env}' 的选项 '{option}' 值 '{value}' 无效。",
+  "error: command-argument value '{value}' is invalid for argument '{name}'.":
+    "错误：命令参数 '{name}' 的值 '{value}' 无效。",
+  "error: {message}": "错误：{message}",
 };
