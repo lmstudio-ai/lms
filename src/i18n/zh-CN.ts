@@ -439,7 +439,7 @@ export const zhCN: Record<string, string> = {
     '要在 API/SDK 中使用该模型，请使用标识符 "{p0}"。',
   "Context Length: {p0}": "上下文长度：{p0}",
   "GPU Offload: {p0}%": "GPU 卸载比例：{p0}%",
-  "Estimated GPU Memory:   {p0}": "预估 GPU 显存：   {p0}",
+  "Estimated GPU Memory:   {p0}": "预估 GPU 显存：{p0}",
   "Estimated Total Memory: {p0}": "预估总内存：{p0}",
   "Confidence: {p0}": "置信度：{p0}",
   "Successfully logged in as a compute device for {p0} {p1}.":
