@@ -11,6 +11,7 @@ import { terminalSize } from "@lmstudio/lms-isomorphic";
 import fuzzy from "fuzzy";
 import { getCachedModelCatalogOrFetch } from "./catalogHelpers.js";
 import { getCliPref } from "../../cliPref.js";
+import { searchTheme } from "../../inquirerTheme.js";
 
 const MODEL_SELECTION_MESSAGE = t("Select a model to chat with");
 
@@ -149,6 +150,7 @@ export async function maybeGetLLM(
       search<string>(
         {
           message: MODEL_SELECTION_MESSAGE,
+          theme: searchTheme,
           pageSize: terminalSize().rows - 4,
           source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
             void signal;

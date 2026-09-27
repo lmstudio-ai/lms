@@ -626,6 +626,7 @@ async function askToChooseArtifactDownloadSelection(
     select<ArtifactModelSelectionValue>(
       {
         message: chalk.green(t(`Select a variant`)),
+        theme: searchTheme,
         loop: false,
         pageSize,
         default: getDefaultArtifactModelSelectionValue(modelNode),
@@ -1074,6 +1075,7 @@ async function askToChooseDownloadAction({
     select<DownloadConfirmationAction>(
       {
         message,
+        theme: searchTheme,
         loop: false,
         pageSize: choices.length,
         choices,

@@ -8,6 +8,7 @@ import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { runPromptWithExitHandling } from "../../prompt.js";
 import { type LinkCommandOptions } from "./shared.js";
+import { searchTheme } from "../../inquirerTheme.js";
 
 interface PreferredDeviceOption {
   deviceIdentifier: string;
@@ -156,6 +157,7 @@ async function promptForDeviceIdentifier({
     select<string>(
       {
         message: chalk.green(t("Select a preferred device")) + chalk.dim(" |"),
+        theme: searchTheme,
         loop: false,
         pageSize,
         choices: deviceOptions.map(option => {

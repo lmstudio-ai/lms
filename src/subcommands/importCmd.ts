@@ -313,6 +313,7 @@ async function validateModelNameOrWarn(logger: SimpleLogger, path: string, yes: 
         confirm(
           {
             message: chalk.green(t("Do you wish to continue? (Not recommended)")),
+            transformer: answer => (answer ? t("Yes") : t("No")),
             default: false,
           },
           { output: process.stderr },
@@ -479,6 +480,7 @@ async function warnAboutMove(logger: SimpleLogger, yes: boolean, modelsFolderPat
     confirm(
       {
         message: chalk.green(t("Do you wish to continue?")),
+        transformer: answer => (answer ? t("Yes") : t("No")),
         default: true,
       },
       { output: process.stderr },
@@ -534,7 +536,7 @@ function isValidFolderName(fieldName: string, value: string): true | string {
     return t(`{p0} cannot have leading or trailing spaces`, { p0: fieldName });
   }
   if (/[/<>:"\\|?*]/.test(value)) {
-    return `${fieldName} cannot contain special characters`;
+    return t(`{p0} cannot contain special characters`, { p0: fieldName });
   }
   return true;
 }
@@ -570,6 +572,7 @@ async function resolveUserRepo(
     select<ResolutionMethod>(
       {
         message: chalk.green(t("Choose categorization option")),
+        theme: searchTheme,
         choices: [
           {
             name: t(

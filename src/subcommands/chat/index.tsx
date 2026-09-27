@@ -57,6 +57,7 @@ export async function getOrAskShouldFetchModelCatalog(
         confirm(
           {
             message: FETCH_MODEL_CATALOG_MESSAGE,
+            transformer: (answer: boolean) => (answer ? t("Yes") : t("No")),
           },
           { output: process.stderr },
         ),

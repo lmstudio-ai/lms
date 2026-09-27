@@ -16,6 +16,7 @@ import {
   formatRuntimeUpdateStatus,
   type DownloadRuntimeExtensionResult,
 } from "./helpers/runtimeExtensionDownload.js";
+import { searchTheme } from "../../inquirerTheme.js";
 
 interface RuntimeGetCommandOpts {
   allowIncompatible: boolean;
@@ -189,6 +190,7 @@ async function selectRuntimeExtensionToDownload(
       select<DownloadableRuntimeExtensionInfo>(
         {
           message: t("Multiple runtime extensions matched the query. Select one to download:"),
+          theme: searchTheme,
           choices: promptChoices,
         },
         { output: process.stderr },

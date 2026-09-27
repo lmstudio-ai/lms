@@ -911,4 +911,8 @@ export const zhCN: Record<string, string> = {
   "EMBEDDING": "嵌入模型",
   "CPU:": "CPU：",
   "RAM:": "RAM：",
+  "navigate": "导航",
+  "select": "选择",
+  "No results found": "无匹配结果",
+  "{p0} cannot contain special characters": "{p0} 不能包含特殊字符",
 };
