@@ -53,8 +53,13 @@ function resolveLocale(): Locale {
   return "en";
 }
 
-/** True for the locale values that mean "no language preference" (`C`, `POSIX`, `C.UTF-8`, ...). */
-function isNeutralPosixLocale(value: string): boolean {
+/**
+ * True for the locale values that mean "no language preference" (`C`, `POSIX`, `C.UTF-8`, ...).
+ *
+ * Exported so the neutral-locale rule can be tested directly: resolving `C` as if it were a
+ * language would silently pin every `C`-default terminal to English.
+ */
+export function isNeutralPosixLocale(value: string): boolean {
   const normalized = value.trim().toLowerCase();
   return (
     normalized === "c" ||
@@ -71,8 +76,10 @@ function localeFromTag(tag: string): Locale {
 /**
  * True only for Simplified-Chinese tags. Traditional-Chinese environments (`zh-Hant`, `zh-TW`,
  * `zh-HK`, `zh-MO`) are deliberately excluded because only a Simplified catalog ships with the CLI.
+ *
+ * Exported so the Simplified-only rule is covered directly rather than only through `t()`.
  */
-function isSimplifiedChineseTag(tag: string): boolean {
+export function isSimplifiedChineseTag(tag: string): boolean {
   // Drop the codeset and modifier: `zh_CN.UTF-8@pinyin` -> `zh-cn`.
   const language = tag.trim().toLowerCase().replace(/_/g, "-").split(/[.@]/)[0];
   if (language === "zh") return true;
