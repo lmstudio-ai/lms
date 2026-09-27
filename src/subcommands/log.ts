@@ -139,8 +139,8 @@ function printFormattedLog(log: DiagnosticsLogEvent, stats: boolean): void {
     return;
   }
 
-  console.log("timestamp: " + chalk.green(new Date(log.timestamp).toLocaleString()));
-  console.log("type: " + chalk.green(log.data.type));
+  console.log(t("timestamp: ") + chalk.green(new Date(log.timestamp).toLocaleString()));
+  console.log(t("type: ") + chalk.green(log.data.type));
   printLlmPredictionLogEvent(log.data, stats);
   console.log();
   console.log();
@@ -156,9 +156,9 @@ function printRuntimeLogEvent(data: DiagnosticsLogRuntimeEventData): void {
 
 function printLlmPredictionLogEvent(data: DiagnosticsLogEventData, stats: boolean) {
   if (data.type === "server.log" || data.type === "runtime.log") return;
-  console.log("modelIdentifier: " + chalk.green(data.modelIdentifier));
+  console.log(t("modelIdentifier: ") + chalk.green(data.modelIdentifier));
   if (data.type === "llm.prediction.input") {
-    console.log("modelPath: " + chalk.green(data.modelPath));
+    console.log(t("modelPath: ") + chalk.green(data.modelPath));
     console.log(t("input:"));
     console.log(chalk.green(data.input));
   }

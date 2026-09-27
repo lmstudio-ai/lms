@@ -822,7 +822,7 @@ function printEstimatedResourceUsage(
   logger: SimpleLogger,
 ) {
   const colorFunc = estimate.passesGuardrails === true ? chalk.green : chalk.yellow;
-  logger.info(`Model: ${model.modelKey}`);
+  logger.info(t("Model: {p0}", { p0: model.modelKey }));
   if (contextLength !== undefined) {
     logger.info(t(`Context Length: {p0}`, { p0: contextLength.toLocaleString() }));
   }
@@ -850,7 +850,7 @@ function printEstimatedResourceUsage(
       ? t("This model may be loaded based on your resource guardrails settings.")
       : t("This model will fail to load based on your resource guardrails settings.");
 
-  logger.info("\nEstimate: " + colorFunc(message));
+  logger.info(t("\nEstimate: ") + colorFunc(message));
 }
 
 export const load = loadCommand;

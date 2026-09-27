@@ -174,7 +174,7 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
 function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
   const cpuInfo = survey.hardwareSurvey.cpuSurveyResult.cpuInfo;
   if (cpuInfo === undefined) {
-    return `${chalk.dim("CPU:")} unavailable`;
+    return `${chalk.dim("CPU:")} ${t("unavailable")}`;
   }
   const instructionSetExtensions =
     cpuInfo.supportedInstructionSetExtensions.length > 0

@@ -769,7 +769,7 @@ function artifactDownloadPlanToString(
           break;
         }
         case "satisfied": {
-          message = `${chalk.green("✓ Satisfied")} ${artifactName}`;
+          message = `${chalk.green(t("✓ Satisfied"))} ${artifactName}`;
           break;
         }
         case "completed": {
@@ -819,9 +819,9 @@ function artifactDownloadPlanToString(
         case "satisfied": {
           const satisfiedModel = node.selected ?? node.alreadyOwned;
           if (satisfiedModel === undefined) {
-            message = `${chalk.green("✓ Satisfied")} Unknown`;
+            message = `${chalk.green(t("✓ Satisfied"))} Unknown`;
           } else {
-            message = `${chalk.green("✓ Satisfied")} ${modelToString(satisfiedModel)}`;
+            message = `${chalk.green(t("✓ Satisfied"))} ${modelToString(satisfiedModel)}`;
           }
           break;
         }
@@ -1052,14 +1052,14 @@ async function askToChooseDownloadAction({
     short: string;
   }> = [
     {
-      name: `Yes`,
+      name: t("Yes"),
       value: "download",
-      short: "yes",
+      short: t("yes"),
     },
     {
-      name: "No",
+      name: t("No"),
       value: "cancel",
-      short: "no",
+      short: t("no"),
     },
   ];
   if (canSelectVariants) {

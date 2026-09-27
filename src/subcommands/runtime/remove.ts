@@ -49,7 +49,7 @@ async function removeRuntimeEngine(
   }
   for (const { name, version } of runtimeExtensions) {
     await client.runtime.engine.remove({ name, version });
-    logger.info("Removed " + name + "@" + version);
+    logger.info(t("Removed ") + name + "@" + version);
   }
 }
 

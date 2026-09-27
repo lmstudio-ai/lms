@@ -92,7 +92,7 @@ export function createModelDisplayOptions(
           [
             {
               name: model.name,
-              size: chalk.dim(`(min. ${size})`),
+              size: chalk.dim(t("(min. {p0})", { p0: size })),
               status: chalk.dim(status),
             },
           ],

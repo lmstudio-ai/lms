@@ -124,7 +124,7 @@ importCommand.configureOutput({
     if (str.startsWith("error: missing required argument 'file-path'")) {
       write(
         `${str.trimEnd()}\n\n${missingFilePathHelpMessage}\n\n${chalk.blue(
-          "Run 'lms import -h' for more info.",
+          t("Run 'lms import -h' for more info."),
         )}\n\n`,
       );
     } else {
@@ -564,7 +564,7 @@ async function resolveUserRepo(
   const resolutionMethod: ResolutionMethod = await runPromptWithExitHandling(() =>
     select<ResolutionMethod>(
       {
-        message: chalk.green("Choose categorization option"),
+        message: chalk.green(t("Choose categorization option")),
         choices: [
           {
             name: t(
@@ -572,7 +572,7 @@ async function resolveUserRepo(
               Auto search Hugging Face
               {p0}
             `,
-              { p0: chalk.dim("(Recommended for models downloaded from Hugging Face)") },
+              { p0: chalk.dim(t("(Recommended for models downloaded from Hugging Face)")) },
             ),
             value: "huggingFace",
           },
@@ -582,7 +582,7 @@ async function resolveUserRepo(
               Interactive import
               {p0}
             `,
-              { p0: chalk.dim("(Recommended for custom models)") },
+              { p0: chalk.dim(t("(Recommended for custom models)")) },
             ),
             value: "custom",
           },
@@ -592,7 +592,7 @@ async function resolveUserRepo(
               Don't categorize
               {p0}
             `,
-              { p0: chalk.dim("(will put the model under imported-models/uncategorized)") },
+              { p0: chalk.dim(t("(will put the model under imported-models/uncategorized)")) },
             ),
             value: "uncategorized",
           },
@@ -620,7 +620,7 @@ async function resolveByAskUserRepo(logger: SimpleLogger, path: string): Promise
   const user = await runPromptWithExitHandling(() =>
     promptInput(
       {
-        message: chalk.green("Who is the creator of the model?"),
+        message: chalk.green(t("Who is the creator of the model?")),
         default: getDefaultUserName(),
         validate: (inputValue: string) => isValidFolderName("User", inputValue),
       },
@@ -630,7 +630,7 @@ async function resolveByAskUserRepo(logger: SimpleLogger, path: string): Promise
   const repo = await runPromptWithExitHandling(() =>
     promptInput(
       {
-        message: chalk.green("What is the model name?"),
+        message: chalk.green(t("What is the model name?")),
         default: autoNameRepo(basename(path)),
         validate: (inputValue: string) => isValidFolderName("Repository", inputValue),
       },
@@ -683,7 +683,11 @@ async function resolveByHuggingFaceInteractive(
                 name: option.string,
               };
             }),
-            { value: null, short: "None of the above", name: "None of the above" },
+            {
+              value: null,
+              short: t("None of the above"),
+              name: t("None of the above"),
+            },
           ];
         },
       },

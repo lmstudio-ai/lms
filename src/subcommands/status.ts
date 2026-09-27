@@ -72,7 +72,7 @@ statusCommand.action(async options => {
     }
   } else {
     content += t("Server: {status}\n\n{hint}\n\n    lms server start", {
-      status: chalk.red(" OFF "),
+      status: chalk.red(t("OFF")),
       hint: chalk.dim(t("(i) To start the server, run the following command:")),
     });
   }

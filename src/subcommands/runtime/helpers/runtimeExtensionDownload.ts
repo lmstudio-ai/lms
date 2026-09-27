@@ -40,7 +40,7 @@ export function formatRuntimeUpdateStatus(
   } else if (versionComparison < 0) {
     return chalk.yellow(t("newer version installed"));
   } else {
-    return chalk.dim("up-to-date");
+    return chalk.dim(t("up-to-date"));
   }
 }
 
