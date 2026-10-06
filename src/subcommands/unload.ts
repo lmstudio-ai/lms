@@ -2,7 +2,12 @@ import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { search } from "@inquirer/prompts";
 import { makeTitledPrettyError, text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
-import { type EmbeddingModel, type LLM, type ModelInstanceInfo } from "@lmstudio/sdk";
+import {
+  type DecisionModel,
+  type EmbeddingModel,
+  type LLM,
+  type ModelInstanceInfo,
+} from "@lmstudio/sdk";
 import chalk from "chalk";
 import fuzzy from "fuzzy";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
@@ -52,8 +57,12 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     return;
   }
 
-  const models: Array<LLM | EmbeddingModel> = (
-    await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
+  const models: Array<LLM | EmbeddingModel | DecisionModel> = (
+    await Promise.all([
+      client.llm.listLoaded(),
+      client.embedding.listLoaded(),
+      client.decision.listLoaded(),
+    ])
   ).flat();
 
   const modelInfoEntries = await Promise.all(
@@ -62,9 +71,11 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
       return [modelEntry, modelInfo] as const;
     }),
   );
-  const modelInfoByModel = new Map<LLM | EmbeddingModel, ModelInstanceInfo>(modelInfoEntries);
+  const modelInfoByModel = new Map<LLM | EmbeddingModel | DecisionModel, ModelInstanceInfo>(
+    modelInfoEntries,
+  );
 
-  const getDeviceIdentifier = (modelEntry: LLM | EmbeddingModel): string | null => {
+  const getDeviceIdentifier = (modelEntry: LLM | EmbeddingModel | DecisionModel): string | null => {
     const modelInfo = modelInfoByModel.get(modelEntry);
     if (modelInfo === undefined) {
       return null;
@@ -72,7 +83,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     return modelInfo.deviceIdentifier ?? null;
   };
 
-  const getDeviceSuffix = (modelEntry: LLM | EmbeddingModel): string => {
+  const getDeviceSuffix = (modelEntry: LLM | EmbeddingModel | DecisionModel): string => {
     const deviceIdentifier = getDeviceIdentifier(modelEntry);
     if (deviceNameResolver.isLocal(deviceIdentifier)) {
       return "";
@@ -80,7 +91,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     return ` · ${deviceNameResolver.label(deviceIdentifier)}`;
   };
 
-  const getPathSuffix = (modelEntry: LLM | EmbeddingModel): string => {
+  const getPathSuffix = (modelEntry: LLM | EmbeddingModel | DecisionModel): string => {
     if (modelEntry.identifier === modelEntry.path) {
       return "";
     }
@@ -90,7 +101,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     return ` (${modelEntry.path})`;
   };
 
-  const formatModelTarget = (modelEntry: LLM | EmbeddingModel): string => {
+  const formatModelTarget = (modelEntry: LLM | EmbeddingModel | DecisionModel): string => {
     const deviceIdentifier = getDeviceIdentifier(modelEntry);
     if (deviceNameResolver.isLocal(deviceIdentifier)) {
       return `"${modelEntry.identifier}"`;
@@ -100,7 +111,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
 
   const searchDelimiter = "\u0001";
 
-  const getModelSearchString = (modelEntry: LLM | EmbeddingModel): string => {
+  const getModelSearchString = (modelEntry: LLM | EmbeddingModel | DecisionModel): string => {
     const pathSuffix = getPathSuffix(modelEntry);
     const deviceSuffix = getDeviceSuffix(modelEntry);
     const suffix = `${pathSuffix}${deviceSuffix}`;
@@ -119,9 +130,9 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
 
   const promptForModel = async (
     promptLabel: string,
-    modelEntries: Array<LLM | EmbeddingModel>,
+    modelEntries: Array<LLM | EmbeddingModel | DecisionModel>,
     searchStrings: Array<string>,
-  ): Promise<LLM | EmbeddingModel> => {
+  ): Promise<LLM | EmbeddingModel | DecisionModel> => {
     const pageSize = terminalSize().rows - 5;
     return await runPromptWithExitHandling(() =>
       search<(typeof modelEntries)[number]>(
