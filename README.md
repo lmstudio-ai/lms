@@ -47,11 +47,6 @@ Here are some frequently used commands:
 - `lms create` - To create a new project with LM Studio SDK
 - `lms log stream` - To stream logs from LM Studio
 
-Model management commands support LLM, embedding, and decision models. Use `lms load <model key>`
-to load a decision model and `lms unload <identifier>` or `lms unload --all` to unload it.
-Decision models support resource estimation, AutoFit, GPU offload, context length, parallelism,
-and TTL; engine configuration files and speculative decoding are LLM-only.
-
 # Contributing
 
 The CLI is part of the [lmstudio.js monorepo](https://github.com/lmstudio-ai/lmstudio.js) and cannot be built standalone.

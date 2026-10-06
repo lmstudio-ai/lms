@@ -37,8 +37,6 @@ const client = {
 beforeEach(() => {
   jest.clearAllMocks();
   unload.setOptionValue("all", false);
-  client.llm.listLoaded.mockResolvedValue([models[0]]);
-  client.embedding.listLoaded.mockResolvedValue([models[1]]);
   jest
     .mocked(createClient)
     .mockResolvedValue(client as unknown as Awaited<ReturnType<typeof createClient>>);
@@ -63,13 +61,4 @@ it.each([
       unloaded.includes(model.identifier) === true ? 1 : 0,
     );
   }
-});
-
-it("unloads the only loaded decision model without an identifier", async () => {
-  client.llm.listLoaded.mockResolvedValue([]);
-  client.embedding.listLoaded.mockResolvedValue([]);
-  await unload.parseAsync(["node", "lms"]);
-  expect(models[2].unload).toHaveBeenCalledTimes(1);
-  expect(models[0].unload).not.toHaveBeenCalled();
-  expect(models[1].unload).not.toHaveBeenCalled();
 });

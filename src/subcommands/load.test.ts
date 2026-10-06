@@ -1,8 +1,25 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
+import { getCliPref } from "../cliPref.js";
+import { createClient } from "../createClient.js";
+import type * as CreateClientModule from "../createClient.js";
+import { createDeviceNameResolver } from "../deviceNameLookup.js";
 import { assertLoadConfigSupportedForCliModel, load } from "./load.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
 
 jest.mock("@inquirer/prompts", () => ({ search: jest.fn() }));
+jest.mock("../createClient.js", () => ({
+  ...jest.requireActual<typeof CreateClientModule>("../createClient.js"),
+  createClient: jest.fn(),
+}));
+jest.mock("../cliPref.js", () => ({ getCliPref: jest.fn() }));
+jest.mock("../deviceNameLookup.js", () => ({ createDeviceNameResolver: jest.fn() }));
+jest.mock("../Spinner.js", () => ({
+  Spinner: class {
+    setText() {}
+    stop() {}
+    stopIfNotStopped() {}
+  },
+}));
 
 describe("assertLoadConfigSupportedForCliModel", () => {
   it("allows decision lifecycle load controls", () => {
@@ -55,6 +72,80 @@ describe("assertLoadConfigSupportedForCliModel", () => {
 });
 
 describe("load command", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    for (const option of load.options) {
+      load.setOptionValue(option.attributeName(), option.defaultValue);
+    }
+    jest.mocked(getCliPref).mockResolvedValue({
+      get: () => ({ lastLoadedModels: [] }),
+      setWithProducer: jest.fn(),
+    } as unknown as Awaited<ReturnType<typeof getCliPref>>);
+    jest.mocked(createDeviceNameResolver).mockResolvedValue({
+      isLocal: (deviceIdentifier: string | null) => deviceIdentifier === null,
+      label: () => "Test peer",
+    } as unknown as Awaited<ReturnType<typeof createDeviceNameResolver>>);
+  });
+
+  it.each(["llm", "embedding", "decision"] as const)(
+    "routes loading and estimation through the %s namespace",
+    async type => {
+      const info = { type, modelKey: "test/model", path: "test/model", deviceIdentifier: "peer" };
+      const namespaces = Object.fromEntries(
+        ["llm", "embedding", "decision"].map(
+          name =>
+            [
+              name,
+              {
+                load: jest.fn(async () => ({
+                  getModelInfo: async () => ({ ...info, identifier: "instance" }),
+                })),
+                estimateResourcesUsage: jest.fn(async () => ({
+                  memory: { totalVramBytes: 1024, totalBytes: 2048, confidence: "high" },
+                  passesGuardrails: true,
+                })),
+              },
+            ] as const,
+        ),
+      );
+      jest.mocked(createClient).mockResolvedValue({
+        [Symbol.asyncDispose]: async () => {},
+        system: { listDownloadedModels: async () => [info] },
+        ...namespaces,
+      } as unknown as Awaited<ReturnType<typeof createClient>>);
+
+      for (const selection of [
+        ["--exact", info.path],
+        [info.modelKey, "--yes"],
+      ]) {
+        for (const option of load.options) {
+          load.setOptionValue(option.attributeName(), option.defaultValue);
+        }
+        await load.parseAsync(["node", "lms", "--quiet", ...selection]);
+        await load.parseAsync(["node", "lms", "--quiet", ...selection, "--estimate-only"]);
+      }
+      expect(namespaces[type].load).toHaveBeenCalledTimes(2);
+      expect(namespaces[type].load).toHaveBeenCalledWith(
+        info.modelKey,
+        expect.objectContaining({
+          deviceIdentifier: "peer",
+        }),
+      );
+      expect(namespaces[type].estimateResourcesUsage).toHaveBeenCalledTimes(2);
+      expect(namespaces[type].estimateResourcesUsage).toHaveBeenCalledWith(
+        info.modelKey,
+        expect.any(Object),
+        { deviceIdentifier: "peer" },
+      );
+      for (const [name, namespace] of Object.entries(namespaces)) {
+        if (name !== type) {
+          expect(namespace.load).not.toHaveBeenCalled();
+          expect(namespace.estimateResourcesUsage).not.toHaveBeenCalled();
+        }
+      }
+    },
+  );
+
   it.each([
     { arguments: ["--gpu", "max"], option: "--gpu <offload-ratio>" },
     { arguments: ["--context-length", "4096"], option: "-c, --context-length <length>" },
