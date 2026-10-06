@@ -98,7 +98,7 @@ export function assertLoadConfigSupportedForCliModel({
       makeTitledPrettyError(
         "Unsupported load option",
         text`
-          AutoFit cannot be configured for embedding models.
+          AutoFit can only be configured for LLM models.
         `,
       ).message,
     );
