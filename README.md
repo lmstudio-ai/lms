@@ -37,6 +37,7 @@ Here are some frequently used commands:
 - `lms server stop` - To stop the local API server.
 - `lms ls` - To list all downloaded models.
   - `lms ls --json` - To list all downloaded models in machine-readable JSON format.
+  - `lms ls --decision` - To list only downloaded decision models.
 - `lms ps` - To list all loaded models available for inferencing.
   - `lms ps --json` - To list all loaded models available for inferencing in machine-readable JSON format.
 - `lms load` - To load a model
@@ -45,6 +46,11 @@ Here are some frequently used commands:
   - `lms unload --all` - To unload all models
 - `lms create` - To create a new project with LM Studio SDK
 - `lms log stream` - To stream logs from LM Studio
+
+Model management commands support LLM, embedding, and decision models. Use `lms load <model key>`
+to load a decision model and `lms unload <identifier>` or `lms unload --all` to unload it.
+Decision models support resource estimation, AutoFit, GPU offload, context length, parallelism,
+and TTL; engine configuration files and speculative decoding are LLM-only.
 
 # Contributing
 

@@ -5,6 +5,32 @@ import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecodi
 jest.mock("@inquirer/prompts", () => ({ search: jest.fn() }));
 
 describe("assertLoadConfigSupportedForCliModel", () => {
+  it("allows decision lifecycle load controls", () => {
+    const logger = { errorWithoutPrefix: jest.fn() } as unknown as SimpleLogger;
+    assertLoadConfigSupportedForCliModel({
+      model: { type: "decision" },
+      loadConfig: { autoFit: true, maxParallelPredictions: 2 },
+      logger,
+    });
+    expect(logger.errorWithoutPrefix).not.toHaveBeenCalled();
+  });
+
+  it.each([{ engineCwd: "." }, { engineConfigFileContents: "" }, { speculativeDraftMtp: false }])(
+    "rejects LLM-only settings for decision models: %j",
+    loadConfig => {
+      const logger = { errorWithoutPrefix: jest.fn() } as unknown as SimpleLogger;
+      jest.spyOn(process, "exit").mockImplementation(() => {
+        throw new Error("exit");
+      });
+      expect(() =>
+        assertLoadConfigSupportedForCliModel({ model: { type: "decision" }, loadConfig, logger }),
+      ).toThrow("exit");
+      expect(logger.errorWithoutPrefix).toHaveBeenCalledWith(
+        expect.stringContaining("can only be configured for LLM models"),
+      );
+    },
+  );
+
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -23,7 +49,7 @@ describe("assertLoadConfigSupportedForCliModel", () => {
       }),
     ).toThrow("process.exit(1)");
     expect(logger.errorWithoutPrefix).toHaveBeenCalledWith(
-      expect.stringContaining("AutoFit can only be configured for LLM models."),
+      expect.stringContaining("AutoFit cannot be configured for embedding models."),
     );
   });
 });

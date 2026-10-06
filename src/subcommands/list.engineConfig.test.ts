@@ -49,6 +49,7 @@ beforeEach(() => {
       ],
     },
     embedding: { listLoaded: async () => [model("embedding-model", {}, "embedding")] },
+    decision: { listLoaded: async () => [] },
   } as unknown as Awaited<ReturnType<typeof createClient>>);
 });
 afterEach(() => jest.restoreAllMocks());
