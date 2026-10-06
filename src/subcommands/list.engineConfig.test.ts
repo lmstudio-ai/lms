@@ -49,6 +49,9 @@ beforeEach(() => {
       ],
     },
     embedding: { listLoaded: async () => [model("embedding-model", {}, "embedding")] },
+    decision: {
+      listLoaded: async () => [model("decision-model", { maxParallelPredictions: 2 }, "decision")],
+    },
   } as unknown as Awaited<ReturnType<typeof createClient>>);
 });
 afterEach(() => jest.restoreAllMocks());
@@ -74,6 +77,11 @@ it("reports file mode, actual context, and unknown parallelism in JSON without Y
   expect(
     rows.filter(row => row.identifier !== "file-model").every(row => !row.engineConfigFileEnabled),
   ).toBe(true);
+  expect(rows.find(row => row.identifier === "decision-model")).toMatchObject({
+    engineConfigFileEnabled: false,
+    contextLength: 32768,
+    parallel: 2,
+  });
   expect(JSON.stringify(rows)).not.toContain("max-model-len");
   expect(JSON.stringify(rows)).not.toContain("engineConfigFileContents");
 });
@@ -86,5 +94,6 @@ it("identifies both modes in the table and keeps absent parallelism unknown", as
   expect(table).toMatch(/file-model.*32768\s+-\s+File/);
   expect(table).toMatch(/normal-model.*32768\s+4\s+LM Studio/);
   expect(table).toMatch(/cleared-model.*32768\s+-\s+LM Studio/);
+  expect(table).toMatch(/decision-model.*32768\s+2\s+LM Studio/);
   expect(table).not.toContain("max-model-len");
 });
