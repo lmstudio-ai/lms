@@ -1,6 +1,12 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
-import { type EmbeddingModel, type LLM, type LMStudioClient, type ModelInfo } from "@lmstudio/sdk";
+import {
+  type DecisionModel,
+  type EmbeddingModel,
+  type LLM,
+  type LMStudioClient,
+  type ModelInfo,
+} from "@lmstudio/sdk";
 import chalk from "chalk";
 import columnify from "columnify";
 import { architectureInfoLookup } from "../architectureStylizations.js";
@@ -51,6 +57,7 @@ async function listLoadedModels(client: LMStudioClient): Promise<Array<LoadedMod
   const loadedModels = [
     ...(await client.llm.listLoaded()),
     ...(await client.embedding.listLoaded()),
+    ...(await client.decision.listLoaded()),
   ];
   return await Promise.all(
     loadedModels.map(async model => {
@@ -230,6 +237,7 @@ type ListCommandOptions = OptionValues &
   LogLevelArgs & {
     llm?: boolean;
     embedding?: boolean;
+    decision?: boolean;
     detailed?: boolean;
     variants?: boolean;
     json?: boolean;
@@ -247,6 +255,7 @@ const lsCommand = new Command<[], ListCommandOptions>()
   .argument("[modelKey]", t("Show variants for the provided model key"))
   .option("--llm", t("Show only LLM models"))
   .option("--embedding", t("Show only embedding models"))
+  .option("--decision", t("Show only decision models"))
   .option("--detailed", t("[Deprecated] Show detailed view with grouping"))
   .option("--variants", t("Show variants for all models"))
   .option("--json", t("Outputs in JSON format to stdout"));
@@ -262,6 +271,7 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   const {
     llm = false,
     embedding = false,
+    decision = false,
     detailed = false,
     variants: variantsOption = false,
     json = false,
@@ -288,7 +298,7 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
 
     const loadedModels = await listLoadedModels(client);
     const firstVariantType = variants[0]?.type;
-    const variantTitle = firstVariantType === "embedding" ? "EMBEDDING" : "LLM";
+    const variantTitle = (firstVariantType ?? "llm").toUpperCase();
 
     console.info();
     console.info(t(`Listing variants for {p0}:`, { p0: modelKey }));
@@ -304,13 +314,16 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   const originalModelsCount = allDownloadedModels.length;
 
   let filteredDownloadedModels = allDownloadedModels;
-  if (llm || embedding) {
+  if (llm || embedding || decision) {
     const allowedTypes = new Set<string>();
     if (llm) {
       allowedTypes.add("llm");
     }
     if (embedding) {
       allowedTypes.add("embedding");
+    }
+    if (decision) {
+      allowedTypes.add("decision");
     }
     filteredDownloadedModels = allDownloadedModels.filter(model => allowedTypes.has(model.type));
   }
@@ -412,6 +425,18 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
       });
       console.info();
     }
+
+    const decisionModels = filteredDownloadedModels.filter(model => model.type === "decision");
+    if (decisionModels.length > 0) {
+      printModelsWithVariantRows({
+        title: "DECISION",
+        baseModels: decisionModels,
+        loadedModels,
+        variantInfosByModelKey,
+        deviceNameResolver,
+      });
+      console.info();
+    }
     return;
   }
 
@@ -424,6 +449,12 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   const embeddingModels = filteredDownloadedModels.filter(model => model.type === "embedding");
   if (embeddingModels.length > 0) {
     printDownloadedModelsTable("EMBEDDING", embeddingModels, loadedModels, deviceNameResolver);
+    console.info();
+  }
+
+  const decisionModels = filteredDownloadedModels.filter(model => model.type === "decision");
+  if (decisionModels.length > 0) {
+    printDownloadedModelsTable("DECISION", decisionModels, loadedModels, deviceNameResolver);
     console.info();
   }
 });
@@ -442,14 +473,15 @@ psCommand.action(async (options: PsCommandOptions) => {
   const deviceNameResolver = await createDeviceNameResolver(client, logger);
   const { json = false } = options;
 
-  const [llmModels, embeddingModels] = await Promise.all([
+  const [llmModels, embeddingModels, decisionModels] = await Promise.all([
     client.llm.listLoaded(),
     client.embedding.listLoaded(),
+    client.decision.listLoaded(),
   ]);
-  const loadedModels = [...llmModels, ...embeddingModels];
+  const loadedModels = [...llmModels, ...embeddingModels, ...decisionModels];
 
   if (json) {
-    const [llmInfos, embeddingInfos] = await Promise.all([
+    const [llmInfos, embeddingInfos, decisionInfos] = await Promise.all([
       Promise.all(
         llmModels.map(async model => {
           const info = await model.getModelInfo();
@@ -479,8 +511,23 @@ psCommand.action(async (options: PsCommandOptions) => {
           };
         }),
       ),
+      Promise.all(
+        decisionModels.map(async model => {
+          const info = await model.getModelInfo();
+          const { instanceReference: _, ...filteredInfo } = info;
+          const loadConfig = await model.getLoadConfig();
+          const instanceProcessingState = await model.getInstanceProcessingState();
+          return {
+            ...filteredInfo,
+            status: instanceProcessingState.status,
+            queued: instanceProcessingState.queued,
+            parallel: loadConfig.maxParallelPredictions ?? null,
+            engineConfigFileEnabled: false,
+          };
+        }),
+      ),
     ]);
-    console.info(JSON.stringify([...llmInfos, ...embeddingInfos]));
+    console.info(JSON.stringify([...llmInfos, ...embeddingInfos, ...decisionInfos]));
     return;
   }
 
@@ -502,7 +549,7 @@ psCommand.action(async (options: PsCommandOptions) => {
 
   // Use the reported launch settings; the imported contents never belong in the listing.
   const mapModel = async (
-    loadedModel: LLM | EmbeddingModel,
+    loadedModel: LLM | EmbeddingModel | DecisionModel,
     parallel: number | "-",
     engineConfigFileEnabled = false,
   ) => {
@@ -543,6 +590,10 @@ psCommand.action(async (options: PsCommandOptions) => {
       );
     }),
     ...embeddingModels.map(model => mapModel(model, "-")),
+    ...decisionModels.map(async model => {
+      const loadConfig = await model.getLoadConfig();
+      return mapModel(model, loadConfig.maxParallelPredictions ?? "-");
+    }),
   ]);
 
   loadedModelsWithInfo.sort((a, b) => a.identifier.localeCompare(b.identifier));

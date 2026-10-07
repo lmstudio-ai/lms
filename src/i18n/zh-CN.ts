@@ -223,6 +223,7 @@ export const zhCN: Record<string, string> = {
   "Show variants for the provided model key": "显示所提供模型 key 的变体",
   "Show only LLM models": "仅显示 LLM 模型",
   "Show only embedding models": "仅显示嵌入模型",
+  "Show only decision models": "仅显示决策模型",
   "[Deprecated] Show detailed view with grouping": "[已弃用] 显示带分组的详细视图",
   "Show variants for all models": "显示所有模型的变体",
   "Outputs in JSON format to stdout": "以 JSON 格式输出到标准输出",

@@ -54,7 +54,11 @@ statusCommand.action(async options => {
 
     await using client = await createClient(logger, options);
     const loadedModels = (
-      await Promise.all([client.llm.listLoaded(), client.embedding.listLoaded()])
+      await Promise.all([
+        client.llm.listLoaded(),
+        client.embedding.listLoaded(),
+        client.decision.listLoaded(),
+      ])
     ).flat();
     const downloadedModels = await client.system.listDownloadedModels();
     if (loadedModels.length === 0) {

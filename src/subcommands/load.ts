@@ -76,13 +76,13 @@ interface AssertLoadConfigSupportedForCliModelOpts {
   logger: SimpleLogger;
 }
 
-/** Rejects LLM-only load settings after the CLI resolves an embedding model. */
+/** Rejects load settings unsupported by the resolved model type. */
 export function assertLoadConfigSupportedForCliModel({
   model,
   loadConfig,
   logger,
 }: AssertLoadConfigSupportedForCliModelOpts): void {
-  if (model.type !== "embedding") {
+  if (model.type === "llm") {
     return;
   }
   if (loadConfig.engineConfigFileContents !== undefined || loadConfig.engineCwd !== undefined) {
@@ -94,7 +94,7 @@ export function assertLoadConfigSupportedForCliModel({
     );
     process.exit(1);
   }
-  if (loadConfig.autoFit === true) {
+  if (model.type === "embedding" && loadConfig.autoFit === true) {
     logger.errorWithoutPrefix(
       makeTitledPrettyError(
         t("Unsupported load option"),
@@ -478,16 +478,14 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     }
     if (estimateOnly === true) {
       assertLoadConfigSupportedForCliModel({ model, loadConfig, logger });
-      const estimate = await (
-        model.type === "llm" ? client.llm : client.embedding
-      ).estimateResourcesUsage(model.modelKey, loadConfig, {
+      const estimate = await client[model.type].estimateResourcesUsage(model.modelKey, loadConfig, {
         deviceIdentifier: model.deviceIdentifier,
       });
       printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
       return;
     }
 
-    const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
+    const loadNamespace = client[model.type];
     assertLoadConfigSupportedForCliModel({ model, loadConfig, logger });
     await loadModel({
       logger,
@@ -619,9 +617,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
 
   assertLoadConfigSupportedForCliModel({ model, loadConfig, logger });
   if (estimateOnly === true) {
-    const estimate = await (
-      model.type === "llm" ? client.llm : client.embedding
-    ).estimateResourcesUsage(model.modelKey, loadConfig, {
+    const estimate = await client[model.type].estimateResourcesUsage(model.modelKey, loadConfig, {
       deviceIdentifier: deferToPreferredDevice ? undefined : model.deviceIdentifier,
     });
     printEstimatedResourceUsage(model, loadConfig.contextLength, gpu, estimate, logger);
@@ -640,7 +636,7 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
   });
 
-  const loadNamespace = model.type === "embedding" ? client.embedding : client.llm;
+  const loadNamespace = client[model.type];
   await loadModel({
     logger,
     namespace: loadNamespace,
@@ -720,7 +716,7 @@ async function loadModel({
   deviceIdentifier,
 }: {
   logger: SimpleLogger;
-  namespace: LMStudioClient["llm"] | LMStudioClient["embedding"];
+  namespace: LMStudioClient["llm"] | LMStudioClient["embedding"] | LMStudioClient["decision"];
   modelKey: string;
   deviceNameResolver: DeviceNameResolver;
   identifier: string | undefined;
