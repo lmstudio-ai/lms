@@ -35,7 +35,7 @@ type ServerStatusCommandOptions = OptionValues &
 /**
  * Checks the HTTP server with retries.
  */
-async function checkHttpServerWithRetries(
+export async function checkHttpServerWithRetries(
   logger: SimpleLogger,
   port: number,
   networkInterface: string | undefined,
