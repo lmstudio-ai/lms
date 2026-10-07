@@ -1,9 +1,10 @@
 import { Command } from "@commander-js/extra-typings";
-import { type SimpleLogger } from "@lmstudio/lms-common";
+import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { type ModelFormatName } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { findLatestVersion } from "./helpers/findLatestVersion.js";
@@ -35,7 +36,7 @@ async function selectRuntimeEngine(
     // Then run `lms runtime select llm-engine llama.cpp-win-x86_64-avx2@1.0.0 --latest`
     // Without this Error, the command would select @1.0.0, but that may or may not
     // be what the user intends.
-    throw new UserInputError("Cannot specify version with --latest.");
+    throw new UserInputError(t("Cannot specify version with --latest."));
   }
 
   let runtimeExtensions = resolveMultipleRuntimeExtensions(engineInfos, name);
@@ -51,20 +52,20 @@ async function selectRuntimeEngine(
   }
 
   if (runtimeExtensions.length === 0) {
-    logger.info("No installed runtime extensions found matching: " + name);
+    logger.info(t("No installed runtime extensions found matching: " + name));
     logger.info();
-    logger.info("Use 'lms runtime ls' to see installed runtime extensions.");
+    logger.info(t("Use 'lms runtime ls' to see installed runtime extensions."));
     process.exit(1);
   }
 
   if (runtimeExtensions.length > 1) {
-    logger.info("Multiple runtime extensions found:");
+    logger.info(t("Multiple runtime extensions found:"));
     logger.info();
     for (const runtimeExtension of runtimeExtensions) {
       logger.info(`  - ${runtimeExtension.name}@${runtimeExtension.version}`);
     }
     logger.info();
-    logger.info("Please disambiguate by specifying a version.");
+    logger.info(t("Please disambiguate by specifying a version."));
     process.exit(1);
   }
 
@@ -80,14 +81,24 @@ async function selectRuntimeEngine(
       existingSelection.version !== runtimeExtension.version
     ) {
       await client.runtime.engine.select(runtimeExtension, modelFormatName);
-      logger.infoText`
-        Selected ${runtimeExtension.name}@${runtimeExtension.version} for ${modelFormatName}
-      `;
+      logger.info(
+        t(
+          text`
+        Selected {p0}@{p1} for {p2}
+      `,
+          { p0: runtimeExtension.name, p1: runtimeExtension.version, p2: modelFormatName },
+        ),
+      );
     } else {
-      logger.infoText`
-        Already selected ${runtimeExtension.name}@${runtimeExtension.version}
-        for ${modelFormatName}
-      `;
+      logger.info(
+        t(
+          text`
+        Already selected {p0}@{p1}
+        for {p2}
+      `,
+          { p0: runtimeExtension.name, p1: runtimeExtension.version, p2: modelFormatName },
+        ),
+      );
     }
   }
 }
@@ -131,22 +142,32 @@ async function selectLatestVersionOfSelectedEngines(
   for (const selection of latestSelections) {
     if (selection.version !== selection.previousVersion) {
       await client.runtime.engine.select(selection, selection.modelFormatName);
-      logger.infoText`
-        Selected ${selection.name}@${selection.version} for ${selection.modelFormatName}
-      `;
+      logger.info(
+        t(
+          text`
+        Selected {p0}@{p1} for {p2}
+      `,
+          { p0: selection.name, p1: selection.version, p2: selection.modelFormatName },
+        ),
+      );
     } else {
-      logger.infoText`
-        Already selected ${selection.name}@${selection.version} for ${selection.modelFormatName}
-      `;
+      logger.info(
+        t(
+          text`
+        Already selected {p0}@{p1} for {p2}
+      `,
+          { p0: selection.name, p1: selection.version, p2: selection.modelFormatName },
+        ),
+      );
     }
   }
 }
 
 const selectCommand = new Command()
   .name("select")
-  .description("Select installed LLM engines")
-  .argument("[alias]", "Alias of an LLM engine")
-  .option("--latest", "Select the latest version")
+  .description(t("Select installed LLM engines"))
+  .argument("[alias]", t("Alias of an LLM engine"))
+  .option("--latest", t("Select the latest version"))
   .action(async function (alias) {
     const mergedOptions = this.optsWithGlobals();
     const logger = createLogger(mergedOptions as LogLevelArgs);
@@ -158,7 +179,7 @@ const selectCommand = new Command()
     const { latest = false } = mergedOptions;
 
     if (alias === undefined && latest === false) {
-      throw new UserInputError("Must specify at least one of [alias] or --latest");
+      throw new UserInputError(t("Must specify at least one of [alias] or --latest"));
     } else if (alias === undefined) {
       await selectLatestVersionOfSelectedEngines(logger, client);
     } else {

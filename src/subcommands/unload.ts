@@ -12,6 +12,7 @@ import chalk from "chalk";
 import fuzzy from "fuzzy";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { createDeviceNameResolver } from "../deviceNameLookup.js";
+import { t } from "../i18n/index.js";
 import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
@@ -24,16 +25,16 @@ type UnloadCommandOptions = OptionValues &
 
 const unloadCommand = new Command<[], UnloadCommandOptions>()
   .name("unload")
-  .description("Unload a model")
+  .description(t("Unload a model"))
   .argument(
     "[identifier]",
-    text`
+    t(text`
       The identifier of the model to unload. If not provided and exactly one model is loaded, it
       will be unloaded automatically. Otherwise, you will be prompted to select a model
       interactively from a list.
-    `,
+    `),
   )
-  .option("-a, --all", "Unload all models");
+  .option("-a, --all", t("Unload all models"));
 
 addCreateClientOptions(unloadCommand);
 addLogLevelOptions(unloadCommand);
@@ -47,11 +48,14 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
   if (unloadAll === true && identifier !== undefined) {
     logger.errorWithoutPrefix(
       makeTitledPrettyError(
-        "Invalid Usage",
-        text`
-          You cannot provide ${chalk.cyan("[path]")} when the flag
-          ${chalk.yellow("--all")} is set.
+        t("Invalid Usage"),
+        t(
+          text`
+          You cannot provide {p0} when the flag
+          {p1} is set.
         `,
+          { p0: chalk.cyan("[path]"), p1: chalk.yellow("--all") },
+        ),
       ).message,
     );
     return;
@@ -147,7 +151,7 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
             return options.map(option => {
               const modelEntry = modelEntries[option.index];
               if (modelEntry === undefined) {
-                throw new Error("Search results returned an invalid model index.");
+                throw new Error(t("Search results returned an invalid model index."));
               }
               return {
                 value: modelEntry,
@@ -164,17 +168,17 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
 
   if (unloadAll === true) {
     if (models.length === 0) {
-      logger.info("No models to unload.");
+      logger.info(t("No models to unload."));
     } else {
       logger.debug(`Unloading ${models.length} models...`);
       for (const model of models) {
-        logger.info(`Unloading ${formatModelTarget(model)}...`);
+        logger.info(t("Unloading {target}...", { target: formatModelTarget(model) }));
         await model.unload();
       }
       if (models.length > 1) {
-        logger.info(`Unloaded ${models.length} models.`);
+        logger.info(t("Unloaded {count} models.", { count: models.length }));
       } else {
-        logger.info(`Unloaded 1 model.`);
+        logger.info(t("Unloaded 1 model."));
       }
     }
   } else if (identifier !== undefined) {
@@ -182,14 +186,17 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
     if (matchingModels.length === 0) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(
-          "Model Not Found",
-          text`
-            Cannot find a model with the identifier "${chalk.yellow(identifier)}".
+          t("Model Not Found"),
+          t(
+            text`
+            Cannot find a model with the identifier "{p0}".
 
             To see a list of loaded models, run:
 
-                ${chalk.yellow("lms ps")}
+                {p1}
           `,
+            { p0: chalk.yellow(identifier), p1: chalk.yellow("lms ps") },
+          ),
         ).message,
       );
       return;
@@ -198,24 +205,24 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
       const modelEntry = matchingModels[0];
       logger.debug(`Unloading ${formatModelTarget(modelEntry)}...`);
       await modelEntry.unload();
-      logger.info(`Model ${formatModelTarget(modelEntry)} unloaded.`);
+      logger.info(t("Model {target} unloaded.", { target: formatModelTarget(modelEntry) }));
     } else {
       // Multiple models with the same identifier - prompt user to select
       const matchingSearchStrings = matchingModels.map(modelEntry =>
         getModelSearchString(modelEntry),
       );
       const selected = await promptForModel(
-        "Multiple models found. Select one to unload",
+        t("Multiple models found. Select one to unload"),
         matchingModels,
         matchingSearchStrings,
       );
       logger.debug(`Unloading ${formatModelTarget(selected)}...`);
       await selected.unload();
-      logger.info(`Model ${formatModelTarget(selected)} unloaded.`);
+      logger.info(t("Model {target} unloaded.", { target: formatModelTarget(selected) }));
     }
   } else {
     if (models.length === 0) {
-      logger.info(`You don't have any models loaded. Use "lms load" to load a model.`);
+      logger.info(t('You don\'t have any models loaded. Use "lms load" to load a model.'));
       process.exit(1);
     }
     // If there is exactly one model loaded, unload it automatically without prompting.
@@ -223,15 +230,19 @@ unloadCommand.action(async (identifier, options: UnloadCommandOptions) => {
       const modelEntry = models[0];
       logger.debug(`Unloading ${formatModelTarget(modelEntry)}...`);
       await modelEntry.unload();
-      logger.info(`Model ${formatModelTarget(modelEntry)} unloaded.`);
+      logger.info(t("Model {target} unloaded.", { target: formatModelTarget(modelEntry) }));
       return;
     }
-    console.info(chalk.dim("! To unload all models, use the --all flag."));
+    console.info(chalk.dim(t("! To unload all models, use the --all flag.")));
     console.info();
-    const selected = await promptForModel("Select a model to unload", models, modelSearchStrings);
+    const selected = await promptForModel(
+      t("Select a model to unload"),
+      models,
+      modelSearchStrings,
+    );
     logger.debug(`Unloading ${formatModelTarget(selected)}...`);
     await selected.unload();
-    logger.info(`Model ${formatModelTarget(selected)} unloaded.`);
+    logger.info(t("Model {target} unloaded.", { target: formatModelTarget(selected) }));
   }
 });
 

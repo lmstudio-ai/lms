@@ -5,6 +5,7 @@ import { resolve } from "path";
 import { addCreateClientOptions, createClient } from "../createClient.js";
 import { createDownloadPbUpdater } from "../downloadPbUpdater.js";
 import { exists } from "../exists.js";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger } from "../logLevel.js";
 import { ProgressBar } from "../ProgressBar.js";
 
@@ -13,33 +14,33 @@ const artifactIdentifierParser = (str: string): { owner: string; name: string } 
   const parts = str.split("/");
   if (parts.length !== 2) {
     throw new InvalidArgumentError(
-      "Invalid artifact identifier. Must be in the form of 'owner/name'.",
+      t("Invalid artifact identifier. Must be in the form of 'owner/name'."),
     );
   }
   const [owner, name] = parts;
   if (!kebabCaseRegex.test(owner)) {
-    throw new InvalidArgumentError("Invalid owner. Must be kebab-case.");
+    throw new InvalidArgumentError(t("Invalid owner. Must be kebab-case."));
   }
   if (!kebabCaseWithDotsRegex.test(name)) {
-    throw new InvalidArgumentError("Invalid name. Must be kebab-case (dots allowed).");
+    throw new InvalidArgumentError(t("Invalid name. Must be kebab-case (dots allowed)."));
   }
   return { owner, name };
 };
 
 const cloneCommand = new Command()
   .name("clone")
-  .description("Clone an artifact from LM Studio Hub to a local folder")
+  .description(t("Clone an artifact from LM Studio Hub to a local folder"))
   .argument(
     "<artifact>",
-    "The identifier for the artifact. Must be in the form of 'owner/name'.",
+    t("The identifier for the artifact. Must be in the form of 'owner/name'."),
     artifactIdentifierParser,
   )
   .argument(
     "[path]",
-    text`
+    t(text`
       The path to the folder to clone the resources into. If not provided, defaults to a new
       folder with the artifact name in the current working directory.
-  `,
+  `),
   );
 
 addCreateClientOptions(cloneCommand);
@@ -63,10 +64,13 @@ cloneCommand.action(async (artifactIdentifier, path = "", options) => {
   if (await exists(resolvedPath)) {
     if (autoNamed) {
       logger.error(
-        `Path already exists: ${resolvedPath}\n       You can provide a different path by providing it as a second argument.`,
+        t(
+          `Path already exists: {p0}\n       You can provide a different path by providing it as a second argument.`,
+          { p0: resolvedPath },
+        ),
       );
     } else {
-      logger.error(`Path already exists: ${resolvedPath}`);
+      logger.error(t(`Path already exists: {p0}`, { p0: resolvedPath }));
     }
     process.exit(1);
   }
@@ -82,10 +86,10 @@ cloneCommand.action(async (artifactIdentifier, path = "", options) => {
     },
     onStartFinalizing: () => {
       pb.stop();
-      logger.info("Finalizing download...");
+      logger.info(t("Finalizing download..."));
     },
   });
-  logger.info(`Artifact successfully cloned to ${resolvedPath}.`);
+  logger.info(t(`Artifact successfully cloned to {p0}.`, { p0: resolvedPath }));
 });
 
 export const clone = cloneCommand;

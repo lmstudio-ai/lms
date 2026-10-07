@@ -2,6 +2,7 @@ import { text } from "@lmstudio/lms-common";
 import { type DownloadProgressUpdate } from "@lmstudio/sdk";
 import { formatSizeBytes1000 } from "./formatBytes.js";
 import { type ProgressBar } from "./ProgressBar.js";
+import { t } from "./i18n/index.js";
 
 function formatRemainingTime(timeSeconds: number) {
   const seconds = timeSeconds % 60;
@@ -37,12 +38,20 @@ export function createDownloadPbUpdater(pb: ProgressBar) {
     const timeLeftSeconds = Math.round((totalBytes - downloadedBytes) / speedBytesPerSecond);
     pb.setRatio(
       downloadedBytes / totalBytes,
-      text`
-        ${downloadedBytesString.padStart(longestDownloadedBytesStringLength)} /
-        ${totalBytesString.padStart(longestTotalBytesStringLength)} |
-        ${speedBytesPerSecondString.padStart(longestSpeedBytesPerSecondStringLength)}/s | ETA
-        ${formatRemainingTime(timeLeftSeconds)}
+      t(
+        text`
+        {p0} /
+        {p1} |
+        {p2}/s | ETA
+        {p3}
       `,
+        {
+          p0: downloadedBytesString.padStart(longestDownloadedBytesStringLength),
+          p1: totalBytesString.padStart(longestTotalBytesStringLength),
+          p2: speedBytesPerSecondString.padStart(longestSpeedBytesPerSecondStringLength),
+          p3: formatRemainingTime(timeLeftSeconds),
+        },
+      ),
     );
   };
 }

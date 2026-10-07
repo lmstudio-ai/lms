@@ -1,4 +1,5 @@
 import { Command } from "@commander-js/extra-typings";
+import { t } from "../../i18n/index.js";
 import { get } from "./get.js";
 import { ls } from "./list.js";
 import { remove } from "./remove.js";
@@ -9,7 +10,7 @@ import { update } from "./update.js";
 // Create the runtime command
 const runtimeCommand = new Command()
   .name("runtime")
-  .description("Manage and update the inference runtime");
+  .description(t("Manage and update the inference runtime"));
 
 // Add subcommands
 runtimeCommand.addCommand(ls);

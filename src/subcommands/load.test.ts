@@ -1,6 +1,7 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { assertLoadConfigSupportedForCliModel, load } from "./load.js";
 import { resolveCliSpeculativeDecodingLoadConfig } from "./loadSpeculativeDecoding.js";
+import { t } from "../i18n/index.js";
 
 jest.mock("@inquirer/prompts", () => ({ search: jest.fn() }));
 
@@ -49,7 +50,7 @@ describe("assertLoadConfigSupportedForCliModel", () => {
       }),
     ).toThrow("process.exit(1)");
     expect(logger.errorWithoutPrefix).toHaveBeenCalledWith(
-      expect.stringContaining("AutoFit can only be configured for LLM models."),
+      expect.stringContaining(t("AutoFit can only be configured for LLM models.")),
     );
   });
 });
@@ -132,13 +133,21 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftMaxTokens: 7,
       }),
-    ).toThrow("--speculative-draft-simple or --speculative-draft-mtp");
+    ).toThrow(
+      t(
+        "--speculative draft tuning flags require --speculative-draft-simple or --speculative-draft-mtp.",
+      ),
+    );
 
     expect(() =>
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftMinContinueProbability: 0.25,
       }),
-    ).toThrow("--speculative-draft-simple or --speculative-draft-mtp");
+    ).toThrow(
+      t(
+        "--speculative draft tuning flags require --speculative-draft-simple or --speculative-draft-mtp.",
+      ),
+    );
   });
 
   it("rejects draft model without Draft Simple", () => {
@@ -146,7 +155,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftModel: "test/draft",
       }),
-    ).toThrow("--speculative-draft-model requires --speculative-draft-simple");
+    ).toThrow(t("--speculative-draft-model requires --speculative-draft-simple."));
   });
 
   it("rejects Draft Simple without a draft model", () => {
@@ -154,7 +163,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
       resolveCliSpeculativeDecodingLoadConfig({
         speculativeDraftSimple: true,
       }),
-    ).toThrow("--speculative-draft-simple requires --speculative-draft-model");
+    ).toThrow(t("--speculative-draft-simple requires --speculative-draft-model."));
   });
 
   it("rejects Draft MTP with Draft Simple", () => {
@@ -164,7 +173,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
         speculativeDraftSimple: true,
         speculativeDraftModel: "test/draft",
       }),
-    ).toThrow("--speculative-draft-mtp and --speculative-draft-simple");
+    ).toThrow(t("--speculative-draft-mtp and --speculative-draft-simple cannot both be used."));
   });
 
   it("rejects Draft MTP with a draft model resource", () => {
@@ -173,7 +182,7 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
         speculativeDraftMtp: true,
         speculativeDraftModel: "test/draft",
       }),
-    ).toThrow("--speculative-draft-mtp cannot be combined with --speculative-draft-model");
+    ).toThrow(t("--speculative-draft-mtp cannot be combined with --speculative-draft-model."));
   });
 
   it("rejects min draft tokens greater than max draft tokens", () => {
@@ -184,6 +193,10 @@ describe("resolveCliSpeculativeDecodingLoadConfig", () => {
         speculativeDraftMaxTokens: 2,
         speculativeDraftMinTokens: 7,
       }),
-    ).toThrow("--speculative-draft-min-tokens");
+    ).toThrow(
+      t(
+        "--speculative-draft-min-tokens must be less than or equal to --speculative-draft-max-tokens.",
+      ),
+    );
   });
 });

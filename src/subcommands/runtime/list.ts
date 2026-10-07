@@ -9,6 +9,7 @@ import {
 import columnify from "columnify";
 import { compareVersions } from "../../compareVersions.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
 import { invertSelections } from "./helpers/invertSelections.js";
@@ -63,7 +64,7 @@ async function listEngines(
   const engines = constructDisplayInfo(enginesResp, selectionsResp);
 
   if (engines.length === 0) {
-    logger.info("No runtimes found.");
+    logger.info(t("No runtimes found."));
     return;
   }
 
@@ -84,7 +85,9 @@ async function listEngines(
 
     if (sortedEngines.length === 0) {
       throw new UserInputError(
-        `No LLM Engines support the "${[...modelFormatFilters].join(", ")}" model format(s).`,
+        t(`No LLM Engines support the "{p0}" model format(s).`, {
+          p0: [...modelFormatFilters].join(", "),
+        }),
       );
     }
   }
@@ -107,15 +110,15 @@ async function listEngines(
       columns: ["engine", "selected", "format"],
       config: {
         engine: {
-          headingTransform: () => "LLM ENGINE",
+          headingTransform: () => t("LLM ENGINE"),
           align: "left",
         },
         selected: {
-          headingTransform: () => "SELECTED",
+          headingTransform: () => t("SELECTED"),
           align: "center",
         },
         format: {
-          headingTransform: () => "MODEL FORMAT",
+          headingTransform: () => t("MODEL FORMAT"),
           align: "center",
         },
       },
@@ -127,7 +130,7 @@ async function listEngines(
 
 const lsCommand = new Command()
   .name("ls")
-  .description("List installed LLM engines")
+  .description(t("List installed LLM engines"))
   .action(async function () {
     // Access options for logging and client creation
     const options = this.optsWithGlobals();

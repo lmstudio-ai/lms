@@ -1,10 +1,12 @@
+import { t } from "../i18n/index.js";
 export interface ParsedLmStudioArtifactUrl {
   owner: string;
   name: string;
 }
 
-const invalidLmStudioArtifactUrlMessage =
-  "Invalid LM Studio artifact URL. Expected https://lmstudio.ai/models/owner/name or https://lmstudio.ai/owner/name.";
+const invalidLmStudioArtifactUrlMessage = t(
+  "Invalid LM Studio artifact URL. Expected https://lmstudio.ai/models/owner/name or https://lmstudio.ai/owner/name.",
+);
 
 export function tryParseLmStudioArtifactUrl(modelName: string): ParsedLmStudioArtifactUrl | null {
   let parsedUrl: URL;
@@ -18,7 +20,7 @@ export function tryParseLmStudioArtifactUrl(modelName: string): ParsedLmStudioAr
     return null;
   }
   if (parsedUrl.protocol !== "https:") {
-    throw new Error("Only https://lmstudio.ai URLs are supported.");
+    throw new Error(t("Only https://lmstudio.ai URLs are supported."));
   }
 
   const pathSegments = parsedUrl.pathname.split("/").filter(segment => segment !== "");

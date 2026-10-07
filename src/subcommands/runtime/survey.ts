@@ -13,6 +13,7 @@ import chalk from "chalk";
 import columnify from "columnify";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
 import { formatSizeBytes1024 } from "../../formatBytes.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 
 interface GpuMemoryMetrics {
@@ -36,37 +37,37 @@ function getBackendCompatibilityStatusLabel(
     case "compatible":
       return "Compatible";
     case "incompatibleAppVersion":
-      return "Incompatible app version";
+      return t("Incompatible app version");
     case "incompatibleBackendVersion":
-      return "Incompatible backend version";
+      return t("Incompatible backend version");
     case "invalidCpuArchitecture":
-      return "Invalid CPU architecture";
+      return t("Invalid CPU architecture");
     case "invalidCpuInstructionSetExtensions":
-      return "Invalid CPU instruction set extensions";
+      return t("Invalid CPU instruction set extensions");
     case "cpuSurveyUnsuccessful":
-      return "CPU survey unsuccessful";
+      return t("CPU survey unsuccessful");
     case "gpuSurveyUnsuccessful":
-      return "GPU survey unsuccessful";
+      return t("GPU survey unsuccessful");
     case "gpuRequiredButNoneFound":
-      return "GPU required but none found";
+      return t("GPU required but none found");
     case "gpuTargetsRequiredButNoneSpecified":
-      return "GPU targets required but none specified";
+      return t("GPU targets required but none specified");
     case "gpuDriverUnsupported":
-      return "GPU driver unsupported";
+      return t("GPU driver unsupported");
     case "noSupportedGpus":
-      return "No supported GPUs";
+      return t("No supported GPUs");
     case "incompatiblePlatform":
-      return "Incompatible platform";
+      return t("Incompatible platform");
     case "libraryOutdated":
-      return "Library outdated";
+      return t("Library outdated");
     case "invalidLibraryVersionFormat":
-      return "Invalid library version format";
+      return t("Invalid library version format");
     case "missingLibraries":
-      return "Missing libraries";
+      return t("Missing libraries");
     case "errorSurveyingHardware":
-      return "Error surveying hardware";
+      return t("Error surveying hardware");
     case "errorCheckingCompatibility":
-      return "Error checking compatibility";
+      return t("Error checking compatibility");
     case "unknown":
       return "Unknown";
     default: {
@@ -163,7 +164,7 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
   return columnify(rows, {
     columns: ["device", "vram"],
     config: {
-      device: { headingTransform: () => chalk.dim("GPU/ACCELERATORS"), align: "left" },
+      device: { headingTransform: () => chalk.dim(t("GPU/ACCELERATORS")), align: "left" },
       vram: { headingTransform: () => chalk.dim("VRAM"), align: "left" },
     },
     columnSplitter: "   ",
@@ -173,20 +174,20 @@ function renderGpuTable(survey: RuntimeHardwareSurveyEngine): string | undefined
 function renderCpuLine(survey: RuntimeHardwareSurveyEngine): string {
   const cpuInfo = survey.hardwareSurvey.cpuSurveyResult.cpuInfo;
   if (cpuInfo === undefined) {
-    return `${chalk.dim("CPU:")} unavailable`;
+    return `${chalk.dim(t("CPU:"))} ${t("unavailable")}`;
   }
   const instructionSetExtensions =
     cpuInfo.supportedInstructionSetExtensions.length > 0
       ? ` (${cpuInfo.supportedInstructionSetExtensions.join(", ")})`
       : "";
   const architectureLabel = getRuntimeHardwareCpuArchitectureLabel(cpuInfo.architecture);
-  return `${chalk.dim("CPU:")} ${architectureLabel}${instructionSetExtensions}`;
+  return `${chalk.dim(t("CPU:"))} ${architectureLabel}${instructionSetExtensions}`;
 }
 
 function renderRamLine(survey: RuntimeHardwareSurveyEngine): string {
   const ramCapacityText = formatSizeBytes1024(survey.memoryInfo.ramCapacity);
 
-  return `${chalk.dim("RAM:")} ${ramCapacityText}`;
+  return `${chalk.dim(t("RAM:"))} ${ramCapacityText}`;
 }
 
 function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | undefined {
@@ -197,13 +198,13 @@ function renderCompatibilityLine(survey: RuntimeHardwareSurveyEngine): string | 
   if (survey.compatibility.message === undefined) {
     return `Compatibility: ${statusLabel}`;
   }
-  return `Compatibility: ${statusLabel} - ${survey.compatibility.message}`;
+  return t(`Compatibility: {p0} - {p1}`, { p0: statusLabel, p1: survey.compatibility.message });
 }
 
 function renderEngineSurvey(survey: RuntimeHardwareSurveyEngine) {
   const gpuTable = renderGpuTable(survey);
   if (gpuTable === undefined) {
-    console.info("No GPUs detected");
+    console.info(t("No GPUs detected"));
   } else {
     console.info(gpuTable);
   }
@@ -232,9 +233,9 @@ type SurveyCommandOptions = OptionValues &
 
 const surveyCommand = new Command<[], SurveyCommandOptions>()
   .name("survey")
-  .description("Survey hardware available to selected runtime engines")
-  .option("--json", "Output the raw JSON response")
-  .option("--refresh", "Resurvey selected and new runtimes");
+  .description(t("Survey hardware available to selected runtime engines"))
+  .option("--json", t("Output the raw JSON response"))
+  .option("--refresh", t("Resurvey selected and new runtimes"));
 addCreateClientOptions(surveyCommand);
 addLogLevelOptions(surveyCommand);
 
@@ -249,19 +250,33 @@ surveyCommand.action(async function (commandOptions) {
   }
 
   if (surveyResult.engines.length === 0) {
-    console.info("No runtime survey results");
+    console.info(t("No runtime survey results"));
     return;
   }
 
   // Find and render the llama.cpp engine's survey
   const engineSurvey = surveyResult.engines.find(engine => engine.engine === "llama.cpp");
   if (engineSurvey !== undefined) {
-    console.info(chalk.dim(`Survey by ${engineSurvey.name} (${engineSurvey.version})`));
+    console.info(
+      chalk.dim(
+        t("Survey by {name} ({version}).", {
+          name: engineSurvey.name,
+          version: engineSurvey.version,
+        }),
+      ),
+    );
     renderEngineSurvey(engineSurvey);
   } else {
     // If llama.cpp survey is not available, render the first engine's survey as a fallback
     const firstEngine = surveyResult.engines[0];
-    console.info(chalk.dim(`Survey by ${firstEngine.name} (${firstEngine.version})`));
+    console.info(
+      chalk.dim(
+        t("Survey by {name} ({version}).", {
+          name: firstEngine.name,
+          version: firstEngine.version,
+        }),
+      ),
+    );
     renderEngineSurvey(firstEngine);
   }
 });

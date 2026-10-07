@@ -1,17 +1,20 @@
+import { t } from "./i18n/index.js";
 const NUM_VERSION_COMPONENTS = 3;
 const VERSION_REGEX = /^\d+(\.\d+){2}$/;
 
 function parseVersion(version: string): number[] {
   if (!VERSION_REGEX.test(version)) {
     throw new Error(
-      `Invalid version format: "${version}". Expected MAJOR.MINOR.PATCH with numbers only.`,
+      t(`Invalid version format: "{p0}". Expected MAJOR.MINOR.PATCH with numbers only.`, {
+        p0: version,
+      }),
     );
   }
 
   return version.split(".").map(part => {
     const num = +part;
     if (!Number.isSafeInteger(num) || num < 0) {
-      throw new Error(`Invalid component ${part} in ${version}`);
+      throw new Error(t(`Invalid component {p0} in {p1}`, { p0: part, p1: version }));
     }
     return num;
   });

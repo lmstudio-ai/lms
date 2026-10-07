@@ -7,6 +7,7 @@ import { confirm } from "@inquirer/prompts";
 import { getCliPref, type CliPref } from "../../cliPref.js";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../../createClient.js";
 import { formatSizeBytes1000 } from "../../formatBytes.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { type SimpleFileData } from "../../SimpleFileData.js";
 import { createRefinedNumberParser } from "../../types/refinedNumber.js";
@@ -39,8 +40,9 @@ type ChatCommandOptions = OptionValues &
 export const DEFAULT_SYSTEM_PROMPT =
   "You are an AI assistant running in the user's terminal. Provide helpful and concise responses.";
 
-const FETCH_MODEL_CATALOG_MESSAGE =
-  "Always fetch the model catalog ? (requires internet connection)";
+const FETCH_MODEL_CATALOG_MESSAGE = t(
+  "Always fetch the model catalog ? (requires internet connection)",
+);
 
 export async function getOrAskShouldFetchModelCatalog(
   dontFetchCatalog: boolean,
@@ -55,6 +57,7 @@ export async function getOrAskShouldFetchModelCatalog(
         confirm(
           {
             message: FETCH_MODEL_CATALOG_MESSAGE,
+            transformer: (answer: boolean) => (answer ? t("Yes") : t("No")),
           },
           { output: process.stderr },
         ),
@@ -63,7 +66,7 @@ export async function getOrAskShouldFetchModelCatalog(
         draft.fetchModelCatalog = fetchAnswer;
       });
       if (fetchAnswer === true) {
-        logger.info("Setting the preference to always fetch the model catalog.");
+        logger.info(t("Setting the preference to always fetch the model catalog."));
         shouldFetchModelCatalog = true;
       }
     } else if (fetchModelCatalogPreference === true) {
@@ -90,7 +93,7 @@ export function createModelDisplayOptions(
           [
             {
               name: model.name,
-              size: chalk.dim(`(min. ${size})`),
+              size: chalk.dim(t("(min. {p0})", { p0: size })),
               status: chalk.dim(status),
             },
           ],
@@ -143,7 +146,7 @@ export async function handleNonInteractiveChat(
     }
     process.exit(0);
   } catch (err) {
-    logger.error("Error during chat:", err);
+    logger.error(t("Error during chat:"), err);
     process.exit(1);
   }
 }
@@ -183,23 +186,23 @@ export async function startInteractiveChat(
 
 const chatCommandBase = new Command<[], ChatCommandOptions>()
   .name("chat")
-  .description("Start an interactive chat with a model")
-  .argument("[model]", "Model name to use")
-  .option("-p, --prompt <prompt>", "Print response to stdout and quit")
-  .option("-s, --system-prompt <systemPrompt>", "Custom system prompt to use for the chat")
-  .option("--stats", "Display detailed prediction statistics after each response")
+  .description(t("Start an interactive chat with a model"))
+  .argument("[model]", t("Model name to use"))
+  .option("-p, --prompt <prompt>", t("Print response to stdout and quit"))
+  .option("-s, --system-prompt <systemPrompt>", t("Custom system prompt to use for the chat"))
+  .option("--stats", t("Display detailed prediction statistics after each response"))
   .addOption(
-    new Option("--ttl <ttl>", "Time (in seconds) to keep the model loaded after the chat ends")
+    new Option("--ttl <ttl>", t("Time (in seconds) to keep the model loaded after the chat ends"))
       .argParser(createRefinedNumberParser({ integer: true, min: 1 }))
       .default(3600),
   )
   .addOption(
-    new Option("--reasoning <mode>", "Reasoning mode for this chat session")
+    new Option("--reasoning <mode>", t("Reasoning mode for this chat session"))
       .choices([...REASONING_MODES])
       .default("auto"),
   )
-  .option("--dont-fetch-catalog", "Skip fetching the model catalog", false)
-  .option("-y, --yes", "Assume 'yes' as answer to all CLI prompts");
+  .option("--dont-fetch-catalog", t("Skip fetching the model catalog"), false)
+  .option("-y, --yes", t("Assume 'yes' as answer to all CLI prompts"));
 
 const chatCommandWithClient = addCreateClientOptions(chatCommandBase);
 const chatCommand = addLogLevelOptions(chatCommandWithClient);
@@ -221,7 +224,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
   }
   const ttl = +options.ttl;
   if (Number.isSafeInteger(ttl) !== true || ttl < 0) {
-    logger.error("Invalid TTL value, must be a non-negative integer.");
+    logger.error(t("Invalid TTL value, must be a non-negative integer."));
     process.exit(1);
   }
   const chat = Chat.empty();
@@ -261,7 +264,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
   if (providedPrompt.length !== 0) {
     if (llm === undefined) {
       // Cannot reach this point in non-interactive mode but we check anyway
-      logger.error("No model loaded. Please specify a model to chat with.");
+      logger.error(t("No model loaded. Please specify a model to chat with."));
       process.exit(1);
     }
     await handleNonInteractiveChat(llm, chat, providedPrompt, logger, {
@@ -270,7 +273,7 @@ chatCommand.action(async (model, options: ChatCommandOptions) => {
       reasoningMode: options.reasoning,
     });
   } else {
-    logger.error("No prompt provided for non-interactive chat.");
+    logger.error(t("No prompt provided for non-interactive chat."));
     process.exit(0);
   }
 });

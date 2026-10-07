@@ -4,6 +4,7 @@ import { type LMStudioClient } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { compareVersions } from "../../../compareVersions.js";
 import { handleDownloadWithProgressBar } from "../../../handleDownloadWithProgressBar.js";
+import { t } from "../../../i18n/index.js";
 
 export function determineLatestLocalVersion(localVersions: Array<string>): string | undefined {
   let latestLocalVersion: string | undefined = undefined;
@@ -31,15 +32,15 @@ export function formatRuntimeUpdateStatus(
   latestLocalVersion: string | undefined,
 ): string {
   if (latestLocalVersion === undefined) {
-    return chalk.dim("not installed");
+    return chalk.dim(t("not installed"));
   }
   const versionComparison = compareVersions(remoteVersion, latestLocalVersion);
   if (versionComparison > 0) {
-    return chalk.yellow("update available");
+    return chalk.yellow(t("update available"));
   } else if (versionComparison < 0) {
-    return chalk.yellow("newer version installed");
+    return chalk.yellow(t("newer version installed"));
   } else {
-    return chalk.dim("up-to-date");
+    return chalk.dim(t("up-to-date"));
   }
 }
 
@@ -70,14 +71,19 @@ export async function downloadRuntimeExtensionWithErrorHandling(
       },
       // After the download, the server extracts and sets up the runtime, which can take minutes.
       {
-        finalizingMessage: "Installing runtime... (this might take a while)",
-        completedMessage: "Runtime installed.",
+        finalizingMessage: t("Installing runtime... (this might take a while)"),
+        completedMessage: t("Runtime installed."),
       },
     );
     return "downloaded";
   } catch (error) {
     if (error instanceof Error && error.message.includes("is already installed")) {
-      logger.info(`${runtimeExtension.name}@${runtimeExtension.version} is already installed.`);
+      logger.info(
+        t(`{p0}@{p1} is already installed.`, {
+          p0: runtimeExtension.name,
+          p1: runtimeExtension.version,
+        }),
+      );
       return "already-installed";
     }
     throw error;

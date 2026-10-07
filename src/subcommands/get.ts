@@ -21,6 +21,7 @@ import fuzzy from "fuzzy";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
 import { formatSizeBytes1000, formatSizeBytesWithColor1000 } from "../formatBytes.js";
 import { handleDownloadWithProgressBar } from "../handleDownloadWithProgressBar.js";
+import { t } from "../i18n/index.js";
 import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
@@ -72,45 +73,45 @@ interface DownloadPlannerCliOpts {
 
 const getCommand = new Command<[], GetCommandOptions>()
   .name("get")
-  .description(text`Search and download local models or Hub artifacts`)
+  .description(t(text`Search and download local models or Hub artifacts`))
   .argument(
     "[name]",
-    text`
+    t(text`
       The model or Hub artifact to download, for example "openai/gpt-oss-20b" or
       "owner/my-skill". For a specific model quantization, append its name with "@", for example
       "qwen/qwen3.5-9b@q8_0". To download a model from Hugging Face directly, use its full URL.
-    `,
+    `),
   )
   .option(
     "--mlx",
-    text`
+    t(text`
       Restrict model resolution to MLX-compatible options. If any of "--mlx" or "--gguf" is
       specified, only matching formats will be considered. Otherwise only options supported by your
       system will be considered.
-    `,
+    `),
   )
   .option(
     "--gguf",
-    text`
+    t(text`
       Restrict model resolution to GGUF-compatible options. If any of "--mlx" or "--gguf" is
       specified, only matching formats will be considered. Otherwise only options supported by your
       system will be considered.
-    `,
+    `),
   )
   .option(
     "-y, --yes",
-    text`
+    t(text`
       Automatically approve all prompts. Useful for scripting. If there are multiple
       staff picks matching the search term, the first one will be used. If there are multiple
       download options, the preselected option based on your hardware and preferences will be used.
-    `,
+    `),
   )
   .option(
     "--select",
-    text`
+    t(text`
       Open variant selection before downloading. Useful if the default variant is already
       downloaded and you want to choose a different one.
-    `,
+    `),
   );
 
 addCreateClientOptions(getCommand);
@@ -148,7 +149,7 @@ function splitModelNameAndQuantization(modelName: string | undefined) {
 
   const splitByAt = normalizedModelName.split("@");
   if (splitByAt.length >= 3) {
-    throw new Error("You cannot have more than 2 @'s in the model name argument.");
+    throw new Error(t("You cannot have more than 2 @'s in the model name argument."));
   }
   normalizedModelName = splitByAt[0]?.trim();
   if (splitByAt.length === 2) {
@@ -172,14 +173,14 @@ function tryParseHuggingFaceUrl(modelName: string): ParsedHuggingFaceTarget | nu
     return null;
   }
   if (parsedUrl.protocol !== "https:") {
-    throw new Error("Only https://huggingface.co URLs are supported.");
+    throw new Error(t("Only https://huggingface.co URLs are supported."));
   }
 
   const pathSegments = parsedUrl.pathname.split("/").filter(segment => segment !== "");
   const [user, repo] = pathSegments;
   if (user === undefined || repo === undefined) {
     throw new Error(
-      "Invalid Hugging Face model URL. Expected https://huggingface.co/owner/repo[/*].",
+      t("Invalid Hugging Face model URL. Expected https://huggingface.co/owner/repo[/*]."),
     );
   }
 
@@ -256,7 +257,7 @@ async function resolveStaffPickDownloadRequest({
   compatibilityTypes: Array<ModelCompatibilityType> | undefined;
 }): Promise<Extract<DownloadPlanRequest, { type: "artifact" }>> {
   if (searchTerm !== undefined && searchTerm !== "") {
-    logger.info("Searching staff picks with the term", chalk.yellow(searchTerm));
+    logger.info(t("Searching staff picks with the term"), chalk.yellow(searchTerm));
   }
 
   const staffPickResults = await client.repository.unstable.fuzzyFindStaffPicks({
@@ -264,7 +265,7 @@ async function resolveStaffPickDownloadRequest({
     compatibilityTypes,
   });
   if (staffPickResults.length === 0) {
-    throw new Error("No staff picks found with the specified search criteria.");
+    throw new Error(t("No staff picks found with the specified search criteria."));
   }
 
   const exactMatchIndex = staffPickResults.findIndex(result => result.exact);
@@ -272,10 +273,12 @@ async function resolveStaffPickDownloadRequest({
   if (exactMatchIndex !== -1) {
     selectedResult = staffPickResults[exactMatchIndex];
   } else if (yes) {
-    logger.info("Multiple staff picks found. Automatically selecting the first one due to --yes.");
+    logger.info(
+      t("Multiple staff picks found. Automatically selecting the first one due to --yes."),
+    );
     selectedResult = staffPickResults[0];
   } else {
-    logger.info("No exact match found. Please choose a model from the list below.");
+    logger.info(t("No exact match found. Please choose a model from the list below."));
     logger.infoWithoutPrefix();
     selectedResult = await askToChooseStaffPick(staffPickResults, 2);
   }
@@ -352,10 +355,10 @@ getCommand.action(async (modelName, options: GetCommandOptions) => {
   const logger = createLogger(options);
   try {
     if (select && yes) {
-      throw new Error("The --select flag cannot be used with --yes.");
+      throw new Error(t("The --select flag cannot be used with --yes."));
     }
     if (select && process.stdin.isTTY !== true) {
-      throw new Error("The --select flag requires an interactive terminal.");
+      throw new Error(t("The --select flag requires an interactive terminal."));
     }
 
     const { modelNameWithoutQuantization, specifiedQuantName } =
@@ -401,7 +404,7 @@ async function askToChooseStaffPick(
   return await runPromptWithExitHandling(() =>
     search<FuzzyFindStaffPickResult>(
       {
-        message: "Select a model to download",
+        message: t("Select a model to download"),
         pageSize,
         theme: searchTheme,
         source: async (term: string | undefined, { signal }: { signal: AbortSignal }) => {
@@ -412,7 +415,7 @@ async function askToChooseStaffPick(
             const staffPick = staffPicks[option.index];
             let name: string = "";
             if (staffPick.exact) {
-              name += chalk.yellow("[Exact Match] ");
+              name += chalk.yellow(t("[Exact Match] "));
             }
             name += option.string;
             if (staffPick.description !== undefined) {
@@ -542,19 +545,19 @@ function createArtifactDownloadOptionTag(
 ) {
   switch (type) {
     case "willNotFit":
-      return chalk.white.bgRed(" Won't Fit ");
+      return chalk.white.bgRed(t(" Won't Fit "));
     case "fitWithoutGPU":
-      return chalk.black.bgGreen(" CPU Fit ");
+      return chalk.black.bgGreen(t(" CPU Fit "));
     case "partialGPUOffload":
-      return chalk.black.bgYellow(" Partial GPU ");
+      return chalk.black.bgYellow(t(" Partial GPU "));
     case "fullGPUOffload":
-      return chalk.black.bgGreen(" Full GPU ");
+      return chalk.black.bgGreen(t(" Full GPU "));
     case "recommended":
-      return chalk.black.bgYellow(" ★ Recommended ");
+      return chalk.black.bgYellow(t(" ★ Recommended "));
     case "downloaded":
-      return chalk.black.bgGreen(" ✓ Downloaded ");
+      return chalk.black.bgGreen(t(" ✓ Downloaded "));
     case "downloading":
-      return chalk.black.bgBlueBright(" ⌛ Downloading ");
+      return chalk.black.bgBlueBright(t(" ⌛ Downloading "));
   }
 }
 
@@ -596,7 +599,7 @@ async function askToChooseArtifactDownloadSelection(
   modelNode: ArtifactDownloadPlanModelNode,
   pageSize: number,
 ): Promise<ArtifactModelSelectionValue> {
-  console.info(chalk.dim("! Use the arrow keys to navigate, and press enter to select."));
+  console.info(chalk.dim(t("! Use the arrow keys to navigate, and press enter to select.")));
 
   const choiceData = createArtifactDownloadOptionChoiceData(modelNode);
   const quantColumnWidth = Math.max(0, ...choiceData.map(choice => choice.quantText.length));
@@ -622,7 +625,8 @@ async function askToChooseArtifactDownloadSelection(
   return await runPromptWithExitHandling(() =>
     select<ArtifactModelSelectionValue>(
       {
-        message: chalk.green(`Select a variant`),
+        message: chalk.green(t(`Select a variant`)),
+        theme: searchTheme,
         loop: false,
         pageSize,
         default: getDefaultArtifactModelSelectionValue(modelNode),
@@ -728,7 +732,7 @@ function modelToString(model: ArtifactDownloadPlanModelInfo) {
   return result;
 }
 
-const toDownloadText = chalk.yellow("↓ To download:");
+const toDownloadText = chalk.yellow(t("↓ To download:"));
 
 interface ArtifactPlanScreenOpts {
   clearScreen?: boolean;
@@ -758,7 +762,7 @@ function artifactDownloadPlanToString(
       const artifactName = `${node.owner}/${node.name}`;
       switch (nodeState) {
         case "pending": {
-          message = `⧗ ${artifactName} - Pending...`;
+          message = t(`⧗ {p0} - Pending...`, { p0: artifactName });
           break;
         }
         case "fetching": {
@@ -766,7 +770,7 @@ function artifactDownloadPlanToString(
           break;
         }
         case "satisfied": {
-          message = `${chalk.green("✓ Satisfied")} ${artifactName}`;
+          message = `${chalk.green(t("✓ Satisfied"))} ${artifactName}`;
           break;
         }
         case "completed": {
@@ -782,7 +786,7 @@ function artifactDownloadPlanToString(
         }
       }
       if (highlightedNodeIndex === currentNodeIndex) {
-        message += " " + chalk.yellowBright("[Editing]");
+        message += " " + chalk.yellowBright(t("[Editing]"));
       }
       lines.push(selfPrefix + message);
       for (let i = 0; i < node.dependencyNodes.length; i++) {
@@ -806,7 +810,7 @@ function artifactDownloadPlanToString(
       const nodeState = node.state;
       switch (nodeState) {
         case "pending": {
-          message = `⧗ Concrete Model - Pending...`;
+          message = t(`⧗ Concrete Model - Pending...`);
           break;
         }
         case "fetching": {
@@ -816,9 +820,9 @@ function artifactDownloadPlanToString(
         case "satisfied": {
           const satisfiedModel = node.selected ?? node.alreadyOwned;
           if (satisfiedModel === undefined) {
-            message = `${chalk.green("✓ Satisfied")} Unknown`;
+            message = `${chalk.green(t("✓ Satisfied"))} Unknown`;
           } else {
-            message = `${chalk.green("✓ Satisfied")} ${modelToString(satisfiedModel)}`;
+            message = `${chalk.green(t("✓ Satisfied"))} ${modelToString(satisfiedModel)}`;
           }
           break;
         }
@@ -840,7 +844,7 @@ function artifactDownloadPlanToString(
         }
       }
       if (highlightedNodeIndex === currentNodeIndex) {
-        message = chalk.yellowBright("▶ ") + message + " " + chalk.yellowBright("[Editing]");
+        message = chalk.yellowBright("▶ ") + message + " " + chalk.yellowBright(t("[Editing]"));
       }
       lines.push(selfPrefix + message);
       break;
@@ -865,17 +869,21 @@ function buildArtifactDownloadPlanLines(
 
   if (isFinished) {
     if (plan.downloadAction === "attachToExistingDownload") {
-      lines.push(chalk.yellow("This download is already in progress."));
+      lines.push(chalk.yellow(t("This download is already in progress.")));
     } else if (plan.downloadSizeBytes !== 0) {
       if (yes) {
         lines.push(
           chalk.yellow(
-            `Resolution completed. Downloading ${formatSizeBytes1000(plan.downloadSizeBytes)}...`,
+            t(`Resolution completed. Downloading {p0}...`, {
+              p0: formatSizeBytes1000(plan.downloadSizeBytes),
+            }),
           ),
         );
       } else {
         lines.push(
-          chalk.yellow(`About to download ${formatSizeBytes1000(plan.downloadSizeBytes)}.`),
+          chalk.yellow(
+            t(`About to download {p0}.`, { p0: formatSizeBytes1000(plan.downloadSizeBytes) }),
+          ),
         );
       }
     }
@@ -883,13 +891,15 @@ function buildArtifactDownloadPlanLines(
     lines.push(
       chalk.dim(
         spinnerFrames[spinnerFrame] +
-          ` Resolving download plan... (${formatSizeBytes1000(plan.downloadSizeBytes)})`,
+          t(` Resolving download plan... ({p0})`, {
+            p0: formatSizeBytes1000(plan.downloadSizeBytes),
+          }),
       ),
     );
   } else {
     lines.push(
       chalk.dim(
-        spinnerFrames[(spinnerFrame + 5) % spinnerFrames.length] + " Resolving download plan...",
+        spinnerFrames[(spinnerFrame + 5) % spinnerFrames.length] + t(" Resolving download plan..."),
       ),
     );
   }
@@ -971,42 +981,51 @@ function maybeExitIfNothingToDownload({
   if (requestRefersToModel(downloadPlan, request)) {
     if (request.type === "artifact") {
       logger.infoWithoutPrefix(
-        text`
+        t(
+          text`
           Model already downloaded. To use, run:
-          ${chalk.yellowBright(`lms load ${quoteCommandArgument(commandTarget)}`)}
+          {p0}
         `,
+          { p0: chalk.yellowBright(`lms load ${quoteCommandArgument(commandTarget)}`) },
+        ),
       );
     } else {
       const rootNode = downloadPlan.nodes[0];
       if (rootNode === undefined || rootNode.type !== "model") {
         // Unexpected: direct planner model downloads should always resolve to a model root here.
-        logger.infoWithoutPrefix("Model already downloaded.");
+        logger.infoWithoutPrefix(t("Model already downloaded."));
       } else {
         const modelKey = rootNode.selected?.modelKey ?? rootNode.alreadyOwned?.modelKey;
         if (modelKey !== undefined) {
           logger.infoWithoutPrefix(
-            text`
+            t(
+              text`
               Model already downloaded. To use, run:
-              ${chalk.yellowBright(`lms load ${quoteCommandArgument(modelKey)}`)}
+              {p0}
             `,
+              { p0: chalk.yellowBright(`lms load ${quoteCommandArgument(modelKey)}`) },
+            ),
           );
         } else {
           // Unexpected: no-download direct model plans should usually expose the selected or
           // already-owned model key. Avoid printing a broken `lms load` hint when they do not.
-          logger.infoWithoutPrefix("Model already downloaded.");
+          logger.infoWithoutPrefix(t("Model already downloaded."));
         }
       }
     }
   } else {
-    logger.infoWithoutPrefix("Everything is already downloaded");
+    logger.infoWithoutPrefix(t("Everything is already downloaded"));
   }
 
   if (showSelectHint) {
     logger.infoWithoutPrefix(
-      text`
+      t(
+        text`
         If you wish to download a variant, run:
-        ${chalk.yellowBright(`lms get ${quoteCommandArgument(commandTarget)} --select`)}
+        {p0}
       `,
+        { p0: chalk.yellowBright(`lms get ${quoteCommandArgument(commandTarget)} --select`) },
+      ),
     );
   }
 
@@ -1025,28 +1044,30 @@ async function askToChooseDownloadAction({
   }
 
   const message =
-    downloadAction === "attachToExistingDownload" ? "Follow the download?" : "Start download?";
+    downloadAction === "attachToExistingDownload"
+      ? t("Follow the download?")
+      : t("Start download?");
   const choices: Array<{
     name: string;
     value: DownloadConfirmationAction;
     short: string;
   }> = [
     {
-      name: `Yes`,
+      name: t("Yes"),
       value: "download",
-      short: "yes",
+      short: t("yes"),
     },
     {
-      name: "No",
+      name: t("No"),
       value: "cancel",
-      short: "no",
+      short: t("no"),
     },
   ];
   if (canSelectVariants) {
     choices.push({
-      name: "Change variant selection",
+      name: t("Change variant selection"),
       value: "selectVariants",
-      short: "change variant selection",
+      short: t("change variant selection"),
     });
   }
   console.info();
@@ -1054,6 +1075,7 @@ async function askToChooseDownloadAction({
     select<DownloadConfirmationAction>(
       {
         message,
+        theme: searchTheme,
         loop: false,
         pageSize: choices.length,
         choices,
@@ -1160,12 +1182,16 @@ async function maybeHandleMissingRequestedQuant({
 
   const editableNodeIndexes = getEditableArtifactPlanModelNodeIndexes(downloadPlan);
   if (yes || editableNodeIndexes.length === 0) {
-    logger.error(`Cannot find variant ${requestedQuantName}.`);
+    logger.error(t(`Cannot find variant {p0}.`, { p0: requestedQuantName }));
     process.exit(1);
   }
 
   logger.infoWithoutPrefix(
-    chalk.red(`Cannot find variant ${requestedQuantName}, please select one from below.`),
+    chalk.red(
+      t("Cannot find variant {variant}, please select one from below.", {
+        variant: requestedQuantName,
+      }),
+    ),
   );
   await openArtifactDownloadSelectionEditor(downloadPlanner, {
     clearScreenBeforeSelection: false,

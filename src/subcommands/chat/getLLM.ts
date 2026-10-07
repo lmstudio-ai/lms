@@ -1,5 +1,6 @@
-import { type SimpleLogger } from "@lmstudio/lms-common";
+import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { type LLM, type LMStudioClient } from "@lmstudio/sdk";
+import { t } from "../../i18n/index.js";
 import { getOwnerNameFromModelName, loadModelWithProgress } from "./util.js";
 import { downloadArtifact } from "../get.js";
 import { createModelDisplayOptions } from "./index.js";
@@ -10,8 +11,9 @@ import { terminalSize } from "@lmstudio/lms-isomorphic";
 import fuzzy from "fuzzy";
 import { getCachedModelCatalogOrFetch } from "./catalogHelpers.js";
 import { getCliPref } from "../../cliPref.js";
+import { searchTheme } from "../../inquirerTheme.js";
 
-const MODEL_SELECTION_MESSAGE = "Select a model to chat with";
+const MODEL_SELECTION_MESSAGE = t("Select a model to chat with");
 
 export async function maybeGetLLM(
   client: LMStudioClient,
@@ -37,9 +39,14 @@ export async function maybeGetLLM(
   } catch (e) {
     if (!process.stdin.isTTY) {
       if (isModelRequested !== true) {
-        logger.error("No loaded model found, load with:\n       lms load");
+        logger.error(t("No loaded model found, load with:\n       lms load"));
       } else {
-        logger.error(`Model "${modelName}" not found, load with:\n       lms load ${modelName}`);
+        logger.error(
+          t(`Model "{p0}" not found, load with:\n       lms load {p1}`, {
+            p0: modelName,
+            p1: modelName,
+          }),
+        );
       }
       process.exit(1);
     }
@@ -56,10 +63,15 @@ export async function maybeGetLLM(
           // No op, will fall back to model selection below
         }
       } else {
-        logger.errorText`
-          Invalid model name '${modelName}'. Please provide a model name in the format
+        logger.error(
+          t(
+            text`
+          Invalid model name '{p0}'. Please provide a model name in the format
           'owner/model-name'.
-        `;
+        `,
+            { p0: modelName },
+          ),
+        );
         process.exit(1);
       }
     } else {
@@ -70,17 +82,22 @@ export async function maybeGetLLM(
       // select a model Instead, we exit with an error and tell them to load a model
       if (isModelRequested) {
         // User requested a specific model but it could not be loaded or downloaded
-        logger.errorText`
-          Unable to download or load the requested model '${modelName}'. Please check the model name
+        logger.error(
+          t(
+            text`
+          Unable to download or load the requested model '{p0}'. Please check the model name
           and try downloading it first with 'lms get'.
-        `;
+        `,
+            { p0: modelName },
+          ),
+        );
       } else {
         // No model requested and no model loaded
-        logger.error("No loaded model found, load with:\n       lms load");
+        logger.error(t("No loaded model found, load with:\n       lms load"));
       }
       process.exit(1);
     } else {
-      logger.error("Did not find the model. Please select a model to use:");
+      logger.error(t("Did not find the model. Please select a model to use:"));
     }
 
     // No model loaded, offer to download a model from the catalog or use existing downloaded
@@ -133,6 +150,7 @@ export async function maybeGetLLM(
       search<string>(
         {
           message: MODEL_SELECTION_MESSAGE,
+          theme: searchTheme,
           pageSize: terminalSize().rows - 4,
           source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
             void signal;
@@ -152,7 +170,7 @@ export async function maybeGetLLM(
     const selectedModel = modelsMap.find(modelEntry => modelEntry.name === selectedModelName);
 
     if (selectedModel === undefined) {
-      logger.error("No model selected, exiting.");
+      logger.error(t("No model selected, exiting."));
       process.exit(1);
     }
     if (!selectedModel.isDownloaded) {
@@ -162,10 +180,15 @@ export async function maybeGetLLM(
       } else {
         // It is not a model from the catalog, so must be a direct model which is not downloaded,
         // unexpected path as only cataloged models are offered to download
-        logger.errorText`
-            Model ${selectedModel.name} is not downloaded. Please download the model first with
+        logger.error(
+          t(
+            text`
+            Model {p0} is not downloaded. Please download the model first with
             'lms get'.
-          `;
+          `,
+            { p0: selectedModel.name },
+          ),
+        );
         process.exit(1);
       }
     }

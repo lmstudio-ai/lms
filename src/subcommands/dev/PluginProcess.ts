@@ -1,9 +1,10 @@
-import { SimpleLogger } from "@lmstudio/lms-common";
+import { SimpleLogger, text } from "@lmstudio/lms-common";
 import { type UtilBinary } from "@lmstudio/lms-es-plugin-runner";
 import { pluginManifestSchema } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient, type PluginManifest, type PluginRunnerType } from "@lmstudio/sdk";
 import { type ChildProcessWithoutNullStreams } from "child_process";
 import { readFile } from "fs/promises";
+import { t } from "../../i18n/index.js";
 
 type PluginProcessStatus = "stopped" | "starting" | "running" | "restarting";
 export interface PluginProcessOpts {
@@ -40,16 +41,18 @@ export abstract class PluginProcess {
       const manifestContent = await readFile(this.manifestFilePath, "utf-8");
       manifest = pluginManifestSchema.parse(JSON.parse(manifestContent));
     } catch (error) {
-      this.serverLogger.error(`Failed to read or parse manifest file.`, error);
+      this.serverLogger.error(t(`Failed to read or parse manifest file.`), error);
       this.status = "stopped";
       return;
     }
 
     if (manifest.runner !== this.runnerType) {
-      this.serverLogger.errorText`
+      this.serverLogger.error(
+        t(text`
         "lms dev" currently does not support changing the runner type dynamically. Please re-run
         "lms dev".
-      `;
+      `),
+      );
       this.status = "stopped";
       return;
     }
@@ -60,8 +63,8 @@ export abstract class PluginProcess {
       const identifier = `${manifest.owner}/${manifest.name}`;
       if (this.opts.noNotify !== true) {
         await this.client.system.notify({
-          title: `Plugin "${identifier}" started`,
-          description: "This plugin is run by lms CLI development server.",
+          title: t(`Plugin "{p0}" started`, { p0: identifier }),
+          description: t("This plugin is run by lms CLI development server."),
         });
       }
       this.firstTime = false;
@@ -91,12 +94,12 @@ export abstract class PluginProcess {
       await this.unregister?.();
       this.unregister = null;
       if (code !== null) {
-        this.serverLogger.warn(`Plugin process exited with code ${code}`);
+        this.serverLogger.warn(t(`Plugin process exited with code {p0}`, { p0: code }));
       } else {
         if (signal === "SIGKILL") {
           // OK to ignore because we killed it
         } else {
-          this.serverLogger.warn(`Plugin process exited with signal ${signal}`);
+          this.serverLogger.warn(t(`Plugin process exited with signal {p0}`, { p0: signal }));
         }
       }
       if (this.status === "restarting") {

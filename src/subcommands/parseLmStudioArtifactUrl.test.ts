@@ -1,4 +1,5 @@
 import { tryParseLmStudioArtifactUrl } from "./parseLmStudioArtifactUrl.js";
+import { t } from "../i18n/index.js";
 
 describe("tryParseLmStudioArtifactUrl", () => {
   it("parses the current lmstudio.ai models URL format", () => {
@@ -35,12 +36,14 @@ describe("tryParseLmStudioArtifactUrl", () => {
   it("rejects non-https lmstudio.ai URLs", () => {
     expect(() =>
       tryParseLmStudioArtifactUrl("http://lmstudio.ai/models/nvidia/nemotron-3-super"),
-    ).toThrow("Only https://lmstudio.ai URLs are supported.");
+    ).toThrow(t("Only https://lmstudio.ai URLs are supported."));
   });
 
   it("rejects unexpected lmstudio.ai paths", () => {
     expect(() => tryParseLmStudioArtifactUrl("https://lmstudio.ai/models/nvidia")).toThrow(
-      "Invalid LM Studio artifact URL. Expected https://lmstudio.ai/models/owner/name or https://lmstudio.ai/owner/name.",
+      t(
+        "Invalid LM Studio artifact URL. Expected https://lmstudio.ai/models/owner/name or https://lmstudio.ai/owner/name.",
+      ),
     );
   });
 });

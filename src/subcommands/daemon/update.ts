@@ -1,6 +1,7 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { spawn, spawnSync } from "child_process";
 import * as readline from "readline";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 import { readInstallLocationOrExit } from "./shared.js";
 
@@ -23,12 +24,14 @@ function checkLinuxLibatomic(): LibatomicCheckResult {
     }
     if (result.status !== 0) {
       const statusDescription =
-        result.signal !== null ? `signal ${result.signal}` : `exit code ${result.status}`;
+        result.signal !== null
+          ? `signal ${result.signal}`
+          : t(`exit code {p0}`, { p0: result.status });
       const stderr = (result.stderr ?? "").trim();
       const details = stderr.length > 0 ? `: ${stderr}` : "";
       return {
         status: "ldconfig-unavailable",
-        error: `"ldconfig -p" failed with ${statusDescription}${details}`,
+        error: t(`"ldconfig -p" failed with {p0}{p1}`, { p0: statusDescription, p1: details }),
       };
     }
     return (result.stdout ?? "").includes("libatomic.so.1")
@@ -41,9 +44,9 @@ function checkLinuxLibatomic(): LibatomicCheckResult {
 
 const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
   .name("update")
-  .description("Update the llmster daemon")
-  .option("--beta", "Use the beta channel for the daemon upgrade")
-  .option("--channel <name>", "Use the specified channel for the daemon upgrade")
+  .description(t("Update the llmster daemon"))
+  .option("--beta", t("Use the beta channel for the daemon upgrade"))
+  .option("--channel <name>", t("Use the specified channel for the daemon upgrade"))
   .action(async (options: DaemonUpdateCommandOptions) => {
     const logger = createLogger(options);
 
@@ -62,17 +65,23 @@ const updateDaemon = new Command<[], DaemonUpdateCommandOptions>()
     if (process.platform === "linux") {
       const libatomicCheck = checkLinuxLibatomic();
       if (libatomicCheck.status === "ldconfig-unavailable") {
-        logger.info(`Could not update: "ldconfig" must be available on your PATH before updating.
+        logger.info(
+          t(
+            `Could not update: "ldconfig" must be available on your PATH before updating.
 
 Please ensure ldconfig is installed and in your PATH, then run this again:
 
       lms daemon update
 
-Error details: ${libatomicCheck.error}
-`);
+Error details: {p0}
+`,
+            { p0: libatomicCheck.error },
+          ),
+        );
         process.exit(1);
       } else if (libatomicCheck.status === "no-libatomic") {
-        logger.info(`📣 Notice: One-time dependency update needed.
+        logger.info(
+          t(`📣 Notice: One-time dependency update needed.
 
 The next version of llmster requires "libatomic", which is not currently installed on your system.
 
@@ -84,12 +93,15 @@ The next version of llmster requires "libatomic", which is not currently install
 2. Afterwards, run this again:
 
       lms daemon update
-`);
+`),
+        );
         process.exit(1);
       }
     }
 
-    logger.info(`Starting llmster upgrade using ${installLocation.executablePath}...`);
+    logger.info(
+      t(`Starting llmster upgrade using {p0}...`, { p0: installLocation.executablePath }),
+    );
 
     // On Windows, we will start the updater in a new window to prevent issues with lms.exe being
     // used.
@@ -101,10 +113,13 @@ The next version of llmster requires "libatomic", which is not currently install
       });
 
       await new Promise<void>(resolve => {
-        rl.question("We will run the updater in a new terminal. Hit <ENTER> to continue.", () => {
-          rl.close();
-          resolve();
-        });
+        rl.question(
+          t("We will run the updater in a new terminal. Hit <ENTER> to continue."),
+          () => {
+            rl.close();
+            resolve();
+          },
+        );
       });
 
       // Use cmd.exe to start the process in a new window
@@ -129,7 +144,7 @@ The next version of llmster requires "libatomic", which is not currently install
         process.exit(code === null ? 1 : code);
       });
       child.on("error", error => {
-        logger.error("Failed to launch llmster for upgrade:", error);
+        logger.error(t("Failed to launch llmster for upgrade:"), error);
         process.exit(1);
       });
     }

@@ -1,6 +1,14 @@
 /**
  * ANSI color codes and theme utilities for inquirer prompts
+ *
+ * The prompts ship with English labels baked into the library (`keysHelpTip` renders
+ * `↑↓ navigate • ⏎ select`, and `style.error` renders the no-results message), and neither is a
+ * documented option — both are only reachable through the theme, which is what this module
+ * provides. Every label therefore goes through `t()`, so English output stays byte-identical.
  */
+
+import chalk from "chalk";
+import { t } from "./i18n/index.js";
 
 // ANSI color codes
 export const ANSI_TEAL = "\x1b[36m";
@@ -31,6 +39,16 @@ export const highlightSelectedText = (value: string) => {
 export const searchTheme = {
   style: {
     highlight: highlightSelectedText,
+    // Same shape and colours as the library default; only the action labels are localized.
+    // They are prose, unlike `↑↓` / `⏎` / `(Y/n)`, which name the keys the user must press and
+    // therefore stay verbatim.
+    keysHelpTip: (keys: Array<[string, string]>) =>
+      keys
+        .map(([key, action]) => `${chalk.bold(key)} ${chalk.dim(t(action))}`)
+        .join(chalk.dim(" • ")),
+    // The library hard-codes `'No results found'` here; `t()` passes any other message — for
+    // example a validator's already-localized text — straight through.
+    error: (text: string) => chalk.red(`> ${t(text)}`),
   },
 };
 

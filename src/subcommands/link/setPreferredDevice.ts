@@ -4,9 +4,11 @@ import { text } from "@lmstudio/lms-common";
 import { terminalSize } from "@lmstudio/lms-isomorphic";
 import chalk from "chalk";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { runPromptWithExitHandling } from "../../prompt.js";
 import { type LinkCommandOptions } from "./shared.js";
+import { searchTheme } from "../../inquirerTheme.js";
 
 interface PreferredDeviceOption {
   deviceIdentifier: string;
@@ -17,8 +19,8 @@ interface PreferredDeviceOption {
 
 export const setPreferredDevice = new Command<[], LinkCommandOptions>()
   .name("set-preferred-device")
-  .description("Set the preferred LM Link device for model resolution")
-  .argument("[deviceIdentifier]", "Device identifier to set as preferred");
+  .description(t("Set the preferred LM Link device for model resolution"))
+  .argument("[deviceIdentifier]", t("Device identifier to set as preferred"));
 
 addCreateClientOptions(setPreferredDevice);
 addLogLevelOptions(setPreferredDevice);
@@ -31,16 +33,26 @@ setPreferredDevice.action(
     const lmLinkStatus = await client.repository.lmLink.status();
 
     if (lmLinkStatus.issues.includes("notLoggedIn") === true) {
-      logger.infoText`
-      LM Link not running because you are not logged in. Use ${chalk.cyan("lms login")} to login.
-    `;
+      logger.info(
+        t(
+          text`
+      LM Link not running because you are not logged in. Use {p0} to login.
+    `,
+          { p0: chalk.cyan("lms login") },
+        ),
+      );
       return;
     }
 
     if (lmLinkStatus.issues.includes("noAccess") === true) {
-      logger.infoText`
-      You do not have access to LM Link. Visit ${chalk.cyan("https://lmstudio.ai/lm-link")} to request access.
-    `;
+      logger.info(
+        t(
+          text`
+      You do not have access to LM Link. Visit {p0} to request access.
+    `,
+          { p0: chalk.cyan("https://lmstudio.ai/lm-link") },
+        ),
+      );
       return;
     }
 
@@ -67,7 +79,7 @@ setPreferredDevice.action(
     }
 
     if (deviceOptions.length === 0) {
-      logger.error("No devices are available to set as preferred.");
+      logger.error(t("No devices are available to set as preferred."));
       return;
     }
 
@@ -88,8 +100,8 @@ setPreferredDevice.action(
     );
 
     if (matchingOption === undefined) {
-      logger.error(`Unknown device identifier "${resolvedIdentifier}".`);
-      logger.info("Available device identifiers:");
+      logger.error(t(`Unknown device identifier "{p0}".`, { p0: resolvedIdentifier }));
+      logger.info(t("Available device identifiers:"));
       for (const option of deviceOptions) {
         logger.info(`  - ${option.deviceIdentifier} (${option.deviceName})`);
       }
@@ -99,13 +111,21 @@ setPreferredDevice.action(
     await client.repository.lmLink.setPreferredDevice(matchingOption.deviceIdentifier);
 
     logger.info(
-      `Updated preferred device to "${matchingOption.deviceName}" (${matchingOption.deviceIdentifier}).`,
+      t(`Updated preferred device to "{p0}" ({p1}).`, {
+        p0: matchingOption.deviceName,
+        p1: matchingOption.deviceIdentifier,
+      }),
     );
 
     if (lmLinkStatus.issues.includes("deviceDisabled") === true) {
-      logger.infoText`
-      Note: LM Link is disabled. Run ${chalk.cyan("lms link enable")} to enable it.
-    `;
+      logger.info(
+        t(
+          text`
+      Note: LM Link is disabled. Run {p0} to enable it.
+    `,
+          { p0: chalk.cyan("lms link enable") },
+        ),
+      );
     }
   },
 );
@@ -122,10 +142,12 @@ async function promptForDeviceIdentifier({
   const isStdoutInteractive = process.stdout.isTTY === true;
   const isStdinInteractive = process.stdin.isTTY === true;
   if (isStdoutInteractive === false || isStdinInteractive === false) {
-    console.info(text`
+    console.info(
+      t(text`
       Cannot prompt for a preferred device in a non-interactive environment.
       Re-run with a device identifier argument.
-    `);
+    `),
+    );
     return null;
   }
 
@@ -134,13 +156,14 @@ async function promptForDeviceIdentifier({
   return await runPromptWithExitHandling(() =>
     select<string>(
       {
-        message: chalk.green("Select a preferred device") + chalk.dim(" |"),
+        message: chalk.green(t("Select a preferred device")) + chalk.dim(" |"),
+        theme: searchTheme,
         loop: false,
         pageSize,
         choices: deviceOptions.map(option => {
           let label = option.deviceName;
           if (option.kind === "local") {
-            label += chalk.dim(" (this device)");
+            label += chalk.dim(t(" (this device)"));
           }
           if (option.statusLabel !== null) {
             label += chalk.dim(` (${option.statusLabel})`);
@@ -149,7 +172,7 @@ async function promptForDeviceIdentifier({
             preferredDeviceIdentifier !== undefined &&
             preferredDeviceIdentifier === option.deviceIdentifier
           ) {
-            label += chalk.green(" (preferred)");
+            label += chalk.green(t(" (preferred)"));
           }
           return {
             name: label,

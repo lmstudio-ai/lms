@@ -17,6 +17,8 @@ import { homedir } from "os";
 import { basename, dirname, join } from "path";
 import { z } from "zod";
 import { getCliPref } from "../cliPref.js";
+import { localizeCommanderError, markCustomErrorOutput } from "../commanderErrors.js";
+import { t } from "../i18n/index.js";
 import { defaultModelsFolder } from "../lmstudioPaths.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
@@ -28,7 +30,7 @@ import { fuzzyHighlightOptions, searchTheme } from "../inquirerTheme.js";
 function parseUserRepo(value: string): [string, string] {
   const parts = value.split("/");
   if (parts.length !== 2) {
-    throw new InvalidArgumentError("Must be user and repo separated by a slash.");
+    throw new InvalidArgumentError(t("Must be user and repo separated by a slash."));
   }
   return parts as [string, string];
 }
@@ -38,12 +40,12 @@ function parseUserRepo(value: string): [string, string] {
  */
 function validateFilePath(filePath: string): void {
   if (!existsSync(filePath)) {
-    throw new InvalidArgumentError(`File does not exist`);
+    throw new InvalidArgumentError(t(`File does not exist`));
   }
 
   const stats = statSync(filePath);
   if (!stats.isFile()) {
-    throw new InvalidArgumentError(`Path is not a file`);
+    throw new InvalidArgumentError(t(`Path is not a file`));
   }
 }
 
@@ -57,74 +59,81 @@ type ImportCommandOptions = OptionValues &
     dryRun?: boolean;
   };
 
-const missingFilePathHelpMessage = text`
+const missingFilePathHelpMessage = t(
+  text`
   Provide the path to the model file you downloaded (e.g. .gguf).
 
   Example:
 
-      ${chalk.yellow("lms import ~/Downloads/mistral-7b-instruct.Q4_K_M.gguf")}
-`;
+      {p0}
+`,
+  { p0: chalk.yellow("lms import ~/Downloads/mistral-7b-instruct.Q4_K_M.gguf") },
+);
 
 const importCommand = new Command<[], ImportCommandOptions>()
   .name("import")
-  .description("Import a model file into LM Studio")
-  .argument("<file-path>", "Path to the model file to import", value => {
+  .description(t("Import a model file into LM Studio"))
+  .argument("<file-path>", t("Path to the model file to import"), value => {
     validateFilePath(value);
     return value;
   })
   .option(
     "-y, --yes",
-    text`
+    t(text`
       Automatically approve all prompts. Will also attempt to automatically resolve the
       user and repository from the file name.
-    `,
+    `),
   )
   .option(
     "--user-repo <user/repo>",
-    text`
+    t(text`
       Manually provide the user and repository in the format "user/repo". Specifying this will
       skip prompts about how to categorize the model file.
-    `,
+    `),
     parseUserRepo,
   )
   .option(
     "-c, --copy",
-    text`
+    t(text`
       Copy the file instead of moving it. This is useful when you want to keep the original file
       in place.
-    `,
+    `),
   )
   .option(
     "-L, --hard-link",
-    text`
+    t(text`
       Create a hard link instead of moving or copying the file. This is useful when you want to
       keep the original file in place.
-    `,
+    `),
   )
   .option(
     "-l, --symbolic-link",
-    text`
+    t(text`
       Create a symbolic link instead of moving or copying the file. This is useful when you want
       to keep the original file in place.
-    `,
+    `),
   )
   .option(
     "--dry-run",
-    text`
+    t(text`
       Do not actually perform the import, just show what would be done.
-    `,
+    `),
   );
 
+// commander's own wording is localized by our handler; this command additionally appends the
+// missing-path guidance, so it must keep control of the write.
+markCustomErrorOutput(importCommand);
 importCommand.configureOutput({
   outputError: (str, write) => {
+    const localized = localizeCommanderError(str);
     if (str.startsWith("error: missing required argument 'file-path'")) {
       write(
-        `${str.trimEnd()}\n\n${missingFilePathHelpMessage}\n\n${chalk.blue(
-          "Run 'lms import -h' for more info.",
+        `${localized.trimEnd()}\n\n${missingFilePathHelpMessage}\n\n${chalk.blue(
+          t("Run 'lms import -h' for more info."),
         )}\n\n`,
       );
     } else {
-      write(str);
+      write(localized);
     }
   },
 });
@@ -151,8 +160,8 @@ importCommand.action(async (path, options: ImportCommandOptions) => {
   if ((isCopy ? 1 : 0) + (isHardLink ? 1 : 0) + (isSymbolicLink ? 1 : 0) > 1) {
     logger.error(
       makeTitledPrettyError(
-        "Invalid Usage",
-        "Cannot specify more than one of --copy, --hard-link, or --symbolic-link",
+        t("Invalid Usage"),
+        t("Cannot specify more than one of --copy, --hard-link, or --symbolic-link"),
       ),
     );
     process.exit(1);
@@ -178,7 +187,7 @@ importCommand.action(async (path, options: ImportCommandOptions) => {
   logger.debug("Target path", targetPath);
   try {
     await access(targetPath);
-    logger.error("Target file already exists:", targetPath);
+    logger.error(t("Target file already exists:"), targetPath);
     process.exit(1);
   } catch (error) {
     /* ignore */
@@ -186,15 +195,15 @@ importCommand.action(async (path, options: ImportCommandOptions) => {
 
   if (isDryRun === true) {
     if (move) {
-      logger.info("Would move the file to", targetPath);
+      logger.info(t("Would move the file to"), targetPath);
     } else if (isCopy === true) {
-      logger.info("Would copy the file to", targetPath);
+      logger.info(t("Would copy the file to"), targetPath);
     } else if (isHardLink === true) {
-      logger.info("Would create a hard link at", targetPath);
+      logger.info(t("Would create a hard link at"), targetPath);
     } else if (isSymbolicLink === true) {
-      logger.info("Would create a symbolic link at", targetPath);
+      logger.info(t("Would create a symbolic link at"), targetPath);
     }
-    logger.info(`But not actually doing it because of ${chalk.yellow("--dry-run")}`);
+    logger.info(t(`But not actually doing it because of {p0}`, { p0: chalk.yellow("--dry-run") }));
   } else {
     if (move) {
       await importViaMove(logger, path, targetPath);
@@ -219,7 +228,7 @@ importCommand.action(async (path, options: ImportCommandOptions) => {
 async function importViaMove(logger: SimpleLogger, sourcePath: string, targetPath: string) {
   await mkdir(dirname(targetPath), { recursive: true });
   await rename(sourcePath, targetPath);
-  logger.info("File moved to", targetPath);
+  logger.info(t("File moved to"), targetPath);
 }
 
 /**
@@ -233,7 +242,7 @@ async function importViaMove(logger: SimpleLogger, sourcePath: string, targetPat
 async function importViaCopy(logger: SimpleLogger, sourcePath: string, targetPath: string) {
   await mkdir(dirname(targetPath), { recursive: true });
   await copyFile(sourcePath, targetPath);
-  logger.info("File copied to", targetPath);
+  logger.info(t("File copied to"), targetPath);
 }
 
 /**
@@ -247,7 +256,7 @@ async function importViaCopy(logger: SimpleLogger, sourcePath: string, targetPat
 async function importViaHardLink(logger: SimpleLogger, sourcePath: string, targetPath: string) {
   await mkdir(dirname(targetPath), { recursive: true });
   await link(sourcePath, targetPath);
-  logger.info("Hard link created at", targetPath);
+  logger.info(t("Hard link created at"), targetPath);
 }
 
 /**
@@ -261,7 +270,7 @@ async function importViaHardLink(logger: SimpleLogger, sourcePath: string, targe
 async function importViaSymbolicLink(logger: SimpleLogger, sourcePath: string, targetPath: string) {
   await mkdir(dirname(targetPath), { recursive: true });
   await symlink(sourcePath, targetPath);
-  logger.info("Symbolic link created at", targetPath);
+  logger.info(t("Symbolic link created at"), targetPath);
 }
 
 /**
@@ -275,22 +284,36 @@ async function importViaSymbolicLink(logger: SimpleLogger, sourcePath: string, t
 async function validateModelNameOrWarn(logger: SimpleLogger, path: string, yes: boolean) {
   if (!doesFileNameIndicateModel(path)) {
     if (yes) {
-      logger.warn("The file name does not look like a model file. This may not work.");
-      logger.warn(`Model files usually have extensions: ${modelExtensions.join(", ")}`);
+      logger.warn(t("The file name does not look like a model file. This may not work."));
+      logger.warn(
+        t(`Model files usually have extensions: {p0}`, { p0: modelExtensions.join(", ") }),
+      );
     } else {
-      process.stderr.write(text`
-        ${"\n"}${chalk.yellow.underline(" File does not look like a model file ")}
+      process.stderr.write(
+        t(
+          text`
+        {p0}{p1}
 
         This file does not look like a model file:
 
-            ${chalk.dim(path)}
+            {p2}
 
-        Model files usually have extension: ${modelExtensions.join(", ")}${"\n\n"}
-      `);
+        Model files usually have extension: {p3}{p4}
+      `,
+          {
+            p0: "\n",
+            p1: chalk.yellow.underline(" " + t("File does not look like a model file") + " "),
+            p2: chalk.dim(path),
+            p3: modelExtensions.join(", "),
+            p4: "\n\n",
+          },
+        ),
+      );
       const shouldContinue = await runPromptWithExitHandling(() =>
         confirm(
           {
-            message: chalk.green("Do you wish to continue? (Not recommended)"),
+            message: chalk.green(t("Do you wish to continue? (Not recommended)")),
+            transformer: answer => (answer ? t("Yes") : t("No")),
             default: false,
           },
           { output: process.stderr },
@@ -310,11 +333,13 @@ async function validateModelNameOrWarn(logger: SimpleLogger, path: string, yes: 
  */
 async function maybeWarnAboutWindowsSymlink(logger: SimpleLogger) {
   if (process.platform === "win32") {
-    logger.warnText`
+    logger.warn(
+      t(text`
       Due to Windows usually require administrator privileges to create symbolic links, this
       operation may fail.
-    `;
-    logger.warn("You can try creating hard links instead. (Use the --hard-link flag)");
+    `),
+    );
+    logger.warn(t("You can try creating hard links instead. (Use the --hard-link flag)"));
   }
 }
 
@@ -336,7 +361,7 @@ function getUserAppDataPath() {
         ? join(homedir(), ".config")
         : process.env.XDG_CONFIG_HOME;
     default:
-      throw new Error("Unsupported platform");
+      throw new Error(t("Unsupported platform"));
   }
 }
 
@@ -373,7 +398,7 @@ async function resolveModelsFolderPath(logger: SimpleLogger) {
   let modelsFolderPath = defaultModelsFolder;
   if (settingsJsonPath === null) {
     logger.warn(
-      "Could not locate LM Studio configuration file, using default path:",
+      t("Could not locate LM Studio configuration file, using default path:"),
       modelsFolderPath,
     );
   } else {
@@ -386,7 +411,7 @@ async function resolveModelsFolderPath(logger: SimpleLogger) {
       }
     } catch (error) {
       logger.warn(
-        "Could not parse LM Studio configuration file, using default path:",
+        t("Could not parse LM Studio configuration file, using default path:"),
         modelsFolderPath,
       );
       logger.debug(error);
@@ -409,33 +434,53 @@ async function warnAboutMove(logger: SimpleLogger, yes: boolean, modelsFolderPat
     return;
   }
   if (yes) {
-    logger.warn("Warning about move suppressed by the --yes flag.");
+    logger.warn(t("Warning about move suppressed by the --yes flag."));
   }
   logger.debug("Asking user to confirm moving the file");
-  process.stderr.write(text`
-    ${"\n"}${chalk.green.underline(" Importing model file into LM Studio ")}
+  process.stderr.write(
+    t(
+      text`
+    {p0}{p1}
 
-    By default, ${chalk.yellow("lms import")} will ${chalk.cyan("move")} the file to LM
+    By default, {p2} will {p3} the file to LM
     Studio's models folder:
 
-        ${chalk.dim(modelsFolderPath)}
+        {p4}
 
-    If you want to ${chalk.cyan("copy")} the file instead, use the ${chalk.yellow("--copy")}
+    If you want to {p5} the file instead, use the {p6}
     flag.
 
-    If you want to create a ${chalk.cyan("symbolic link")} instead, use the
-    ${chalk.yellow("--symbolic-link")} flag.
+    If you want to create a {p7} instead, use the
+    {p8} flag.
 
-    If you want to create a ${chalk.cyan("hard link")} instead, use the
-    ${chalk.yellow("--hard-link")} flag.
+    If you want to create a {p9} instead, use the
+    {p10} flag.
 
     This message will only show up once. You can always look up the usage via the
-    ${chalk.yellow("--help")} flag.${"\n\n"}
-  `);
+    {p11} flag.{p12}
+  `,
+      {
+        p0: "\n",
+        p1: chalk.green.underline(" " + t("Importing model file into LM Studio") + " "),
+        p2: chalk.yellow("lms import"),
+        p3: chalk.cyan(t("move")),
+        p4: chalk.dim(modelsFolderPath),
+        p5: chalk.cyan(t("copy")),
+        p6: chalk.yellow("--copy"),
+        p7: chalk.cyan(t("symbolic link")),
+        p8: chalk.yellow("--symbolic-link"),
+        p9: chalk.cyan(t("hard link")),
+        p10: chalk.yellow("--hard-link"),
+        p11: chalk.yellow("--help"),
+        p12: "\n\n",
+      },
+    ),
+  );
   const shouldContinue = await runPromptWithExitHandling(() =>
     confirm(
       {
-        message: chalk.green("Do you wish to continue?"),
+        message: chalk.green(t("Do you wish to continue?")),
+        transformer: answer => (answer ? t("Yes") : t("No")),
         default: true,
       },
       { output: process.stderr },
@@ -479,19 +524,19 @@ function getDefaultUserName() {
  */
 function isValidFolderName(fieldName: string, value: string): true | string {
   if (value === "") {
-    return `${fieldName} cannot be empty`;
+    return t(`{p0} cannot be empty`, { p0: fieldName });
   }
   if (value.length > 100) {
-    return `${fieldName} is too long`;
+    return t(`{p0} is too long`, { p0: fieldName });
   }
   if (value.startsWith(".") || value.endsWith(".")) {
-    return `${fieldName} cannot start or end with "."`;
+    return t(`{p0} cannot start or end with "."`, { p0: fieldName });
   }
   if (value.trim() !== value) {
-    return `${fieldName} cannot have leading or trailing spaces`;
+    return t(`{p0} cannot have leading or trailing spaces`, { p0: fieldName });
   }
   if (/[/<>:"\\|?*]/.test(value)) {
-    return `${fieldName} cannot contain special characters`;
+    return t(`{p0} cannot contain special characters`, { p0: fieldName });
   }
   return true;
 }
@@ -512,12 +557,12 @@ async function resolveUserRepo(
 ): Promise<[string, string]> {
   const fileName = basename(path);
   if (yes) {
-    logger.info("Attempting to find the model on Hugging Face...");
+    logger.info(t("Attempting to find the model on Hugging Face..."));
     const candidates = await findCandidateHuggingFaceUserRepos(logger, fileName);
     if (candidates.length > 0) {
       return candidates[0];
     }
-    logger.info("Cannot find the model on Hugging Face, use default naming...");
+    logger.info(t("Cannot find the model on Hugging Face, use default naming..."));
 
     // Use user name as user
     // Use file name without extension as repo
@@ -526,27 +571,37 @@ async function resolveUserRepo(
   const resolutionMethod: ResolutionMethod = await runPromptWithExitHandling(() =>
     select<ResolutionMethod>(
       {
-        message: chalk.green("Choose categorization option"),
+        message: chalk.green(t("Choose categorization option")),
+        theme: searchTheme,
         choices: [
           {
-            name: text`
+            name: t(
+              text`
               Auto search Hugging Face
-              ${chalk.dim("(Recommended for models downloaded from Hugging Face)")}
+              {p0}
             `,
+              { p0: chalk.dim(t("(Recommended for models downloaded from Hugging Face)")) },
+            ),
             value: "huggingFace",
           },
           {
-            name: text`
+            name: t(
+              text`
               Interactive import
-              ${chalk.dim("(Recommended for custom models)")}
+              {p0}
             `,
+              { p0: chalk.dim(t("(Recommended for custom models)")) },
+            ),
             value: "custom",
           },
           {
-            name: text`
+            name: t(
+              text`
               Don't categorize
-              ${chalk.dim("(will put the model under imported-models/uncategorized)")}
+              {p0}
             `,
+              { p0: chalk.dim(t("(will put the model under imported-models/uncategorized)")) },
+            ),
             value: "uncategorized",
           },
         ],
@@ -573,7 +628,7 @@ async function resolveByAskUserRepo(logger: SimpleLogger, path: string): Promise
   const user = await runPromptWithExitHandling(() =>
     promptInput(
       {
-        message: chalk.green("Who is the creator of the model?"),
+        message: chalk.green(t("Who is the creator of the model?")),
         default: getDefaultUserName(),
         validate: (inputValue: string) => isValidFolderName("User", inputValue),
       },
@@ -583,7 +638,7 @@ async function resolveByAskUserRepo(logger: SimpleLogger, path: string): Promise
   const repo = await runPromptWithExitHandling(() =>
     promptInput(
       {
-        message: chalk.green("What is the model name?"),
+        message: chalk.green(t("What is the model name?")),
         default: autoNameRepo(basename(path)),
         validate: (inputValue: string) => isValidFolderName("Repository", inputValue),
       },
@@ -606,21 +661,23 @@ async function resolveByHuggingFaceInteractive(
   logger: SimpleLogger,
   fileName: string,
 ): Promise<[string, string]> {
-  logger.info("Searching for the model on Hugging Face using the file name...");
+  logger.info(t("Searching for the model on Hugging Face using the file name..."));
   const candidates = (await findCandidateHuggingFaceUserRepos(logger, fileName)).slice(0, 25);
   if (candidates.length === 0) {
-    logger.warnText`
+    logger.warn(
+      t(text`
       Cannot find the model on Hugging Face, you need to manually specify the user/repo.
-    `;
+    `),
+    );
     return await resolveByAskUserRepo(logger, fileName);
   }
   const candidatesJoined = candidates.map(([user, repo]) => `${user}/${repo}`);
-  logger.info("Found the following repositories on Hugging Face containing this file:");
+  logger.info(t("Found the following repositories on Hugging Face containing this file:"));
   const pageSize = terminalSize().rows - 3;
   const selected = await runPromptWithExitHandling(() =>
     search<[string, string] | null>(
       {
-        message: chalk.green("Please select the correct one") + chalk.dim(" |"),
+        message: chalk.green(t("Please select the correct onet(")) + chalk.dim(") |"),
         pageSize,
         theme: searchTheme,
         source: async (inputValue: string | undefined, { signal }: { signal: AbortSignal }) => {
@@ -634,7 +691,11 @@ async function resolveByHuggingFaceInteractive(
                 name: option.string,
               };
             }),
-            { value: null, short: "None of the above", name: "None of the above" },
+            {
+              value: null,
+              short: t("None of the above"),
+              name: t("None of the above"),
+            },
           ];
         },
       },
@@ -642,7 +703,7 @@ async function resolveByHuggingFaceInteractive(
     ),
   );
   if (selected === null) {
-    logger.info("Please specify the user and repository manually.");
+    logger.info(t("Please specify the user and repository manually."));
     return await resolveByAskUserRepo(logger, fileName);
   } else {
     return selected;
@@ -704,7 +765,7 @@ async function queryHuggingFace(logger: SimpleLogger, term: string) {
   ).then(response => response.json());
   const result = searchResultSchema.safeParse(json);
   if (!result.success) {
-    logger.warn("Failed to parse Hugging Face search result");
+    logger.warn(t("Failed to parse Hugging Face search result"));
     logger.debug(result.error);
     return [];
   } else {

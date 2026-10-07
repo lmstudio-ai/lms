@@ -1,6 +1,7 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import { existsSync, readFileSync } from "fs";
 import { dirname } from "path";
+import { t } from "../../i18n/index.js";
 import { llmsterInstallLocationFilePath } from "../../lmstudioPaths.js";
 
 export interface InstallLocationFileContent {
@@ -20,7 +21,7 @@ export function readInstallLocationOrExit(logger: SimpleLogger): InstallLocation
   const installLocationDescription = "llmster-install-location.json";
 
   if (existsSync(installLocationPath) === false) {
-    logger.error(`Cannot find install location file at ${installLocationPath}.`);
+    logger.error(t(`Cannot find install location file at {p0}.`, { p0: installLocationPath }));
     process.exit(1);
   }
 
@@ -33,7 +34,10 @@ export function readInstallLocationOrExit(logger: SimpleLogger): InstallLocation
     }
   } catch (error) {
     logger.error(
-      `Failed to read or parse install location from ${installLocationDescription} at ${installLocationPath}:`,
+      t(`Failed to read or parse install location from {p0} at {p1}:`, {
+        p0: installLocationDescription,
+        p1: installLocationPath,
+      }),
       error as Error,
     );
     process.exit(1);
@@ -45,7 +49,10 @@ export function readInstallLocationOrExit(logger: SimpleLogger): InstallLocation
     parsedInstallLocation.path.length === 0
   ) {
     logger.error(
-      `Install location file ${installLocationDescription} at ${installLocationPath} does not contain a valid executable path.`,
+      t(`Install location file {p0} at {p1} does not contain a valid executable path.`, {
+        p0: installLocationDescription,
+        p1: installLocationPath,
+      }),
     );
     process.exit(1);
   }

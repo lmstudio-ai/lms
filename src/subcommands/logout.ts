@@ -1,6 +1,7 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { text } from "@lmstudio/lms-common";
 import { addCreateClientOptions, createClient, type CreateClientArgs } from "../createClient.js";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { Spinner } from "../Spinner.js";
 import { normalizeAuthenticationStatus } from "../authenticationStatusUtils.js";
@@ -9,7 +10,7 @@ type LogoutCommandOptions = OptionValues & CreateClientArgs & LogLevelArgs;
 
 const logoutCommand = new Command<[], LogoutCommandOptions>()
   .name("logout")
-  .description(text`Log out of LM Studio`);
+  .description(t(text`Log out of LM Studio`));
 
 addCreateClientOptions(logoutCommand);
 addLogLevelOptions(logoutCommand);
@@ -24,7 +25,7 @@ logoutCommand.action(async options => {
 
   switch (authenticationStatus.type) {
     case "none":
-      logger.info("You were already logged out.");
+      logger.info(t("You were already logged out."));
       return;
     case "computeDevice":
       break;
@@ -32,14 +33,14 @@ logoutCommand.action(async options => {
       break;
     default: {
       const exhaustiveCheck: never = authenticationStatus;
-      throw new Error(`Unexpected authentication status: ${exhaustiveCheck}`);
+      throw new Error(t(`Unexpected authentication status: {p0}`, { p0: exhaustiveCheck }));
     }
   }
 
   const shouldShowSpinner =
     process.stdout.isTTY && options.logLevel !== "none" && options.quiet !== true;
 
-  const spinner = shouldShowSpinner ? new Spinner("Logging out...") : null;
+  const spinner = shouldShowSpinner ? new Spinner(t("Logging out...")) : null;
 
   const sigintHandler = () => {
     spinner?.stopIfNotStopped();
@@ -59,10 +60,10 @@ logoutCommand.action(async options => {
     }
   }
   if (authenticationStatus.type === "computeDevice") {
-    logger.info("Successfully logged out and removed compute-device identity.");
+    logger.info(t("Successfully logged out and removed compute-device identity."));
     return;
   }
-  logger.info("Successfully logged out.");
+  logger.info(t("Successfully logged out."));
 });
 
 export const logout = logoutCommand;

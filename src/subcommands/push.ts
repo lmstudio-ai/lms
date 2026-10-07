@@ -30,13 +30,14 @@ import {
   recursiveFindAncestorFolderWithFile,
 } from "../findProjectFolder.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 const overridesParser = (str: string): any => {
   try {
     return JSON.parse(str);
   } catch (error) {
-    throw new InvalidArgumentError("Invalid JSON string");
+    throw new InvalidArgumentError(t("Invalid JSON string"));
   }
 };
 
@@ -52,34 +53,34 @@ type PushCommandOptions = OptionValues &
 
 const pushCommand = new Command<[], PushCommandOptions>()
   .name("push")
-  .description("Uploads the artifact in the current folder to LM Studio Hub")
+  .description(t("Uploads the artifact in the current folder to LM Studio Hub"))
   .option(
     "--description <value>",
-    text`
+    t(text`
       Description of the artifact. If provided, will overwrite the existing description.
-    `,
+    `),
   )
-  .addOption(new Option("--overrides <value>", "JSON string").argParser(overridesParser))
+  .addOption(new Option("--overrides <value>", t("JSON string")).argParser(overridesParser))
   .option(
     "--write-revision",
-    text`
+    t(text`
       When specified, the revision number will be written to the manifest.json file. This is
       useful if you want to keep track of the revision number in your source control.
-    `,
+    `),
   )
   .option(
     "--private",
-    text`
+    t(text`
       When specified, the published artifact will be marked as private. This flag is only
       effective if the artifact did not exist before. (It will not change the visibility of an
       existing artifact.)
-    `,
+    `),
   )
   .option(
     "-y, --yes",
-    text`
+    t(text`
       Automatically approve all prompts.
-    `,
+    `),
   );
 
 addCreateClientOptions(pushCommand);
@@ -105,30 +106,33 @@ pushCommand.action(async options => {
     const skillContents = await readFile(join(currentPath, "SKILL.md"), "utf-8");
     const frontmatterMatch = skillContents.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u);
     if (frontmatterMatch === null) {
-      throw new Error("SKILL.md must contain YAML frontmatter with a name and description.");
+      throw new Error(t("SKILL.md must contain YAML frontmatter with a name and description."));
     }
 
     const frontmatter: unknown = YAML.parse(frontmatterMatch[1]!);
     if (typeof frontmatter !== "object" || frontmatter === null || Array.isArray(frontmatter)) {
-      throw new Error("SKILL.md must contain YAML frontmatter with a name and description.");
+      throw new Error(t("SKILL.md must contain YAML frontmatter with a name and description."));
     }
 
     const fields = frontmatter as Record<string, unknown>;
     if (typeof fields.name !== "string" || fields.name.trim().length === 0) {
-      throw new Error("Skill name is required in SKILL.md.");
+      throw new Error(t("Skill name is required in SKILL.md."));
     }
     if (typeof fields.description !== "string" || fields.description.trim().length === 0) {
-      throw new Error("Skill description is required in SKILL.md.");
+      throw new Error(t("Skill description is required in SKILL.md."));
     }
 
     const skillName = fields.name.trim();
     if (!kebabCaseRegex.test(skillName) || skillName.length > 63) {
-      throw new Error("Skill name must be a kebab-case string between 1 and 63 characters.");
+      throw new Error(t("Skill name must be a kebab-case string between 1 and 63 characters."));
     }
     const folderName = basename(currentPath);
     if (folderName !== skillName) {
       throw new Error(
-        `Skill folder name must match the name in SKILL.md. Received ${folderName}, expected ${skillName}.`,
+        t(`Skill folder name must match the name in SKILL.md. Received {p0}, expected {p1}.`, {
+          p0: folderName,
+          p1: skillName,
+        }),
       );
     }
 
@@ -136,7 +140,7 @@ pushCommand.action(async options => {
     authenticated = true;
     const owners = await client.repository.unstable.getWritableArtifactOwners();
     if (owners.length === 0) {
-      throw new Error("Your account does not have an artifact owner available for publishing.");
+      throw new Error(t("Your account does not have an artifact owner available for publishing."));
     }
 
     let owner: string;
@@ -145,12 +149,14 @@ pushCommand.action(async options => {
     } else {
       if (process.stdin.isTTY !== true || process.stderr.isTTY !== true) {
         throw new Error(
-          "Multiple artifact owners are available. Run lms push in an interactive terminal to select one or create a manifest.json that specifies the owner.",
+          t(
+            "Multiple artifact owners are available. Run lms push in an interactive terminal to select one or create a manifest.json that specifies the owner.",
+          ),
         );
       }
       // This branch only runs when the owner list has at least two entries.
       const selectedOwner = await askQuestionWithChoices(
-        "Select an owner",
+        t("Select an owner"),
         owners as [string, ...Array<string>],
       );
       if (selectedOwner === null) {
@@ -183,9 +189,9 @@ pushCommand.action(async options => {
   const needsConfirmation = !yes && (manifest.type === "plugin" || manifest.type === "skill");
 
   if (manifest.owner === "local") {
-    logger.error("This artifact was created without a username.");
+    logger.error(t("This artifact was created without a username."));
     logger.error(
-      "Please edit the manifest.json and set the owner field to your LM Studio Hub username.",
+      t("Please edit the manifest.json and set the owner field to your LM Studio Hub username."),
     );
     process.exit(1);
   }
@@ -199,7 +205,7 @@ pushCommand.action(async options => {
 
   if (needsConfirmation) {
     if (!(await askQuestion("Continue?"))) {
-      logger.info("Aborting push.");
+      logger.info(t("Aborting push."));
       process.exit(1);
     }
   }
@@ -214,7 +220,7 @@ pushCommand.action(async options => {
   });
 
   if (manifest.type === "skill") {
-    logger.info("   Or install it with:");
+    logger.info(t("   Or install it with:"));
     logger.info();
     logger.info(`       ${chalk.yellow(`lms get ${manifest.owner}/${manifest.name}`)}`);
   }
@@ -224,20 +230,25 @@ export const push = pushCommand;
 
 function printFileList(fileList: LocalArtifactFileList, logger: SimpleLogger) {
   logger.info();
-  logger.info("The following files will be pushed:");
+  logger.info(t("The following files will be pushed:"));
   logger.info();
   for (const file of fileList.files) {
     logger.info(`   ${file.relativePath} ${chalk.dim(`(${formatSizeBytes1000(file.sizeBytes)})`)}`);
   }
   logger.info();
   if (fileList.usedIgnoreFile !== undefined && fileList.usedIgnoreFile !== "") {
-    logger.info(chalk.dim(`(Used ignore file ${fileList.usedIgnoreFile})`));
+    logger.info(chalk.dim(t("(Used ignore file {file}).", { file: fileList.usedIgnoreFile })));
   } else {
     logger.info(
-      chalk.dim(text`
-        (i) You can create a ${chalk.yellow(".lmsignore")} or ${chalk.yellow(".gitignore")} file to
+      chalk.dim(
+        t(
+          text`
+        (i) You can create a {p0} or {p1} file to
         filter out unwanted files.
-      `),
+      `,
+          { p0: chalk.yellow(".lmsignore"), p1: chalk.yellow(".gitignore") },
+        ),
+      ),
     );
   }
   logger.info();
@@ -273,7 +284,7 @@ function parseArtifactIdentifierToOwnerName(
     !kebabCaseRegex.test(owner) ||
     !kebabCaseWithDotsRegex.test(name)
   ) {
-    throw new Error(`Invalid ${fieldName}: ${artifactIdentifier}`);
+    throw new Error(t(`Invalid {p0}: {p1}`, { p0: fieldName, p1: artifactIdentifier }));
   }
   return [owner, name] as const;
 }

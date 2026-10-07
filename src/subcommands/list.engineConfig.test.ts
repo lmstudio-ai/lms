@@ -2,6 +2,7 @@ import { type LLMLoadModelConfig } from "@lmstudio/sdk";
 import { createClient } from "../createClient.js";
 import { createDeviceNameResolver } from "../deviceNameLookup.js";
 import { ps } from "./list.js";
+import { t } from "../i18n/index.js";
 
 jest.mock("../createClient.js", () => ({
   ...jest.requireActual<typeof import("../createClient.js")>("../createClient.js"),
@@ -90,7 +91,7 @@ it("identifies both modes in the table and keeps absent parallelism unknown", as
   const output = jest.spyOn(console, "info").mockImplementation(() => {});
   await ps.parseAsync(["node", "lms"]);
   const table = output.mock.calls.map(args => args.join(" ")).join("\n");
-  expect(table).toContain("LOAD CONFIG");
+  expect(table).toContain(t("LOAD CONFIG"));
   expect(table).toMatch(/file-model.*32768\s+-\s+File/);
   expect(table).toMatch(/normal-model.*32768\s+4\s+LM Studio/);
   expect(table).toMatch(/cleared-model.*32768\s+-\s+LM Studio/);

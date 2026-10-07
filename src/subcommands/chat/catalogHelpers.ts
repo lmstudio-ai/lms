@@ -1,6 +1,7 @@
 import { type SimpleLogger } from "@lmstudio/lms-common";
 import type { HubModel } from "@lmstudio/lms-shared-types";
 import { type LMStudioClient } from "@lmstudio/sdk";
+import { t } from "../../i18n/index.js";
 
 let cachedCatalogPromise: Promise<HubModel[]> | null = null;
 /**
@@ -21,9 +22,9 @@ export async function getCachedModelCatalogOrFetch(
     // Clear the cached promise on failure so that subsequent calls will retry
     cachedCatalogPromise = null;
     if (error instanceof Error && error.message.toLowerCase().includes("network") === true) {
-      logger?.warn("Offline, unable to fetch model catalog");
+      logger?.warn(t("Offline, unable to fetch model catalog"));
     } else {
-      logger?.error("Error fetching model catalog:", error);
+      logger?.error(t("Error fetching model catalog:"), error);
     }
     return [];
   }

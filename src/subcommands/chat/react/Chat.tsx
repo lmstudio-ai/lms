@@ -22,6 +22,7 @@ import {
 import { insertPasteAtCursor } from "./inputReducer.js";
 import { createSlashCommands } from "./slashCommands.js";
 import type { ChatUserInputState, InkChatMessage, Suggestion } from "./types.js";
+import { t } from "../../../i18n/index.js";
 
 // Freezes streaming content into static chunks at natural breaks to reduce re-renders.
 // Uses multiple boundaries to handle different content (best effort):
@@ -128,7 +129,10 @@ export const ChatComponent = React.memo(
       onOverflow: snapshot => {
         setFlickerCount(prev => prev + 1);
         setStatusMessage(
-          `Layout Overflow - ${snapshot.renderedHeight} rendered height exceeds ${snapshot.availableHeight} available height`,
+          t(`Layout Overflow - {p0} rendered height exceeds {p1} available height`, {
+            p0: snapshot.renderedHeight,
+            p1: snapshot.availableHeight,
+          }),
         );
       },
     });
@@ -343,7 +347,7 @@ export const ChatComponent = React.memo(
           }),
         );
       } else {
-        logInChat("Prediction aborted by user.");
+        logInChat(t("Prediction aborted by user."));
       }
       if (
         abortControllerRef.current !== null &&
@@ -360,7 +364,7 @@ export const ChatComponent = React.memo(
         return;
       }
 
-      logInChat("Download interrupted. Continue download in background?");
+      logInChat(t("Download interrupted. Continue download in background?"));
       requestConfirmation({
         onConfirm: () => {
           handleExit();
@@ -422,7 +426,7 @@ export const ChatComponent = React.memo(
         return;
       }
       if (confirmationResponse === "invalid") {
-        logInChat("Please answer 'yes' or 'no'");
+        logInChat(t("Please answer 'yes' or 'no'"));
         return;
       }
 
@@ -449,7 +453,7 @@ export const ChatComponent = React.memo(
             selectedSuggestion,
           });
           if (wasCommandHandled === false) {
-            logInChat(`Unknown command: ${userInputText}`);
+            logInChat(t(`Unknown command: {p0}`, { p0: userInputText }));
           }
           return;
         }
@@ -461,13 +465,15 @@ export const ChatComponent = React.memo(
       }
 
       if (llmRef.current === null) {
-        logErrorInChat("No model loaded. Please load a model using /model");
+        logErrorInChat(t("No model loaded. Please load a model using /model"));
         return;
       }
 
       if (isPredicting) {
         logInChat(
-          "A prediction is already in progress. Please wait for it to finish or press CTRL+C to abort it.",
+          t(
+            "A prediction is already in progress. Please wait for it to finish or press CTRL+C to abort it.",
+          ),
         );
         return;
       }
@@ -642,10 +648,10 @@ export const ChatComponent = React.memo(
             const currentModelKey = llmRef.current.modelKey;
             const currentModelDeviceIdentifier = currentModelDeviceIdentifierRef.current;
             logErrorInChat(`${error.message}`);
-            logInChat(`Would you like to reload the model?`);
+            logInChat(t(`Would you like to reload the model?`));
             requestConfirmation({
               onConfirm: async () => {
-                logInChat("Reloading model...");
+                logInChat(t("Reloading model..."));
                 setModelLoadingProgress(0);
                 try {
                   llmRef.current = await client.llm.model(currentModelKey, {
@@ -656,7 +662,7 @@ export const ChatComponent = React.memo(
                     },
                     deviceIdentifier: currentModelDeviceIdentifier,
                   });
-                  logInChat(`Model reloaded: ${llmRef.current.displayName}`);
+                  logInChat(t(`Model reloaded: {p0}`, { p0: llmRef.current.displayName }));
                   setModelLoadingProgress(null);
                 } catch (reloadError) {
                   setModelLoadingProgress(null);
@@ -664,16 +670,16 @@ export const ChatComponent = React.memo(
                     reloadError instanceof Error && reloadError.message !== undefined
                       ? reloadError.message
                       : String(reloadError);
-                  logErrorInChat(`Failed to reload model: ${reloadErrorMessage}`);
+                  logErrorInChat(t(`Failed to reload model: {p0}`, { p0: reloadErrorMessage }));
                 }
               },
               onCancel: () => {
-                logInChat("Model reload cancelled.");
+                logInChat(t("Model reload cancelled."));
                 handleExit();
               },
             });
           } else {
-            logErrorInChat(`Prediction error: ${error.message}`);
+            logErrorInChat(t(`Prediction error: {p0}`, { p0: error.message }));
           }
         }
       } finally {

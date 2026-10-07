@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import chalk from "chalk";
 import type { InkChatMessage } from "./types.js";
 import { trimLeadingNewlines, trimTrailingNewlines, trimNewlines } from "../util.js";
+import { t } from "../../../i18n/index.js";
 
 interface ChatMessageProps {
   message: InkChatMessage;
@@ -65,7 +66,7 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
           {message.stoppedByUser === true && (
             <Box>
               <Text color="red" wrap="truncate">
-                [Response stopped by user]
+                {t("[Response stopped by user]")}
               </Text>
             </Box>
           )}
@@ -97,19 +98,21 @@ export const ChatMessage = memo(({ message, modelName }: ChatMessageProps) => {
           <Box paddingX={1} borderStyle={"round"} borderColor={"magenta"} flexDirection="column">
             <Text dimColor>👾 lms chat</Text>
             <Text>
-              Type <Text bold>exit</Text> or Ctrl+C to quit
+              {t("Type ")}
+              <Text bold>exit</Text>
+              {t(" or Ctrl+C to quit")}
             </Text>
             {modelName !== null && (
               <Box paddingTop={1}>
-                <Text bold>{`Chatting with ${modelName}`}</Text>
+                <Text bold>{t(`Chatting with {p0}`, { p0: modelName })}</Text>
               </Box>
             )}
             <Box paddingTop={1} flexDirection="column">
-              <Text dimColor>Try one of the following commands:</Text>
-              <Text dimColor>/model - Load a model (type /model to see list)</Text>
-              <Text dimColor>/download - Download a model</Text>
-              <Text dimColor>/clear - Clear the chat history</Text>
-              <Text dimColor>/help - Show help information</Text>
+              <Text dimColor>{t("Try one of the following commands:")}</Text>
+              <Text dimColor>{t("/model - Load a model (type /model to see list)")}</Text>
+              <Text dimColor>{t("/download - Download a model")}</Text>
+              <Text dimColor>{t("/clear - Clear the chat history")}</Text>
+              <Text dimColor>{t("/help - Show help information")}</Text>
             </Box>
           </Box>
         </Box>

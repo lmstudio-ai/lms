@@ -1,15 +1,17 @@
 import { Command } from "@commander-js/extra-typings";
 import chalk from "chalk";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
+import { t } from "../../i18n/index.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { type LinkCommandOptions, startLinkLoader } from "./shared.js";
+import { text } from "@lmstudio/lms-common";
 
 const MAX_CONNECTION_WAIT_MS = 10000; // 10 seconds
 const POLL_INTERVAL_MS = 100; // 100 ms
 
 export const enable = new Command<[], LinkCommandOptions>()
   .name("enable")
-  .description("Enable LM Link on this device");
+  .description(t("Enable LM Link on this device"));
 
 addCreateClientOptions(enable);
 addLogLevelOptions(enable);
@@ -25,44 +27,55 @@ enable.action(async function () {
   // Check for blocking issues
   if (currentStatus.issues.includes("notLoggedIn")) {
     logger.info(
-      "LM Link enabled, but you are not authenticated. Run " +
-        chalk.cyan("lms login") +
-        " to continue.",
+      t("LM Link enabled, but you are not authenticated. Run {command} to continue.", {
+        command: chalk.cyan("lms login"),
+      }),
     );
     return;
   }
 
   if (currentStatus.issues.includes("noAccess")) {
     logger.info(
-      "LM Link enabled, but you do not have access. Visit " +
-        chalk.cyan("https://lmstudio.ai/lm-link"),
+      t("LM Link enabled, but you do not have access. Visit {url}", {
+        url: chalk.cyan("https://lmstudio.ai/lm-link"),
+      }),
     );
     return;
   }
 
   if (currentStatus.issues.includes("badVersion")) {
     const { isDaemon } = await client.system.getInfo();
-    logger.infoText`
-      LM Link is enabled. However, LM Link cannot connect because the protocol has updated. You need to update
-      ${isDaemon ? "llmster" : "LM Studio"} to continue using LM Link.
-    `;
+    logger.info(
+      t(
+        text`
+        LM Link is enabled. However, LM Link cannot connect because the protocol has updated. You need to update
+        {target} to continue using LM Link.
+      `,
+        { target: isDaemon ? "llmster" : "LM Studio" },
+      ),
+    );
     if (isDaemon) {
-      logger.infoText`
-        Run ${chalk.cyan("lms daemon update")} to update.
-      `;
+      logger.info(
+        t(
+          text`
+        Run {command} to update.
+      `,
+          { command: chalk.cyan("lms daemon update") },
+        ),
+      );
     }
     return;
   }
 
   // Already online
   if (currentStatus.status === "online") {
-    logger.info("LM Link is enabled and online.");
+    logger.info(t("LM Link is enabled and online."));
     return;
   }
 
   // Need to connect
   if (currentStatus.issues.length === 0) {
-    logger.info("LM Link enabled. Connecting...");
+    logger.info(t("LM Link enabled. Connecting..."));
     const stopLoader = startLinkLoader();
     const initialLastErrorTimestamp =
       currentStatus.lastError !== undefined ? currentStatus.lastError.timestamp : undefined;
@@ -96,24 +109,27 @@ enable.action(async function () {
     }
 
     if (currentStatus.status === "online") {
-      logger.info("LM Link is now online.");
+      logger.info(t("LM Link is now online."));
     } else if (updatedLastError !== null) {
-      logger.info(`Failed to connect: ${updatedLastError.message}`);
+      logger.info(t(`Failed to connect: {p0}`, { p0: updatedLastError.message }));
       logger.info(
-        "LM Link will continue to retry connection in the background. Use " +
-          chalk.cyan("lms link status") +
-          " to check current status.",
+        t(
+          "LM Link will continue to retry connection in the background. Use {command} to check current status.",
+          {
+            command: chalk.cyan("lms link status"),
+          },
+        ),
       );
     } else {
       logger.info(
-        "LM Link enabled but could not connect. Use " +
-          chalk.cyan("lms link status") +
-          " for details.",
+        t("LM Link enabled but could not connect. Use {command} for details.", {
+          command: chalk.cyan("lms link status"),
+        }),
       );
     }
   } else {
     // That means we still see it as disabled, which is unexpected. Error out just in case. This
     // should never happen since setDisabled should have thrown if it failed, but just in case.
-    logger.error("Something went wrong enabling LM Link. Please try again");
+    logger.error(t("Something went wrong enabling LM Link. Please try again"));
   }
 });

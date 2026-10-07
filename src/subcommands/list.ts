@@ -18,15 +18,16 @@ import {
 } from "../deviceNameLookup.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
 import { formatTimeLean } from "../formatElapsedTime.js";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 
 function loadedCheck(count: number) {
   if (count === 0) {
     return "";
   } else if (count === 1) {
-    return chalk.green("✓ LOADED");
+    return chalk.green(t("✓ LOADED"));
   } else {
-    return chalk.green(`✓ LOADED (${count})`);
+    return chalk.green(t(`✓ LOADED ({p0})`, { p0: count }));
   }
 }
 
@@ -112,22 +113,22 @@ function printDownloadedModelsTable(
           align: "left",
         },
         path: {
-          headingTransform: () => chalk.dim(title),
+          headingTransform: () => chalk.dim(t(title)),
         },
         params: {
-          headingTransform: () => chalk.dim("PARAMS"),
+          headingTransform: () => chalk.dim(t("PARAMS")),
           align: "left",
         },
         arch: {
-          headingTransform: () => chalk.dim("ARCH"),
+          headingTransform: () => chalk.dim(t("ARCH")),
           align: "left",
         },
         sizeBytes: {
-          headingTransform: () => chalk.dim("SIZE"),
+          headingTransform: () => chalk.dim(t("SIZE")),
           align: "left",
         },
         device: {
-          headingTransform: () => chalk.dim("DEVICE"),
+          headingTransform: () => chalk.dim(t("DEVICE")),
           align: "left",
         },
       },
@@ -206,22 +207,22 @@ function printModelsWithVariantRows({
           align: "left",
         },
         path: {
-          headingTransform: () => chalk.dim(title),
+          headingTransform: () => chalk.dim(t(title)),
         },
         params: {
-          headingTransform: () => chalk.dim("PARAMS"),
+          headingTransform: () => chalk.dim(t("PARAMS")),
           align: "left",
         },
         arch: {
-          headingTransform: () => chalk.dim("ARCH"),
+          headingTransform: () => chalk.dim(t("ARCH")),
           align: "left",
         },
         sizeBytes: {
-          headingTransform: () => chalk.dim("SIZE"),
+          headingTransform: () => chalk.dim(t("SIZE")),
           align: "left",
         },
         device: {
-          headingTransform: () => chalk.dim("DEVICE"),
+          headingTransform: () => chalk.dim(t("DEVICE")),
           align: "left",
         },
       },
@@ -250,14 +251,14 @@ type PsCommandOptions = OptionValues &
 
 const lsCommand = new Command<[], ListCommandOptions>()
   .name("ls")
-  .description("List the models available on disk")
-  .argument("[modelKey]", "Show variants for the provided model key")
-  .option("--llm", "Show only LLM models")
-  .option("--embedding", "Show only embedding models")
-  .option("--decision", "Show only decision models")
-  .option("--detailed", "[Deprecated] Show detailed view with grouping")
-  .option("--variants", "Show variants for all models")
-  .option("--json", "Outputs in JSON format to stdout");
+  .description(t("List the models available on disk"))
+  .argument("[modelKey]", t("Show variants for the provided model key"))
+  .option("--llm", t("Show only LLM models"))
+  .option("--embedding", t("Show only embedding models"))
+  .option("--decision", t("Show only decision models"))
+  .option("--detailed", t("[Deprecated] Show detailed view with grouping"))
+  .option("--variants", t("Show variants for all models"))
+  .option("--json", t("Outputs in JSON format to stdout"));
 
 addCreateClientOptions(lsCommand);
 addLogLevelOptions(lsCommand);
@@ -277,13 +278,13 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   } = options;
 
   if (modelKey !== undefined && variantsOption) {
-    logger.error(chalk.red("Cannot combine a model key argument with --variants."));
+    logger.error(chalk.red(t("Cannot combine a model key argument with --variants.")));
     process.exit(1);
   }
 
   if (detailed) {
     logger.warn(
-      chalk.yellow("The '--detailed' flag is deprecated. Output is the same as 'lms ls'"),
+      chalk.yellow(t("The '--detailed' flag is deprecated. Output is the same as 'lms ls'")),
     );
   }
 
@@ -300,7 +301,7 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
     const variantTitle = (firstVariantType ?? "llm").toUpperCase();
 
     console.info();
-    console.info(`Listing variants for ${modelKey}:`);
+    console.info(t(`Listing variants for {p0}:`, { p0: modelKey }));
     console.info();
     printDownloadedModelsTable(variantTitle, variants, loadedModels, deviceNameResolver);
     console.info();
@@ -353,10 +354,14 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
 
   if (filteredModelsCount === 0) {
     if (originalModelsCount === 0) {
-      console.info(chalk.red("You have not downloaded any models yet."));
+      console.info(chalk.red(t("You have not downloaded any models yet.")));
     } else {
       console.info(
-        chalk.red(`You have ${originalModelsCount} models, but none of them match the filter.`),
+        chalk.red(
+          t("You have {count} models, but none of them match the filter.", {
+            count: originalModelsCount,
+          }),
+        ),
       );
     }
     return;
@@ -368,10 +373,15 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
   }
 
   console.info();
-  console.info(text`
-    You have ${filteredDownloadedModels.length} models,
-    taking up ${formatSizeBytes1000(totalSizeBytes)} of disk space.
-  `);
+  console.info(
+    t(
+      text`
+    You have {p0} models,
+    taking up {p1} of disk space.
+  `,
+      { p0: filteredDownloadedModels.length, p1: formatSizeBytes1000(totalSizeBytes) },
+    ),
+  );
   console.info();
 
   if (variantsOption) {
@@ -451,8 +461,8 @@ lsCommand.action(async (modelKey, options: ListCommandOptions) => {
 
 const psCommand = new Command<[], PsCommandOptions>()
   .name("ps")
-  .description("List the models currently loaded in memory")
-  .option("--json", "Outputs in JSON format to stdout");
+  .description(t("List the models currently loaded in memory"))
+  .option("--json", t("Outputs in JSON format to stdout"));
 
 addCreateClientOptions(psCommand);
 addLogLevelOptions(psCommand);
@@ -522,13 +532,18 @@ psCommand.action(async (options: PsCommandOptions) => {
   }
 
   if (loadedModels.length === 0) {
-    logger.infoText`
+    logger.info(
+      t(
+        text`
       No models are currently loaded.
 
       To load a model, run:
 
-          ${chalk.cyan("lms load <model path>")}
-    `;
+          {p0}
+    `,
+        { p0: chalk.cyan("lms load <model path>") },
+      ),
+    );
     return;
   }
 
@@ -599,35 +614,35 @@ psCommand.action(async (options: PsCommandOptions) => {
       ],
       config: {
         identifier: {
-          headingTransform: () => chalk.dim("IDENTIFIER"),
+          headingTransform: () => chalk.dim(t("IDENTIFIER")),
           align: "left",
         },
         path: {
-          headingTransform: () => chalk.dim("MODEL"),
+          headingTransform: () => chalk.dim(t("MODEL")),
           align: "left",
         },
         status: {
-          headingTransform: () => chalk.dim("STATUS"),
+          headingTransform: () => chalk.dim(t("STATUS")),
           align: "left",
         },
         sizeBytes: {
-          headingTransform: () => chalk.dim("SIZE"),
+          headingTransform: () => chalk.dim(t("SIZE")),
           align: "left",
         },
         contextLength: {
-          headingTransform: () => chalk.dim("CONTEXT"),
+          headingTransform: () => chalk.dim(t("CONTEXT")),
           align: "left",
         },
         parallel: {
-          headingTransform: () => chalk.dim("PARALLEL"),
+          headingTransform: () => chalk.dim(t("PARALLEL")),
           align: "left",
         },
         loadConfig: {
-          headingTransform: () => chalk.dim("LOAD CONFIG"),
+          headingTransform: () => chalk.dim(t("LOAD CONFIG")),
           align: "left",
         },
         device: {
-          headingTransform: () => chalk.dim("DEVICE"),
+          headingTransform: () => chalk.dim(t("DEVICE")),
           align: "left",
         },
         ttlMs: {

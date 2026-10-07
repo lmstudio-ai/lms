@@ -22,6 +22,7 @@ import { addCreateClientOptions, createClient, type CreateClientArgs } from "../
 import { type DeviceNameResolver, createDeviceNameResolver } from "../deviceNameLookup.js";
 import { formatElapsedTime } from "../formatElapsedTime.js";
 import { formatSizeBytes1024 } from "../formatBytes.js";
+import { t } from "../i18n/index.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { runPromptWithExitHandling } from "../prompt.js";
 import { Spinner } from "../Spinner.js";
@@ -38,10 +39,10 @@ const gpuOptionParser = (str: string): number => {
   }
   const num = +str;
   if (Number.isNaN(num)) {
-    throw new InvalidArgumentError("Not a number");
+    throw new InvalidArgumentError(t("Not a number"));
   }
   if (num < 0 || num > 1) {
-    throw new InvalidArgumentError("Number out of range, must be between 0 and 1");
+    throw new InvalidArgumentError(t("Number out of range, must be between 0 and 1"));
   }
   return num;
 };
@@ -87,8 +88,8 @@ export function assertLoadConfigSupportedForCliModel({
   if (loadConfig.engineConfigFileContents !== undefined || loadConfig.engineCwd !== undefined) {
     logger.errorWithoutPrefix(
       makeTitledPrettyError(
-        "Unsupported load option",
-        "Engine configuration options can only be configured for LLM models.",
+        t("Unsupported load option"),
+        t("Engine configuration options can only be configured for LLM models."),
       ).message,
     );
     process.exit(1);
@@ -96,10 +97,10 @@ export function assertLoadConfigSupportedForCliModel({
   if (model.type === "embedding" && loadConfig.autoFit === true) {
     logger.errorWithoutPrefix(
       makeTitledPrettyError(
-        "Unsupported load option",
-        text`
+        t("Unsupported load option"),
+        t(text`
           AutoFit can only be configured for LLM models.
-        `,
+        `),
       ).message,
     );
     process.exit(1);
@@ -118,10 +119,10 @@ export function assertLoadConfigSupportedForCliModel({
 
   logger.errorWithoutPrefix(
     makeTitledPrettyError(
-      "Unsupported load option",
-      text`
+      t("Unsupported load option"),
+      t(text`
         Speculative decoding can only be configured for LLM models.
-      `,
+      `),
     ).message,
   );
   process.exit(1);
@@ -147,171 +148,171 @@ function hasMultipleModelKeys(models: Array<ModelInfo>): boolean {
 
 const loadCommand = new Command<[], LoadCommandOptions>()
   .name("load")
-  .description("Load a model")
+  .description(t("Load a model"))
   .argument(
     "[model-key]",
-    text`
+    t(text`
       The model key to load. If not provided, enters an interactive mode to select a model.
-    `,
+    `),
   )
   .option(
     "--engine-config-file <path>",
-    text`
+    t(text`
       Import an engine configuration file. Use trusted files without secrets; contents are
       readable by users and clients with access to the model's configuration.
-    `,
+    `),
   )
-  .option("--no-engine-config-file", "Use ordinary LM Studio settings for this load.")
+  .option("--no-engine-config-file", t("Use ordinary LM Studio settings for this load."))
   .option(
     "--engine-cwd <path>",
-    text`
+    t(text`
       Set the engine's current working directory in config-file mode. Defaults to the saved
       directory or runtime temp, which is removed on unload.
-    `,
+    `),
   )
-  .option("--no-engine-cwd", "Use the runtime temporary directory for this load.")
+  .option("--no-engine-cwd", t("Use the runtime temporary directory for this load."))
   .addOption(
     new Option(
       "--auto",
-      text`
+      t(text`
         Automatically choose context length and model placement based on available resources,
         when supported by the connected backend.
-      `,
+      `),
     ).conflicts(["gpu", "contextLength"]),
   )
   .addOption(
     new Option(
       "--gpu <offload-ratio>",
-      text`
+      t(text`
         GPU offload ratio. Valid values: "off" (disable GPU), "max" (full offload), or a number
         between 0 and 1 (e.g., "0.5" for 50% offload). By default, LM Studio automatically
         determines the optimal offload ratio.
-      `,
+      `),
     ).argParser(gpuOptionParser),
   )
   .addOption(
     new Option(
       "-c, --context-length <length>",
-      text`
+      t(text`
         The number of tokens to consider as context when generating text. If not provided, the
         default value will be used.
-      `,
+      `),
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
   .addOption(
     new Option(
       "--parallel <count>",
-      text`
+      t(text`
         Maximum number of predictions the model can run at a given time. The speed of each
         individual prediction may decrease with concurrency, but each prediction will start faster
         and higher total throughput can be achieved.
-      `,
+      `),
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
   .addOption(
     new Option(
       "--ttl <seconds>",
-      text`
+      t(text`
         TTL: If provided, when the model is not used for this number of seconds, it will be unloaded.
-      `,
+      `),
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
   .addOption(
     new Option(
       "--speculative-draft-mtp",
-      text`
+      t(text`
         Enable load-time Draft MTP speculative decoding when supported by the model.
-      `,
+      `),
     ).default(undefined),
   )
   .addOption(
     new Option(
       "--no-speculative-draft-mtp",
-      text`
+      t(text`
         Disable load-time Draft MTP speculative decoding.
-      `,
+      `),
     ).default(undefined),
   )
   .addOption(
     new Option(
       "--speculative-draft-simple",
-      text`
+      t(text`
         Enable load-time Draft Simple speculative decoding using --speculative-draft-model.
-      `,
+      `),
     ),
   )
   .addOption(
     new Option(
       "--speculative-draft-model <model>",
-      text`
+      t(text`
         Draft model resource to use with --speculative-draft-simple.
-      `,
+      `),
     ),
   )
   .addOption(
     new Option(
       "--speculative-draft-max-tokens <count>",
-      text`
+      t(text`
         Maximum number of draft tokens to generate per speculative decoding step. Requires
         --speculative-draft-simple or --speculative-draft-mtp.
-      `,
+      `),
     ).argParser(createRefinedNumberParser({ integer: true, min: 1 })),
   )
   .addOption(
     new Option(
       "--speculative-draft-min-tokens <count>",
-      text`
+      t(text`
         Minimum draft length to consider for speculative decoding. Requires
         --speculative-draft-simple or --speculative-draft-mtp.
-      `,
+      `),
     ).argParser(createRefinedNumberParser({ integer: true, min: 0 })),
   )
   .addOption(
     new Option(
       "--speculative-draft-min-continue-probability <probability>",
-      text`
+      t(text`
         Continue drafting while token probability is at or above this threshold. Requires
         --speculative-draft-simple or --speculative-draft-mtp.
-      `,
+      `),
     ).argParser(createRefinedNumberParser({ min: 0, max: 1 })),
   )
   .addOption(
     new Option(
       "--exact",
-      text`
+      t(text`
         Only load the model if the path provided matches the model exactly. Fails if the path
         provided does not match any model.
-      `,
+      `),
     ).hideHelp(),
   )
   .addOption(
     new Option(
       "--local",
-      text`
+      t(text`
         Only use models available locally. Models provided via LM Link will be ignored.
-      `,
+      `),
     ).hideHelp(),
   )
   .option(
     "--identifier <identifier>",
-    text`
+    t(text`
       The identifier to assign to the loaded model. The identifier can be used to refer to the
       model in the API.
-    `,
+    `),
   )
   .option(
     "--estimate-only",
-    text`
+    t(text`
       Calculate an estimate of the resources required to load the model. Does not load the model.
-    `,
+    `),
   )
   .option(
     "-y, --yes",
-    text`
+    t(text`
       Automatically approve all prompts. Useful for scripting. If there are multiple
       models matching the model key, the model will be loaded on the preferred device (if set),
       or the first matching model will be loaded.
-    `,
+    `),
   );
 
 addCreateClientOptions(loadCommand);
@@ -365,7 +366,9 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   };
   if (typeof engineConfigFile === "string" && loadConfig.engineConfigFileContents === "") {
     throw new Error(
-      "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+      t(
+        "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+      ),
     );
   }
   if (gpu !== undefined) {
@@ -399,11 +402,14 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     if (modelKey === undefined) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(
-          "Path not provided",
-          text`
-            The parameter ${chalk.cyan("[model-key]")} is required when using the
-            ${chalk.yellow("--exact")} flag.
+          t("Path not provided"),
+          t(
+            text`
+            The parameter {p0} is required when using the
+            {p1} flag.
           `,
+            { p0: chalk.cyan("[model-key]"), p1: chalk.yellow("--exact") },
+          ),
         ).message,
       );
       process.exit(1);
@@ -415,16 +421,23 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       if (models.length === 0) {
         logger.errorWithoutPrefix(
           makeTitledPrettyError(
-            "Model not found",
-            text`
-              No model found with path being exactly "${chalk.yellow(modelPath)}".
+            t("Model not found"),
+            t(
+              text`
+              No model found with path being exactly "{p0}".
 
-              To disable exact matching, remove the ${chalk.yellow("--exact")} flag.
+              To disable exact matching, remove the {p1} flag.
 
               To see a list of all downloaded models, run:
 
-                  ${chalk.yellow("lms ls")}
+                  {p2}
             `,
+              {
+                p0: chalk.yellow(modelPath),
+                p1: chalk.yellow("--exact"),
+                p2: chalk.yellow("lms ls"),
+              },
+            ),
           ).message,
         );
       } else {
@@ -436,20 +449,28 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
         }, models[0].path);
         logger.errorWithoutPrefix(
           makeTitledPrettyError(
-            "Model not found",
-            text`
-              No model found with path being exactly "${chalk.yellow(modelPath)}".
+            t("Model not found"),
+            t(
+              text`
+              No model found with path being exactly "{p0}".
 
-              To disable exact matching, remove the ${chalk.yellow("--exact")} flag.
+              To disable exact matching, remove the {p1} flag.
 
               To see a list of all downloaded models, run:
 
-                  ${chalk.yellow("lms ls")}
+                  {p2}
 
               Note, you need to provide the full model path. For example:
 
-                lms load --exact ${shortestPath}
+                lms load --exact {p3}
             `,
+              {
+                p0: chalk.yellow(modelPath),
+                p1: chalk.yellow("--exact"),
+                p2: chalk.yellow("lms ls"),
+                p3: shortestPath,
+              },
+            ),
           ).message,
         );
       }
@@ -490,18 +511,21 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     if (initialFilteredModels.length === 0) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(
-          "Model not found",
-          text`
-            No model found that matches model key "${chalk.yellow(modelKey)}".
+          t("Model not found"),
+          t(
+            text`
+            No model found that matches model key "{p0}".
 
             To see a list of all downloaded models, run:
 
-                ${chalk.yellow("lms ls")}
+                {p1}
 
-            To select a model interactively, remove the ${chalk.yellow("--yes")} flag:
+            To select a model interactively, remove the {p2} flag:
 
                 lms load
           `,
+            { p0: chalk.yellow(modelKey), p1: chalk.yellow("lms ls"), p2: chalk.yellow("--yes") },
+          ),
         ).message,
       );
       process.exit(1);
@@ -510,9 +534,14 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       const matchingModels = initialFilteredModels.map(option => models[option.index]);
       const hasSameDeviceDuplicates = hasDuplicatesOnSameDevice(matchingModels);
       if (hasSameDeviceDuplicates) {
-        logger.warnText`
-          ${initialFilteredModels.length} models match the provided model key on the same device. Loading the first one.
-        `;
+        logger.warn(
+          t(
+            text`
+          {p0} models match the provided model key on the same device. Loading the first one.
+        `,
+            { p0: initialFilteredModels.length },
+          ),
+        );
         model = models[initialFilteredModels[0].index];
       } else {
         model = matchingModels[0];
@@ -534,10 +563,15 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       });
     } else if (initialFilteredModels.length === 0) {
       console.info(
-        chalk.red(text`
-          ! Cannot find a model matching the provided model key (${chalk.yellow(modelKey)}). Please
+        chalk.red(
+          t(
+            text`
+          ! Cannot find a model matching the provided model key ({p0}). Please
           select one from the list below.
-        `),
+        `,
+            { p0: chalk.yellow(modelKey) },
+          ),
+        ),
       );
       modelKey = "";
       model = await selectModel({
@@ -562,9 +596,9 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
       const hasSameDeviceDuplicates = hasDuplicatesOnSameDevice(matchingModels);
       if (hasMultipleKeys || hasSameDeviceDuplicates) {
         console.info(
-          text`
+          t(text`
             ! Multiple models match the provided model key. Please select one.
-          `,
+          `),
         );
         model = await selectModel({
           models,
@@ -637,8 +671,11 @@ async function selectModel({
     search<ModelInfo>(
       {
         message:
-          chalk.green(`Select a model to ${estimateOnly === true ? "estimate" : "load"}`) +
-          chalk.dim(" |"),
+          chalk.green(
+            t(`Select a model to {p0}`, {
+              p0: t(estimateOnly === true ? "estimate" : "load"),
+            }),
+          ) + chalk.dim(" |"),
         pageSize,
         theme: searchTheme,
         source: async (input: string | undefined, { signal }: { signal: AbortSignal }) => {
@@ -713,7 +750,7 @@ async function loadModel({
   const sigintListener = () => {
     spinner.stop();
     abortController.abort();
-    logger.warn("Load cancelled.");
+    logger.warn(t("Load cancelled."));
     process.exit(1);
   };
 
@@ -742,23 +779,35 @@ async function loadModel({
       typeof loadedConfig.engineConfigFileContents === "string" &&
       loadedConfig.engineConfigFileContents !== ""
     ) {
-      logger.info("Using a configuration file; LM Studio load-tuning settings are ignored.");
+      logger.info(t("Using a configuration file; LM Studio load-tuning settings are ignored."));
     }
   }
   const loadedDeviceIdentifier = info?.deviceIdentifier ?? null;
+  const elapsed = formatElapsedTime(endTime - startTime);
   const successLine = deviceNameResolver.isLocal(loadedDeviceIdentifier)
-    ? `Model loaded successfully in ${formatElapsedTime(endTime - startTime)}.`
-    : `Model loaded successfully on ${deviceNameResolver.label(
-        loadedDeviceIdentifier,
-      )} in ${formatElapsedTime(endTime - startTime)}.`;
+    ? t("Model loaded successfully in {time}.", { time: elapsed })
+    : t("Model loaded successfully on {device} in {time}.", {
+        device: deviceNameResolver.label(loadedDeviceIdentifier),
+        time: elapsed,
+      });
   const sizeBytes = info?.sizeBytes;
   const sizeLine = sizeBytes === undefined ? "" : `\n(${formatSizeBytes1024(sizeBytes)})`;
-  logger.info(text`
-    ${successLine}${sizeLine}
-  `);
-  logger.info(text`
-    To use the model in the API/SDK, use the identifier "${chalk.green(info!.identifier)}".
-  `);
+  logger.info(
+    t(
+      text`
+    {p0}{p1}
+  `,
+      { p0: successLine, p1: sizeLine },
+    ),
+  );
+  logger.info(
+    t(
+      text`
+    To use the model in the API/SDK, use the identifier "{p0}".
+  `,
+      { p0: chalk.green(info!.identifier) },
+    ),
+  );
 }
 
 function printEstimatedResourceUsage(
@@ -769,29 +818,35 @@ function printEstimatedResourceUsage(
   logger: SimpleLogger,
 ) {
   const colorFunc = estimate.passesGuardrails === true ? chalk.green : chalk.yellow;
-  logger.info(`Model: ${model.modelKey}`);
+  logger.info(t("Model: {p0}", { p0: model.modelKey }));
   if (contextLength !== undefined) {
-    logger.info(`Context Length: ${contextLength.toLocaleString()}`);
+    logger.info(t(`Context Length: {p0}`, { p0: contextLength.toLocaleString() }));
   }
   if (gpuOffloadRatio !== undefined) {
-    logger.info(`GPU Offload: ${gpuOffloadRatio * 100}%`);
+    logger.info(t(`GPU Offload: {p0}%`, { p0: gpuOffloadRatio * 100 }));
   }
   logger.info(
-    `Estimated GPU Memory:   ${colorFunc(formatSizeBytes1024(estimate.memory.totalVramBytes))}`,
+    t(`Estimated GPU Memory:   {p0}`, {
+      p0: colorFunc(formatSizeBytes1024(estimate.memory.totalVramBytes)),
+    }),
   );
   logger.info(
-    `Estimated Total Memory: ${colorFunc(formatSizeBytes1024(estimate.memory.totalBytes))}`,
+    t(`Estimated Total Memory: {p0}`, {
+      p0: colorFunc(formatSizeBytes1024(estimate.memory.totalBytes)),
+    }),
   );
 
   if (estimate.memory.confidence === "low") {
-    logger.info(`Confidence: ${chalk.yellow(estimate.memory.confidence.toUpperCase())}`);
+    logger.info(
+      t(`Confidence: {p0}`, { p0: chalk.yellow(estimate.memory.confidence.toUpperCase()) }),
+    );
   }
   const message =
     estimate.passesGuardrails === true
-      ? "This model may be loaded based on your resource guardrails settings."
-      : "This model will fail to load based on your resource guardrails settings.";
+      ? t("This model may be loaded based on your resource guardrails settings.")
+      : t("This model will fail to load based on your resource guardrails settings.");
 
-  logger.info("\nEstimate: " + colorFunc(message));
+  logger.info(t("\nEstimate: ") + colorFunc(message));
 }
 
 export const load = loadCommand;

@@ -8,6 +8,7 @@ import { createClient } from "../createClient.js";
 import { createDeviceNameResolver } from "../deviceNameLookup.js";
 import { createLogger } from "../logLevel.js";
 import { load } from "./load.js";
+import { t } from "../i18n/index.js";
 
 jest.mock("@inquirer/prompts", () => ({ search: jest.fn() }));
 jest.mock("node:fs/promises", () => ({
@@ -140,7 +141,7 @@ it("leaves omitted fields unset and notices inherited mode from the loaded repor
   expect(
     logger.info.mock.calls.filter(
       ([message]) =>
-        message === "Using a configuration file; LM Studio load-tuning settings are ignored.",
+        message === t("Using a configuration file; LM Studio load-tuning settings are ignored."),
     ),
   ).toHaveLength(1);
 });
@@ -157,7 +158,19 @@ it.each([null, "peer"])(
     loadedConfig.mockRejectedValue(new Error("Unsupported model format: onnx"));
     await parse("test/model", "--yes");
     expect(loadedConfig).not.toHaveBeenCalled();
-    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("Model loaded successfully"));
+    // The message is localized, so match the locale-independent prefix of either phrasing
+    // ("... successfully in {time}" or "... successfully on {device} in {time}").
+    // The keys must match the catalogued source strings exactly (including punctuation),
+    // otherwise `t` falls back to English and the prefix would never match localized output.
+    const successPrefixes = [
+      t("Model loaded successfully in {time}."),
+      t("Model loaded successfully on {device} in {time}."),
+    ].map(template => template.split("{")[0]);
+    expect(
+      logger.info.mock.calls.some(([message]) =>
+        successPrefixes.some(prefix => String(message).includes(prefix)),
+      ),
+    ).toBe(true);
   },
 );
 
@@ -187,7 +200,9 @@ it("allows disabling mode while independently supplying a CWD", async () => {
     expect.objectContaining({ engineConfigFileContents: "", engineCwd: resolve(".") }),
   );
   expect(logger.info).not.toHaveBeenCalledWith(
-    expect.stringContaining("Using a configuration file"),
+    expect.stringContaining(
+      t("Using a configuration file; LM Studio load-tuning settings are ignored."),
+    ),
   );
 });
 
@@ -219,7 +234,9 @@ it.each([[], ["--estimate-only"]])(
     await expect(
       parse("test/model", "--yes", "--engine-config-file", "empty.yaml", ...flags),
     ).rejects.toThrow(
-      "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+      t(
+        "Engine configuration file is empty. Use --no-engine-config-file to disable config-file mode.",
+      ),
     );
     expect(createClient).not.toHaveBeenCalled();
     expect(loadModel).not.toHaveBeenCalled();
@@ -244,7 +261,9 @@ it("rejects explicit engine options for embedding models rather than dropping th
   });
   await expect(parse("test/model", "--yes", "--no-engine-config-file")).rejects.toThrow("exit");
   expect(logger.errorWithoutPrefix).toHaveBeenCalledWith(
-    expect.stringContaining("Engine configuration options"),
+    expect.stringContaining(
+      t("Engine configuration options can only be configured for LLM models."),
+    ),
   );
   expect(loadModel).not.toHaveBeenCalled();
 });
