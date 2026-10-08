@@ -33,7 +33,10 @@ For details about each subcommand, run `lms <subcommand> --help`.
 Here are some frequently used commands:
 
 - `lms status` - To check the status of LM Studio.
-- `lms server start` - To start the local API server.
+- `lms server start` - To start the local API server. By default the server only accepts connections from localhost (`127.0.0.1`).
+  - `lms server start --port <port>` - To run the server on a custom port.
+  - `lms server start --bind <address>` - To bind the server to a network address; use `--bind 0.0.0.0` to serve to your local network. Can also be set via the `LMS_SERVER_HOST` environment variable. Only do this if you know what you are doing — every machine on the network can then use the server.
+  - `lms server start --cors` - To enable CORS. This means any website you visit can access the server. It is required if you are developing a web application.
 - `lms server stop` - To stop the local API server.
 - `lms ls` - To list all downloaded models.
   - `lms ls --json` - To list all downloaded models in machine-readable JSON format.
