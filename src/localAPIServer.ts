@@ -27,8 +27,8 @@ const serverInfoSchema = z.object({
 });
 const installLocationSchema = z.object({
   path: z.string().min(1),
-  argv: z.array(z.string()),
-  cwd: z.string().min(1),
+  argv: z.array(z.string()).default([]),
+  cwd: z.string().min(1).optional(),
 });
 
 /** Reads a published port, rejecting records left by processes that have exited. */
@@ -120,7 +120,7 @@ export async function findOrStartLocalAPIServer({
       const {
         path: executablePath,
         argv: processArguments,
-        cwd: workingDirectory,
+        cwd: workingDirectory = dirname(executablePath),
       } = installLocationSchema.parse(JSON.parse(readFileSync(join(home, relativePath), "utf-8")));
       const launchArguments = processArguments[1] === "." ? ["."] : [];
       if (!relativePath.endsWith("llmster-install-location.json")) {

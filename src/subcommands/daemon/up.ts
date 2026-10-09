@@ -1,6 +1,6 @@
 import { Command, type OptionValues } from "@commander-js/extra-typings";
 import { createClient } from "../../createClient.js";
-import { tryFindLocalAPIServer } from "../../localAPIServer.js";
+import { findOrStartLocalAPIServer, tryFindLocalAPIServer } from "../../localAPIServer.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../../logLevel.js";
 
 type DaemonUpCommandOptions = OptionValues &
@@ -21,11 +21,12 @@ up.action(async (options: DaemonUpCommandOptions) => {
   const useJson = options.json ?? false;
 
   const previousStatus = await tryFindLocalAPIServer({ logger });
-  await using client = await createClient(
-    logger,
-    {},
-    { localAPIServer: previousStatus ?? undefined },
-  );
+  const selectedServer = previousStatus ?? (await findOrStartLocalAPIServer({ logger }));
+  if (selectedServer === null) {
+    logger.error("Failed to start or connect to a local LM Studio or Bionic API server.");
+    process.exit(1);
+  }
+  await using client = await createClient(logger, {}, { localAPIServer: selectedServer });
   const daemonInfo = await client.system.getInfo();
 
   if (useJson) {
@@ -38,19 +39,20 @@ up.action(async (options: DaemonUpCommandOptions) => {
       }),
     );
   } else {
+    const appName = selectedServer.package === "bionic" ? "Bionic" : "LM Studio";
     if (previousStatus !== null) {
       if (daemonInfo.isDaemon) {
         console.info(`The daemon is already running (PID: ${daemonInfo.pid}).`);
       } else {
         console.info(
-          `LM Studio is already running (PID: ${daemonInfo.pid}); not starting a second daemon.`,
+          `${appName} is already running (PID: ${daemonInfo.pid}); not starting a second daemon.`,
         );
       }
     } else {
       if (daemonInfo.isDaemon) {
         console.info(`llmster started (PID: ${daemonInfo.pid}).`);
       } else {
-        console.info(`LM Studio started (PID: ${daemonInfo.pid}).`);
+        console.info(`${appName} started (PID: ${daemonInfo.pid}).`);
       }
     }
   }

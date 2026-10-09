@@ -244,6 +244,16 @@ test.each(["daemon", "lmstudio", "bionic"] as const)(
   },
 );
 
+test("starts a path-only llmster record from the executable directory", async () => {
+  const installFile = installApp("daemon");
+  const executablePath = join(home, "daemon", "llmster");
+  writeFileSync(executablePath, `#!${process.execPath}\nrequire(process.cwd() + "/index.js");`, {
+    mode: 0o755,
+  });
+  writeJson(installFile, { path: executablePath });
+  expect((await findOrStartLocalAPIServer({ logger, home }))?.package).toBe("daemon");
+});
+
 test("skips an executable that starts but exits before serving an API", async () => {
   installApp("bionic");
   writeJson(join(home, ".internal", "llmster-install-location.json"), {
