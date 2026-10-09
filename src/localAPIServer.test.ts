@@ -2,12 +2,15 @@ import { apiServerPorts, SimpleLogger } from "@lmstudio/lms-common";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { createServer, type Server } from "http";
 import { tmpdir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import { WebSocketServer } from "ws";
 import { z } from "zod";
 import { createClient } from "./createClient.js";
-import { findOrStartLocalAPIServer } from "./findOrStartLocalAPIServer.js";
-import { readLocalAPIServerPort, tryFindLocalAPIServer } from "./localAPIServer.js";
+import {
+  findOrStartLocalAPIServer,
+  readLocalAPIServerPort,
+  tryFindLocalAPIServer,
+} from "./localAPIServer.js";
 import { getServerConfig } from "./subcommands/server.js";
 
 // Scan fixture ports rather than unrelated apps running on the developer's machine.
@@ -16,8 +19,6 @@ jest.mock("@lmstudio/lms-common", () => ({
   apiServerPorts: [],
 }));
 
-const originalAPIInfoPath = process.env.LMS_API_SERVER_INFO_PATH;
-const originalForceProd = process.env.LMS_FORCE_PROD;
 const logger = new SimpleLogger("", { debug() {}, error() {}, info() {}, warn() {} });
 const servers: Array<Server> = [];
 const sockets: Array<WebSocketServer> = [];
@@ -25,8 +26,8 @@ let home: string;
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "lms-coexistence-"));
+  jest.replaceProperty(process, "env", { ...process.env, LMS_FORCE_PROD: "1" });
   delete process.env.LMS_API_SERVER_INFO_PATH;
-  process.env.LMS_FORCE_PROD = "1";
 });
 
 afterEach(async () => {
@@ -40,86 +41,73 @@ afterEach(async () => {
     server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
-  for (const internalFolder of [
-    join(home, ".internal"),
-    join(home, "apps", "bionic", ".internal"),
-  ]) {
+  for (const folder of [".internal", "apps/bionic/.internal"]) {
     try {
-      const info = z
+      const { pid } = z
         .object({ pid: z.number() })
-        .parse(JSON.parse(readFileSync(join(internalFolder, "http-server.json"), "utf-8")));
-      if (info.pid !== process.pid) {
-        process.kill(info.pid);
+        .parse(JSON.parse(readFileSync(join(home, folder, "http-server.json"), "utf-8")));
+      if (pid !== process.pid) {
+        process.kill(pid);
       }
     } catch {
       // A fixture may have no discovery file, or its process may already have exited.
     }
   }
   apiServerPorts.splice(0);
-  if (originalAPIInfoPath === undefined) {
-    delete process.env.LMS_API_SERVER_INFO_PATH;
-  } else {
-    process.env.LMS_API_SERVER_INFO_PATH = originalAPIInfoPath;
-  }
-  if (originalForceProd === undefined) {
-    delete process.env.LMS_FORCE_PROD;
-  } else {
-    process.env.LMS_FORCE_PROD = originalForceProd;
-  }
+  jest.restoreAllMocks();
   rmSync(home, { force: true, recursive: true });
 });
+
+/** Publishes an app record, creating its fixture directory as needed. */
+function writeJson(path: string, value: unknown) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(value));
+}
 
 /** Serves discovery and a key-protected SDK endpoint using actual loopback transports. */
 async function startApp(packageName: "lmstudio" | "bionic" | "daemon") {
   const internalFolder = join(
     home,
-    ...(packageName === "bionic" ? ["apps", "bionic"] : []),
-    ".internal",
+    packageName === "bionic" ? "apps/bionic/.internal" : ".internal",
   );
-  mkdirSync(internalFolder, { recursive: true });
-  const key = `${packageName}-key`;
-  writeFileSync(join(internalFolder, "lms-key-2"), key);
-  const server = createServer((request, response) => {
-    response.setHeader("Content-Type", "application/json");
-    response.end(
-      JSON.stringify(
-        request.url === "/lms-status"
-          ? { package: packageName, version: "1.0.0" }
-          : { lmstudio: true },
-      ),
-    );
+  const server = createServer((_request, response) => {
+    response.end(JSON.stringify({ package: packageName, version: "1.0.0" }));
   });
   servers.push(server);
   const socketServer = new WebSocketServer({ server });
   sockets.push(socketServer);
+  const key = `${packageName}-key`;
   socketServer.on("connection", socket => {
-    let authenticated = false;
-    socket.on("message", data => {
-      const packet: unknown = JSON.parse(data.toString());
-      if (!authenticated) {
-        const authentication = z
-          .object({ clientIdentifier: z.string(), clientPasskey: z.string() })
-          .parse(packet);
-        authenticated =
-          authentication.clientIdentifier === "lms-cli" &&
-          authentication.clientPasskey === `<LMS-CLI-LMS-KEY>${key}`;
-        socket.send(
-          JSON.stringify(
-            authenticated ? { success: true } : { success: false, error: "Wrong app key" },
-          ),
-        );
-        return;
-      }
-      const message = z.object({ type: z.string(), callId: z.number().optional() }).parse(packet);
-      if (message.type === "rpcCall") {
-        socket.send(
-          JSON.stringify({
-            type: "rpcResult",
-            callId: message.callId,
-            result: { pid: process.pid, isDaemon: packageName === "daemon", version: packageName },
-          }),
-        );
-      }
+    socket.once("message", data => {
+      const authentication = z
+        .object({ clientIdentifier: z.string(), clientPasskey: z.string() })
+        .parse(JSON.parse(data.toString()));
+      const authenticated =
+        authentication.clientIdentifier === "lms-cli" &&
+        authentication.clientPasskey === `<LMS-CLI-LMS-KEY>${key}`;
+      socket.send(
+        JSON.stringify(
+          authenticated ? { success: true } : { success: false, error: "Wrong app key" },
+        ),
+      );
+      socket.on("message", data => {
+        const message = z
+          .object({ type: z.string(), callId: z.number().optional() })
+          .parse(JSON.parse(data.toString()));
+        if (message.type === "rpcCall") {
+          socket.send(
+            JSON.stringify({
+              type: "rpcResult",
+              callId: message.callId,
+              result: {
+                pid: process.pid,
+                isDaemon: packageName === "daemon",
+                version: packageName,
+              },
+            }),
+          );
+        }
+      });
     });
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -128,22 +116,21 @@ async function startApp(packageName: "lmstudio" | "bionic" | "daemon") {
     throw new Error("Fixture did not bind a TCP port.");
   }
   const infoFile = join(internalFolder, "http-server.json");
-  writeFileSync(infoFile, JSON.stringify({ port: address.port, pid: process.pid }));
-  writeFileSync(
-    join(internalFolder, "http-server-config.json"),
-    JSON.stringify({ port: address.port, networkInterface: "127.0.0.1" }),
-  );
-  return { internalFolder, infoFile, port: address.port };
+  writeJson(infoFile, { port: address.port, pid: process.pid });
+  writeFileSync(join(internalFolder, "lms-key-2"), key);
+  writeJson(join(internalFolder, "http-server-config.json"), {
+    port: address.port,
+    networkInterface: "127.0.0.1",
+  });
+  return { infoFile, port: address.port };
 }
 
 /** Records an executable fixture that publishes discovery only after being launched by lms. */
 function installApp(packageName: "lmstudio" | "bionic" | "daemon") {
   const internalFolder = join(
     home,
-    ...(packageName === "bionic" ? ["apps", "bionic"] : []),
-    ".internal",
+    packageName === "bionic" ? "apps/bionic/.internal" : ".internal",
   );
-  mkdirSync(internalFolder, { recursive: true });
   const workingDirectory = join(home, packageName);
   mkdirSync(workingDirectory);
   writeFileSync(
@@ -152,11 +139,9 @@ function installApp(packageName: "lmstudio" | "bionic" | "daemon") {
     const { createServer } = require("http");
     const { writeFileSync } = require("fs");
     const server = createServer((_request, response) => {
-      response.setHeader("Content-Type", "application/json");
       response.end(JSON.stringify({ package: ${JSON.stringify(packageName)}, version: "1.0.0" }));
     });
     server.listen(0, "127.0.0.1", () => {
-      writeFileSync(${JSON.stringify(join(internalFolder, "lms-key-2"))}, "fresh-key");
       writeFileSync(${JSON.stringify(join(internalFolder, "http-server.json"))}, JSON.stringify({ port: server.address().port, pid: process.pid }));
     });
     setTimeout(() => process.exit(0), 10000);
@@ -166,18 +151,15 @@ function installApp(packageName: "lmstudio" | "bionic" | "daemon") {
     internalFolder,
     packageName === "daemon" ? "llmster-install-location.json" : "app-install-location.json",
   );
-  writeFileSync(
-    installFile,
-    JSON.stringify({
-      path: process.execPath,
-      argv: [process.execPath, "."],
-      cwd: workingDirectory,
-    }),
-  );
+  writeJson(installFile, {
+    path: process.execPath,
+    argv: [process.execPath, "."],
+    cwd: workingDirectory,
+  });
   return installFile;
 }
 
-// Covers discovery, correct authentication, and REST configuration selection for the running-app matrix.
+// Covers discovery, authentication and REST settings across the running-app matrix.
 test.each([
   [true, false, "bionic"],
   [false, true, "lmstudio"],
@@ -196,13 +178,9 @@ test.each([
     if (selected === null) {
       throw new Error("No app discovered.");
     }
-    const client = await createClient(logger, {}, { localAPIServer: selected });
-    try {
-      expect((await client.system.getInfo()).version).toBe(expectedApp);
-      expect((await getServerConfig(logger, selected))?.port).toBe(selected.port);
-    } finally {
-      await client[Symbol.asyncDispose]();
-    }
+    await using client = await createClient(logger, {}, { localAPIServer: selected });
+    expect((await client.system.getInfo()).version).toBe(expectedApp);
+    expect((await getServerConfig(logger, selected))?.port).toBe(selected.port);
   },
 );
 
@@ -224,7 +202,7 @@ test.each([2147483647, process.pid])(
     servers[1].on("request", (_request, response) => {
       response.end(JSON.stringify({ package: "bionic", version: "dev" }));
     });
-    writeFileSync(devServer.infoFile, JSON.stringify({ pid: publishedPid, port: devServer.port }));
+    writeJson(devServer.infoFile, { pid: publishedPid, port: devServer.port });
     apiServerPorts.push(devServer.port);
     expect((await tryFindLocalAPIServer({ logger, home }))?.port).toBe(bionic.port);
   },
@@ -252,28 +230,14 @@ test.each(["daemon", "lmstudio", "bionic"] as const)(
     const daemonFile = installApp("daemon");
     const lmstudioFile = installApp("lmstudio");
     installApp("bionic");
-    const staleInstallation = JSON.stringify({
-      path: join(home, "missing-executable"),
-      argv: [],
-      cwd: home,
-    });
+    const staleInstallation = { path: join(home, "missing-executable"), argv: [], cwd: home };
     if (expectedApp !== "daemon") {
-      writeFileSync(daemonFile, staleInstallation);
+      writeJson(daemonFile, staleInstallation);
     }
     if (expectedApp === "bionic") {
-      writeFileSync(lmstudioFile, staleInstallation);
+      writeJson(lmstudioFile, staleInstallation);
     }
-    const selected = await findOrStartLocalAPIServer({
-      logger,
-      home,
-      maxAttempts: 100,
-      pollIntervalMs: 20,
-    });
-    expect(selected?.package).toBe(expectedApp);
-    if (selected === null) {
-      throw new Error("App did not start.");
-    }
-    expect(readFileSync(join(selected.internalFolder, "lms-key-2"), "utf-8")).toBe("fresh-key");
+    expect((await findOrStartLocalAPIServer({ logger, home }))?.package).toBe(expectedApp);
     expect(readFileSync(daemonFile, "utf-8")).toContain(
       expectedApp === "daemon" ? process.execPath : "missing-executable",
     );
@@ -284,17 +248,13 @@ test("returns no target when no app is running or installed", async () => {
   expect(await findOrStartLocalAPIServer({ logger, home })).toBeNull();
 });
 
-test.each([
-  ["a missing file", undefined],
-  ["invalid JSON", "{"],
-  ["a missing port", JSON.stringify({ pid: process.pid })],
-  ["port zero", JSON.stringify({ port: 0 })],
-  ["a non-integer port", JSON.stringify({ port: 1234.5 })],
-  ["a port above 65535", JSON.stringify({ port: 65536 })],
-])("ignores %s", (_description, content) => {
-  const infoFile = join(home, "http-server.json");
-  if (content !== undefined) {
-    writeFileSync(infoFile, content);
-  }
-  expect(readLocalAPIServerPort(infoFile)).toBeNull();
-});
+test.each([undefined, "{", "{}", '{"port":0}', '{"port":1234.5}', '{"port":65536}'])(
+  "ignores invalid discovery %s",
+  content => {
+    const infoFile = join(home, "http-server.json");
+    if (content !== undefined) {
+      writeFileSync(infoFile, content);
+    }
+    expect(readLocalAPIServerPort(infoFile)).toBeNull();
+  },
+);

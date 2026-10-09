@@ -10,8 +10,11 @@ import {
   type CreateClientArgs,
 } from "../createClient.js";
 import { exists } from "../exists.js";
-import { findOrStartLocalAPIServer } from "../findOrStartLocalAPIServer.js";
-import { tryFindLocalAPIServer, type LocalAPIServer } from "../localAPIServer.js";
+import {
+  findOrStartLocalAPIServer,
+  tryFindLocalAPIServer,
+  type LocalAPIServer,
+} from "../localAPIServer.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
@@ -160,29 +163,18 @@ stop.action(async options => {
     logger.error("The server is not running.");
     process.exit(1);
   }
-  let port: number;
-  let networkInterface: string;
-  try {
-    const serverConfig = await getServerConfig(logger, localAPIServer);
-    if (serverConfig === undefined) {
-      logger.error("The server is not running.");
-      process.exit(1);
-    }
-    port = serverConfig.port;
-    networkInterface = serverConfig.networkInterface;
-  } catch (e) {
-    logger.error(`The server is not running.`);
-    process.exit(1);
-  }
-  const running = await checkHttpServer(logger, port, networkInterface);
-  if (!running) {
+  const config = await getServerConfig(logger, localAPIServer).catch(() => undefined);
+  if (
+    config === undefined ||
+    !(await checkHttpServer(logger, config.port, config.networkInterface))
+  ) {
     logger.error(`The server is not running.`);
     process.exit(1);
   }
 
   await using client = await createClient(logger, options, { localAPIServer });
   await client.system.stopHttpServer();
-  logger.info(`Stopped the server on port ${port}.`);
+  logger.info(`Stopped the server on port ${config.port}.`);
 });
 
 const status = new Command<[], ServerStatusCommandOptions>()
@@ -202,20 +194,16 @@ status.action(async options => {
   const logger = createLogger(options);
   const localAPIServer = await tryFindLocalAPIServer({ logger });
   const { json = false } = options;
-  let port: undefined | number = undefined;
-  let networkInterface: undefined | string = undefined;
-  try {
-    const config =
-      localAPIServer === null ? undefined : await getServerConfig(logger, localAPIServer);
-    port = config?.port;
-    networkInterface = config?.networkInterface;
-  } catch (e) {
-    logger.debug(`Failed to read last status`, e);
-  }
-  let running = false;
-  if (port !== undefined) {
-    running = await checkHttpServer(logger, port, networkInterface);
-  }
+  const config =
+    localAPIServer === null
+      ? undefined
+      : await getServerConfig(logger, localAPIServer).catch(error => {
+          logger.debug("Failed to read last status", error);
+          return undefined;
+        });
+  const port = config?.port;
+  const running =
+    config !== undefined && (await checkHttpServer(logger, config.port, config.networkInterface));
   if (json) {
     process.stdout.write(JSON.stringify({ running, port }) + "\n");
     return;

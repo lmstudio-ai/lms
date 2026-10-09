@@ -6,8 +6,11 @@ import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import { exists } from "./exists.js";
-import { findOrStartLocalAPIServer } from "./findOrStartLocalAPIServer.js";
-import { getInternalFolderForPort, type LocalAPIServer } from "./localAPIServer.js";
+import {
+  findOrStartLocalAPIServer,
+  getInternalFolderForPort,
+  type LocalAPIServer,
+} from "./localAPIServer.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { createRefinedNumberParser } from "./types/refinedNumber.js";
 
@@ -141,38 +144,26 @@ export async function createClient(
     auth = {
       clientIdentifier: `lms-cli-remote-${randomBytes(18).toString("base64")}`,
     };
+  } else if (
+    lmsKey.startsWith("<") &&
+    (process.env.LMS_FORCE_PROD === undefined || process.env.LMS_FORCE_PROD === "")
+  ) {
+    // An uninjected key without LMS_FORCE_PROD identifies a development build.
+    logger.warnText`
+      You are using a development build of lms-cli. Privileged features such as "lms push" will
+      not work.
+    `;
+    auth = { clientIdentifier: "lms-cli-dev" };
   } else {
-    // Not remote. We need to check if this is a production build.
-    if (
-      lmsKey.startsWith("<") &&
-      (process.env.LMS_FORCE_PROD === undefined || process.env.LMS_FORCE_PROD === "")
-    ) {
-      // lmsKey not injected and we did not force prod, this is not a production build.
-      logger.warnText`
-        You are using a development build of lms-cli. Privileged features such as "lms push" will
-        not work.
-      `;
-      auth = {
-        clientIdentifier: "lms-cli-dev",
-      };
-    } else {
-      // Resolve the key after discovery/startup, which may have generated a fresh app-specific key.
-      const lmsKey2Path = join(
-        localAPIServer?.internalFolder ?? getInternalFolderForPort(port),
-        "lms-key-2",
-      );
-      if (await exists(lmsKey2Path)) {
-        const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
-        auth = {
-          clientIdentifier: "lms-cli",
-          clientPasskey: lmsKey + lmsKey2,
-        };
-      } else {
-        // Development instances can accept the CLI identifier without a published key.
-        auth = {
-          clientIdentifier: "lms-cli",
-        };
-      }
+    // Resolve the key after discovery/startup, which may have generated a fresh app-specific key.
+    const lmsKey2Path = join(
+      localAPIServer?.internalFolder ?? getInternalFolderForPort(port),
+      "lms-key-2",
+    );
+    // Development instances can accept the CLI identifier without a published key.
+    auth = { clientIdentifier: "lms-cli" };
+    if (await exists(lmsKey2Path)) {
+      auth.clientPasskey = lmsKey + (await readFile(lmsKey2Path, "utf-8")).trim();
     }
   }
   const baseUrl = `ws://${host}:${port}`;
