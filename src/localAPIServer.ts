@@ -151,8 +151,8 @@ export async function findOrStartLocalAPIServer({
           );
         }
       }
-      logger.error("Timed out waiting for the local app to start.");
-      return null;
+      child.kill();
+      throw new Error("Timed out waiting for the local app to start.");
     } catch (error) {
       logger.debug(`Cannot start the installation recorded at ${relativePath}:`, error);
     }

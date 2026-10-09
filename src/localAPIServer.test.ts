@@ -254,6 +254,27 @@ test("skips an executable that starts but exits before serving an API", async ()
   expect((await findOrStartLocalAPIServer({ logger, home }))?.package).toBe("bionic");
 });
 
+test("skips a hung installation after timeout and terminates its spawned process", async () => {
+  installApp("daemon");
+  installApp("bionic");
+  const pidFile = join(home, "hung-pid");
+  writeFileSync(
+    join(home, "daemon", "index.js"),
+    `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
+     setInterval(() => {}, 1000);`,
+  );
+  try {
+    expect((await findOrStartLocalAPIServer({ logger, home }))?.package).toBe("bionic");
+    expect(() => process.kill(Number(readFileSync(pidFile, "utf-8")), 0)).toThrow();
+  } finally {
+    try {
+      process.kill(Number(readFileSync(pidFile, "utf-8")));
+    } catch {
+      // The timed-out fixture should already have exited.
+    }
+  }
+}, 75000);
+
 test("returns no target when no app is running or installed", async () => {
   expect(await findOrStartLocalAPIServer({ logger, home })).toBeNull();
 });
