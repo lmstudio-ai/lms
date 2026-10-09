@@ -15,11 +15,12 @@ export const status = new Command<[], DaemonStatusCommandOptions>()
 
 addLogLevelOptions(status);
 
+// Report the selected running app without waking another installation.
 status.action(async (options: DaemonStatusCommandOptions) => {
   const logger = createLogger(options);
   const useJson = options.json ?? false;
 
-  const serverStatus = await tryFindLocalAPIServer(logger);
+  const serverStatus = await tryFindLocalAPIServer({ logger });
   if (serverStatus === null) {
     if (useJson === true) {
       console.log(JSON.stringify({ status: "not-running" }));
@@ -27,14 +28,18 @@ status.action(async (options: DaemonStatusCommandOptions) => {
       console.info("LM Studio is not running");
     }
   } else {
-    await using client = await createClient(logger);
+    await using client = await createClient(logger, {}, { localAPIServer: serverStatus });
     const daemonInfo = await client.system.getInfo();
     if (useJson === true) {
       console.log(
         JSON.stringify({ status: "running", pid: daemonInfo.pid, isDaemon: daemonInfo.isDaemon }),
       );
     } else {
-      const processName = daemonInfo.isDaemon === true ? "llmster" : "LM Studio";
+      const processName = daemonInfo.isDaemon
+        ? "llmster"
+        : serverStatus.package === "bionic"
+          ? "Bionic"
+          : "LM Studio";
       console.info(`${processName} v${daemonInfo.version} is running (PID: ${daemonInfo.pid})`);
     }
   }
