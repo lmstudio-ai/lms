@@ -102,7 +102,7 @@ export async function tryFindLocalAPIServer({
   return publishedServer?.package === "bionic" ? publishedServer : null;
 }
 
-/** Uses a running app, or starts the first valid installation: llmster, LM Studio, then Bionic. */
+/** Uses a running app, or tries llmster, LM Studio, then Bionic, skipping failed launches. */
 export async function findOrStartLocalAPIServer({
   logger,
   home = lmstudioHome,
@@ -138,19 +138,24 @@ export async function findOrStartLocalAPIServer({
       child.unref();
       logger.info("Starting local model service...");
       logger.debug("Starting local app:", { executablePath, launchArguments, workingDirectory });
+      for (let attempt = 0; attempt < 60; attempt++) {
+        await setTimeout(1000);
+        const server = await tryFindLocalAPIServer({ logger, home });
+        if (server !== null) {
+          return server;
+        }
+        // A process exiting without an API is a failed launch, even with exit code 0.
+        if (child.exitCode !== null || child.signalCode !== null) {
+          throw new Error(
+            `Local app exited before publishing its API (code ${child.exitCode}, signal ${child.signalCode}).`,
+          );
+        }
+      }
+      logger.error("Timed out waiting for the local app to start.");
+      return null;
     } catch (error) {
       logger.debug(`Cannot start the installation recorded at ${relativePath}:`, error);
-      continue;
     }
-    for (let attempt = 0; attempt < 60; attempt++) {
-      await setTimeout(1000);
-      const server = await tryFindLocalAPIServer({ logger, home });
-      if (server !== null) {
-        return server;
-      }
-    }
-    logger.error("Timed out waiting for the local app to start.");
-    return null;
   }
   logger.error("No running LM Studio or Bionic app, and no valid installation was found.");
   return null;

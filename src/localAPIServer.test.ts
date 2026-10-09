@@ -244,6 +244,16 @@ test.each(["daemon", "lmstudio", "bionic"] as const)(
   },
 );
 
+test("skips an executable that starts but exits before serving an API", async () => {
+  installApp("bionic");
+  writeJson(join(home, ".internal", "llmster-install-location.json"), {
+    path: process.execPath,
+    argv: [],
+    cwd: home,
+  });
+  expect((await findOrStartLocalAPIServer({ logger, home }))?.package).toBe("bionic");
+});
+
 test("returns no target when no app is running or installed", async () => {
   expect(await findOrStartLocalAPIServer({ logger, home })).toBeNull();
 });
