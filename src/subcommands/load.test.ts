@@ -9,6 +9,32 @@ describe("assertLoadConfigSupportedForCliModel", () => {
     jest.restoreAllMocks();
   });
 
+  it("allows decision lifecycle load controls", () => {
+    const logger = { errorWithoutPrefix: jest.fn() } as unknown as SimpleLogger;
+    assertLoadConfigSupportedForCliModel({
+      model: { type: "decision" },
+      loadConfig: { autoFit: true, maxParallelPredictions: 2 },
+      logger,
+    });
+    expect(logger.errorWithoutPrefix).not.toHaveBeenCalled();
+  });
+
+  it.each([{ engineCwd: "." }, { engineConfigFileContents: "" }, { speculativeDraftMtp: false }])(
+    "rejects LLM-only settings for decision models: %j",
+    loadConfig => {
+      const logger = { errorWithoutPrefix: jest.fn() } as unknown as SimpleLogger;
+      jest.spyOn(process, "exit").mockImplementation(() => {
+        throw new Error("exit");
+      });
+      expect(() =>
+        assertLoadConfigSupportedForCliModel({ model: { type: "decision" }, loadConfig, logger }),
+      ).toThrow("exit");
+      expect(logger.errorWithoutPrefix).toHaveBeenCalledWith(
+        expect.stringContaining("can only be configured for LLM models"),
+      );
+    },
+  );
+
   it("rejects AutoFit for embedding models", () => {
     const logger = { errorWithoutPrefix: jest.fn() } as unknown as SimpleLogger;
     jest.spyOn(process, "exit").mockImplementation(code => {

@@ -38,6 +38,7 @@ status.action(async function () {
     const loadedModels = [
       ...(await client.llm.listLoaded()),
       ...(await client.embedding.listLoaded()),
+      ...(await client.decision.listLoaded()),
     ];
 
     // Get model info for each loaded model
@@ -142,6 +143,7 @@ status.action(async function () {
   const loadedModels = [
     ...(await client.llm.listLoaded()),
     ...(await client.embedding.listLoaded()),
+    ...(await client.decision.listLoaded()),
   ];
 
   const modelInfos = await Promise.all(
