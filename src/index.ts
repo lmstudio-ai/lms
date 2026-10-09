@@ -22,6 +22,7 @@ import { log } from "./subcommands/log.js";
 import { login } from "./subcommands/login.js";
 import { logout } from "./subcommands/logout.js";
 import { push } from "./subcommands/push.js";
+import { remove } from "./subcommands/remove.js";
 import { runtime } from "./subcommands/runtime/index.js";
 import { server } from "./subcommands/server.js";
 import { status } from "./subcommands/status.js";
@@ -165,7 +166,7 @@ Learn more:           ${chalk.blue("https://lmstudio.ai/docs/developer")}
 Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`,
 );
 
-addCommandsGroup("Local models", [chat, get, load, unload, ls, ps, importCmd], "#22D3EE");
+addCommandsGroup("Local models", [chat, get, load, unload, remove, ls, ps, importCmd], "#22D3EE");
 addCommandsGroup("Serve", [server, log], "#34D399");
 addCommandsGroup("Remote Instances", [link], "#818CF8");
 addCommandsGroup("Runtime", [runtime], "#C084FC");
