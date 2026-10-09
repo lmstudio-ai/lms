@@ -37,6 +37,7 @@ Here are some frequently used commands:
 - `lms server stop` - To stop the local API server.
 - `lms ls` - To list all downloaded models.
   - `lms ls --json` - To list all downloaded models in machine-readable JSON format.
+  - `lms ls --decision` - To list only downloaded decision models.
 - `lms ps` - To list all loaded models available for inferencing.
   - `lms ps --json` - To list all loaded models available for inferencing in machine-readable JSON format.
 - `lms load` - To load a model
