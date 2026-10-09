@@ -47,6 +47,20 @@ Here are some frequently used commands:
 - `lms create` - To create a new project with LM Studio SDK
 - `lms log stream` - To stream logs from LM Studio
 
+## Local app selection
+
+`lms` prefers a running LM Studio or llmster over Bionic. It connects to Bionic when Bionic is the
+only running app, without starting another backend. When none are running, it tries valid recorded
+installations in this order: llmster, LM Studio, Bionic. Missing or stale installations are skipped.
+
+Discovery, CLI authentication, and REST server settings all come from the selected app. Bionic uses
+`~/.lmstudio/apps/bionic/.internal`; LM Studio and llmster retain `~/.lmstudio/.internal` (under your
+configured LM Studio home). Shared model and runtime storage is unchanged.
+
+`lms status`, `lms server status`, and `lms server stop` do not start an app. In development,
+`LMS_API_SERVER_INFO_PATH` selects one exact instance and never falls back to another app or starts
+one if that instance is unavailable.
+
 # Contributing
 
 The CLI is part of the [lmstudio.js monorepo](https://github.com/lmstudio-ai/lmstudio.js) and cannot be built standalone.

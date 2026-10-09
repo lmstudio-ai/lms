@@ -1,6 +1,8 @@
 import { Command, Option, type OptionValues } from "@commander-js/extra-typings";
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
 import { readFile } from "fs/promises";
+import { join } from "path";
+import { z } from "zod";
 import {
   checkHttpServer,
   createClient,
@@ -8,14 +10,15 @@ import {
   type CreateClientArgs,
 } from "../createClient.js";
 import { exists } from "../exists.js";
-import { serverConfigPath } from "../lmstudioPaths.js";
+import { findOrStartLocalAPIServer } from "../findOrStartLocalAPIServer.js";
+import { tryFindLocalAPIServer, type LocalAPIServer } from "../localAPIServer.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { createRefinedNumberParser } from "../types/refinedNumber.js";
 
-interface HttpServerConfig {
-  port: number;
-  networkInterface: string;
-}
+const httpServerConfigSchema = z.object({
+  port: z.number().int().min(1).max(65535),
+  networkInterface: z.string(),
+});
 
 type ServerStartCommandOptions = OptionValues &
   CreateClientArgs &
@@ -53,17 +56,14 @@ async function checkHttpServerWithRetries(
   return false;
 }
 
-/**
- * Gets the last status of the server, or undefined if the server has never been started
- */
-export async function getServerConfig(logger: SimpleLogger): Promise<HttpServerConfig | undefined> {
-  const lastStatusPath = serverConfigPath;
+/** Reads REST settings from the same app selected for API requests and authentication. */
+export async function getServerConfig(logger: SimpleLogger, localAPIServer: LocalAPIServer) {
+  const lastStatusPath = join(localAPIServer.internalFolder, "http-server-config.json");
   if (!(await exists(lastStatusPath))) {
     return undefined;
   }
   logger.debug(`Reading last status from ${lastStatusPath}`);
-  const lastStatus = JSON.parse(await readFile(lastStatusPath, "utf-8")) as HttpServerConfig;
-  return lastStatus;
+  return httpServerConfigSchema.parse(JSON.parse(await readFile(lastStatusPath, "utf-8")));
 }
 
 const start = new Command<[], ServerStartCommandOptions>()
@@ -96,10 +96,16 @@ const start = new Command<[], ServerStartCommandOptions>()
 
 addLogLevelOptions(start);
 
+// Resolve the app before reading its settings or starting its REST server.
 start.action(async options => {
   const { port, bind, cors = false, ...logArgs } = options;
   const logger = createLogger(logArgs);
-  await using client = await createClient(logger, logArgs);
+  const localAPIServer = await findOrStartLocalAPIServer({ logger });
+  if (localAPIServer === null) {
+    logger.error("Failed to connect to a local app.");
+    process.exit(1);
+  }
+  await using client = await createClient(logger, logArgs, { localAPIServer });
   if (cors) {
     logger.warnText`
       CORS is enabled. This means any website you visit can use the LM Studio server.
@@ -113,7 +119,10 @@ start.action(async options => {
   }
   const resolvedNetworkInterface = bind ?? envNetworkInterface ?? "127.0.0.1";
 
-  const resolvedPort = port ?? (await getServerConfig(logger))?.port ?? DEFAULT_SERVER_PORT;
+  const resolvedPort =
+    port ??
+    (await getServerConfig(logger, localAPIServer))?.port ??
+    (localAPIServer.package === "bionic" ? 1235 : DEFAULT_SERVER_PORT);
   logger.debug(`Attempting to start the server on port ${resolvedPort}...`);
 
   if (resolvedNetworkInterface !== "127.0.0.1") {
@@ -143,14 +152,24 @@ const stop = new Command<[], ServerStopCommandOptions>()
 
 addLogLevelOptions(stop);
 
+// A stop command must not wake an app or switch targets after reading its REST settings.
 stop.action(async options => {
   const logger = createLogger(options);
+  const localAPIServer = await tryFindLocalAPIServer({ logger });
+  if (localAPIServer === null) {
+    logger.error("The server is not running.");
+    process.exit(1);
+  }
   let port: number;
   let networkInterface: string;
   try {
-    const serverConfig = await getServerConfig(logger);
-    port = serverConfig!.port;
-    networkInterface = serverConfig!.networkInterface;
+    const serverConfig = await getServerConfig(logger, localAPIServer);
+    if (serverConfig === undefined) {
+      logger.error("The server is not running.");
+      process.exit(1);
+    }
+    port = serverConfig.port;
+    networkInterface = serverConfig.networkInterface;
   } catch (e) {
     logger.error(`The server is not running.`);
     process.exit(1);
@@ -161,7 +180,7 @@ stop.action(async options => {
     process.exit(1);
   }
 
-  await using client = await createClient(logger, options);
+  await using client = await createClient(logger, options, { localAPIServer });
   await client.system.stopHttpServer();
   logger.info(`Stopped the server on port ${port}.`);
 });
@@ -178,13 +197,16 @@ const status = new Command<[], ServerStatusCommandOptions>()
 
 addLogLevelOptions(status);
 
+// Status is read-only and uses the selected app's REST configuration.
 status.action(async options => {
   const logger = createLogger(options);
+  const localAPIServer = await tryFindLocalAPIServer({ logger });
   const { json = false } = options;
   let port: undefined | number = undefined;
   let networkInterface: undefined | string = undefined;
   try {
-    const config = await getServerConfig(logger);
+    const config =
+      localAPIServer === null ? undefined : await getServerConfig(logger, localAPIServer);
     port = config?.port;
     networkInterface = config?.networkInterface;
   } catch (e) {

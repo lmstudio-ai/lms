@@ -1,13 +1,13 @@
 import { Option, type Command, type OptionValues } from "@commander-js/extra-typings";
 import { text, type SimpleLogger } from "@lmstudio/lms-common";
-import { findOrStartLlmster } from "@lmstudio/lms-common-server";
 import { LMStudioClient, type LMStudioClientConstructorOpts } from "@lmstudio/sdk";
 import chalk from "chalk";
 import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
+import { join } from "path";
 import { exists } from "./exists.js";
-import { lmsKey2Path } from "./lmstudioPaths.js";
-import { readLocalAPIServerPort, tryFindLocalAPIServer } from "./localAPIServer.js";
+import { findOrStartLocalAPIServer } from "./findOrStartLocalAPIServer.js";
+import { getInternalFolderForPort, type LocalAPIServer } from "./localAPIServer.js";
 import { type LogLevelArgs } from "./logLevel.js";
 import { createRefinedNumberParser } from "./types/refinedNumber.js";
 
@@ -87,14 +87,16 @@ export interface CreateClientArgs {
   port?: number;
 }
 
-export interface CreateClientOpts {}
+export interface CreateClientOpts {
+  localAPIServer?: LocalAPIServer;
+}
 const lmsKey = "<LMS-CLI-LMS-KEY>";
 
 /** Resolves the requested LM Studio instance and creates the authenticated CLI client. */
 export async function createClient(
   logger: SimpleLogger,
   args: CreateClientArgs & LogLevelArgs = {},
-  _opts: CreateClientOpts = {},
+  { localAPIServer }: CreateClientOpts = {},
 ) {
   let { host, port } = args;
   let isRemote = true;
@@ -108,6 +110,31 @@ export async function createClient(
     logger.error(`Host should not include the port number. Use ${chalk.yellow("--port")} instead.`);
     process.exit(1);
   }
+  if (port === undefined && host === "127.0.0.1") {
+    const selectedServer = localAPIServer ?? (await findOrStartLocalAPIServer({ logger }));
+    if (selectedServer === null) {
+      logger.error(
+        process.env.LMS_API_SERVER_INFO_PATH === undefined
+          ? "Failed to start or connect to a local LM Studio or Bionic API server."
+          : `Failed to connect using ${process.env.LMS_API_SERVER_INFO_PATH}.`,
+      );
+      process.exit(1);
+    }
+    localAPIServer = selectedServer;
+    port = selectedServer.port;
+  } else {
+    port ??= DEFAULT_SERVER_PORT;
+    if (!(await checkHttpServer(logger, port, host))) {
+      logger.error(
+        text`
+          The server does not appear to be running at ${host}:${port}. Please make sure the server
+          is running and accessible at the specified address.
+        `,
+      );
+      process.exit(1);
+    }
+  }
+
   let auth: LMStudioClientConstructorOpts;
   if (isRemote) {
     // If connecting to a remote server, we will use a random client identifier.
@@ -129,6 +156,11 @@ export async function createClient(
         clientIdentifier: "lms-cli-dev",
       };
     } else {
+      // Resolve the key after discovery/startup, which may have generated a fresh app-specific key.
+      const lmsKey2Path = join(
+        localAPIServer?.internalFolder ?? getInternalFolderForPort(port),
+        "lms-key-2",
+      );
       if (await exists(lmsKey2Path)) {
         const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
         auth = {
@@ -136,74 +168,14 @@ export async function createClient(
           clientPasskey: lmsKey + lmsKey2,
         };
       } else {
-        // This case will happen when the CLI is the production build, yet the local LM Studio has
-        // not been run yet (so no lms-key-2 file). In this case, we will just use a dummy client
-        // identifier as we will soon try to wake up the service and refetch the key.
+        // Development instances can accept the CLI identifier without a published key.
         auth = {
           clientIdentifier: "lms-cli",
         };
       }
     }
   }
-  if (port === undefined && host === "127.0.0.1") {
-    // Taskmaster can select one exact development instance. Normal lms runs retain the existing
-    // discovery and wake-up behavior.
-    const serverStatus =
-      process.env.LMS_API_SERVER_INFO_PATH === undefined
-        ? await findOrStartLlmster({
-            getLocalAPIServerPort: readLocalAPIServerPort,
-            logger,
-          })
-        : await tryFindLocalAPIServer(logger);
-
-    if (serverStatus !== null) {
-      const baseUrl = `ws://${host}:${serverStatus.port}`;
-      logger.debug(`Found local API server at ${baseUrl}`);
-
-      if (
-        auth.clientIdentifier === "lms-cli" &&
-        process.env.LMS_API_SERVER_INFO_PATH === undefined
-      ) {
-        // Refetch the lms key due to the possibility of a new key being generated.
-        const lmsKey2 = (await readFile(lmsKey2Path, "utf-8")).trim();
-        auth = {
-          ...auth,
-          clientPasskey: lmsKey + lmsKey2,
-        };
-      }
-
-      return new LMStudioClient({ baseUrl, logger, ...auth });
-    }
-
-    logger.error(
-      process.env.LMS_API_SERVER_INFO_PATH === undefined
-        ? "Failed to start or connect to local LM Studio API server."
-        : `Failed to connect using ${process.env.LMS_API_SERVER_INFO_PATH}.`,
-    );
-    process.exit(1);
-  }
-
-  if (port === undefined) {
-    port = DEFAULT_SERVER_PORT;
-  }
-
-  logger.debug(`Connecting to server at ${host}:${port}`);
-  if (!(await checkHttpServer(logger, port, host))) {
-    logger.error(
-      text`
-        The server does not appear to be running at ${host}:${port}. Please make sure the server
-        is running and accessible at the specified address.
-      `,
-    );
-    process.exit(1);
-  }
   const baseUrl = `ws://${host}:${port}`;
-  logger.debug(`Found server at ${port}`);
-  const client = new LMStudioClient({
-    baseUrl,
-    logger,
-    ...auth,
-  });
-
-  return client;
+  logger.debug(`Connecting to ${localAPIServer?.package ?? "server"} at ${baseUrl}`);
+  return new LMStudioClient({ baseUrl, logger, ...auth });
 }

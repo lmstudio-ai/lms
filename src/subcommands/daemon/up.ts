@@ -15,12 +15,17 @@ const up = new Command<[], DaemonUpCommandOptions>()
 
 addLogLevelOptions(up);
 
+// Reuse the selected running app before considering a cold start.
 up.action(async (options: DaemonUpCommandOptions) => {
   const logger = createLogger(options);
   const useJson = options.json ?? false;
 
-  const previousStatus = await tryFindLocalAPIServer(logger);
-  await using client = await createClient(logger);
+  const previousStatus = await tryFindLocalAPIServer({ logger });
+  await using client = await createClient(
+    logger,
+    {},
+    { localAPIServer: previousStatus ?? undefined },
+  );
   const daemonInfo = await client.system.getInfo();
 
   if (useJson) {
