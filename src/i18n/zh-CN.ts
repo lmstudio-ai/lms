@@ -327,8 +327,8 @@ export const zhCN: Record<string, string> = {
   "Daemon is not running.": "守护进程未在运行。",
   "Shutting down llmster...": "正在关闭 llmster...",
   "Done.": "完成。",
-  "The daemon is currently running as part of LM Studio. Please exit LM Studio to stop it.":
-    "守护进程当前作为 LM Studio 的一部分运行。请退出 LM Studio 以停止它。",
+  "The daemon is currently running as part of {p0}. Please exit {p0} to stop it.":
+    "守护进程当前作为 {p0} 的一部分运行。请退出 {p0} 以停止它。",
   "Commands for managing the LM Studio daemon": "管理 LM Studio 守护进程的命令",
   "Update the llmster daemon": "更新 llmster 守护进程",
   "Use the beta channel for the daemon upgrade": "守护进程升级使用 beta 渠道",
@@ -531,10 +531,10 @@ export const zhCN: Record<string, string> = {
   "Install location file {p0} at {p1} does not contain a valid executable path.":
     "{p1} 处的安装位置文件 {p0} 不包含有效的可执行文件路径。",
   "The daemon is already running (PID: {p0}).": "守护进程已在运行（PID：{p0}）。",
-  "LM Studio is already running (PID: {p0}); not starting a second daemon.":
-    "LM Studio 已在运行（PID：{p0}），不会再启动第二个守护进程。",
+  "{p0} is already running (PID: {p1}); not starting a second daemon.":
+    "{p0} 已在运行（PID：{p1}），不会再启动第二个守护进程。",
   "llmster started (PID: {p0}).": "llmster 已启动（PID：{p0}）。",
-  "LM Studio started (PID: {p0}).": "LM Studio 已启动（PID：{p0}）。",
+  "{p0} started (PID: {p1}).": "{p0} 已启动（PID：{p1}）。",
   'Could not update: "ldconfig" must be available on your PATH before updating.\n\nPlease ensure ldconfig is installed and in your PATH, then run this again:\n\n      lms daemon update\n\nError details: {p0}\n':
     "更新失败：更新前必须确保 ldconfig 已在你的 PATH 中。\n\n请确认 ldconfig 已安装并加入 PATH，然后重新运行：\n\n      lms daemon update\n\n错误详情：{p0}\n",
   '📣 Notice: One-time dependency update needed.\n\nThe next version of llmster requires "libatomic", which is not currently installed on your system.\n\n1. To install it:\n\n      Debian/Ubuntu: sudo apt-get update && sudo apt-get install -y libatomic1\n      Fedora/RHEL:  sudo dnf install -y libatomic\n\n2. Afterwards, run this again:\n\n      lms daemon update\n':
@@ -546,8 +546,9 @@ export const zhCN: Record<string, string> = {
   "Starting the development server for {p0}/{p1}...": "正在为 {p0}/{p1} 启动开发服务器...",
   "Error during chat:": "对话过程中出错：",
   "Authentication required": "需要身份验证",
-  "Failed to start or connect to local LM Studio API server.":
-    "启动或连接本地 LM Studio API 服务器失败。",
+  "Failed to start or connect to a local LM Studio or Bionic API server.":
+    "启动或连接本地 LM Studio 或 Bionic API 服务器失败。",
+  "Failed to connect to a local app.": "连接本地应用失败。",
   "Failed to connect using {path}.": "连接 {path} 失败。",
   "CLI commit: ": "CLI 提交：",
   "(Used ignore file {file}).": "（使用了忽略文件 {file}。）",

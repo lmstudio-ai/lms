@@ -9,6 +9,7 @@ import {
 } from "../createClient.js";
 import { formatSizeBytes1000 } from "../formatBytes.js";
 import { t } from "../i18n/index.js";
+import { tryFindLocalAPIServer, type LocalAPIServer } from "../localAPIServer.js";
 import { addLogLevelOptions, createLogger, type LogLevelArgs } from "../logLevel.js";
 import { getServerConfig } from "./server.js";
 
@@ -25,34 +26,37 @@ const statusCommand = new Command<[], StatusCommandOptions>()
 addCreateClientOptions(statusCommand);
 addLogLevelOptions(statusCommand);
 
+// Keep the REST status and model queries on the same app without starting one for status checks.
 statusCommand.action(async options => {
   const logger = createLogger(options);
   let { host, port } = options;
   if (host === undefined) {
     host = "127.0.0.1";
   }
+  let localAPIServer: LocalAPIServer | undefined;
   if (port === undefined) {
     if (host === "127.0.0.1") {
-      try {
-        port = (await getServerConfig(logger))?.port ?? DEFAULT_SERVER_PORT;
-      } catch (e) {
-        logger.debug(`Failed to read last status`, e);
-        port = DEFAULT_SERVER_PORT;
+      localAPIServer = (await tryFindLocalAPIServer({ logger })) ?? undefined;
+      if (localAPIServer !== undefined) {
+        try {
+          port = (await getServerConfig(logger, localAPIServer))?.port;
+        } catch (error) {
+          logger.debug("Failed to read last status", error);
+        }
       }
     } else {
       port = DEFAULT_SERVER_PORT;
     }
   }
-  const running = await checkHttpServer(logger, port, host);
   let content = "";
-  if (running) {
+  if (port !== undefined && (await checkHttpServer(logger, port, host))) {
     content += t("Server: {status} (port: {port})", {
       status: chalk.green(t("ON")),
       port,
     });
     content += "\n\n";
 
-    await using client = await createClient(logger, options);
+    await using client = await createClient(logger, options, { localAPIServer });
     const loadedModels = (
       await Promise.all([
         client.llm.listLoaded(),
