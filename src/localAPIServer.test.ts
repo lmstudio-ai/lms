@@ -1,5 +1,6 @@
 import { apiServerPorts, SimpleLogger } from "@lmstudio/lms-common";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { rm } from "fs/promises";
 import { createServer, type Server } from "http";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
@@ -55,7 +56,8 @@ afterEach(async () => {
   }
   apiServerPorts.splice(0);
   jest.restoreAllMocks();
-  rmSync(home, { force: true, recursive: true });
+  // Windows can briefly keep fixture files locked after process termination.
+  await rm(home, { force: true, recursive: true, maxRetries: 3 });
 });
 
 /** Publishes an app record, creating its fixture directory as needed. */
@@ -239,17 +241,26 @@ test.each(["daemon", "lmstudio", "bionic"] as const)(
     }
     expect((await findOrStartLocalAPIServer({ logger, home }))?.package).toBe(expectedApp);
     expect(readFileSync(daemonFile, "utf-8")).toContain(
-      expectedApp === "daemon" ? process.execPath : "missing-executable",
+      expectedApp === "daemon" ? JSON.stringify(process.execPath) : "missing-executable",
     );
   },
 );
 
 test("starts a path-only llmster record from the executable directory", async () => {
   const installFile = installApp("daemon");
-  const executablePath = join(home, "daemon", "llmster");
-  writeFileSync(executablePath, `#!${process.execPath}\nrequire(process.cwd() + "/index.js");`, {
-    mode: 0o755,
-  });
+  const executablePath = join(
+    home,
+    "daemon",
+    process.platform === "win32" ? "llmster.exe" : "llmster",
+  );
+  if (process.platform === "win32") {
+    copyFileSync(process.execPath, executablePath);
+    process.env.NODE_OPTIONS = "--require ./index.js";
+  } else {
+    writeFileSync(executablePath, `#!${process.execPath}\nrequire(process.cwd() + "/index.js");`, {
+      mode: 0o755,
+    });
+  }
   writeJson(installFile, { path: executablePath });
   expect((await findOrStartLocalAPIServer({ logger, home }))?.package).toBe("daemon");
 });
