@@ -37,6 +37,16 @@ function architecture(architecture?: string) {
   return architectureInfoLookup.find(architecture).name;
 }
 
+function formatModelFormat(format: ModelInfo["format"]) {
+  if (format === "gguf") {
+    return "GGUF";
+  }
+  if (format === "safetensors" || format === "mlx_placeholder") {
+    return "MLX";
+  }
+  return format.replaceAll("_", " ").toUpperCase();
+}
+
 function formatModelKeyWithVariantCount(model: ModelInfo) {
   if (model.variants === undefined) {
     return model.modelKey;
@@ -96,6 +106,7 @@ function printDownloadedModelsTable(
       sizeBytes: formatSizeBytes1000(model.sizeBytes),
       params: model.paramsString,
       arch: architecture(model.architecture),
+      format: formatModelFormat(model.format),
       device: formatDeviceLabel(deviceNameResolver, model.deviceIdentifier),
       loaded: loadedCheck(
         countLoadedOnDevice(loadedModels, model.modelKey, model.deviceIdentifier),
@@ -105,7 +116,7 @@ function printDownloadedModelsTable(
 
   console.info(
     columnify(downloadedModelsAndHeadlines, {
-      columns: ["path", "params", "arch", "sizeBytes", "device", "loaded"],
+      columns: ["path", "params", "arch", "format", "sizeBytes", "device", "loaded"],
       config: {
         loaded: {
           headingTransform: () => "",
@@ -120,6 +131,10 @@ function printDownloadedModelsTable(
         },
         arch: {
           headingTransform: () => chalk.dim("ARCH"),
+          align: "left",
+        },
+        format: {
+          headingTransform: () => chalk.dim("FORMAT"),
           align: "left",
         },
         sizeBytes: {
@@ -165,6 +180,7 @@ function printModelsWithVariantRows({
             path: basePath,
             params: model.paramsString,
             arch: architecture(model.architecture),
+            format: formatModelFormat(model.format),
             sizeBytes: formatSizeBytes1000(model.sizeBytes),
             device: formatDeviceLabel(deviceNameResolver, model.deviceIdentifier),
             loaded: loadedCheck(
@@ -186,6 +202,7 @@ function printModelsWithVariantRows({
         path: `${chalk.dim(isSelectedVariant ? " * " : "   ")}${variantInfo.modelKey}`,
         params: variantInfo.paramsString,
         arch: architecture(variantInfo.architecture),
+        format: formatModelFormat(variantInfo.format),
         sizeBytes: formatSizeBytes1000(variantInfo.sizeBytes),
         device: formatDeviceLabel(deviceNameResolver, variantInfo.deviceIdentifier),
         loaded: loadedCheck(
@@ -199,7 +216,7 @@ function printModelsWithVariantRows({
 
   console.info(
     columnify(rows, {
-      columns: ["path", "params", "arch", "sizeBytes", "device", "loaded"],
+      columns: ["path", "params", "arch", "format", "sizeBytes", "device", "loaded"],
       config: {
         loaded: {
           headingTransform: () => "",
@@ -214,6 +231,10 @@ function printModelsWithVariantRows({
         },
         arch: {
           headingTransform: () => chalk.dim("ARCH"),
+          align: "left",
+        },
+        format: {
+          headingTransform: () => chalk.dim("FORMAT"),
           align: "left",
         },
         sizeBytes: {
