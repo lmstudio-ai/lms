@@ -145,22 +145,14 @@ function hasMultipleModelKeys(models: Array<ModelInfo>): boolean {
   return modelKeys.size > 1;
 }
 
-export function getBaseModelKey(modelKey: string): string {
-  const separatorIndex = modelKey.lastIndexOf("@");
-  return separatorIndex === -1 ? modelKey : modelKey.slice(0, separatorIndex);
-}
-
 /** Keep recency preferences keyed by base models, not concrete variants. */
 export function updateLastLoadedModels(
   lastLoadedModels: Array<string>,
-  modelKey: string,
+  baseModelKey: string,
 ): Array<string> {
-  const baseModelKey = getBaseModelKey(modelKey);
   return [
     baseModelKey,
-    ...lastLoadedModels.filter(
-      lastLoadedModelKey => getBaseModelKey(lastLoadedModelKey) !== baseModelKey,
-    ),
+    ...lastLoadedModels.filter(lastLoadedModelKey => lastLoadedModelKey !== baseModelKey),
   ].slice(0, 20);
 }
 
@@ -179,15 +171,22 @@ export async function resolveDownloadedModelVariants({
   client: LMStudioClient;
   modelKey: string;
   models: Array<ModelInfo>;
-}): Promise<Array<ModelInfo>> {
+}): Promise<{ baseModelKey: string; variants: Array<ModelInfo> } | undefined> {
   if (!modelKey.includes("@")) {
-    return [];
+    return undefined;
   }
 
-  const baseModelKey = getBaseModelKey(modelKey);
-  const baseModel = models.find(model => model.modelKey === baseModelKey);
+  // An exact match is a base model, even if its user/repo key contains `@`.
+  if (models.some(model => model.modelKey === modelKey)) {
+    return undefined;
+  }
+  // Resolve variants against known base entries. Longest prefix handles base
+  // keys such as `owner/model@custom` without stripping their `@` suffix.
+  const baseModel = models
+    .filter(model => modelKey.startsWith(`${model.modelKey}@`))
+    .sort((left, right) => right.modelKey.length - left.modelKey.length)[0];
   if (baseModel === undefined) {
-    return [];
+    return undefined;
   }
 
   const variants = await client.system.listDownloadedModelVariants(baseModel.modelKey);
@@ -196,10 +195,13 @@ export async function resolveDownloadedModelVariants({
   // filtered base-model list so flags such as `--local` cannot accidentally
   // load a remote variant.
   const eligibleDeviceIdentifiers = new Set(models.map(model => model.deviceIdentifier));
-  return variants.filter(
-    variant =>
-      eligibleDeviceIdentifiers.has(variant.deviceIdentifier) && variant.modelKey === modelKey,
-  );
+  return {
+    baseModelKey: baseModel.modelKey,
+    variants: variants.filter(
+      variant =>
+        eligibleDeviceIdentifiers.has(variant.deviceIdentifier) && variant.modelKey === modelKey,
+    ),
+  };
 }
 
 const loadCommand = new Command<[], LoadCommandOptions>()
@@ -542,17 +544,20 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   logger.debug("Initial filtered models length:", initialFilteredModels.length);
 
   let model: ModelInfo;
+  let baseModelKeyForRecency: string | undefined;
   let deferToPreferredDevice = false;
   const variantModels =
     modelKey === undefined
       ? undefined
       : await resolveDownloadedModelVariants({ client, modelKey, models });
-  if (variantModels !== undefined && variantModels.length > 0) {
-    model = variantModels[0];
+  if (variantModels !== undefined && variantModels.variants.length > 0) {
+    model = variantModels.variants[0];
+    baseModelKeyForRecency = variantModels.baseModelKey;
     // If the variant exists on multiple eligible devices, let the SDK honor
     // the configured preferred device just as it does for duplicate base
     // model matches. A single variant must remain pinned to its only device.
-    deferToPreferredDevice = variantModels.length > 1 && !hasDuplicatesOnSameDevice(variantModels);
+    deferToPreferredDevice =
+      variantModels.variants.length > 1 && !hasDuplicatesOnSameDevice(variantModels.variants);
   } else if (yes) {
     if (initialFilteredModels.length === 0) {
       logger.errorWithoutPrefix(
@@ -657,7 +662,10 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     return;
   }
 
-  const updatedLastLoadedModels = updateLastLoadedModels(lastLoadedModels, model.modelKey);
+  const updatedLastLoadedModels = updateLastLoadedModels(
+    lastLoadedModels,
+    baseModelKeyForRecency ?? model.modelKey,
+  );
   logger.debug("Updating cliPref");
   cliPref.setWithProducer(draft => {
     draft.lastLoadedModels = updatedLastLoadedModels;

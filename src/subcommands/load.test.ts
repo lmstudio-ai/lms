@@ -2,7 +2,6 @@ import { type SimpleLogger } from "@lmstudio/lms-common";
 import { type LMStudioClient, type ModelInfo } from "@lmstudio/sdk";
 import {
   assertLoadConfigSupportedForCliModel,
-  getBaseModelKey,
   load,
   resolveDownloadedModelVariants,
   updateLastLoadedModels,
@@ -80,7 +79,7 @@ describe("resolveDownloadedModelVariant", () => {
         modelKey: variantModel.modelKey,
         models: [baseModel],
       }),
-    ).resolves.toEqual([variantModel]);
+    ).resolves.toEqual({ baseModelKey: baseModel.modelKey, variants: [variantModel] });
     expect(listDownloadedModelVariants).toHaveBeenCalledWith(baseModel.modelKey);
   });
 
@@ -96,8 +95,55 @@ describe("resolveDownloadedModelVariant", () => {
         modelKey: baseModel.modelKey,
         models: [baseModel],
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toBeUndefined();
     expect(listDownloadedModelVariants).not.toHaveBeenCalled();
+  });
+
+  it("keeps an @-suffixed imported base key distinct from a variant key", async () => {
+    const importedBaseModel = {
+      modelKey: "owner/model@custom",
+      deviceIdentifier: null,
+    } as ModelInfo;
+    const listDownloadedModelVariants = jest.fn();
+    const client = {
+      system: { listDownloadedModelVariants },
+    } as unknown as LMStudioClient;
+
+    await expect(
+      resolveDownloadedModelVariants({
+        client,
+        modelKey: importedBaseModel.modelKey,
+        models: [importedBaseModel],
+      }),
+    ).resolves.toBeUndefined();
+    expect(listDownloadedModelVariants).not.toHaveBeenCalled();
+  });
+
+  it("carries the exact base key for a variant of an @-suffixed base", async () => {
+    const importedBaseModel = {
+      modelKey: "owner/model@custom",
+      deviceIdentifier: null,
+    } as ModelInfo;
+    const variantModel = {
+      modelKey: "owner/model@custom@4bit",
+      deviceIdentifier: null,
+    } as ModelInfo;
+    const listDownloadedModelVariants = jest.fn().mockResolvedValue([variantModel]);
+    const client = {
+      system: { listDownloadedModelVariants },
+    } as unknown as LMStudioClient;
+
+    const resolution = await resolveDownloadedModelVariants({
+      client,
+      modelKey: variantModel.modelKey,
+      models: [{ modelKey: "owner/model", deviceIdentifier: null } as ModelInfo, importedBaseModel],
+    });
+    expect(resolution).toEqual({
+      baseModelKey: importedBaseModel.modelKey,
+      variants: [variantModel],
+    });
+    expect(listDownloadedModelVariants).toHaveBeenCalledWith(importedBaseModel.modelKey);
+    expect(updateLastLoadedModels([], resolution!.baseModelKey)).toEqual(["owner/model@custom"]);
   });
 
   it("returns undefined when the variant is not downloaded", async () => {
@@ -111,7 +157,7 @@ describe("resolveDownloadedModelVariant", () => {
         modelKey: "google/gemma-4-26b-a4b@q4_k_m",
         models: [baseModel],
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ baseModelKey: baseModel.modelKey, variants: [] });
   });
 
   it("does not resolve a variant hosted only on a linked device", async () => {
@@ -129,7 +175,7 @@ describe("resolveDownloadedModelVariant", () => {
         modelKey: variantModel.modelKey,
         models: [baseModel],
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ baseModelKey: baseModel.modelKey, variants: [] });
   });
 
   it("prefers a matching variant on an eligible device", async () => {
@@ -149,7 +195,7 @@ describe("resolveDownloadedModelVariant", () => {
         modelKey: variantModel.modelKey,
         models: [baseModel],
       }),
-    ).resolves.toEqual([variantModel]);
+    ).resolves.toEqual({ baseModelKey: baseModel.modelKey, variants: [variantModel] });
   });
 
   it("keeps matching variants on each eligible device for preference selection", async () => {
@@ -175,22 +221,26 @@ describe("resolveDownloadedModelVariant", () => {
           { ...baseModel, deviceIdentifier: "other-device" } as ModelInfo,
         ],
       }),
-    ).resolves.toEqual([preferredDeviceVariant, otherDeviceVariant]);
+    ).resolves.toEqual({
+      baseModelKey: baseModel.modelKey,
+      variants: [preferredDeviceVariant, otherDeviceVariant],
+    });
   });
 });
 
 describe("last loaded model preferences", () => {
-  it("uses the base model key for concrete variants", () => {
-    expect(getBaseModelKey("google/gemma-4-26b-a4b@4bit")).toBe("google/gemma-4-26b-a4b");
-    expect(getBaseModelKey("google/gemma-4-26b-a4b")).toBe("google/gemma-4-26b-a4b");
-  });
-
-  it("deduplicates variant history by base key and keeps the newest model first", () => {
+  it("preserves and deduplicates an imported base key containing @", () => {
     expect(
       updateLastLoadedModels(
-        ["google/gemma-4-26b-a4b@q8", "other/model", "google/gemma-4-26b-a4b@4bit"],
-        "google/gemma-4-26b-a4b@q4_k_m",
+        ["owner/model@custom", "owner/model", "other/model"],
+        "owner/model@custom",
       ),
+    ).toEqual(["owner/model@custom", "owner/model", "other/model"]);
+  });
+
+  it("deduplicates base-key history and keeps the newest model first", () => {
+    expect(
+      updateLastLoadedModels(["other/model", "google/gemma-4-26b-a4b"], "google/gemma-4-26b-a4b"),
     ).toEqual(["google/gemma-4-26b-a4b", "other/model"]);
   });
 
