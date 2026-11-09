@@ -1,4 +1,5 @@
 import { Command } from "@commander-js/extra-typings";
+import { agent } from "./agent.js";
 import { disable } from "./disable.js";
 import { enable } from "./enable.js";
 import { setDeviceName } from "./setDeviceName.js";
@@ -8,6 +9,7 @@ import { status } from "./status.js";
 export const link = new Command()
   .name("link")
   .description("Commands for managing LM Link")
+  .addCommand(agent)
   .addCommand(enable)
   .addCommand(disable)
   .addCommand(status)
