@@ -1,4 +1,3 @@
-import { confirm } from "@inquirer/prompts";
 import { BufferedEvent, SimpleLogger } from "@lmstudio/lms-common";
 import { AuthenticatedWsServer, type Context } from "@lmstudio/lms-communication-server";
 import { createRepositoryBackendInterface } from "@lmstudio/lms-external-backend-interfaces";
@@ -7,9 +6,10 @@ import { createServer, type Server } from "http";
 import { type Socket } from "net";
 import { tmpdir } from "os";
 import { join } from "path";
+import { askQuestion } from "../../confirm.js";
 import { agent } from "./agent.js";
 
-jest.mock("@inquirer/prompts", () => ({ confirm: jest.fn() }));
+jest.mock("../../confirm.js", () => ({ askQuestion: jest.fn() }));
 
 const logger = new SimpleLogger("", { debug() {}, error() {}, info() {}, warn() {} });
 const sockets = new Set<Socket>();
@@ -24,7 +24,7 @@ let output: jest.SpyInstance<boolean, Parameters<typeof process.stderr.write>>;
 beforeEach(async () => {
   state = { enabled: false, managed: false };
   requestError = undefined;
-  jest.mocked(confirm).mockReset().mockResolvedValue(false);
+  jest.mocked(askQuestion).mockReset().mockResolvedValue(false);
   agent.commands.forEach(command => command.setOptionValue("yes", false));
   Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
   output = jest.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -109,20 +109,13 @@ test.each([
 /** Both explicit approval and --yes allow the command to change the host setting. */
 test.each([false, true])("enables agentic use with --yes=%s", async yes => {
   Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: !yes });
-  jest.mocked(confirm).mockResolvedValue(true);
+  jest.mocked(askQuestion).mockResolvedValue(true);
   await agent.parseAsync(yes ? ["enable", "--yes"] : ["enable"], { from: "user" });
   expect(state.enabled).toBe(true);
 });
 
-/** Declining and Ctrl+C must not grant access. */
-test.each([false, true])("does not mutate after cancellation (Ctrl+C=%s)", async interrupted => {
-  if (interrupted) {
-    jest.mocked(confirm).mockRejectedValue(
-      Object.assign(new Error("Canceled"), {
-        name: "ExitPromptError",
-      }),
-    );
-  }
+/** The shared prompt returns false for both N and Ctrl+C; neither may grant access. */
+test("does not mutate after cancellation", async () => {
   await agent.parseAsync(["enable"], { from: "user" });
   expect(state.enabled).toBe(false);
   expect(output.mock.calls.map(([chunk]) => String(chunk)).join("")).toContain("Canceled.");
@@ -139,7 +132,7 @@ test("requires --yes when enabling non-interactively", async () => {
 test("disables agentic use without confirmation", async () => {
   state.enabled = true;
   Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: false });
-  jest.mocked(confirm).mockRejectedValue(new Error("No terminal available"));
+  jest.mocked(askQuestion).mockRejectedValue(new Error("No terminal available"));
   await agent.parseAsync(["disable"], { from: "user" });
   expect(state.enabled).toBe(false);
 });

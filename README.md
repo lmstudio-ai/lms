@@ -59,11 +59,11 @@ lms link agent disable         # Disable without confirmation
 ```
 
 Agents can read and modify files and run commands with your user permissions. Enabling agentic use
-can effectively give your other devices full control of this device. Confirmation defaults to No;
-non-interactive enabling requires `--yes`.
+can effectively give your other devices full control of this device. Confirmation requires an explicit
+Y or N; non-interactive enabling requires `--yes`.
 
-These commands change only the agentic-use setting. Remote access also requires LM Link to be enabled
-and connected. The query reports the saved setting even when LM Link is offline or signed out.
+These commands change only the agentic-use setting. The query reports the saved setting even when
+LM Link is offline or signed out.
 Managed Runner devices report their effective Runner policy and cannot change it with these commands.
 LM Studio does not support agentic use. These commands use the same app selection as other `lms` commands.
 

@@ -1,5 +1,5 @@
 import { Command } from "@commander-js/extra-typings";
-import { confirm } from "@inquirer/prompts";
+import { askQuestion } from "../../confirm.js";
 import { addCreateClientOptions, createClient } from "../../createClient.js";
 import { addLogLevelOptions, createLogger } from "../../logLevel.js";
 import { UserInputError } from "../../types/UserInputError.js";
@@ -50,27 +50,7 @@ for (const [name, enabled] of [
           "Agents can read and modify files and run commands with your user permissions.\n" +
           "This can effectively give your other devices full control of this device.\n\n",
       );
-      let confirmed = false;
-      try {
-        confirmed = await confirm(
-          {
-            message: "Enable agentic use?",
-            default: false,
-            theme: {
-              style: {
-                /** Keeps the displayed choices explicit; Enter still declines. */
-                defaultAnswer: () => "(Y/N)",
-              },
-            },
-          },
-          { output: process.stderr },
-        );
-      } catch (error: unknown) {
-        if (!(error instanceof Error) || error.name !== "ExitPromptError") {
-          throw error;
-        }
-      }
-      if (!confirmed) {
+      if (!(await askQuestion("Enable agentic use?"))) {
         logger.info("Canceled. The agentic-use setting was not changed.");
         return;
       }
@@ -79,9 +59,6 @@ for (const [name, enabled] of [
     await using client = await createClient(logger, options);
     await client.repository.lmLink.setAgentEnabled(enabled);
     logger.info(`Agentic use is ${enabled ? "enabled" : "disabled"} on this device.`);
-    if (enabled) {
-      logger.info("Remote access requires LM Link to be enabled and connected.");
-    }
   });
   agent.addCommand(command);
 }
