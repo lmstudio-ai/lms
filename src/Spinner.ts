@@ -5,7 +5,10 @@ export class Spinner {
   private timer: NodeJS.Timeout | null = null;
   private spinnerIndex = 0;
 
-  public constructor(private text: string) {
+  public constructor(
+    private text: string,
+    private readonly outputStream: NodeJS.WriteStream = process.stdout,
+  ) {
     this.timer = setInterval(() => {
       this.spinnerIndex++;
       this.refresh();
@@ -27,8 +30,8 @@ export class Spinner {
       clearInterval(this.timer);
       this.timer = null;
     }
-    process.stdout.write("\r\x1B[K");
-    process.stdout.write("\x1B[?25h");
+    this.outputStream.write("\r\x1B[K");
+    this.outputStream.write("\x1B[?25h");
   }
 
   public stopWithoutClear() {
@@ -40,7 +43,7 @@ export class Spinner {
       clearInterval(this.timer);
       this.timer = null;
     }
-    process.stdout.write("\x1B[?25h");
+    this.outputStream.write("\x1B[?25h");
   }
 
   public start() {
@@ -60,8 +63,8 @@ export class Spinner {
   }
 
   private refresh() {
-    process.stdout.write("\x1B[?25l");
-    process.stdout.write(
+    this.outputStream.write("\x1B[?25l");
+    this.outputStream.write(
       `\r${this.text} ${SPINNER_FRAMES[this.spinnerIndex % SPINNER_FRAMES.length]}`,
     );
   }

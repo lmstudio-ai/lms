@@ -15,6 +15,7 @@ import { dev } from "./subcommands/dev/index.js";
 import { flags } from "./subcommands/flags.js";
 import { get } from "./subcommands/get.js";
 import { importCmd } from "./subcommands/importCmd.js";
+import { launch } from "./subcommands/launch/index.js";
 import { link } from "./subcommands/link/index.js";
 import { ls, ps } from "./subcommands/list.js";
 import { load } from "./subcommands/load.js";
@@ -167,6 +168,7 @@ Join our Discord:     ${chalk.blue("https://discord.gg/lmstudio")}`,
 
 addCommandsGroup("Local models", [chat, get, load, unload, ls, ps, importCmd], "#22D3EE");
 addCommandsGroup("Serve", [server, log], "#34D399");
+addCommandsGroup("Launch (Beta)", [launch], "#FB923C");
 addCommandsGroup("Remote Instances", [link], "#818CF8");
 addCommandsGroup("Runtime", [runtime], "#C084FC");
 addCommandsGroup("Develop & Publish (Beta)", [clone, push, dev, login, logout, whoami], "#F9A8D4");
@@ -180,8 +182,14 @@ program.addCommand(version, { hidden: true });
 
 applyHelpConfigurationRecursively(program, rootHelpConfig, subcommandHelpConfig);
 
-// Handle -v/--version before Commander parsing
-if (commandArguments.includes("-v") || commandArguments.includes("--version")) {
+// Handle a top-level -v/--version before Commander parsing, but only when it appears BEFORE the
+// subcommand. After a subcommand the flag belongs to it -- and `launch` forwards everything past
+// `--` to the wrapped tool (e.g. `lms launch codex -- --version`), which a blunt scan of every
+// argument would otherwise preempt by printing the lms version and exiting.
+const firstSubcommandIndex = commandArguments.findIndex(argument => !argument.startsWith("-"));
+const topLevelArguments =
+  firstSubcommandIndex === -1 ? commandArguments : commandArguments.slice(0, firstSubcommandIndex);
+if (topLevelArguments.includes("-v") || topLevelArguments.includes("--version")) {
   console.info("CLI commit: " + getCommitHash());
   process.exit(0);
 }
