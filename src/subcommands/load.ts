@@ -145,6 +145,65 @@ function hasMultipleModelKeys(models: Array<ModelInfo>): boolean {
   return modelKeys.size > 1;
 }
 
+/** Keep recency preferences keyed by base models, not concrete variants. */
+export function updateLastLoadedModels(
+  lastLoadedModels: Array<string>,
+  baseModelKey: string,
+): Array<string> {
+  return [
+    baseModelKey,
+    ...lastLoadedModels.filter(lastLoadedModelKey => lastLoadedModelKey !== baseModelKey),
+  ].slice(0, 20);
+}
+
+/**
+ * Resolve a concrete variant key printed by `lms ls --variants`.
+ *
+ * `listDownloadedModels()` returns the base model entries, while the SDK load
+ * call accepts the concrete variant key. Keep the additional lookup lazy so
+ * the normal `lms load` path does not make one request per downloaded model.
+ */
+export async function resolveDownloadedModelVariants({
+  client,
+  modelKey,
+  models,
+}: {
+  client: LMStudioClient;
+  modelKey: string;
+  models: Array<ModelInfo>;
+}): Promise<{ baseModelKey: string; variants: Array<ModelInfo> } | undefined> {
+  if (!modelKey.includes("@")) {
+    return undefined;
+  }
+
+  // An exact match is a base model, even if its user/repo key contains `@`.
+  if (models.some(model => model.modelKey === modelKey)) {
+    return undefined;
+  }
+  // Resolve variants against known base entries. Longest prefix handles base
+  // keys such as `owner/model@custom` without stripping their `@` suffix.
+  const baseModel = models
+    .filter(model => modelKey.startsWith(`${model.modelKey}@`))
+    .sort((left, right) => right.modelKey.length - left.modelKey.length)[0];
+  if (baseModel === undefined) {
+    return undefined;
+  }
+
+  const variants = await client.system.listDownloadedModelVariants(baseModel.modelKey);
+  // `listDownloadedModelVariants` can include copies hosted by linked LM Link
+  // devices. Restrict the result to the same device set as the already
+  // filtered base-model list so flags such as `--local` cannot accidentally
+  // load a remote variant.
+  const eligibleDeviceIdentifiers = new Set(models.map(model => model.deviceIdentifier));
+  return {
+    baseModelKey: baseModel.modelKey,
+    variants: variants.filter(
+      variant =>
+        eligibleDeviceIdentifiers.has(variant.deviceIdentifier) && variant.modelKey === modelKey,
+    ),
+  };
+}
+
 const loadCommand = new Command<[], LoadCommandOptions>()
   .name("load")
   .description("Load a model")
@@ -485,8 +544,21 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
   logger.debug("Initial filtered models length:", initialFilteredModels.length);
 
   let model: ModelInfo;
+  let baseModelKeyForRecency: string | undefined;
   let deferToPreferredDevice = false;
-  if (yes) {
+  const variantModels =
+    modelKey === undefined
+      ? undefined
+      : await resolveDownloadedModelVariants({ client, modelKey, models });
+  if (variantModels !== undefined && variantModels.variants.length > 0) {
+    model = variantModels.variants[0];
+    baseModelKeyForRecency = variantModels.baseModelKey;
+    // If the variant exists on multiple eligible devices, let the SDK honor
+    // the configured preferred device just as it does for duplicate base
+    // model matches. A single variant must remain pinned to its only device.
+    deferToPreferredDevice =
+      variantModels.variants.length > 1 && !hasDuplicatesOnSameDevice(variantModels.variants);
+  } else if (yes) {
     if (initialFilteredModels.length === 0) {
       logger.errorWithoutPrefix(
         makeTitledPrettyError(
@@ -590,16 +662,13 @@ loadCommand.action(async (modelKeyArg, options: LoadCommandOptions) => {
     return;
   }
 
-  const modelInLastLoadedModelsIndex = lastLoadedModels.indexOf(model.modelKey);
-  if (modelInLastLoadedModelsIndex !== -1) {
-    logger.debug("Removing model from last loaded models:", model.modelKey);
-    lastLoadedModels.splice(modelInLastLoadedModelsIndex, 1);
-  }
-  lastLoadedModels.unshift(model.modelKey);
+  const updatedLastLoadedModels = updateLastLoadedModels(
+    lastLoadedModels,
+    baseModelKeyForRecency ?? model.modelKey,
+  );
   logger.debug("Updating cliPref");
   cliPref.setWithProducer(draft => {
-    // Keep only the last 20 loaded models
-    draft.lastLoadedModels = lastLoadedModels.slice(0, 20);
+    draft.lastLoadedModels = updatedLastLoadedModels;
   });
 
   const loadNamespace = client[model.type];
