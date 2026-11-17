@@ -13,13 +13,19 @@ jest.mock("../deviceNameLookup.js", () => ({
 }));
 
 // Exercise the command against its reported load configuration without running an engine.
-function model(identifier: string, config: LLMLoadModelConfig, type = "llm") {
+function model(
+  identifier: string,
+  config: LLMLoadModelConfig,
+  type = "llm",
+  engine: string | null = "splash",
+) {
   return {
     identifier,
     getLoadConfig: async () => config,
     getContextLength: async () => 32768,
     getModelInfo: async () => ({
       type,
+      ...(engine === null ? {} : { engine }),
       identifier,
       instanceReference: "internal",
       modelKey: identifier,
@@ -46,6 +52,7 @@ beforeEach(() => {
         model("file-model", { engineConfigFileContents: "max-model-len: 32768\n" }),
         model("normal-model", { maxParallelPredictions: 4 }),
         model("cleared-model", { engineConfigFileContents: "", engineCwd: "/inactive" }),
+        model("old-host-model", {}, "llm", null),
       ],
     },
     embedding: { listLoaded: async () => [model("embedding-model", {}, "embedding")] },
@@ -84,13 +91,27 @@ it("reports file mode, actual context, and unknown parallelism in JSON without Y
   });
   expect(JSON.stringify(rows)).not.toContain("max-model-len");
   expect(JSON.stringify(rows)).not.toContain("engineConfigFileContents");
+  for (const identifier of ["file-model", "embedding-model", "decision-model"]) {
+    expect(rows.find(row => row.identifier === identifier)).toMatchObject({ engine: "splash" });
+  }
+  expect(rows.find(row => row.identifier === "old-host-model")).not.toHaveProperty("engine");
+  expect(rows.every(row => !("instanceReference" in row))).toBe(true);
 });
 
 it("identifies both modes in the table and keeps absent parallelism unknown", async () => {
   const output = jest.spyOn(console, "info").mockImplementation(() => {});
   await ps.parseAsync(["node", "lms"]);
   const table = output.mock.calls.map(args => args.join(" ")).join("\n");
-  expect(table).toContain("LOAD CONFIG");
+  expect(
+    table
+      .split("\n")
+      .find(line => line.includes("IDENTIFIER"))
+      ?.trim(),
+  ).toMatch(
+    /^IDENTIFIER\s+MODEL\s+STATUS\s+SIZE\s+CONTEXT\s+PARALLEL\s+LOAD CONFIG\s+DEVICE\s+TTL$/,
+  );
+  expect(table).not.toContain("ENGINE");
+  expect(table).not.toContain("splash");
   expect(table).toMatch(/file-model.*32768\s+-\s+File/);
   expect(table).toMatch(/normal-model.*32768\s+4\s+LM Studio/);
   expect(table).toMatch(/cleared-model.*32768\s+-\s+LM Studio/);
