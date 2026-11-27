@@ -324,6 +324,7 @@ async function generateManifestJsonFromModelYaml(folderPath: string, modelYamlPa
     owner,
     name,
     dependencies,
+    drafters: virtualModelDefinition.drafters,
     tags: virtualModelDefinition.tags,
   };
 
